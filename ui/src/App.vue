@@ -5,7 +5,7 @@ import FileTree from "./components/FileTree.vue";
 </script>
 
 <template>
-  <tab-bar></tab-bar>
+  <tab-bar @change="(e) => {console.log(e)}"></tab-bar>
   <file-tree></file-tree>
 </template>
 
