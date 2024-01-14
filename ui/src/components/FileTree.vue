@@ -2,11 +2,18 @@
 
 import SubCard from "./SubCard.vue";
 import FileTreeNode from "./FileTreeNode.vue";
+import {ref} from "vue";
+
+const files = ref<{[key: string]: string}>({
+  "/Download": "Download",
+  "/Resources": "Resources"
+})
+
 </script>
 
 <template>
 <sub-card class="file-tree">
-  <file-tree-node></file-tree-node>
+  <file-tree-node v-for="(file, path) in files" :content="file"></file-tree-node>
 </sub-card>
 </template>
 
