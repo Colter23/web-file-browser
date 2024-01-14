@@ -57,7 +57,7 @@ class MappingService(database: Database) {
     suspend fun create(mapping: PathMapping): Int = dbQuery {
         MappingTable.insert {
             it[mountPath] = mapping.mountPath
-            it[folderPath] = mapping.folderPath
+            it[folderPath] = mapping.folderPath.removeSuffix("/")
             it[remark] = mapping.remark ?: ""
             it[order] = mapping.order ?: 0
             it[status] = 0

@@ -1,9 +1,12 @@
 package top.colter.routes
 
+import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import top.colter.models.*
+import java.io.File
+import java.nio.file.Path
 import kotlin.io.path.*
 
 
@@ -12,52 +15,76 @@ const val FILE_PREFIX = "%FILE%"
 fun Route.fileRouting() {
     route("/file") {
         get ("/") {
-            call.respond(getFolderData(rootFolder))
+            call.respond(getFolderData())
         }
         get("{path...}") {
             val pathParams = call.parameters.getAll("path") ?: return@get call.respondText("无法获取path")
-            val folderData = getFolderData(rootFolder, pathParams)
-            if (folderData.path.startsWith(FILE_PREFIX)) {
-                call.respond(Path(folderData.path.removePrefix(FILE_PREFIX)).readBytes())
-            }else {
-                call.respond(folderData)
+            try {
+                val folderData = getFolderData(pathParams)
+                if (folderData.path.startsWith(FILE_PREFIX)) {
+                    call.respond(Path(folderData.path.removePrefix(FILE_PREFIX)).readBytes())
+                }else {
+                    call.respond(folderData)
+                }
+            } catch (e: NoSuchFileException) {
+                call.respond(HttpStatusCode.BadRequest, "查无此径: ${e.message}")
             }
         }
     }
 }
 
-fun getFolderData(rootFolder: VirtualFolder, paths: List<String>? = null): FolderData {
+fun getFolderData(paths: List<String> = listOf("")): FolderData {
     val folderList = mutableListOf<FolderInfo>()
     val fileList = mutableListOf<FileInfo>()
 
-    var currentFolder = rootFolder
-    paths?.forEachIndexed { index, p ->
-        val folder = currentFolder.children.find { it.name == p }
-        if (folder is RealFolder) {
-            val inPath = if (paths.size == 1) "" else "/" + paths.drop(index + 1).joinToString("/")
-            val realPath = folder.realPath + inPath
-            val path = Path(realPath)
-            if (!path.isDirectory()) {
-                return FolderData("$FILE_PREFIX$realPath", folderList, fileList)
+    // 列出真实文件夹内结构
+    fun listDirs(path: Path, parentPath: String) {
+        val dirs = path.listDirectoryEntries()
+        dirs.forEach {
+            val filePath = "${parentPath.removeSuffix("/")}/${it.name}"
+            val modified = it.getLastModifiedTime().toString()
+            if (it.isDirectory()) {
+                folderList.add(FolderInfo(it.name, filePath, modified))
+            } else {
+                fileList.add(FileInfo(it.name, filePath, modified, it.fileSize(), it.extension))
             }
-            val dirs = path.listDirectoryEntries()
-            dirs.forEach {
-                val filePath = "${folder.path}$inPath/${it.name}"
-                if (it.isDirectory()) {
-                    folderList.add(FolderInfo(it.name, filePath, it.getLastModifiedTime().toString()))
-                }else {
-                    fileList.add(FileInfo(it.name, filePath, it.getLastModifiedTime().toString(), it.fileSize(), it.extension))
-                }
-            }
-            return FolderData("/" + path.joinToString("/"), folderList, fileList)
-        }else if (folder is VirtualFolder) {
-            currentFolder = folder
         }
     }
-    currentFolder.children.forEach {
-        val modified = if (it is RealFolder) Path(it.realPath).getLastModifiedTime().toString() else ""
-        folderList.add(FolderInfo(it.name, it.path, modified))
+
+    val suchPath = "/" + paths.joinToString("/")
+    if (rootFolder == null) return FolderData(suchPath, folderList, fileList)
+
+    val pathList = mutableListOf<String>()
+    pathList.addAll(paths)
+    var currentFolder = rootFolder
+
+    // 搜索可用目录
+    for (path in pathList.toList()) {
+        if (currentFolder is RealFolder) break
+        if (currentFolder is VirtualFolder) {
+            currentFolder = currentFolder.children.find { it.name == path }
+            pathList.removeAt(0)
+        }
     }
 
-    return FolderData("/" + paths?.joinToString("/"), folderList, fileList)
+    if (currentFolder == null) throw NoSuchFileException(File(suchPath))
+
+    // 获取目录信息
+    if (currentFolder is RealFolder) {
+        val folder = currentFolder
+        val inPath = pathList.joinToString("/")
+        val realPath = folder.realPath + "/" + inPath
+        val path = Path(realPath)
+        if (!path.isDirectory()) {
+            return FolderData("$FILE_PREFIX$realPath", folderList, fileList)
+        }
+        listDirs(path, "${folder.path.removeSuffix("/")}/$inPath")
+    } else if (currentFolder is VirtualFolder) {
+        currentFolder.children.forEach {
+            val modified = if (it is RealFolder) Path(it.realPath).getLastModifiedTime().toString() else ""
+            folderList.add(FolderInfo(it.name, it.path, modified))
+        }
+    }
+    return FolderData(suchPath, folderList, fileList)
+
 }
