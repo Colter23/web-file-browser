@@ -2299,9 +2299,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"web-file-browser-component@workspace:.":
+"web-file-browser-ui@workspace:.":
   version: 0.0.0-use.local
-  resolution: "web-file-browser-component@workspace:."
+  resolution: "web-file-browser-ui@workspace:."
   dependencies:
     "@vitejs/plugin-vue": "npm:^4.5.2"
     autoprefixer: "npm:^10.4.16"
