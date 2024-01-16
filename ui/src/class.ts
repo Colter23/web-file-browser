@@ -21,3 +21,12 @@ export interface FileInfo {
     extension: string;
     modified: string;
 }
+
+
+export type LoadData = (node: FileTreeData) => Promise<unknown>
+export interface FileTreeData {
+    path: string;
+    name: string;
+    isFile?: boolean;
+    children?: FileTreeData[]
+}

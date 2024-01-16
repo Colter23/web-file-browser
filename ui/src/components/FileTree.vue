@@ -2,23 +2,26 @@
 
 import SubCard from "./SubCard.vue";
 import FileTreeNode from "./FileTreeNode.vue";
-import {ref} from "vue";
+import {FileTreeData, LoadData} from "../class.ts";
+import { PropType } from 'vue';
 
-const files = ref<{[key: string]: string}>({
-  "/Download": "Download",
-  "/Resources": "Resources"
-})
+
+const props = defineProps({
+  data: Object as PropType<FileTreeData[]>,
+  loadData: Function as PropType<LoadData>,
+});
+
 
 </script>
 
 <template>
 <sub-card class="file-tree">
-  <file-tree-node v-for="(file, path) in files" :content="file"></file-tree-node>
+  <file-tree-node v-for="file in props.data" :data="file" :load-data="loadData"></file-tree-node>
 </sub-card>
 </template>
 
 <style scoped>
 .file-tree {
-  @apply w-64 h-96 m-10 p-1.5
+  @apply w-64 h-96 m-10 p-1.5 overflow-auto
 }
 </style>
