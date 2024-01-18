@@ -16,7 +16,9 @@ const props = defineProps({
 
 <template>
 <sub-card class="file-tree">
-  <file-tree-node v-for="file in props.data" :data="file" :load-data="loadData"></file-tree-node>
+  <div class="w-max">
+    <file-tree-node v-for="file in props.data" :data="file" :load-data="loadData"></file-tree-node>
+  </div>
 </sub-card>
 </template>
 

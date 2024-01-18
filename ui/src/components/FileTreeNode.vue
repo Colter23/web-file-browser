@@ -15,6 +15,7 @@ const props = defineProps({
 const fold = ref(false)
 
 function clickHandler(file: FileTreeData) {
+  if (file.isFile) return
   if (props.data?.children == undefined || props.data?.children.length == 0) {
     props.loadData?.call("node", file).then(call => {
       console.log(props.data)
@@ -30,11 +31,12 @@ function clickHandler(file: FileTreeData) {
 <template>
   <div class="tree-node" @click="clickHandler(<FileTreeData>data)">
     <div class="node-indent" v-for="_ in deep"></div>
-    <div class="node-icon node-fold-icon">
+    <div v-if="!data?.isFile" class="node-icon node-fold-icon" :class="fold? 'unfold-icon':'fold-icon'">
       <icon icon="icon-unfold" size="normal"></icon>
     </div>
+    <div v-else class="node-indent"></div>
     <div class="node-icon">
-      <icon icon="icon-folder-fill" size="normal"></icon>
+      <icon :icon="data?.isFile?'icon-file':'icon-folder-fill'" size="normal"></icon>
     </div>
     <div class="node-content">{{ data.name }}</div>
   </div>
@@ -45,7 +47,7 @@ function clickHandler(file: FileTreeData) {
 
 <style scoped lang="postcss">
 .tree-node {
-  @apply flex w-full h-7 px-1 rounded-md hover:bg-blue-100
+  @apply flex w-full p-1 rounded-md hover:bg-blue-100
 }
 .node-indent {
   @apply w-6 grow-0 shrink-0
@@ -54,9 +56,15 @@ function clickHandler(file: FileTreeData) {
   @apply w-7 inline-flex grow-0 shrink-0 items-center justify-center cursor-pointer
 }
 .node-fold-icon {
-  @apply w-6 transition-transform -rotate-90
+  @apply w-6 transition-transform
+}
+.fold-icon {
+  @apply -rotate-90
+}
+.unfold-icon {
+  @apply rotate-0
 }
 .node-content {
-  @apply inline-flex grow items-center cursor-pointer
+  @apply max-w-60 inline-flex grow items-center cursor-pointer
 }
 </style>
