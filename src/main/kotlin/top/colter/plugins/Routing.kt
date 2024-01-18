@@ -9,10 +9,12 @@ import top.colter.routes.mappingRouting
 
 fun Application.configureRouting() {
     routing {
-        get("/") {
-            call.respondText("Web File Browser Server")
+        route("/api") {
+            get("/") {
+                call.respondText("Web File Browser Server")
+            }
+            fileRouting()
+            mappingRouting()
         }
-        fileRouting()
-        mappingRouting()
     }
 }
