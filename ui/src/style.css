@@ -2,6 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  background-color: #EBF3FF;
+body {
+  @apply bg-blue-100
 }

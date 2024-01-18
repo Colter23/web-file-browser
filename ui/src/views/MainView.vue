@@ -36,6 +36,6 @@ const handleLoad = (node: FileTreeData) => {
   <file-tree :data="data" :load-data="handleLoad"></file-tree>
 </template>
 
-<style scoped>
+<style scoped lang="postcss">
 
 </style>

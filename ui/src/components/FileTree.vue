@@ -20,7 +20,7 @@ const props = defineProps({
 </sub-card>
 </template>
 
-<style scoped>
+<style scoped lang="postcss">
 .file-tree {
   @apply w-64 h-96 m-10 p-1.5 overflow-auto
 }

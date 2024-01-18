@@ -6,6 +6,6 @@
   <router-view></router-view>
 </template>
 
-<style scoped>
+<style scoped lang="postcss">
 
 </style>

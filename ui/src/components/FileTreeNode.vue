@@ -45,7 +45,7 @@ function clickHandler(file: FileTreeData) {
 
 <style scoped lang="postcss">
 .tree-node {
-  @apply flex w-full h-7 px-1 rounded-md hover:bg-[#EBF3FF]
+  @apply flex w-full h-7 px-1 rounded-md hover:bg-blue-100
 }
 .node-indent {
   @apply w-6 grow-0 shrink-0

@@ -8,7 +8,7 @@
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="postcss">
 .card {
   @apply bg-white/50 border-2 border-white rounded-xl backdrop-blur shadow-lg;
 }
