@@ -6,7 +6,7 @@ const props = withDefaults(defineProps<{
   color?: string;
   size?: string | "large" | "small" | "normal"
 }>(), {
-  color: "#333333",
+  color: "inherent",
   size: "normal"
 })
 
