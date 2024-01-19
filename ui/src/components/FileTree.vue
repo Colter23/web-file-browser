@@ -16,7 +16,7 @@ const props = defineProps({
 
 <template>
 <sub-card class="file-tree">
-  <div class="w-max">
+  <div class="file-tree-list">
     <file-tree-node v-for="file in props.data" :data="file" :load-data="loadData"></file-tree-node>
   </div>
 </sub-card>
@@ -24,6 +24,25 @@ const props = defineProps({
 
 <style scoped lang="postcss">
 .file-tree {
-  @apply w-64 h-96 m-10 p-1.5 overflow-auto
+  @apply w-full h-96 p-1.5 overflow-auto
 }
+
+.file-tree-list {
+  @apply w-full select-none
+}
+
+.file-tree::-webkit-scrollbar{
+  width: 8px;
+  height: 8px;
+
+}
+
+.file-tree::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 5px;
+}
+
+
+
+
 </style>

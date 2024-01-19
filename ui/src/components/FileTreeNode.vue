@@ -65,6 +65,6 @@ function clickHandler(file: FileTreeData) {
   @apply rotate-0
 }
 .node-content {
-  @apply max-w-60 inline-flex grow items-center cursor-pointer
+  @apply inline-flex grow items-center cursor-pointer
 }
 </style>
