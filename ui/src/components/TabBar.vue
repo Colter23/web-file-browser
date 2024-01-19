@@ -32,7 +32,7 @@ const changeHandler = (path: string): void => {
     <div class="tab-item-group">
       <tab-item v-for="(file, path) in files" :name="file" :path="path" :open="selectedFile===path" @close="closeHandler" @click="changeHandler(path)"/>
       <sub-card class="add-btn" @click="files['/test']='TEST'">
-        <Icon icon="icon-add" size="small" />
+        <icon icon="icon-add" size="normal" />
       </sub-card>
     </div>
   </card>
@@ -40,13 +40,13 @@ const changeHandler = (path: string): void => {
 
 <style scoped lang="postcss">
 .tab-bar {
-  @apply mx-6 my-4 h-12 p-1.5;
+  @apply h-12 p-1.5;
 }
 .tab-item-group {
   @apply h-full flex justify-start gap-x-1.5
 }
 .add-btn {
-  @apply flex p-2 h-full text-base items-center border-2 border-white hover:border-[#3662EC] cursor-pointer active:bg-[#3662EC] active:text-white
+  @apply flex p-1.5 h-full text-base items-center border-2 border-white hover:border-[#3662EC] cursor-pointer active:bg-[#3662EC] active:text-white
 }
 
 </style>

@@ -25,10 +25,10 @@ const props = defineProps({
 
 <template>
   <sub-card class="tab-item" :class="{open}">
-    <Icon icon="icon-folder-fill" size="normal" />
+    <icon icon="icon-folder-fill" size="normal" />
     <div class="grow mx-2 truncate">{{ props.name }}</div>
-    <div class="w-6 ml-2 p-1.5 rounded hover:bg-gray-200/70" @click.stop="emit('close', { path })">
-      <Icon icon="icon-delete" size="small" />
+    <div class="w-7 ml-2 p-1.5 rounded hover:bg-gray-200/70" @click.stop="emit('close', { path })">
+      <icon icon="icon-delete" size="normal" />
     </div>
   </sub-card>
 </template>
