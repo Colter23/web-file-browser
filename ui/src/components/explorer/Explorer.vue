@@ -49,8 +49,12 @@ const fileClickHandler = (name: string) => {
   </sub-card>
 </template>
 <style scoped lang="postcss">
+.explorer-wrapper {
+  @apply w-full h-full overflow-auto
+}
+
 .explorer-header {
-  @apply border-b pb-1 text-sm flex px-4 py-2
+  @apply border-b pb-1 text-sm flex px-4 py-2 sticky top-0 bg-white z-10
 }
 
 .explorer-files {
