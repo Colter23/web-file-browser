@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "ace-builds": "^1.32.6",
     "axios": "^1.6.5",
-    "monaco-editor": "^0.45.0",
     "pinia": "^2.1.7",
     "vue": "^3.3.11",
     "vue-router": "^4.2.5"

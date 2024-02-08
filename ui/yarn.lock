@@ -590,6 +590,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"ace-builds@npm:^1.32.6":
+  version: 1.32.6
+  resolution: "ace-builds@npm:1.32.6"
+  checksum: 9b3ac9a500ab5ce779aed75bc0d799b57ddc24229f458a4c3541c35d2b23b51eec1cbb681335de42cac731883d52073540c52e93e2754d302ed9ed718e28cac4
+  languageName: node
+  linkType: hard
+
 "agent-base@npm:^7.0.2, agent-base@npm:^7.1.0":
   version: 7.1.0
   resolution: "agent-base@npm:7.1.0"
@@ -1596,13 +1603,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"monaco-editor@npm:^0.45.0":
-  version: 0.45.0
-  resolution: "monaco-editor@npm:0.45.0"
-  checksum: 77b1522dbbf06b582f143a7be22f48ad82e5cade3f22c26fc19086446e473c720b2147f8a1ac6edf2172abf5d6bc92a5e858f62fb60df8617f8532f1fa1119ab
-  languageName: node
-  linkType: hard
-
 "ms@npm:2.1.2":
   version: 2.1.2
   resolution: "ms@npm:2.1.2"
@@ -2442,9 +2442,9 @@ __metadata:
   resolution: "web-file-browser-ui@workspace:."
   dependencies:
     "@vitejs/plugin-vue": "npm:^4.5.2"
+    ace-builds: "npm:^1.32.6"
     autoprefixer: "npm:^10.4.16"
     axios: "npm:^1.6.5"
-    monaco-editor: "npm:^0.45.0"
     pinia: "npm:^2.1.7"
     postcss: "npm:^8.4.33"
     tailwindcss: "npm:^3.4.1"
