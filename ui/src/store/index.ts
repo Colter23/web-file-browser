@@ -3,14 +3,16 @@ import {FileInfo, FileTreeData, FolderData, FolderInfo} from "../class.ts";
 
 
 declare type FileState = {
+    showEditor: boolean;
     currentPath: string;
     folderData: Map<string, FolderData>;
 }
 
 export const useFileStore = defineStore('file', {
     state: (): FileState => ({
+        showEditor: false,
         // 当前文件路径
-        currentPath: '/' as string,
+        currentPath: '' as string,
         // 文件夹数据  key为文件夹路径
         folderData: new Map() as Map<string, FolderData>,
     }),

@@ -1,28 +1,38 @@
 <script setup lang="ts">
 import SubCard from "../SubCard.vue";
-import {ref} from "vue";
+import {ref, watch} from "vue";
 import {FolderData} from "../../class.ts";
 import ExplorerItem from "./ExplorerItem.vue";
+import {useFileStore} from "../../store";
+import {getFolderData} from "../../network/file-api.ts";
 
-interface ExplorerProps {
-  data: FolderData
-}
 
-const props = withDefaults(defineProps<ExplorerProps>(), {
-  data: () => {
-    return {
-      path: "",
-      folder: [],
-      file: []
-    }
-  }
-})
+const fileStore = useFileStore();
 
-const selected = ref<string[]>([])
+const folderData = ref<FolderData>({ path: "", folder: [], file: [] });
+
+watch(() => fileStore.currentPath, (path: string) => {
+  const data = fileStore.folderData.get(path);
+  if (data) folderData.value = data;
+});
+
+const selected = ref<string[]>([]);
 
 const fileClickHandler = (name: string) => {
-  selected.value = [name]
+  selected.value = [name];
 }
+
+const folderDoubleClickHandler = (path: string) => {
+  getFolderData(path).then(data => {
+    fileStore.currentPath = path;
+    fileStore.saveAndConvertFolderData(data);
+  })
+}
+
+const fileDoubleClickHandler = (path: string) => {
+  fileStore.showEditor = true;
+}
+
 </script>
 
 <template>
@@ -33,18 +43,20 @@ const fileClickHandler = (name: string) => {
       <p>大小</p>
     </div>
     <div class="explorer-files">
-      <explorer-item v-for="file in props.data.folder"
+      <explorer-item v-for="file in folderData.folder"
                      :modified="file.modified"
                      :name="file.name"
                      :selected="selected.includes(file.name)"
-                     @click="fileClickHandler(file.name)" />
-      <explorer-item v-for="file in props.data.file"
+                     @click="fileClickHandler(file.name)"
+                     @dblclick="folderDoubleClickHandler(file.path)" />
+      <explorer-item v-for="file in folderData.file"
                      icon="icon-file"
                      :modified="file.modified"
                      :name="file.name"
                      :selected="selected.includes(file.name)"
                      :size="file.size"
-                     @click="fileClickHandler(file.name)" />
+                     @click="fileClickHandler(file.name)"
+                     @dblclick="fileDoubleClickHandler(file.path)"/>
     </div>
   </sub-card>
 </template>

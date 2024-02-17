@@ -3,11 +3,14 @@ import Icon from "../Icon.vue";
 import CodeEditor from "./CodeEditor.vue";
 import {computed, Ref, ref} from "vue";
 import editorConfig from "../../assets/editor-config.json"
+import {useFileStore} from "../../store";
 
 
-const tabItem = ['语言', '主题', '设置']
+const fileStore = useFileStore();
 
-const settingList = ['VS', 'OneDark']
+const tabItem = ['语言', '主题', '设置'];
+
+const settingList = ['VS', 'OneDark'];
 
 const fileInfo = {
   name: "test.json",
@@ -17,50 +20,50 @@ const fileInfo = {
   extension: "json"
 }
 
-const themeFlag = ref(false)
-const languageFlag = ref(false)
-const settingFlag = ref(false)
+const themeFlag = ref(false);
+const languageFlag = ref(false);
+const settingFlag = ref(false);
 
-const toolMenuBox = ref()
+const toolMenuBox = ref();
 
-const currentTheme = ref('dracula')
-const currentMode = ref('json')
+const currentTheme = ref('dracula');
+const currentMode = ref('json');
 
 
 const themeClass = computed(() => {
-  return `ace-${currentTheme.value.replaceAll('_', '-')}`
+  return `ace-${currentTheme.value.replaceAll('_', '-')}`;
 })
 
 
 const changeMode = (mode: string) => {
-  currentMode.value = mode
+  currentMode.value = mode;
 }
 
 const changeTheme = (theme: string) => {
-  currentTheme.value = theme
+  currentTheme.value = theme;
 }
 
 const addClickListener = (el: Element, flag: Ref) => {
   el.addEventListener("click", () => {
-    if (!flag.value) flag.value = true
+    if (!flag.value) flag.value = true;
     const handle = (e: MouseEvent) => {
       if (!el.contains(e.target as Node)) {
-        flag.value = false
-        document.removeEventListener("click", handle)
+        flag.value = false;
+        document.removeEventListener("click", handle);
       }
     }
-    document.addEventListener("click", handle)
+    document.addEventListener("click", handle);
   })
 }
 
 const vClickOutside = {
   mounted: (el: Element, binding: object) => {
     if (binding.value == '主题') {
-      addClickListener(el, themeFlag)
+      addClickListener(el, themeFlag);
     } else if (binding.value == '语言') {
-      addClickListener(el, languageFlag)
+      addClickListener(el, languageFlag);
     } else if (binding.value == '设置') {
-      addClickListener(el, settingFlag)
+      addClickListener(el, settingFlag);
     }
   }
 }
@@ -68,7 +71,7 @@ const vClickOutside = {
 const itemActive = (select: string) => {
   return (languageFlag.value && select == '语言') ||
       (themeFlag.value && select == '主题') ||
-      (settingFlag.value && select == '设置')
+      (settingFlag.value && select == '设置');
 }
 
 </script>
@@ -93,7 +96,7 @@ const itemActive = (select: string) => {
           <icon icon="icon-add" size="large" color="#ffffff" />
         </div>
 
-        <div class="tool-button-icon hover:bg-red-600/50">
+        <div class="tool-button-icon hover:bg-red-600/50" @click="fileStore.showEditor = false">
           <icon icon="icon-close" size="large" color="#ffffff" />
         </div>
       </div>

@@ -15,7 +15,6 @@ const pathInput = ref();
 
 const isInput = ref(false);
 
-
 watch(() => fileStore.currentPath, (path: string) => {
   pathList.value = path.substring(1, path.length).split("/");
 });
@@ -60,18 +59,17 @@ const changePath = (index: number) => {
 
 <template>
   <sub-card class="path-card">
+    <div class="flex items-center gap-1 pl-2">
+      <div class="path-item px-1" @click="changePath(-1)"><icon icon="icon-homefill" size="large" /></div>
+      <div class="separator"><icon icon="icon-unfold" class="-rotate-90" /></div>
+    </div>
     <div ref="pathBox" class="path-box" :class="isInput? 'hidden':'flex'">
-      <div class="flex items-center gap-1">
-        <div class="path-item px-1" @click="changePath(-1)"><icon icon="icon-homefill" size="large" /></div>
-        <div class="separator"><icon icon="icon-unfold" class="-rotate-90" /></div>
-      </div>
-      <div class="flex items-center gap-1" v-for="(pathItem, index) in pathList">
+      <div class="flex items-center" v-for="(pathItem, index) in pathList">
         <div class="path-item px-2" @click="changePath(index)"><span>{{ pathItem }}</span></div>
         <div class="separator" v-if="index != pathList.length - 1"><icon icon="icon-unfold" class="-rotate-90" /></div>
       </div>
     </div>
-    <div class="grow h-full min-w-14 cursor-text" :class="isInput? 'hidden':''" @click="changeInput">
-    </div>
+    <div class="grow h-full min-w-14 cursor-text" :class="isInput? 'hidden':''" @click="changeInput"></div>
     <div ref="input" class="grow" :class="isInput? 'flex':'hidden'">
       <input ref="pathInput" class="w-full h-10 px-3" :value="fileStore.currentPath">
     </div>
@@ -83,10 +81,10 @@ const changePath = (index: number) => {
   @apply flex grow shrink min-w-48 h-10 items-center gap-1
 }
 .path-box {
-  @apply px-2 shrink overflow-x-scroll
+  @apply shrink overflow-x-scroll
 }
 .path-item {
-  @apply inline-flex items-center h-7 hover:bg-blue-100 rounded cursor-pointer
+  @apply inline-flex items-center h-7 hover:bg-blue-100 rounded cursor-pointer text-nowrap truncate
 }
 .separator {
   @apply w-4 h-7 inline-flex items-center justify-center

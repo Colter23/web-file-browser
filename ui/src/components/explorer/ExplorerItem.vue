@@ -5,9 +5,9 @@ import Icon from "../Icon.vue";
 interface ExplorerItemProps {
   name: string;
   modified: string;
-  size: number;
+  size?: number;
   selected: boolean;
-  icon: string;
+  icon?: string;
 }
 
 const props = withDefaults(defineProps<ExplorerItemProps>(), {
@@ -15,7 +15,7 @@ const props = withDefaults(defineProps<ExplorerItemProps>(), {
   modified: "",
   size: 0,
   selected: false,
-  icon: "icon-folder"
+  icon: "icon-folder-fill"
 })
 
 const getDate = (srcDate: string) => {

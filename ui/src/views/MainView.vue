@@ -10,9 +10,12 @@ import Split from "../components/Split.vue";
 import SubCard from "../components/SubCard.vue";
 import Icon from "../components/Icon.vue";
 import Card from "../components/Card.vue";
+import Explorer from "../components/explorer/Explorer.vue";
+import EditorPanel from "../components/editor/EditorPanel.vue";
+import breadcrumb from "../components/Breadcrumb.vue";
+
 
 const fileStore = useFileStore();
-
 
 const treeData = ref<FileTreeData[]>([]);
 
@@ -25,6 +28,7 @@ const handleLoad = (node: FileTreeData) => {
 }
 
 getFolderData().then(data => {
+  fileStore.currentPath = "/";
   treeData.value = fileStore.saveAndConvertFolderData(data);
 })
 
@@ -38,35 +42,35 @@ getFolderData().then(data => {
         <icon icon="icon-setting" size="2"></icon>
       </card>
     </div>
-
     <card class="flex flex-col shrink grow overflow-auto p-2 gap-y-2">
       <div class="flex gap-x-2">
-        <sub-card class="w-60 h-11"></sub-card>
-        <sub-card class="w-11 h-11 icon rotate-90">
-          <icon icon="icon-unfold" size="large"/>
+        <sub-card class="w-60 h-10"></sub-card>
+        <sub-card class="icon">
+          <icon class="rotate-90" icon="icon-unfold" size="large"/>
         </sub-card>
-        <sub-card class="w-11 h-11 icon">
+        <sub-card class="icon">
           <icon icon="icon-refresh" size="large"/>
         </sub-card>
-        <sub-card class="grow h-11"></sub-card>
-        <sub-card class="w-28 h-11"></sub-card>
+        <breadcrumb></breadcrumb>
+        <sub-card class="w-28 h-10"></sub-card>
       </div>
       <split class="shrink grow overflow-auto">
         <template #left>
           <file-tree :data="treeData" :load-data="handleLoad"></file-tree>
         </template>
         <template #right>
-          <sub-card class="w-full h-full"></sub-card>
+          <sub-card class="w-full h-full">
+            <editor-panel v-show="fileStore.showEditor"></editor-panel>
+            <explorer v-show="!fileStore.showEditor"></explorer>
+          </sub-card>
         </template>
       </split>
     </card>
   </div>
-
-
 </template>
 
 <style scoped lang="postcss">
 .icon {
-  @apply inline-flex items-center justify-center
+  @apply w-10 h-10 shrink-0 inline-flex items-center justify-center
 }
 </style>
