@@ -1,0 +1,36 @@
+# Rust build output
+/target/
+
+# Runtime data and local secrets
+/data/
+/.env
+/.env.*
+!/env.example
+!/ui/.env.example
+
+# Logs and temporary files
+*.log
+*.err
+*.tmp
+*.temp
+/server.log
+/server.err
+
+# Frontend dependencies and build output
+/ui/node_modules/
+/ui/dist/
+/ui/.vite/
+/ui/.yarn/install-state.gz
+/ui/.pnp.*
+
+# IDE and OS metadata
+/.idea/
+/ui/.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Legacy backend snapshot kept out of the Rust repo
+/web-file-browser-kotlin/

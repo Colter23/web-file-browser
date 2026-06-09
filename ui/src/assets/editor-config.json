@@ -1,0 +1,320 @@
+{
+  "mode": [
+    {
+      "name": "Apache Conf",
+      "key": "apache_conf",
+      "icon": "apache",
+      "extensions": ["htaccess", "htgroups", "htpasswd"]
+    },
+    {
+      "name": "AsciiDoc",
+      "key": "asciidoc",
+      "icon": "asciidoc",
+      "extensions": ["asciidoc", "adoc"]
+    },
+    {
+      "name": "C/C++",
+      "key": "c_cpp",
+      "icon": "c_cpp",
+      "extensions": ["c", "cc", "cpp", "cxx", "h", "hh", "ino"]
+    },
+    {
+      "name": "C#",
+      "key": "csharp",
+      "icon": "csharp",
+      "extensions": ["cs"]
+    },
+    {
+      "name": "CSS",
+      "key": "css",
+      "icon": "css",
+      "extensions": ["css"]
+    },
+    {
+      "name": "Dart",
+      "key": "dart",
+      "icon": "dart",
+      "extensions": ["dart"]
+    },
+    {
+      "name": "Dockerfile",
+      "key": "dockerfile",
+      "icon": "dockerfile",
+      "regular": "^Dockerfile$"
+    },
+    {
+      "name": "Go",
+      "key": "golang",
+      "icon": "golang",
+      "extensions": ["go"]
+    },
+    {
+      "name": "Groovy",
+      "key": "groovy",
+      "icon": "groovy",
+      "extensions": ["groovy"]
+    },
+    {
+      "name": "HTML",
+      "key": "html",
+      "icon": "html",
+      "extensions": ["html", "htm", "xhtml", "vue", "we", "wpy", "svg"]
+    },
+    {
+      "name": "INI",
+      "key": "ini",
+      "icon": "ini",
+      "extensions": ["ini", "cfg", "prefs"]
+    },
+    {
+      "name": "Java",
+      "key": "java",
+      "icon": "java",
+      "extensions": ["java"]
+    },
+    {
+      "name": "JavaScript",
+      "key": "javascript",
+      "icon": "javascript",
+      "extensions": ["js", "jsm", "jsx", "cjs", "mjs"]
+    },
+    {
+      "name": "JSON",
+      "key": "json",
+      "icon": "json",
+      "extensions": ["json"]
+    },
+    {
+      "name": "JSP",
+      "key": "jsp",
+      "icon": "jsp",
+      "extensions": ["jsp"]
+    },
+    {
+      "name": "Kotlin",
+      "key": "kotlin",
+      "icon": "kotlin",
+      "extensions": ["kt", "kts"]
+    },
+    {
+      "name": "Log",
+      "key": "log",
+      "icon": "log",
+      "extensions": ["log"]
+    },
+    {
+      "name": "Lua",
+      "key": "lua",
+      "icon": "lua",
+      "extensions": ["lua"]
+    },
+    {
+      "name": "Markdown",
+      "key": "markdown",
+      "icon": "markdown",
+      "extensions": ["md", "markdown"]
+    },
+    {
+      "name": "MATLAB",
+      "key": "matlab",
+      "icon": "matlab",
+      "extensions": ["matlab"]
+    },
+    {
+      "name": "MySQL",
+      "key": "mysql",
+      "icon": "mysql",
+      "extensions": ["mysql"]
+    },
+    {
+      "name": "Nginx",
+      "key": "nginx",
+      "icon": "nginx",
+      "extensions": ["nginx", "conf"]
+    },
+    {
+      "name": "pgSQL",
+      "key": "pgsql",
+      "icon": "pgsql",
+      "extensions": ["pgsql"]
+    },
+    {
+      "name": "PHP",
+      "key": "php",
+      "icon": "php",
+      "extensions": ["php", "inc", "phtml", "shtml", "php3", "php4", "php5", "phps", "phpt", "aw", "ctp", "module"]
+    },
+    {
+      "name": "Powershell",
+      "key": "powershell",
+      "icon": "powershell",
+      "extensions": ["ps1"]
+    },
+    {
+      "name": "Properties",
+      "key": "properties",
+      "icon": "properties",
+      "extensions": ["properties"]
+    },
+    {
+      "name": "Protobuf",
+      "key": "protobuf",
+      "icon": "protobuf",
+      "extensions": ["proto"]
+    },
+    {
+      "name": "Python",
+      "key": "python",
+      "icon": "python",
+      "extensions": ["py"]
+    },
+    {
+      "name": "Ruby",
+      "key": "ruby",
+      "icon": "ruby",
+      "extensions": ["ru", "gemspec", "rake"]
+    },
+    {
+      "name": "Rust",
+      "key": "rust",
+      "icon": "rust",
+      "extensions": ["rs"]
+    },
+    {
+      "name": "SQL",
+      "key": "sql",
+      "icon": "sql",
+      "extensions": ["sql"]
+    },
+    {
+      "name": "Swift",
+      "key": "swift",
+      "icon": "swift",
+      "extensions": ["swift"]
+    },
+    {
+      "name": "Text",
+      "key": "text",
+      "icon": "text",
+      "extensions": ["txt", "ass"]
+    },
+    {
+      "name": "Toml",
+      "key": "toml",
+      "icon": "toml",
+      "extensions": ["toml"]
+    },
+    {
+      "name": "Typescript",
+      "key": "typescript",
+      "icon": "typescript",
+      "extensions": ["ts", "mts", "cts", "typescript", "str"]
+    },
+    {
+      "name": "XML",
+      "key": "xml",
+      "icon": "xml",
+      "extensions": ["xml", "rdf", "rss", "wsdl", "xslt", "atom", "mathml", "mml", "xul", "xbl", "xaml"]
+    },
+    {
+      "name": "YAML",
+      "key": "yaml",
+      "icon": "yaml",
+      "extensions": ["yaml", "yml"]
+    }
+  ],
+  "theme": {
+    "light": [
+      {
+        "name": "Chrome",
+        "key": "chrome"
+      },
+      {
+        "name": "Clouds",
+        "key": "clouds"
+      },
+      {
+        "name": "Crimson Editor",
+        "key": "crimson_editor"
+      },
+      {
+        "name": "GitHub",
+        "key": "github"
+      },
+      {
+        "name": "IPlastic",
+        "key": "iplastic"
+      },
+      {
+        "name": "Solarized Light",
+        "key": "solarized_light"
+      },
+      {
+        "name": "Tomorrow",
+        "key": "tomorrow"
+      },
+      {
+        "name": "XCode",
+        "key": "xcode"
+      }
+    ],
+    "dark": [
+      {
+        "name": "Chaos",
+        "key": "chaos"
+      },
+      {
+        "name": "Dracula",
+        "key": "dracula"
+      },
+      {
+        "name": "Cobalt",
+        "key": "cobalt"
+      },
+      {
+        "name": "Merbivore",
+        "key": "merbivore"
+      },
+      {
+        "name": "Merbivore Soft",
+        "key": "merbivore_soft"
+      },
+      {
+        "name": "Monokai",
+        "key": "monokai"
+      },
+      {
+        "name": "Nord Dark",
+        "key": "nord_dark"
+      },
+      {
+        "name": "One Dark",
+        "key": "one_dark"
+      },
+      {
+        "name": "Pastel on dark",
+        "key": "pastel_on_dark"
+      },
+      {
+        "name": "Solarized Dark",
+        "key": "solarized_dark"
+      },
+      {
+        "name": "Tomorrow Night",
+        "key": "tomorrow_night"
+      },
+      {
+        "name": "Tomorrow Night Blue",
+        "key": "tomorrow_night_blue"
+      },
+      {
+        "name": "Vibrant Ink",
+        "key": "vibrant_ink"
+      },
+      {
+        "name": "GitHub Dark",
+        "key": "github_dark"
+      }
+    ]
+  }
+}
