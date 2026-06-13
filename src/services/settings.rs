@@ -64,7 +64,6 @@ impl SettingsStore {
         tokio::task::spawn_blocking(move || verify_password(hash, password)).await?
     }
 
-    #[allow(dead_code)]
     pub async fn set_admin_password(&self, password: String) -> Result<(), AppError> {
         let hash = hash_password(password).await?;
         let mut settings = self.settings.write().await;

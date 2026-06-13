@@ -66,6 +66,7 @@ onMounted(() => {
 </template>
 
 <style scoped lang="postcss">
+@reference "tailwindcss";
 #editor {
   @apply w-full h-full
 }

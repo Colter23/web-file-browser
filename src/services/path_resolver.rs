@@ -1,5 +1,6 @@
 use std::{
-    cmp::Reverse,
+    cmp::{Ordering, Reverse},
+    collections::BinaryHeap,
     fs,
     path::{Component, Path, PathBuf},
     sync::Arc,
@@ -8,7 +9,9 @@ use std::{
 
 use crate::{
     error::AppError,
-    models::{EntryKind, FileInfo, FolderData, FolderInfo, FolderNode, PathMapping},
+    models::{
+        EntryKind, FileInfo, FolderData, FolderInfo, FolderNode, FolderPageInfo, PathMapping,
+    },
 };
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -50,6 +53,7 @@ pub struct DirectoryListOptions {
     pub order: SortOrder,
     pub filter: EntryFilter,
     pub include_hidden: bool,
+    pub include_total: bool,
 }
 
 impl DirectoryListOptions {
@@ -85,8 +89,19 @@ pub struct ResolvedPath {
     pub real_path: PathBuf,
 }
 
+#[derive(Debug, Clone)]
+pub struct ResolvedParentPath {
+    pub parent_virtual_path: String,
+    pub parent_real_path: PathBuf,
+    pub child_name: String,
+    pub child_virtual_path: String,
+}
+
 pub enum MetadataEntry {
-    Folder(FolderData),
+    Folder {
+        data: FolderData,
+        modified: Option<String>,
+    },
     File(FileInfo),
 }
 
@@ -110,11 +125,26 @@ pub async fn metadata(
         .await?
 }
 
+pub async fn basic_metadata_modified(
+    snapshot: Arc<MappingSnapshot>,
+    path: String,
+) -> Result<Option<String>, AppError> {
+    tokio::task::spawn_blocking(move || basic_metadata_modified_sync(&snapshot, &path)).await?
+}
+
 pub async fn resolve_existing(
     snapshot: Arc<MappingSnapshot>,
     path: String,
 ) -> Result<ResolvedPath, AppError> {
     tokio::task::spawn_blocking(move || resolve_existing_sync(&snapshot, &path)).await?
+}
+
+pub async fn resolve_existing_no_follow_final(
+    snapshot: Arc<MappingSnapshot>,
+    path: String,
+) -> Result<ResolvedPath, AppError> {
+    tokio::task::spawn_blocking(move || resolve_existing_no_follow_final_sync(&snapshot, &path))
+        .await?
 }
 
 pub fn resolve_existing_sync(
@@ -132,6 +162,47 @@ pub fn resolve_existing_sync(
         relative_parts,
         virtual_path,
         real_path,
+    })
+}
+
+pub fn resolve_existing_no_follow_final_sync(
+    snapshot: &MappingSnapshot,
+    path: &str,
+) -> Result<ResolvedPath, AppError> {
+    let parts = split_virtual_path(path)?;
+    let virtual_path = virtual_path_from_parts(&parts);
+    let (mount, relative_parts) = find_mount(snapshot, &parts)
+        .ok_or_else(|| AppError::not_found(format!("查无此路径: {virtual_path}")))?;
+    let real_path =
+        secure_join_existing_no_follow_final(&mount.root_path, &relative_parts, &virtual_path)?;
+
+    Ok(ResolvedPath {
+        mapping: mount.mapping.clone(),
+        relative_parts,
+        virtual_path,
+        real_path,
+    })
+}
+
+pub fn resolve_parent_for_child_sync(
+    snapshot: &MappingSnapshot,
+    child_path: &str,
+) -> Result<ResolvedParentPath, AppError> {
+    let parts = split_virtual_path(child_path)?;
+    let Some(child_name) = parts.last().cloned() else {
+        return Err(AppError::bad_request("目标路径不能为空"));
+    };
+    let parent_parts = parts[..parts.len() - 1].to_vec();
+    let parent_virtual_path = virtual_path_from_parts(&parent_parts);
+    let parent = resolve_existing_sync(snapshot, &parent_virtual_path)?;
+    ensure_writable(&parent.mapping)?;
+    ensure_folder(&parent.real_path, &parent.virtual_path)?;
+
+    Ok(ResolvedParentPath {
+        parent_virtual_path: parent.virtual_path.clone(),
+        parent_real_path: parent.real_path,
+        child_virtual_path: join_virtual_path(&parent_virtual_path, &child_name),
+        child_name,
     })
 }
 
@@ -252,11 +323,10 @@ fn metadata_sync_with_options(
             .map_err(|_| AppError::not_found(format!("查无此路径: {virtual_path}")))?;
         if metadata.is_dir() {
             let parent_path = join_virtual_parts(&mount.mapping.mount_path, &relative_parts);
-            Ok(MetadataEntry::Folder(list_real_folder(
-                &real_path,
-                &parent_path,
-                options,
-            )?))
+            Ok(MetadataEntry::Folder {
+                data: list_real_folder(&real_path, &parent_path, options)?,
+                modified: Some(modified_to_string(&metadata)),
+            })
         } else {
             Ok(MetadataEntry::File(file_info_from_path(
                 &real_path,
@@ -269,22 +339,46 @@ fn metadata_sync_with_options(
             if !parts.is_empty() {
                 return Err(AppError::not_found(format!("查无此路径: {virtual_path}")));
             }
-            return Ok(MetadataEntry::Folder(FolderData::full(
-                virtual_path,
-                Vec::new(),
-                Vec::new(),
-            )));
+            return Ok(MetadataEntry::Folder {
+                data: FolderData::full(virtual_path, Vec::new(), Vec::new()),
+                modified: None,
+            });
         };
         let Some(FolderNode::Virtual { children, .. }) = resolve_virtual_node(root, &parts) else {
             return Err(AppError::not_found(format!("查无此路径: {virtual_path}")));
         };
 
-        Ok(MetadataEntry::Folder(list_virtual_folder(
-            children,
-            virtual_path,
-            options,
-        )))
+        Ok(MetadataEntry::Folder {
+            data: list_virtual_folder(children, virtual_path, options),
+            modified: None,
+        })
     }
+}
+
+fn basic_metadata_modified_sync(
+    snapshot: &MappingSnapshot,
+    path: &str,
+) -> Result<Option<String>, AppError> {
+    let parts = split_virtual_path(path)?;
+    let virtual_path = virtual_path_from_parts(&parts);
+
+    if let Some((mount, relative_parts)) = find_mount(snapshot, &parts) {
+        let real_path = secure_join_existing(&mount.root_path, &relative_parts, &virtual_path)?;
+        let metadata = fs::metadata(&real_path)
+            .map_err(|_| AppError::not_found(format!("查无此路径: {virtual_path}")))?;
+        return Ok(Some(modified_to_string(&metadata)));
+    }
+
+    let Some(root) = &snapshot.root else {
+        if !parts.is_empty() {
+            return Err(AppError::not_found(format!("查无此路径: {virtual_path}")));
+        }
+        return Ok(None);
+    };
+    if resolve_virtual_node(root, &parts).is_none() {
+        return Err(AppError::not_found(format!("查无此路径: {virtual_path}")));
+    }
+    Ok(None)
 }
 
 fn find_mount<'a>(
@@ -307,6 +401,40 @@ fn secure_join_existing(
     for part in relative_parts {
         validate_path_segment(part)?;
         target.push(part);
+    }
+
+    let target = target
+        .canonicalize()
+        .map_err(|_| AppError::not_found(format!("查无此路径: {virtual_path}")))?;
+    if !target.starts_with(root) {
+        return Err(AppError::bad_request("路径越界"));
+    }
+    Ok(target)
+}
+
+fn secure_join_existing_no_follow_final(
+    root: &Path,
+    relative_parts: &[String],
+    virtual_path: &str,
+) -> Result<PathBuf, AppError> {
+    let mut target = root.to_path_buf();
+    for part in relative_parts {
+        validate_path_segment(part)?;
+        target.push(part);
+    }
+
+    let metadata = fs::symlink_metadata(&target)
+        .map_err(|_| AppError::not_found(format!("查无此路径: {virtual_path}")))?;
+    if metadata.file_type().is_symlink() {
+        let parent = target
+            .parent()
+            .unwrap_or(root)
+            .canonicalize()
+            .map_err(|_| AppError::not_found(format!("查无此路径: {virtual_path}")))?;
+        if !parent.starts_with(root) {
+            return Err(AppError::bad_request("路径越界"));
+        }
+        return Ok(target);
     }
 
     let target = target
@@ -443,7 +571,6 @@ fn list_real_folder(
 #[derive(Debug, Clone)]
 struct LightEntry {
     name: String,
-    path: PathBuf,
     kind: EntryKind,
 }
 
@@ -453,11 +580,67 @@ struct DetailedEntry {
     metadata: fs::Metadata,
 }
 
+#[derive(Debug, Default)]
+struct LightReadResult {
+    entries: Vec<LightEntry>,
+    total_entries: usize,
+    folder_total: usize,
+    file_total: usize,
+}
+
+#[derive(Debug, Clone)]
+struct LightEntryHeapItem {
+    entry: LightEntry,
+    order: SortOrder,
+}
+
+impl PartialEq for LightEntryHeapItem {
+    fn eq(&self, other: &Self) -> bool {
+        self.entry.kind == other.entry.kind && self.entry.name == other.entry.name
+    }
+}
+
+impl Eq for LightEntryHeapItem {}
+
+impl PartialOrd for LightEntryHeapItem {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for LightEntryHeapItem {
+    fn cmp(&self, other: &Self) -> Ordering {
+        cmp_light_entries(&self.entry, &other.entry, self.order)
+    }
+}
+
 fn read_light_entries(
     path: &Path,
     options: DirectoryListOptions,
-) -> Result<Vec<LightEntry>, AppError> {
-    let mut entries = Vec::new();
+) -> Result<LightReadResult, AppError> {
+    read_light_entries_with_window(path, options, None)
+}
+
+fn read_light_entries_page(
+    path: &Path,
+    options: DirectoryListOptions,
+) -> Result<LightReadResult, AppError> {
+    read_light_entries_with_window(
+        path,
+        options,
+        options
+            .limit
+            .map(|limit| options.offset.saturating_add(limit)),
+    )
+}
+
+fn read_light_entries_with_window(
+    path: &Path,
+    options: DirectoryListOptions,
+    keep_window: Option<usize>,
+) -> Result<LightReadResult, AppError> {
+    let mut result = LightReadResult::default();
+    let mut heap = keep_window.map(|_| BinaryHeap::<LightEntryHeapItem>::new());
     for entry in fs::read_dir(path)? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().to_string();
@@ -472,13 +655,41 @@ fn read_light_entries(
         if !filter_allows(options.filter, kind) {
             continue;
         }
-        entries.push(LightEntry {
-            name,
-            path: entry.path(),
-            kind,
-        });
+
+        result.total_entries += 1;
+        match kind {
+            EntryKind::Folder => result.folder_total += 1,
+            EntryKind::File => result.file_total += 1,
+        }
+
+        let light_entry = LightEntry { name, kind };
+        match (keep_window, heap.as_mut()) {
+            (Some(0), _) => {}
+            (Some(keep), Some(heap)) if heap.len() < keep => {
+                heap.push(LightEntryHeapItem {
+                    entry: light_entry,
+                    order: options.order,
+                });
+            }
+            (Some(_), Some(heap)) => {
+                let should_keep = heap.peek().is_some_and(|worst| {
+                    cmp_light_entries(&light_entry, &worst.entry, options.order) == Ordering::Less
+                });
+                if should_keep {
+                    heap.pop();
+                    heap.push(LightEntryHeapItem {
+                        entry: light_entry,
+                        order: options.order,
+                    });
+                }
+            }
+            _ => result.entries.push(light_entry),
+        }
     }
-    Ok(entries)
+    if let Some(heap) = heap {
+        result.entries = heap.into_iter().map(|item| item.entry).collect();
+    }
+    Ok(result)
 }
 
 fn list_real_folder_basic(
@@ -486,10 +697,11 @@ fn list_real_folder_basic(
     parent_path: &str,
     options: DirectoryListOptions,
 ) -> Result<FolderData, AppError> {
-    let mut entries = read_light_entries(path, options)?;
-    sort_light_entries(&mut entries, options.order);
-    let (folder_total, file_total) = count_kinds(entries.iter().map(|entry| entry.kind));
-    let entries = page_entries(entries, options);
+    let mut result = read_light_entries_page(path, options)?;
+    sort_light_entries(&mut result.entries, options.order);
+    let has_more = has_more(result.total_entries, options);
+    let totals = count_totals_if_requested(&result, options);
+    let entries = page_entries(result.entries, options);
     let mut folder = Vec::new();
     let mut file = Vec::new();
     for entry in entries {
@@ -503,8 +715,8 @@ fn list_real_folder_basic(
         parent_path.to_string(),
         folder,
         file,
-        folder_total,
-        file_total,
+        totals,
+        has_more,
         options,
     ))
 }
@@ -514,56 +726,94 @@ fn list_real_folder_full(
     parent_path: &str,
     options: DirectoryListOptions,
 ) -> Result<FolderData, AppError> {
-    let entries = read_light_entries(path, options)?;
-    let (folder_total, file_total) = count_kinds(entries.iter().map(|entry| entry.kind));
-    let mut entries = entries
+    if options.sort == DirectorySort::Name {
+        let mut result = read_light_entries_page(path, options)?;
+        sort_light_entries(&mut result.entries, options.order);
+        let has_more = has_more(result.total_entries, options);
+        let totals = count_totals_if_requested(&result, options);
+        let entries = page_entries(result.entries, options)
+            .into_iter()
+            .map(|entry| detailed_entry(path, entry))
+            .collect::<Result<Vec<_>, std::io::Error>>()?;
+        return Ok(folder_data_from_detailed_entries(
+            parent_path.to_string(),
+            entries,
+            totals,
+            has_more,
+            options,
+        ));
+    }
+
+    let result = read_light_entries(path, options)?;
+    let has_more = has_more(result.total_entries, options);
+    let totals = count_totals_if_requested(&result, options);
+    let mut entries = result
+        .entries
         .into_iter()
-        .map(|entry| {
-            let metadata = fs::metadata(&entry.path)?;
-            Ok(DetailedEntry {
-                light: entry,
-                metadata,
-            })
-        })
+        .map(|entry| detailed_entry(path, entry))
         .collect::<Result<Vec<_>, std::io::Error>>()?;
     sort_detailed_entries(&mut entries, options.sort, options.order);
     let entries = page_entries(entries, options);
+
+    Ok(folder_data_from_detailed_entries(
+        parent_path.to_string(),
+        entries,
+        totals,
+        has_more,
+        options,
+    ))
+}
+
+fn detailed_entry(parent_path: &Path, entry: LightEntry) -> Result<DetailedEntry, std::io::Error> {
+    let metadata = fs::metadata(parent_path.join(&entry.name))?;
+    Ok(DetailedEntry {
+        light: entry,
+        metadata,
+    })
+}
+
+fn folder_data_from_detailed_entries(
+    parent_path: String,
+    entries: Vec<DetailedEntry>,
+    totals: Option<(usize, usize)>,
+    has_more: bool,
+    options: DirectoryListOptions,
+) -> FolderData {
     let mut folder = Vec::new();
     let mut file = Vec::new();
     for entry in entries {
         match entry.light.kind {
-            EntryKind::Folder => folder.push(folder_info_from_detailed_entry(&entry, parent_path)),
-            EntryKind::File => file.push(file_info_from_detailed_entry(&entry, parent_path)),
+            EntryKind::Folder => folder.push(folder_info_from_detailed_entry(&entry, &parent_path)),
+            EntryKind::File => file.push(file_info_from_detailed_entry(&entry, &parent_path)),
         }
     }
 
-    Ok(folder_data(
-        parent_path.to_string(),
-        folder,
-        file,
-        folder_total,
-        file_total,
-        options,
-    ))
+    folder_data(parent_path, folder, file, totals, has_more, options)
 }
 
 fn folder_data(
     path: String,
     folder: Vec<FolderInfo>,
     file: Vec<FileInfo>,
-    folder_total: usize,
-    file_total: usize,
+    totals: Option<(usize, usize)>,
+    has_more: bool,
     options: DirectoryListOptions,
 ) -> FolderData {
     if let Some(limit) = options.limit {
+        let (folder_total, file_total) = totals
+            .map(|(folder_total, file_total)| (Some(folder_total), Some(file_total)))
+            .unwrap_or((None, None));
         FolderData::paged(
             path,
             folder,
             file,
-            folder_total,
-            file_total,
-            options.offset,
-            limit,
+            FolderPageInfo {
+                folder_total,
+                file_total,
+                offset: options.offset,
+                limit,
+                has_more,
+            },
         )
     } else {
         FolderData::full(path, folder, file)
@@ -588,7 +838,8 @@ fn list_virtual_folder(
         folder.reverse();
     }
     if let Some(limit) = options.limit {
-        let folder_total = folder.len();
+        let has_more = has_more(folder.len(), options);
+        let folder_total = options.include_total.then_some(folder.len());
         let folder = folder
             .into_iter()
             .skip(options.offset)
@@ -598,10 +849,13 @@ fn list_virtual_folder(
             virtual_path,
             folder,
             Vec::new(),
-            folder_total,
-            0,
-            options.offset,
-            limit,
+            FolderPageInfo {
+                folder_total,
+                file_total: options.include_total.then_some(0),
+                offset: options.offset,
+                limit,
+                has_more,
+            },
         )
     } else {
         FolderData::full(virtual_path, folder, Vec::new())
@@ -673,9 +927,7 @@ fn folder_info_from_detailed_entry(entry: &DetailedEntry, parent_path: &str) -> 
 }
 
 fn file_info_from_detailed_entry(entry: &DetailedEntry, parent_path: &str) -> FileInfo {
-    let extension = entry
-        .light
-        .path
+    let extension = Path::new(&entry.light.name)
         .extension()
         .map(|extension| extension.to_string_lossy().to_string())
         .unwrap_or_default();
@@ -710,13 +962,17 @@ fn file_info_from_path(path: &Path, virtual_path: &str, metadata: &fs::Metadata)
 }
 
 fn sort_light_entries(entries: &mut [LightEntry], order: SortOrder) {
-    entries.sort_by(|left, right| {
-        kind_order(left.kind)
-            .cmp(&kind_order(right.kind))
-            .then_with(|| left.name.cmp(&right.name))
-    });
+    entries.sort_by(|left, right| cmp_light_entries(left, right, order));
+}
+
+fn cmp_light_entries(left: &LightEntry, right: &LightEntry, order: SortOrder) -> Ordering {
+    let ordering = kind_order(left.kind)
+        .cmp(&kind_order(right.kind))
+        .then_with(|| left.name.cmp(&right.name));
     if order == SortOrder::Desc {
-        entries.reverse();
+        ordering.reverse()
+    } else {
+        ordering
     }
 }
 
@@ -757,16 +1013,20 @@ fn filter_allows(filter: EntryFilter, kind: EntryKind) -> bool {
     )
 }
 
-fn count_kinds(kinds: impl Iterator<Item = EntryKind>) -> (usize, usize) {
-    let mut folder_total = 0;
-    let mut file_total = 0;
-    for kind in kinds {
-        match kind {
-            EntryKind::Folder => folder_total += 1,
-            EntryKind::File => file_total += 1,
-        }
-    }
-    (folder_total, file_total)
+fn count_totals_if_requested(
+    result: &LightReadResult,
+    options: DirectoryListOptions,
+) -> Option<(usize, usize)> {
+    options
+        .include_total
+        .then_some((result.folder_total, result.file_total))
+}
+
+fn has_more(total_entries: usize, options: DirectoryListOptions) -> bool {
+    options
+        .limit
+        .map(|limit| options.offset.saturating_add(limit) < total_entries)
+        .unwrap_or(false)
 }
 
 fn page_entries<T>(entries: Vec<T>, options: DirectoryListOptions) -> Vec<T> {
@@ -806,8 +1066,10 @@ mod tests {
     use crate::models::PathMapping;
 
     use super::{
-        DirectoryDetail, DirectoryListOptions, MappingSnapshot, MetadataEntry, metadata_sync,
-        metadata_sync_with_options, resolve_existing_sync, split_virtual_path,
+        DirectoryDetail, DirectoryListOptions, MappingSnapshot, MetadataEntry,
+        basic_metadata_modified_sync, metadata_sync, metadata_sync_with_options, page_entries,
+        read_light_entries_page, resolve_existing_no_follow_final_sync, resolve_existing_sync,
+        sort_light_entries, split_virtual_path,
     };
 
     #[test]
@@ -845,11 +1107,95 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn no_follow_final_keeps_final_symlink_when_available() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp =
+            std::env::temp_dir().join(format!("web-file-browser-resolver-symlink-test-{nonce}"));
+        fs::create_dir_all(&temp).unwrap();
+        let source = temp.join("source.txt");
+        let link = temp.join("source-link.txt");
+        fs::write(&source, "hello").unwrap();
+        if !try_create_file_symlink(&source, &link) {
+            fs::remove_dir_all(temp).unwrap();
+            return;
+        }
+
+        let snapshot = MappingSnapshot::build(vec![PathMapping {
+            id: Some(1),
+            mount_path: "/repo".to_string(),
+            folder_path: temp.to_string_lossy().to_string(),
+            remark: Some(String::new()),
+            order: Some(0),
+            writable: true,
+        }])
+        .await
+        .unwrap();
+
+        let followed = resolve_existing_sync(&snapshot, "/repo/source-link.txt").unwrap();
+        let not_followed =
+            resolve_existing_no_follow_final_sync(&snapshot, "/repo/source-link.txt").unwrap();
+
+        assert!(followed.real_path.ends_with("source.txt"));
+        assert!(not_followed.real_path.ends_with("source-link.txt"));
+        assert!(
+            fs::symlink_metadata(&not_followed.real_path)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
     async fn empty_snapshot_only_serves_virtual_root() {
         let snapshot = MappingSnapshot::build(Vec::new()).await.unwrap();
 
         assert!(metadata_sync(&snapshot, "/").is_ok());
         assert!(metadata_sync(&snapshot, "/missing").is_err());
+    }
+
+    #[tokio::test]
+    async fn basic_modified_precheck_uses_real_target_only() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp = std::env::temp_dir().join(format!("web-file-browser-modified-test-{nonce}"));
+        fs::create_dir_all(&temp).unwrap();
+        fs::write(temp.join("a.txt"), "hello").unwrap();
+
+        let snapshot = MappingSnapshot::build(vec![PathMapping {
+            id: Some(1),
+            mount_path: "/repo".to_string(),
+            folder_path: temp.to_string_lossy().to_string(),
+            remark: Some(String::new()),
+            order: Some(0),
+            writable: true,
+        }])
+        .await
+        .unwrap();
+
+        let root_modified = basic_metadata_modified_sync(&snapshot, "/").unwrap();
+        let folder_modified = basic_metadata_modified_sync(&snapshot, "/repo").unwrap();
+        let file_modified = basic_metadata_modified_sync(&snapshot, "/repo/a.txt").unwrap();
+
+        assert_eq!(root_modified, None);
+        assert!(
+            folder_modified
+                .as_deref()
+                .is_some_and(|value| !value.is_empty())
+        );
+        assert!(
+            file_modified
+                .as_deref()
+                .is_some_and(|value| !value.is_empty())
+        );
+
+        fs::remove_dir_all(temp).unwrap();
     }
 
     #[tokio::test]
@@ -877,13 +1223,14 @@ mod tests {
         .await
         .unwrap();
 
-        let MetadataEntry::Folder(data) = metadata_sync_with_options(
+        let MetadataEntry::Folder { data, .. } = metadata_sync_with_options(
             &snapshot,
             "/repo",
             DirectoryListOptions {
                 offset: 1,
                 limit: Some(1),
                 detail: DirectoryDetail::Full,
+                include_total: true,
                 ..DirectoryListOptions::default()
             },
         )
@@ -899,5 +1246,112 @@ mod tests {
         assert_eq!(data.has_more, Some(true));
 
         fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
+    async fn omits_totals_by_default_but_keeps_has_more() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp = std::env::temp_dir().join(format!("web-file-browser-total-test-{nonce}"));
+        fs::create_dir_all(temp.join("folder-a")).unwrap();
+        fs::create_dir_all(temp.join("folder-b")).unwrap();
+        fs::create_dir_all(temp.join("folder-c")).unwrap();
+        fs::write(temp.join("a.txt"), "a").unwrap();
+        fs::write(temp.join("b.txt"), "b").unwrap();
+        fs::write(temp.join("c.txt"), "c").unwrap();
+
+        let snapshot = MappingSnapshot::build(vec![PathMapping {
+            id: Some(1),
+            mount_path: "/repo".to_string(),
+            folder_path: temp.to_string_lossy().to_string(),
+            remark: Some(String::new()),
+            order: Some(0),
+            writable: true,
+        }])
+        .await
+        .unwrap();
+
+        let MetadataEntry::Folder { data, .. } = metadata_sync_with_options(
+            &snapshot,
+            "/repo",
+            DirectoryListOptions {
+                offset: 2,
+                limit: Some(2),
+                detail: DirectoryDetail::Basic,
+                ..DirectoryListOptions::default()
+            },
+        )
+        .unwrap() else {
+            panic!("expected folder metadata");
+        };
+
+        assert_eq!(data.folder_total, None);
+        assert_eq!(data.file_total, None);
+        assert_eq!(data.folder.len(), 1);
+        assert_eq!(data.file.len(), 1);
+        assert_eq!(data.has_more, Some(true));
+
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[test]
+    fn paged_light_read_keeps_only_requested_sort_window() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp = std::env::temp_dir().join(format!("web-file-browser-window-test-{nonce}"));
+        fs::create_dir_all(&temp).unwrap();
+        for index in 0..50 {
+            fs::write(temp.join(format!("file-{index:02}.txt")), "x").unwrap();
+        }
+
+        let options = DirectoryListOptions {
+            offset: 10,
+            limit: Some(5),
+            ..DirectoryListOptions::default()
+        };
+        let mut result = read_light_entries_page(&temp, options).unwrap();
+
+        assert_eq!(result.total_entries, 50);
+        assert_eq!(result.folder_total, 0);
+        assert_eq!(result.file_total, 50);
+        assert_eq!(result.entries.len(), 15);
+
+        sort_light_entries(&mut result.entries, options.order);
+        let names = page_entries(result.entries, options)
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            names,
+            vec![
+                "file-10.txt",
+                "file-11.txt",
+                "file-12.txt",
+                "file-13.txt",
+                "file-14.txt",
+            ]
+        );
+
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    fn try_create_file_symlink(source: &std::path::Path, link: &std::path::Path) -> bool {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(source, link).is_ok()
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_file(source, link).is_ok()
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = (source, link);
+            false
+        }
     }
 }

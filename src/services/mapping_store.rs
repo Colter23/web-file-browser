@@ -40,6 +40,20 @@ impl MappingStore {
         self.snapshot.read().await.mappings.clone()
     }
 
+    pub async fn count(&self) -> usize {
+        self.snapshot.read().await.mappings.len()
+    }
+
+    pub async fn get(&self, id: i64) -> Option<PathMapping> {
+        self.snapshot
+            .read()
+            .await
+            .mappings
+            .iter()
+            .find(|mapping| mapping.id == Some(id))
+            .cloned()
+    }
+
     pub async fn snapshot(&self) -> Arc<MappingSnapshot> {
         self.snapshot.read().await.clone()
     }

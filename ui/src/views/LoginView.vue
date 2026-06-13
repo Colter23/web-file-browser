@@ -68,6 +68,7 @@ const submit = async () => {
 </template>
 
 <style scoped lang="postcss">
+@reference "tailwindcss";
 .login-page {
   @apply min-h-screen flex items-center justify-center bg-slate-100 px-4
 }

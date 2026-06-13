@@ -2,13 +2,14 @@
 import {onMounted, reactive, ref} from "vue";
 import {useRouter} from "vue-router";
 import {PathMapping, RuntimeSettings} from "../class";
-import {createMapping, deleteMapping, getMappings, getSettings, updateMapping} from "../network/api";
+import {changePassword, createMapping, deleteMapping, getMappings, getSettings, updateMapping} from "../network/api";
 
 const router = useRouter();
 const mappings = ref<PathMapping[]>([]);
 const settings = ref<RuntimeSettings | null>(null);
 const loading = ref(false);
 const message = ref("");
+const messageKind = ref<"success" | "error">("error");
 
 const form = reactive<PathMapping>({
   mountPath: "",
@@ -16,6 +17,12 @@ const form = reactive<PathMapping>({
   remark: "",
   order: 0,
   writable: true
+})
+
+const passwordForm = reactive({
+  currentPassword: "",
+  newPassword: "",
+  confirmPassword: ""
 })
 
 const load = async () => {
@@ -26,7 +33,7 @@ const load = async () => {
     mappings.value = mappingData;
     settings.value = settingData;
   } catch (error) {
-    message.value = error instanceof Error ? error.message : "加载设置失败";
+    showError(error, "加载设置失败");
   } finally {
     loading.value = false;
   }
@@ -42,6 +49,32 @@ const resetForm = () => {
   form.writable = true;
 }
 
+const conflictPolicyText = (policy: RuntimeSettings["conflictPolicy"]) => {
+  return {
+    autoRename: "自动重命名",
+    reject: "拒绝",
+    overwrite: "覆盖"
+  }[policy] ?? policy;
+}
+
+const corsOriginsText = (origins: RuntimeSettings["corsAllowedOrigins"]) => {
+  return origins.length ? origins.join("，") : "同源";
+}
+
+const listText = (values: string[]) => {
+  return values.length ? values.join("，") : "不限制";
+}
+
+const showError = (error: unknown, fallback: string) => {
+  messageKind.value = "error";
+  message.value = error instanceof Error ? error.message : fallback;
+}
+
+const showSuccess = (text: string) => {
+  messageKind.value = "success";
+  message.value = text;
+}
+
 const addMapping = async () => {
   message.value = "";
   try {
@@ -49,7 +82,7 @@ const addMapping = async () => {
     resetForm();
     await load();
   } catch (error) {
-    message.value = error instanceof Error ? error.message : "添加挂载失败";
+    showError(error, "添加挂载失败");
   }
 }
 
@@ -60,7 +93,7 @@ const saveMapping = async (mapping: PathMapping) => {
     await updateMapping(mapping.id, mapping);
     await load();
   } catch (error) {
-    message.value = error instanceof Error ? error.message : "保存挂载失败";
+    showError(error, "保存挂载失败");
   }
 }
 
@@ -72,7 +105,28 @@ const removeMapping = async (mapping: PathMapping) => {
     await deleteMapping(mapping.id);
     await load();
   } catch (error) {
-    message.value = error instanceof Error ? error.message : "删除挂载失败";
+    showError(error, "删除挂载失败");
+  }
+}
+
+const resetPasswordForm = () => {
+  passwordForm.currentPassword = "";
+  passwordForm.newPassword = "";
+  passwordForm.confirmPassword = "";
+}
+
+const savePassword = async () => {
+  message.value = "";
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    showError(null, "两次输入的新密码不一致");
+    return;
+  }
+  try {
+    await changePassword(passwordForm.currentPassword, passwordForm.newPassword);
+    resetPasswordForm();
+    showSuccess("管理员密码已更新");
+  } catch (error) {
+    showError(error, "修改密码失败");
   }
 }
 </script>
@@ -118,6 +172,16 @@ const removeMapping = async (mapping: PathMapping) => {
       </section>
 
       <section class="panel" v-if="settings">
+        <h2>管理员密码</h2>
+        <form class="password-form" @submit.prevent="savePassword">
+          <input v-model="passwordForm.currentPassword" autocomplete="current-password" placeholder="当前密码" type="password" required>
+          <input v-model="passwordForm.newPassword" autocomplete="new-password" minlength="8" placeholder="新密码" type="password" required>
+          <input v-model="passwordForm.confirmPassword" autocomplete="new-password" minlength="8" placeholder="确认新密码" type="password" required>
+          <button class="primary-button" type="submit">更新密码</button>
+        </form>
+      </section>
+
+      <section class="panel" v-if="settings">
         <h2>服务配置</h2>
         <dl>
           <div><dt>监听地址</dt><dd>{{ settings.bindAddress }}:{{ settings.port }}</dd></div>
@@ -125,27 +189,40 @@ const removeMapping = async (mapping: PathMapping) => {
           <div><dt>配置文件</dt><dd>{{ settings.configFile }}</dd></div>
           <div><dt>回收站</dt><dd>{{ settings.trashDir }}</dd></div>
           <div><dt>静态目录</dt><dd>{{ settings.staticDir }}</dd></div>
+          <div><dt>CORS 来源</dt><dd>{{ corsOriginsText(settings.corsAllowedOrigins) }}</dd></div>
+          <div><dt>信任代理来源头</dt><dd>{{ settings.trustProxyHeaders ? "已启用" : "未启用" }}</dd></div>
+          <div><dt>编辑上限</dt><dd>{{ settings.maxEditBytes }} bytes</dd></div>
+          <div><dt>可编辑扩展名</dt><dd>{{ listText(settings.editableExtensions) }}</dd></div>
+          <div><dt>可编辑 MIME</dt><dd>{{ listText(settings.editableMimeTypes) }}</dd></div>
           <div><dt>上传上限</dt><dd>{{ settings.maxUploadBytes ? `${settings.maxUploadBytes} bytes` : "不限制" }}</dd></div>
           <div><dt>目录分页上限</dt><dd>{{ settings.maxDirPageSize }}</dd></div>
           <div><dt>目录并发</dt><dd>{{ settings.maxDirConcurrency }}</dd></div>
           <div><dt>传输并发</dt><dd>{{ settings.maxTransferConcurrency }}</dd></div>
           <div><dt>IP 并发</dt><dd>{{ settings.maxIpConcurrency }}</dd></div>
           <div><dt>任务并发</dt><dd>{{ settings.maxTaskConcurrency }}</dd></div>
+          <div><dt>任务历史</dt><dd>最近 {{ settings.taskHistoryLimit }} 条已结束任务</dd></div>
           <div><dt>任务限速</dt><dd>{{ settings.taskSpeedLimitBytesPerSec ? `${settings.taskSpeedLimitBytesPerSec} bytes/s` : "不限制" }}</dd></div>
+          <div><dt>解压字节上限</dt><dd>{{ settings.maxExtractBytes ? `${settings.maxExtractBytes} bytes` : "不限制" }}</dd></div>
+          <div><dt>解压条目上限</dt><dd>{{ settings.maxExtractFiles ? settings.maxExtractFiles : "不限制" }}</dd></div>
           <div><dt>搜索索引</dt><dd>{{ settings.indexEnabled ? "已启用" : "未启用" }}</dd></div>
+          <div><dt>启动重建索引</dt><dd>{{ settings.indexRebuildOnStartup ? "启用" : "关闭" }}</dd></div>
           <div><dt>审计日志</dt><dd>{{ settings.auditFile }}</dd></div>
+          <div><dt>审计轮转</dt><dd>{{ settings.auditMaxBytes ? `${settings.auditMaxBytes} bytes` : "不限制" }}</dd></div>
+          <div><dt>审计保留</dt><dd>最近 {{ settings.auditRetentionFiles }} 个轮转文件</dd></div>
           <div><dt>回收站保留</dt><dd>{{ settings.trashRetentionDays ? `${settings.trashRetentionDays} 天` : "不限制" }}</dd></div>
           <div><dt>回收站容量</dt><dd>{{ settings.trashMaxBytes ? `${settings.trashMaxBytes} bytes` : "不限制" }}</dd></div>
+          <div><dt>冲突策略</dt><dd>{{ conflictPolicyText(settings.conflictPolicy) }}</dd></div>
           <div><dt>认证</dt><dd>{{ settings.authConfigured ? "已初始化" : "未初始化" }}</dd></div>
         </dl>
       </section>
 
-      <div v-if="message" class="message">{{ message }}</div>
+      <div v-if="message" class="message" :class="{success: messageKind === 'success'}">{{ message }}</div>
     </main>
   </div>
 </template>
 
 <style scoped lang="postcss">
+@reference "tailwindcss";
 .settings-page {
   @apply min-h-screen bg-slate-100 text-slate-900
 }
@@ -171,7 +248,8 @@ h2 {
 }
 
 .mapping-form,
-.mapping-row {
+.mapping-row,
+.password-form {
   @apply grid gap-2 items-center
 }
 
@@ -181,6 +259,10 @@ h2 {
 
 .mapping-row {
   grid-template-columns: 1fr 2fr 1fr 90px 90px 80px 80px;
+}
+
+.password-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 100px;
 }
 
 input {
@@ -244,9 +326,14 @@ dd {
   @apply rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700
 }
 
+.message.success {
+  @apply border-emerald-200 bg-emerald-50 text-emerald-700
+}
+
 @media (max-width: 900px) {
   .mapping-form,
-  .mapping-row {
+  .mapping-row,
+  .password-form {
     grid-template-columns: 1fr;
   }
 }

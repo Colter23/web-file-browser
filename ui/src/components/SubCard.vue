@@ -9,6 +9,7 @@
 </template>
 
 <style scoped lang="postcss">
+@reference "tailwindcss";
 .sub-card {
   @apply bg-white/50 rounded-lg backdrop-blur shadow;
 }

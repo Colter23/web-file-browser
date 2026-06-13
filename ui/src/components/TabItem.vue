@@ -34,6 +34,7 @@ const props = defineProps({
 </template>
 
 <style scoped lang="postcss">
+@reference "tailwindcss";
 .tab-item {
   @apply flex pl-2.5 pr-0.5 min-w-28 max-w-60 h-full text-base items-center border-2 border-white hover:border-[#3662EC] cursor-pointer active:bg-[#3662EC] active:text-white
 }

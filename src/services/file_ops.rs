@@ -2,11 +2,17 @@ use std::{fs, sync::Arc};
 
 use crate::{
     error::AppError,
-    models::{CreateEntryRequest, CreateEntryType, FileOperationResponse, MoveEntryRequest},
-    services::path_resolver::{
-        MappingSnapshot, ResolvedPath, ensure_folder, ensure_not_mount_root, ensure_writable,
-        join_virtual_path, normalize_child_name, resolve_existing_sync, split_virtual_path,
-        virtual_path_from_parts,
+    models::{
+        ConflictPolicy, CreateEntryRequest, CreateEntryType, FileOperationResponse,
+        MoveEntryRequest,
+    },
+    services::{
+        conflict,
+        path_resolver::{
+            MappingSnapshot, ResolvedPath, ensure_folder, ensure_not_mount_root, ensure_writable,
+            join_virtual_path, normalize_child_name, resolve_existing_no_follow_final_sync,
+            resolve_existing_sync, split_virtual_path, virtual_path_from_parts,
+        },
     },
 };
 
@@ -14,16 +20,20 @@ pub async fn create_entry(
     snapshot: Arc<MappingSnapshot>,
     parent_path: String,
     request: CreateEntryRequest,
+    policy: ConflictPolicy,
 ) -> Result<FileOperationResponse, AppError> {
-    tokio::task::spawn_blocking(move || create_entry_sync(&snapshot, &parent_path, request)).await?
+    tokio::task::spawn_blocking(move || create_entry_sync(&snapshot, &parent_path, request, policy))
+        .await?
 }
 
 pub async fn move_entry(
     snapshot: Arc<MappingSnapshot>,
     source_path: String,
     request: MoveEntryRequest,
+    policy: ConflictPolicy,
 ) -> Result<FileOperationResponse, AppError> {
-    tokio::task::spawn_blocking(move || move_entry_sync(&snapshot, &source_path, &request)).await?
+    tokio::task::spawn_blocking(move || move_entry_sync(&snapshot, &source_path, &request, policy))
+        .await?
 }
 
 pub async fn resolve_delete_target(
@@ -31,9 +41,10 @@ pub async fn resolve_delete_target(
     path: String,
 ) -> Result<ResolvedPath, AppError> {
     tokio::task::spawn_blocking(move || {
-        let resolved = resolve_existing_sync(&snapshot, &path)?;
+        let resolved = resolve_existing_no_follow_final_sync(&snapshot, &path)?;
         ensure_writable(&resolved.mapping)?;
         ensure_not_mount_root(&resolved)?;
+        ensure_no_symlink(&resolved.real_path, "不支持删除符号链接")?;
         Ok(resolved)
     })
     .await?
@@ -43,26 +54,30 @@ fn create_entry_sync(
     snapshot: &MappingSnapshot,
     parent_path: &str,
     request: CreateEntryRequest,
+    policy: ConflictPolicy,
 ) -> Result<FileOperationResponse, AppError> {
     let parent = resolve_existing_sync(snapshot, parent_path)?;
     ensure_writable(&parent.mapping)?;
     ensure_folder(&parent.real_path, &parent.virtual_path)?;
     let name = normalize_child_name(&request.name)?;
-    let target = parent.real_path.join(&name);
-    if target.exists() {
-        return Err(AppError::conflict(format!(
-            "路径已存在: {}",
-            join_virtual_path(&parent.virtual_path, &name)
-        )));
-    }
+    let virtual_path = join_virtual_path(&parent.virtual_path, &name);
+    let target = conflict::resolve_child(&parent.real_path, &name, &virtual_path, policy)?;
 
     match request.entry_type {
-        CreateEntryType::File => fs::write(&target, [])?,
-        CreateEntryType::Folder => fs::create_dir(&target)?,
+        CreateEntryType::File => {
+            conflict::ensure_file_overwrite_allowed(&target)?;
+            fs::write(&target.path, [])?;
+        }
+        CreateEntryType::Folder => {
+            if target.existed {
+                return Err(AppError::conflict("仅支持显式覆盖文件，不覆盖目录"));
+            }
+            fs::create_dir(&target.path)?;
+        }
     }
 
     Ok(FileOperationResponse {
-        path: join_virtual_path(&parent.virtual_path, &name),
+        path: join_virtual_path(&parent.virtual_path, &target.name),
     })
 }
 
@@ -70,10 +85,12 @@ fn move_entry_sync(
     snapshot: &MappingSnapshot,
     source_path: &str,
     request: &MoveEntryRequest,
+    policy: ConflictPolicy,
 ) -> Result<FileOperationResponse, AppError> {
-    let source = resolve_existing_sync(snapshot, source_path)?;
+    let source = resolve_existing_no_follow_final_sync(snapshot, source_path)?;
     ensure_writable(&source.mapping)?;
     ensure_not_mount_root(&source)?;
+    ensure_no_symlink(&source.real_path, "不支持移动符号链接")?;
 
     let target_parts = split_virtual_path(&request.target_path)?;
     let Some(target_name) = target_parts.last() else {
@@ -92,22 +109,51 @@ fn move_entry_sync(
         return Err(AppError::bad_request("不能跨挂载点移动文件"));
     }
 
-    let target = target_parent.real_path.join(&target_name);
-    if target.exists() {
-        return Err(AppError::conflict(format!(
-            "路径已存在: {}",
-            join_virtual_path(&target_parent.virtual_path, &target_name)
-        )));
+    let desired_virtual_path = join_virtual_path(&target_parent.virtual_path, &target_name);
+    let desired_target = target_parent.real_path.join(&target_name);
+    if desired_target.exists()
+        && let Ok(canonical_target) = desired_target.canonicalize()
+        && canonical_target == source.real_path
+    {
+        return Ok(FileOperationResponse {
+            path: desired_virtual_path,
+        });
     }
 
-    if source.real_path.is_dir() && target.starts_with(&source.real_path) {
+    let target = conflict::resolve_child(
+        &target_parent.real_path,
+        &target_name,
+        &desired_virtual_path,
+        policy,
+    )?;
+
+    if source.real_path.is_dir() && target.path.starts_with(&source.real_path) {
         return Err(AppError::bad_request("不能把文件夹移动到自身内部"));
     }
 
-    fs::rename(&source.real_path, &target)?;
+    if target.existed {
+        if source.real_path.is_dir() {
+            return Err(AppError::conflict("不支持覆盖移动目录"));
+        }
+        conflict::ensure_file_overwrite_allowed(&target)?;
+        conflict::replace_file_sync(&source.real_path, &target.path)?;
+    } else {
+        fs::rename(&source.real_path, &target.path)?;
+    }
     Ok(FileOperationResponse {
-        path: join_virtual_path(&target_parent.virtual_path, &target_name),
+        path: join_virtual_path(&target_parent.virtual_path, &target.name),
     })
+}
+
+fn ensure_no_symlink(path: &std::path::Path, message: &str) -> Result<(), AppError> {
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.file_type().is_symlink() {
+        return Err(AppError::bad_request(format!(
+            "{message}: {}",
+            path.display()
+        )));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -117,7 +163,9 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use crate::models::{CreateEntryRequest, CreateEntryType, MoveEntryRequest, PathMapping};
+    use crate::models::{
+        ConflictPolicy, CreateEntryRequest, CreateEntryType, MoveEntryRequest, PathMapping,
+    };
 
     use super::{create_entry_sync, move_entry_sync};
     use crate::services::path_resolver::MappingSnapshot;
@@ -147,7 +195,9 @@ mod tests {
             CreateEntryRequest {
                 entry_type: CreateEntryType::File,
                 name: "a.txt".to_string(),
+                conflict_policy: None,
             },
+            ConflictPolicy::Reject,
         )
         .unwrap();
         move_entry_sync(
@@ -155,7 +205,9 @@ mod tests {
             "/repo/a.txt",
             &MoveEntryRequest {
                 target_path: "/repo/b.txt".to_string(),
+                conflict_policy: None,
             },
+            ConflictPolicy::Reject,
         )
         .unwrap();
 
@@ -188,7 +240,9 @@ mod tests {
             CreateEntryRequest {
                 entry_type: CreateEntryType::File,
                 name: "a.txt".to_string(),
+                conflict_policy: None,
             },
+            ConflictPolicy::Reject,
         );
 
         assert!(result.is_err());
@@ -233,7 +287,9 @@ mod tests {
             "/left/a.txt",
             &MoveEntryRequest {
                 target_path: "/right/a.txt".to_string(),
+                conflict_policy: None,
             },
+            ConflictPolicy::Reject,
         );
 
         assert!(result.is_err());
@@ -241,5 +297,56 @@ mod tests {
         assert!(!right.join("a.txt").exists());
         fs::remove_dir_all(left).unwrap();
         fs::remove_dir_all(right).unwrap();
+    }
+
+    #[tokio::test]
+    async fn auto_renames_create_and_move_conflicts() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp = std::env::temp_dir().join(format!("web-file-browser-rename-test-{nonce}"));
+        fs::create_dir_all(&temp).unwrap();
+        fs::write(temp.join("a.txt"), "old").unwrap();
+        fs::write(temp.join("source.txt"), "source").unwrap();
+        fs::write(temp.join("target.txt"), "target").unwrap();
+        let snapshot = MappingSnapshot::build(vec![PathMapping {
+            id: Some(1),
+            mount_path: "/repo".to_string(),
+            folder_path: temp.to_string_lossy().to_string(),
+            remark: Some(String::new()),
+            order: Some(0),
+            writable: true,
+        }])
+        .await
+        .unwrap();
+
+        let created = create_entry_sync(
+            &snapshot,
+            "/repo",
+            CreateEntryRequest {
+                entry_type: CreateEntryType::File,
+                name: "a.txt".to_string(),
+                conflict_policy: None,
+            },
+            ConflictPolicy::AutoRename,
+        )
+        .unwrap();
+        let moved = move_entry_sync(
+            &snapshot,
+            "/repo/source.txt",
+            &MoveEntryRequest {
+                target_path: "/repo/target.txt".to_string(),
+                conflict_policy: None,
+            },
+            ConflictPolicy::AutoRename,
+        )
+        .unwrap();
+
+        assert_eq!(created.path, "/repo/a (1).txt");
+        assert_eq!(moved.path, "/repo/target (1).txt");
+        assert!(temp.join("a (1).txt").is_file());
+        assert!(temp.join("target (1).txt").is_file());
+        fs::remove_dir_all(temp).unwrap();
     }
 }

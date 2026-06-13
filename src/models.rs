@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryKind {
@@ -34,6 +35,28 @@ fn default_writable() -> bool {
     true
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum ConflictPolicy {
+    #[default]
+    AutoRename,
+    Reject,
+    Overwrite,
+}
+
+impl FromStr for ConflictPolicy {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim() {
+            "autoRename" | "auto-rename" | "auto_rename" | "auto" => Ok(Self::AutoRename),
+            "reject" => Ok(Self::Reject),
+            "overwrite" => Ok(Self::Overwrite),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct FolderData {
     pub path: String,
@@ -49,6 +72,15 @@ pub struct FolderData {
     pub limit: Option<usize>,
     #[serde(rename = "hasMore", skip_serializing_if = "Option::is_none")]
     pub has_more: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct FolderPageInfo {
+    pub folder_total: Option<usize>,
+    pub file_total: Option<usize>,
+    pub offset: usize,
+    pub limit: usize,
+    pub has_more: bool,
 }
 
 impl FolderData {
@@ -69,22 +101,17 @@ impl FolderData {
         path: String,
         folder: Vec<FolderInfo>,
         file: Vec<FileInfo>,
-        folder_total: usize,
-        file_total: usize,
-        offset: usize,
-        limit: usize,
+        page: FolderPageInfo,
     ) -> Self {
-        let has_more = offset.saturating_add(limit) < folder_total
-            || offset.saturating_add(limit) < file_total;
         Self {
             path,
             folder,
             file,
-            folder_total: Some(folder_total),
-            file_total: Some(file_total),
-            offset: Some(offset),
-            limit: Some(limit),
-            has_more: Some(has_more),
+            folder_total: page.folder_total,
+            file_total: page.file_total,
+            offset: Some(page.offset),
+            limit: Some(page.limit),
+            has_more: Some(page.has_more),
         }
     }
 }
@@ -141,6 +168,13 @@ pub struct LoginRequest {
     pub password: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionResponse {
@@ -157,18 +191,31 @@ pub struct RuntimeSettings {
     pub config_file: String,
     pub trash_dir: String,
     pub static_dir: String,
+    pub cors_allowed_origins: Vec<String>,
+    pub trust_proxy_headers: bool,
+    pub max_edit_bytes: u64,
+    pub editable_extensions: Vec<String>,
+    pub editable_mime_types: Vec<String>,
     pub max_upload_bytes: Option<u64>,
     pub max_dir_page_size: usize,
     pub max_dir_concurrency: usize,
     pub max_transfer_concurrency: usize,
     pub max_ip_concurrency: usize,
     pub max_task_concurrency: usize,
+    pub task_history_limit: usize,
     pub task_speed_limit_bytes_per_sec: Option<u64>,
+    pub max_extract_bytes: Option<u64>,
+    pub max_extract_files: Option<usize>,
+    pub max_extract_depth: usize,
     pub index_enabled: bool,
+    pub index_rebuild_on_startup: bool,
     pub index_scan_delay_ms: u64,
     pub audit_file: String,
+    pub audit_max_bytes: Option<u64>,
+    pub audit_retention_files: usize,
     pub trash_retention_days: Option<u64>,
     pub trash_max_bytes: Option<u64>,
+    pub conflict_policy: ConflictPolicy,
     pub auth_configured: bool,
 }
 
@@ -178,6 +225,8 @@ pub struct CreateEntryRequest {
     #[serde(rename = "type")]
     pub entry_type: CreateEntryType,
     pub name: String,
+    #[serde(default, alias = "conflict")]
+    pub conflict_policy: Option<ConflictPolicy>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -191,6 +240,8 @@ pub enum CreateEntryType {
 #[serde(rename_all = "camelCase")]
 pub struct MoveEntryRequest {
     pub target_path: String,
+    #[serde(default, alias = "conflict")]
+    pub conflict_policy: Option<ConflictPolicy>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -210,6 +261,38 @@ pub struct UploadResponse {
 pub struct TaskPathRequest {
     pub sources: Vec<String>,
     pub target_path: Option<String>,
+    #[serde(default, alias = "conflict")]
+    pub conflict_policy: Option<ConflictPolicy>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ArchiveFormat {
+    TarGz,
+    Zip,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveTaskRequest {
+    pub sources: Vec<String>,
+    pub target_path: String,
+    #[serde(default)]
+    pub output_name: Option<String>,
+    pub format: ArchiveFormat,
+    #[serde(default, alias = "conflict")]
+    pub conflict_policy: Option<ConflictPolicy>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractTaskRequest {
+    pub source_path: String,
+    pub target_path: String,
+    #[serde(default)]
+    pub folder_name: Option<String>,
+    #[serde(default, alias = "conflict")]
+    pub conflict_policy: Option<ConflictPolicy>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -230,6 +313,8 @@ pub enum TaskKind {
     Copy,
     Move,
     Delete,
+    Archive,
+    Extract,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -261,6 +346,8 @@ pub struct TaskStatus {
     pub speed_bytes_per_sec: f64,
     pub processed_items: usize,
     pub total_items: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_path: Option<String>,
     pub errors: Vec<TaskError>,
     pub started_at: Option<String>,
     pub finished_at: Option<String>,
@@ -310,11 +397,53 @@ pub struct HealthResponse {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ReadinessResponse {
+    pub status: String,
+    pub version: String,
+    pub checks: Vec<ReadinessCheck>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadinessCheck {
+    pub name: String,
+    pub status: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MetricsResponse {
     pub mappings: usize,
     pub active_sessions: usize,
-    pub tasks_total: usize,
-    pub tasks_running: usize,
     pub trash_entries: usize,
-    pub indexed_entries: usize,
+    pub tasks: TaskMetrics,
+    pub limits: RequestLimitMetrics,
+    pub index: IndexStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskMetrics {
+    pub total: usize,
+    pub queued: usize,
+    pub running: usize,
+    pub completed: usize,
+    pub failed: usize,
+    pub cancelled: usize,
+    pub errors_total: usize,
+    pub processed_bytes: u64,
+    pub current_speed_bytes_per_sec: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestLimitMetrics {
+    pub dir_scan_limit: usize,
+    pub active_dir_scans: usize,
+    pub transfer_limit: usize,
+    pub active_transfers: usize,
+    pub ip_limit: usize,
+    pub tracked_ips: usize,
+    pub active_ip_requests: usize,
 }

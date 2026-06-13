@@ -1,6 +1,8 @@
 use std::{
+    fs::Metadata,
     path::{Path, PathBuf},
     sync::Arc,
+    time::UNIX_EPOCH,
 };
 
 use axum::{
@@ -9,7 +11,9 @@ use axum::{
     extract::{Multipart, multipart::Field},
     http::{
         HeaderMap, HeaderName, HeaderValue, StatusCode,
-        header::{CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, RANGE},
+        header::{
+            CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, ETAG, IF_MATCH, RANGE,
+        },
     },
     response::{IntoResponse, Response},
 };
@@ -17,16 +21,20 @@ use futures_util::StreamExt;
 use tokio::{
     fs::{self, File, OpenOptions},
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufWriter, SeekFrom},
+    sync::OwnedSemaphorePermit,
 };
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
 use crate::{
     error::AppError,
-    models::{FileOperationResponse, UploadResponse},
-    services::path_resolver::{
-        MappingSnapshot, ResolvedPath, ensure_file, ensure_folder, ensure_not_mount_root,
-        ensure_writable, join_virtual_path, normalize_child_name, resolve_existing,
+    models::{ConflictPolicy, FileOperationResponse, UploadResponse},
+    services::{
+        conflict,
+        path_resolver::{
+            MappingSnapshot, ResolvedPath, ensure_file, ensure_folder, ensure_not_mount_root,
+            ensure_writable, join_virtual_path, normalize_child_name, resolve_existing,
+        },
     },
 };
 
@@ -34,6 +42,14 @@ const ACCEPT_RANGES_VALUE: &str = "bytes";
 const ACCEPT_RANGES_HEADER: HeaderName = HeaderName::from_static("accept-ranges");
 const STREAM_BUFFER_SIZE: usize = 256 * 1024;
 const WRITE_BUFFER_SIZE: usize = 256 * 1024;
+const TEXT_SAMPLE_BYTES: usize = 8 * 1024;
+
+#[derive(Debug, Clone, Default)]
+pub struct EditablePolicy {
+    pub max_bytes: u64,
+    pub extensions: Vec<String>,
+    pub mime_types: Vec<String>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ByteRange {
@@ -52,29 +68,59 @@ pub async fn stream_existing_file(
     headers: HeaderMap,
     attachment: bool,
     head_only: bool,
+    edit_policy: Option<&EditablePolicy>,
+    transfer_permit: OwnedSemaphorePermit,
 ) -> Result<Response, AppError> {
-    ensure_file(&resolved.real_path, &resolved.virtual_path)?;
-    let mut file = File::open(&resolved.real_path).await?;
-    let size = file.metadata().await?.len();
+    let mut file = if head_only && edit_policy.is_none() {
+        None
+    } else {
+        Some(File::open(&resolved.real_path).await?)
+    };
+    let metadata = match file.as_ref() {
+        Some(file) => file.metadata().await?,
+        None => fs::metadata(&resolved.real_path).await?,
+    };
+    if !metadata.is_file() {
+        return Err(AppError::bad_request(format!(
+            "路径不是文件: {}",
+            resolved.virtual_path
+        )));
+    }
+    if let Some(policy) = edit_policy {
+        let file = file
+            .as_mut()
+            .ok_or_else(|| AppError::internal("编辑模式 HEAD 未打开文件"))?;
+        ensure_editable_file(
+            file,
+            &metadata,
+            &resolved.real_path,
+            &resolved.virtual_path,
+            policy,
+        )
+        .await?;
+    }
+    let size = metadata.len();
+    let etag = content_etag(&metadata);
     let range = parse_range_header(headers.get(RANGE), size)?;
     let (status, start, length) = match range {
         Some(range) => (StatusCode::PARTIAL_CONTENT, range.start, range.len()),
         None => (StatusCode::OK, 0, size),
     };
 
-    if start > 0 {
-        file.seek(SeekFrom::Start(start)).await?;
-    }
-
     let mime = mime_guess::from_path(&resolved.real_path).first_or_octet_stream();
     let mut response = if head_only {
         Body::empty().into_response()
     } else {
-        Body::from_stream(ReaderStream::with_capacity(
-            file.take(length),
-            STREAM_BUFFER_SIZE,
-        ))
-        .into_response()
+        let mut file = file.ok_or_else(|| AppError::internal("内容读取请求未打开文件"))?;
+        if start > 0 {
+            file.seek(SeekFrom::Start(start)).await?;
+        }
+        let stream = ReaderStream::with_capacity(file.take(length), STREAM_BUFFER_SIZE);
+        let stream =
+            futures_util::stream::unfold((stream, transfer_permit), |(mut stream, permit)| async {
+                stream.next().await.map(|chunk| (chunk, (stream, permit)))
+            });
+        Body::from_stream(stream).into_response()
     };
     *response.status_mut() = status;
 
@@ -88,6 +134,7 @@ pub async fn stream_existing_file(
         ACCEPT_RANGES_HEADER,
         HeaderValue::from_static(ACCEPT_RANGES_VALUE),
     );
+    insert_header_value(headers, ETAG, &etag)?;
     headers.insert(
         CONTENT_LENGTH,
         HeaderValue::from_str(&length.to_string())
@@ -116,29 +163,47 @@ pub async fn save_content(
     path: String,
     headers: HeaderMap,
     body: Body,
-    max_bytes: Option<u64>,
-) -> Result<Json<FileOperationResponse>, AppError> {
+    max_upload_bytes: Option<u64>,
+    edit_policy: &EditablePolicy,
+) -> Result<(HeaderMap, Json<FileOperationResponse>), AppError> {
+    let max_bytes = effective_write_limit(max_upload_bytes, edit_policy.max_bytes);
     ensure_declared_length_within_limit(&headers, max_bytes)?;
+    let if_match = required_if_match(&headers)?;
     let resolved = resolve_existing(snapshot, path).await?;
     ensure_writable(&resolved.mapping)?;
     ensure_not_mount_root(&resolved)?;
     ensure_file(&resolved.real_path, &resolved.virtual_path)?;
+    ensure_editable_path(&resolved.real_path, &resolved.virtual_path, edit_policy).await?;
+    verify_if_match(&if_match, &resolved.real_path, &resolved.virtual_path).await?;
 
     let temp_path = temp_path_for(&resolved.real_path)?;
-    let result = write_body_to_file(body, &temp_path, max_bytes).await;
+    let result = write_body_to_file(body, &temp_path, max_bytes, true).await;
     if result.is_err() {
         let _ = fs::remove_file(&temp_path).await;
     }
     result?;
+    if let Err(error) =
+        verify_if_match(&if_match, &resolved.real_path, &resolved.virtual_path).await
+    {
+        let _ = fs::remove_file(&temp_path).await;
+        return Err(error);
+    }
 
     if let Err(error) = replace_file(&temp_path, &resolved.real_path).await {
         let _ = fs::remove_file(&temp_path).await;
         return Err(error);
     }
 
-    Ok(Json(FileOperationResponse {
-        path: resolved.virtual_path,
-    }))
+    let etag = current_content_etag(&resolved.real_path, &resolved.virtual_path).await?;
+    let mut response_headers = HeaderMap::new();
+    insert_header_value(&mut response_headers, ETAG, &etag)?;
+
+    Ok((
+        response_headers,
+        Json(FileOperationResponse {
+            path: resolved.virtual_path,
+        }),
+    ))
 }
 
 pub async fn upload_multipart(
@@ -146,6 +211,7 @@ pub async fn upload_multipart(
     parent_path: String,
     mut multipart: Multipart,
     max_bytes: Option<u64>,
+    policy: ConflictPolicy,
 ) -> Result<(StatusCode, Json<UploadResponse>), AppError> {
     let parent = resolve_existing(snapshot, parent_path).await?;
     ensure_writable(&parent.mapping)?;
@@ -156,7 +222,7 @@ pub async fn upload_multipart(
         let Some(file_name) = field.file_name().map(ToString::to_string) else {
             continue;
         };
-        files.push(upload_field(&parent, file_name, field, max_bytes).await?);
+        files.push(upload_field(&parent, file_name, field, max_bytes, policy).await?);
     }
 
     Ok((StatusCode::CREATED, Json(UploadResponse { files })))
@@ -230,29 +296,40 @@ async fn upload_field(
     file_name: String,
     mut field: Field<'_>,
     max_bytes: Option<u64>,
+    policy: ConflictPolicy,
 ) -> Result<FileOperationResponse, AppError> {
     let name = normalize_child_name(&file_name)?;
-    let target = parent.real_path.join(&name);
-    if target.exists() {
-        return Err(AppError::conflict(format!(
-            "路径已存在: {}",
-            join_virtual_path(&parent.virtual_path, &name)
-        )));
-    }
+    let virtual_path = join_virtual_path(&parent.virtual_path, &name);
+    let target = conflict::resolve_child(&parent.real_path, &name, &virtual_path, policy)?;
+    conflict::ensure_file_overwrite_allowed(&target)?;
 
-    let temp_path = temp_path_for(&target)?;
+    let temp_path = temp_path_for(&target.path)?;
     let result = write_field_to_file(&mut field, &temp_path, max_bytes).await;
     if result.is_err() {
         let _ = fs::remove_file(&temp_path).await;
     }
     result?;
-    if let Err(error) = fs::rename(&temp_path, &target).await {
-        let _ = fs::remove_file(&temp_path).await;
-        return Err(error.into());
+    if target.existed {
+        if let Err(error) = replace_file(&temp_path, &target.path).await {
+            let _ = fs::remove_file(&temp_path).await;
+            return Err(error);
+        }
+    } else {
+        if target.path.exists() {
+            let _ = fs::remove_file(&temp_path).await;
+            return Err(AppError::conflict(format!(
+                "路径已存在: {}",
+                join_virtual_path(&parent.virtual_path, &target.name)
+            )));
+        }
+        if let Err(error) = fs::rename(&temp_path, &target.path).await {
+            let _ = fs::remove_file(&temp_path).await;
+            return Err(error.into());
+        }
     }
 
     Ok(FileOperationResponse {
-        path: join_virtual_path(&parent.virtual_path, &name),
+        path: join_virtual_path(&parent.virtual_path, &target.name),
     })
 }
 
@@ -260,6 +337,7 @@ async fn write_body_to_file(
     body: Body,
     temp_path: &Path,
     max_bytes: Option<u64>,
+    validate_text: bool,
 ) -> Result<(), AppError> {
     let mut stream = body.into_data_stream();
     let mut file = BufWriter::with_capacity(WRITE_BUFFER_SIZE, create_temp_file(temp_path).await?);
@@ -267,6 +345,9 @@ async fn write_body_to_file(
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|error| AppError::bad_request(error.to_string()))?;
         written = checked_add_len(written, chunk.len(), max_bytes)?;
+        if validate_text {
+            ensure_text_chunk(&chunk)?;
+        }
         file.write_all(&chunk).await?;
     }
     file.flush().await?;
@@ -313,6 +394,155 @@ fn ensure_declared_length_within_limit(
     Ok(())
 }
 
+fn effective_write_limit(max_upload_bytes: Option<u64>, max_edit_bytes: u64) -> Option<u64> {
+    max_upload_bytes
+        .map(|max_upload_bytes| max_upload_bytes.min(max_edit_bytes))
+        .or(Some(max_edit_bytes))
+}
+
+async fn ensure_editable_path(
+    path: &Path,
+    virtual_path: &str,
+    policy: &EditablePolicy,
+) -> Result<(), AppError> {
+    let mut file = File::open(path).await?;
+    let metadata = file.metadata().await?;
+    ensure_editable_file(&mut file, &metadata, path, virtual_path, policy).await
+}
+
+async fn ensure_editable_file(
+    file: &mut File,
+    metadata: &Metadata,
+    path: &Path,
+    virtual_path: &str,
+    policy: &EditablePolicy,
+) -> Result<(), AppError> {
+    ensure_editable_kind(path, virtual_path, policy)?;
+
+    if metadata.len() > policy.max_bytes {
+        return Err(AppError::payload_too_large(format!(
+            "文件超过在线编辑上限: {virtual_path}，当前 {} bytes，上限 {max_bytes} bytes",
+            metadata.len(),
+            max_bytes = policy.max_bytes
+        )));
+    }
+
+    if metadata.len() == 0 {
+        return Ok(());
+    }
+
+    file.seek(SeekFrom::Start(0)).await?;
+    let sample_len = metadata.len().min(TEXT_SAMPLE_BYTES as u64) as usize;
+    let mut sample = vec![0_u8; sample_len];
+    file.read_exact(&mut sample).await?;
+    let complete_sample = metadata.len() <= TEXT_SAMPLE_BYTES as u64;
+    if !looks_like_text(&sample, complete_sample, path) {
+        return Err(AppError::unsupported_media_type(format!(
+            "文件看起来不是文本文件，不能在线编辑: {virtual_path}"
+        )));
+    }
+    Ok(())
+}
+
+fn ensure_editable_kind(
+    path: &Path,
+    virtual_path: &str,
+    policy: &EditablePolicy,
+) -> Result<(), AppError> {
+    if policy.extensions.is_empty() && policy.mime_types.is_empty() {
+        return Ok(());
+    }
+
+    if editable_extension_matches(path, &policy.extensions)
+        || editable_mime_matches(path, &policy.mime_types)
+    {
+        return Ok(());
+    }
+
+    Err(AppError::unsupported_media_type(format!(
+        "文件类型不在允许在线编辑范围内: {virtual_path}"
+    )))
+}
+
+fn ensure_text_chunk(chunk: &[u8]) -> Result<(), AppError> {
+    if chunk.contains(&0) {
+        return Err(AppError::unsupported_media_type(
+            "保存内容包含二进制数据，已拒绝写入",
+        ));
+    }
+    Ok(())
+}
+
+async fn verify_if_match(if_match: &str, path: &Path, virtual_path: &str) -> Result<(), AppError> {
+    if if_match_allows(if_match, &current_content_etag(path, virtual_path).await?) {
+        Ok(())
+    } else {
+        Err(AppError::precondition_failed(format!(
+            "文件已被外部修改，请刷新后再保存: {virtual_path}"
+        )))
+    }
+}
+
+async fn current_content_etag(path: &Path, virtual_path: &str) -> Result<String, AppError> {
+    let metadata = fs::metadata(path).await.map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            AppError::precondition_failed(format!("文件已不存在，请刷新后再保存: {virtual_path}"))
+        } else {
+            AppError::from(error)
+        }
+    })?;
+    if !metadata.is_file() {
+        return Err(AppError::precondition_failed(format!(
+            "路径已不再是文件，请刷新后再保存: {virtual_path}"
+        )));
+    }
+    Ok(content_etag(&metadata))
+}
+
+fn required_if_match(headers: &HeaderMap) -> Result<String, AppError> {
+    let value = headers.get(IF_MATCH).ok_or_else(|| {
+        AppError::precondition_required("保存文件需要 If-Match 头，请重新打开文件后再保存")
+    })?;
+    let value = value
+        .to_str()
+        .map_err(|_| AppError::bad_request("If-Match 头无效"))?
+        .trim();
+    if value.is_empty() {
+        return Err(AppError::bad_request("If-Match 头不能为空"));
+    }
+    Ok(value.to_string())
+}
+
+fn if_match_allows(if_match: &str, current_etag: &str) -> bool {
+    if_match
+        .split(',')
+        .map(str::trim)
+        .any(|candidate| candidate == "*" || candidate == current_etag)
+}
+
+fn content_etag(metadata: &Metadata) -> String {
+    let modified_nanos = metadata
+        .modified()
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    format!("\"wfb-{:x}-{:x}\"", metadata.len(), modified_nanos)
+}
+
+fn insert_header_value(
+    headers: &mut HeaderMap,
+    name: HeaderName,
+    value: &str,
+) -> Result<(), AppError> {
+    headers.insert(
+        name,
+        HeaderValue::from_str(value)
+            .map_err(|error| AppError::internal(format!("生成响应头失败: {error}")))?,
+    );
+    Ok(())
+}
+
 async fn create_temp_file(path: &Path) -> Result<File, AppError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).await?;
@@ -327,14 +557,48 @@ async fn create_temp_file(path: &Path) -> Result<File, AppError> {
 async fn replace_file(temp_path: &Path, target: &Path) -> Result<(), AppError> {
     match fs::rename(temp_path, target).await {
         Ok(()) => Ok(()),
-        Err(error) if target.exists() => {
-            fs::remove_file(target).await?;
-            fs::rename(temp_path, target).await.map_err(|rename_error| {
-                AppError::internal(format!("替换文件失败: {error}; {rename_error}"))
-            })
-        }
+        Err(error) if target.exists() => replace_existing_file(temp_path, target, error).await,
         Err(error) => Err(error.into()),
     }
+}
+
+async fn replace_existing_file(
+    temp_path: &Path,
+    target: &Path,
+    first_error: std::io::Error,
+) -> Result<(), AppError> {
+    if !target.is_file() {
+        return Err(AppError::conflict("仅支持替换文件，不替换目录"));
+    }
+
+    let backup = replacement_backup_path(target);
+    fs::rename(target, &backup).await.map_err(|backup_error| {
+        AppError::internal(format!("准备替换文件失败: {first_error}; {backup_error}"))
+    })?;
+
+    match fs::rename(temp_path, target).await {
+        Ok(()) => {
+            let _ = fs::remove_file(&backup).await;
+            Ok(())
+        }
+        Err(rename_error) => match fs::rename(&backup, target).await {
+            Ok(()) => Err(AppError::internal(format!(
+                "替换文件失败，已恢复旧文件: {first_error}; {rename_error}"
+            ))),
+            Err(restore_error) => Err(AppError::internal(format!(
+                "替换文件失败，且恢复旧文件失败: {first_error}; {rename_error}; {restore_error}"
+            ))),
+        },
+    }
+}
+
+fn replacement_backup_path(target: &Path) -> PathBuf {
+    let parent = target.parent().unwrap_or_else(|| Path::new("."));
+    let name = target
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("target");
+    parent.join(format!(".{name}.replace-backup-{}", Uuid::new_v4()))
 }
 
 fn temp_path_for(target: &Path) -> Result<PathBuf, AppError> {
@@ -366,6 +630,114 @@ fn checked_add_len(
     Ok(next)
 }
 
+fn looks_like_text(sample: &[u8], complete_sample: bool, path: &Path) -> bool {
+    if sample.is_empty() {
+        return true;
+    }
+    if sample.contains(&0) {
+        return false;
+    }
+    if is_known_binary_extension(path) {
+        return false;
+    }
+    if !is_utf8_sample(sample, complete_sample) {
+        return false;
+    }
+
+    let suspicious_controls = sample
+        .iter()
+        .filter(|byte| {
+            **byte < 0x20 && !matches!(**byte, b'\n' | b'\r' | b'\t' | 0x08 | 0x0c | 0x1b)
+        })
+        .count();
+    suspicious_controls.saturating_mul(100) <= sample.len()
+}
+
+fn editable_extension_matches(path: &Path, extensions: &[String]) -> bool {
+    if extensions.is_empty() {
+        return false;
+    }
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
+        .is_some_and(|extension| extensions.iter().any(|allowed| allowed == &extension))
+}
+
+fn editable_mime_matches(path: &Path, mime_types: &[String]) -> bool {
+    if mime_types.is_empty() {
+        return false;
+    }
+    let mime = mime_guess::from_path(path)
+        .first_or_octet_stream()
+        .to_string()
+        .to_ascii_lowercase();
+    mime_types.iter().any(|allowed| {
+        if allowed == "*/*" || allowed == &mime {
+            return true;
+        }
+        allowed
+            .strip_suffix("/*")
+            .is_some_and(|group| mime.starts_with(&format!("{group}/")))
+    })
+}
+
+fn is_utf8_sample(sample: &[u8], complete_sample: bool) -> bool {
+    match std::str::from_utf8(sample) {
+        Ok(_) => true,
+        Err(error) => !complete_sample && error.error_len().is_none(),
+    }
+}
+
+fn is_known_binary_extension(path: &Path) -> bool {
+    let Some(extension) = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
+    else {
+        return false;
+    };
+
+    matches!(
+        extension.as_str(),
+        "7z" | "avi"
+            | "bmp"
+            | "class"
+            | "dll"
+            | "doc"
+            | "docx"
+            | "exe"
+            | "flac"
+            | "gif"
+            | "gz"
+            | "ico"
+            | "iso"
+            | "jar"
+            | "jpeg"
+            | "jpg"
+            | "m4a"
+            | "mkv"
+            | "mov"
+            | "mp3"
+            | "mp4"
+            | "o"
+            | "ogg"
+            | "pdf"
+            | "png"
+            | "ppt"
+            | "pptx"
+            | "rar"
+            | "so"
+            | "tar"
+            | "wav"
+            | "webm"
+            | "webp"
+            | "xls"
+            | "xlsx"
+            | "xz"
+            | "zip"
+    )
+}
+
 fn attachment_disposition(path: &Path) -> String {
     let file_name = path
         .file_name()
@@ -377,11 +749,27 @@ fn attachment_disposition(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use axum::http::{HeaderMap, HeaderValue, header::CONTENT_LENGTH};
+    use std::{
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    use axum::{
+        body::Body,
+        http::{
+            HeaderMap, HeaderValue,
+            header::{CONTENT_LENGTH, ETAG, IF_MATCH},
+        },
+    };
 
     use crate::error::AppError;
+    use crate::{models::PathMapping, services::path_resolver::MappingSnapshot};
 
-    use super::{ByteRange, ensure_declared_length_within_limit, parse_range};
+    use super::{
+        ByteRange, EditablePolicy, content_etag, editable_extension_matches, editable_mime_matches,
+        ensure_declared_length_within_limit, if_match_allows, parse_range, replace_file,
+        save_content,
+    };
 
     #[test]
     fn parses_closed_range() {
@@ -431,5 +819,231 @@ mod tests {
 
         let error = ensure_declared_length_within_limit(&headers, Some(512)).unwrap_err();
         assert!(matches!(error, AppError::PayloadTooLarge(_)));
+    }
+
+    #[test]
+    fn matches_if_match_values() {
+        assert!(if_match_allows("\"a\", \"b\"", "\"b\""));
+        assert!(if_match_allows("*", "\"anything\""));
+        assert!(!if_match_allows("\"a\"", "\"b\""));
+    }
+
+    #[tokio::test]
+    async fn save_requires_if_match() {
+        let (snapshot, temp) = snapshot_with_file("save-requires-if-match", "hello").await;
+
+        let error = save_content(
+            snapshot,
+            "/repo/a.txt".to_string(),
+            HeaderMap::new(),
+            Body::from("new"),
+            None,
+            &edit_policy(1024),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, AppError::PreconditionRequired(_)));
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
+    async fn save_rejects_stale_if_match() {
+        let (snapshot, temp) = snapshot_with_file("save-stale-if-match", "hello").await;
+        let file = temp.join("a.txt");
+        let old_etag = content_etag(&fs::metadata(&file).unwrap());
+        fs::write(&file, "external-change").unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert(IF_MATCH, HeaderValue::from_str(&old_etag).unwrap());
+
+        let error = save_content(
+            snapshot,
+            "/repo/a.txt".to_string(),
+            headers,
+            Body::from("new"),
+            None,
+            &edit_policy(1024),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, AppError::PreconditionFailed(_)));
+        assert_eq!(fs::read_to_string(file).unwrap(), "external-change");
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
+    async fn save_returns_new_etag_after_match() {
+        let (snapshot, temp) = snapshot_with_file("save-new-etag", "hello").await;
+        let file = temp.join("a.txt");
+        let old_etag = content_etag(&fs::metadata(&file).unwrap());
+        let mut headers = HeaderMap::new();
+        headers.insert(IF_MATCH, HeaderValue::from_str(&old_etag).unwrap());
+
+        let (response_headers, response) = save_content(
+            snapshot,
+            "/repo/a.txt".to_string(),
+            headers,
+            Body::from("new-content"),
+            None,
+            &edit_policy(1024),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response.0.path, "/repo/a.txt");
+        assert_eq!(fs::read_to_string(&file).unwrap(), "new-content");
+        assert!(response_headers.get(ETAG).is_some());
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
+    async fn replace_file_rejects_directory_target() {
+        let temp = temp_dir("replace-dir-target");
+        fs::create_dir_all(&temp).unwrap();
+        let temp_file = temp.join("upload.tmp");
+        let target = temp.join("target");
+        fs::write(&temp_file, "new").unwrap();
+        fs::create_dir(&target).unwrap();
+
+        let result = replace_file(&temp_file, &target).await;
+
+        assert!(result.is_err());
+        assert!(temp_file.exists());
+        assert!(target.is_dir());
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
+    async fn save_rejects_large_edit_target() {
+        let (snapshot, temp) = snapshot_with_file("save-large-edit", "hello").await;
+        let file = temp.join("a.txt");
+        let etag = content_etag(&fs::metadata(&file).unwrap());
+        let mut headers = HeaderMap::new();
+        headers.insert(IF_MATCH, HeaderValue::from_str(&etag).unwrap());
+
+        let error = save_content(
+            snapshot,
+            "/repo/a.txt".to_string(),
+            headers,
+            Body::from("new"),
+            None,
+            &edit_policy(4),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, AppError::PayloadTooLarge(_)));
+        assert_eq!(fs::read_to_string(file).unwrap(), "hello");
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
+    async fn save_rejects_binary_edit_target() {
+        let (snapshot, temp) = snapshot_with_file("save-binary-edit", "hello").await;
+        let file = temp.join("a.txt");
+        fs::write(&file, [0_u8, 1, 2, 3]).unwrap();
+        let etag = content_etag(&fs::metadata(&file).unwrap());
+        let mut headers = HeaderMap::new();
+        headers.insert(IF_MATCH, HeaderValue::from_str(&etag).unwrap());
+
+        let error = save_content(
+            snapshot,
+            "/repo/a.txt".to_string(),
+            headers,
+            Body::from("new"),
+            None,
+            &edit_policy(1024),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, AppError::UnsupportedMediaType(_)));
+        assert_eq!(fs::read(file).unwrap(), vec![0_u8, 1, 2, 3]);
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
+    async fn save_rejects_unlisted_edit_extension() {
+        let (snapshot, temp) = snapshot_with_file("save-edit-extension", "hello").await;
+        let file = temp.join("a.txt");
+        let etag = content_etag(&fs::metadata(&file).unwrap());
+        let mut headers = HeaderMap::new();
+        headers.insert(IF_MATCH, HeaderValue::from_str(&etag).unwrap());
+
+        let error = save_content(
+            snapshot,
+            "/repo/a.txt".to_string(),
+            headers,
+            Body::from("new"),
+            None,
+            &EditablePolicy {
+                max_bytes: 1024,
+                extensions: vec!["rs".to_string()],
+                mime_types: Vec::new(),
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, AppError::UnsupportedMediaType(_)));
+        assert_eq!(fs::read_to_string(file).unwrap(), "hello");
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[test]
+    fn matches_editable_extension_and_mime_rules() {
+        assert!(editable_extension_matches(
+            std::path::Path::new("README.MD"),
+            &["md".to_string()]
+        ));
+        assert!(editable_mime_matches(
+            std::path::Path::new("config.json"),
+            &["application/json".to_string()]
+        ));
+        assert!(editable_mime_matches(
+            std::path::Path::new("note.txt"),
+            &["text/*".to_string()]
+        ));
+        assert!(!editable_extension_matches(
+            std::path::Path::new("image.png"),
+            &["txt".to_string()]
+        ));
+    }
+
+    fn edit_policy(max_bytes: u64) -> EditablePolicy {
+        EditablePolicy {
+            max_bytes,
+            extensions: Vec::new(),
+            mime_types: Vec::new(),
+        }
+    }
+
+    fn temp_dir(prefix: &str) -> std::path::PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("web-file-browser-{prefix}-{nonce}"))
+    }
+
+    async fn snapshot_with_file(
+        prefix: &str,
+        content: &str,
+    ) -> (std::sync::Arc<MappingSnapshot>, std::path::PathBuf) {
+        let temp = temp_dir(prefix);
+        fs::create_dir_all(&temp).unwrap();
+        fs::write(temp.join("a.txt"), content).unwrap();
+        let snapshot = MappingSnapshot::build(vec![PathMapping {
+            id: Some(1),
+            mount_path: "/repo".to_string(),
+            folder_path: temp.to_string_lossy().to_string(),
+            remark: Some(String::new()),
+            order: Some(0),
+            writable: true,
+        }])
+        .await
+        .unwrap();
+        (snapshot, temp)
     }
 }

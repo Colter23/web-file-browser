@@ -10,7 +10,13 @@ instance.interceptors.response.use(
     response => response,
     error => {
         const status = error.response?.status;
-        const message = error.response?.data?.message ?? error.message ?? "请求失败";
+        const data = typeof error.response?.data === "string"
+            ? parseErrorBody(error.response.data)
+            : error.response?.data;
+        const message =
+            typeof data === "object" && data !== null && "message" in data
+                ? String(data.message)
+                : error.message ?? "请求失败";
         if (status === 401 && window.location.pathname !== "/login") {
             const redirect = encodeURIComponent(window.location.pathname + window.location.search);
             window.location.href = `/login?redirect=${redirect}`;
@@ -18,6 +24,14 @@ instance.interceptors.response.use(
         return Promise.reject(new Error(message));
     }
 )
+
+const parseErrorBody = (body: string): { message?: string } | string => {
+    try {
+        return JSON.parse(body);
+    } catch {
+        return body;
+    }
+}
 
 const get = async (url: string, config?: AxiosRequestConfig): Promise<AxiosResponse> => {
     return await instance.get(url, config)

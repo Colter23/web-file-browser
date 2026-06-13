@@ -11,8 +11,8 @@ const emit = defineEmits<{
   (e: "close", path: string): void;
 }>()
 const files = ref<{[key: string]: string}>({
-  "/": "Home",
-  "/resources": "Resources"
+  "/": "主页",
+  "/resources": "资源"
 })
 const selectedFile = ref("/")
 
@@ -31,7 +31,7 @@ const changeHandler = (path: string): void => {
   <card class="tab-bar">
     <div class="tab-item-group">
       <tab-item v-for="(file, path) in files" :name="file" :path="String(path)" :open="selectedFile===path" @close="closeHandler" @click="changeHandler(String(path))"/>
-      <sub-card class="add-btn" @click="files['/test']='TEST'">
+      <sub-card class="add-btn" @click="files['/test']='测试'">
         <icon icon="icon-add" size="normal" />
       </sub-card>
     </div>
@@ -39,6 +39,7 @@ const changeHandler = (path: string): void => {
 </template>
 
 <style scoped lang="postcss">
+@reference "tailwindcss";
 .tab-bar {
   @apply h-full p-1.5;
 }

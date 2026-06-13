@@ -54,6 +54,7 @@ const formatSize = (filesize: number) => {
 </template>
 
 <style scoped lang="postcss">
+@reference "tailwindcss";
 .explorer-file {
   @apply flex px-2 py-1 hover:bg-[#EBF3FF] cursor-pointer
 }

@@ -1,15 +1,28 @@
 use std::{
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
     sync::Arc,
+    time::{Duration as StdDuration, Instant},
 };
 
 use serde::{Deserialize, Serialize};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 
-use crate::error::AppError;
+use crate::{
+    error::AppError,
+    models::ConflictPolicy,
+    services::{
+        conflict,
+        path_resolver::{
+            MappingSnapshot, ResolvedParentPath, join_virtual_path, resolve_parent_for_child_sync,
+        },
+    },
+};
+
+const RETENTION_CHECK_INTERVAL: StdDuration = StdDuration::from_secs(300);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -18,9 +31,19 @@ pub struct TrashRecord {
     pub original_virtual_path: String,
     pub original_real_path: String,
     pub trash_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size_bytes: Option<u64>,
     pub deleted_at: String,
     pub actor: String,
     pub kind: TrashEntryKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashRestoreResult {
+    pub record: TrashRecord,
+    pub restored_virtual_path: String,
+    pub restored_real_path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +58,10 @@ pub struct TrashService {
     root: Arc<PathBuf>,
     index_file: Arc<PathBuf>,
     records: Arc<RwLock<Vec<TrashRecord>>>,
+    retention_days: Option<u64>,
+    max_bytes: Option<u64>,
+    last_retention_check: Arc<RwLock<Option<Instant>>>,
+    retention_cleanup_lock: Arc<Mutex<()>>,
 }
 
 impl TrashService {
@@ -52,13 +79,45 @@ impl TrashService {
             Err(error) => return Err(error.into()),
         };
 
-        let service = Self {
+        Ok(Self {
             root: Arc::new(root),
             index_file: Arc::new(index_file),
             records: Arc::new(RwLock::new(records)),
-        };
-        service.apply_retention(retention_days, max_bytes).await?;
-        Ok(service)
+            retention_days,
+            max_bytes,
+            last_retention_check: Arc::new(RwLock::new(None)),
+            retention_cleanup_lock: Arc::new(Mutex::new(())),
+        })
+    }
+
+    pub async fn cleanup_retention_if_due(&self) -> Result<usize, AppError> {
+        if !self.has_retention_policy() {
+            return Ok(0);
+        }
+
+        if self.retention_check_is_recent().await {
+            return Ok(0);
+        }
+
+        let _guard = self.retention_cleanup_lock.lock().await;
+        if self.retention_check_is_recent().await {
+            return Ok(0);
+        }
+
+        let removed = self.apply_retention().await?;
+        *self.last_retention_check.write().await = Some(Instant::now());
+        Ok(removed)
+    }
+
+    pub async fn cleanup_retention(&self) -> Result<usize, AppError> {
+        if !self.has_retention_policy() {
+            return Ok(0);
+        }
+
+        let _guard = self.retention_cleanup_lock.lock().await;
+        let removed = self.apply_retention().await?;
+        *self.last_retention_check.write().await = Some(Instant::now());
+        Ok(removed)
     }
 
     pub async fn list(&self) -> Vec<TrashRecord> {
@@ -71,7 +130,12 @@ impl TrashService {
         self.records.read().await.len()
     }
 
-    pub async fn restore(&self, id: String) -> Result<TrashRecord, AppError> {
+    pub async fn restore(
+        &self,
+        snapshot: Arc<MappingSnapshot>,
+        id: String,
+        policy: ConflictPolicy,
+    ) -> Result<TrashRestoreResult, AppError> {
         let record = self
             .records
             .read()
@@ -82,7 +146,11 @@ impl TrashService {
             .ok_or_else(|| AppError::not_found(format!("查无此回收站记录: {id}")))?;
         let restored = tokio::task::spawn_blocking({
             let record = record.clone();
-            move || restore_sync(record)
+            move || {
+                let parent =
+                    resolve_parent_for_child_sync(&snapshot, &record.original_virtual_path)?;
+                restore_sync(record, parent, policy)
+            }
         })
         .await??;
         self.remove_record(&id).await?;
@@ -149,58 +217,61 @@ impl TrashService {
         self.save_all(&records).await
     }
 
-    async fn apply_retention(
-        &self,
-        retention_days: Option<u64>,
-        max_bytes: Option<u64>,
-    ) -> Result<(), AppError> {
-        if retention_days.is_none() && max_bytes.is_none() {
-            return Ok(());
-        }
-
+    async fn apply_retention(&self) -> Result<usize, AppError> {
         let mut records = self.records.read().await.clone();
         records.sort_by(|left, right| left.deleted_at.cmp(&right.deleted_at));
-        let mut purge_ids = Vec::new();
+        let purge_ids = select_retention_purge_ids(&records, self.retention_days, self.max_bytes)?;
 
-        if let Some(retention_days) = retention_days {
-            let cutoff = OffsetDateTime::now_utc()
-                .saturating_sub(time::Duration::days(retention_days as i64));
-            for record in &records {
-                if parse_deleted_at(&record.deleted_at)
-                    .map(|deleted_at| deleted_at < cutoff)
-                    .unwrap_or(false)
-                {
-                    purge_ids.push(record.id.clone());
+        self.purge_records(&purge_ids).await
+    }
+
+    async fn purge_records(&self, ids: &[String]) -> Result<usize, AppError> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+
+        let id_set = ids.iter().cloned().collect::<HashSet<_>>();
+        let records_to_purge = self
+            .records
+            .read()
+            .await
+            .iter()
+            .filter(|record| id_set.contains(&record.id))
+            .cloned()
+            .collect::<Vec<_>>();
+        if records_to_purge.is_empty() {
+            return Ok(0);
+        }
+
+        tokio::task::spawn_blocking({
+            let records_to_purge = records_to_purge.clone();
+            move || {
+                for record in &records_to_purge {
+                    purge_record_sync(record)?;
                 }
+                Ok::<_, AppError>(())
             }
-        }
+        })
+        .await??;
 
-        if let Some(max_bytes) = max_bytes {
-            let mut total = records
-                .iter()
-                .map(record_size)
-                .collect::<Result<Vec<_>, _>>()?
-                .into_iter()
-                .sum::<u64>();
-            for record in &records {
-                if total <= max_bytes {
-                    break;
-                }
-                if !purge_ids.contains(&record.id) {
-                    total = total.saturating_sub(record_size(record)?);
-                    purge_ids.push(record.id.clone());
-                }
-            }
-        }
+        let mut records = self.records.write().await;
+        let before = records.len();
+        records.retain(|record| !id_set.contains(&record.id));
+        let removed = before.saturating_sub(records.len());
+        self.save_all(&records).await?;
+        Ok(removed)
+    }
 
-        if purge_ids.is_empty() {
-            return Ok(());
-        }
+    fn has_retention_policy(&self) -> bool {
+        self.retention_days.is_some() || self.max_bytes.is_some()
+    }
 
-        for id in purge_ids {
-            let _ = self.purge(id).await;
-        }
-        Ok(())
+    async fn retention_check_is_recent(&self) -> bool {
+        self.last_retention_check
+            .read()
+            .await
+            .as_ref()
+            .is_some_and(|last_checked| last_checked.elapsed() < RETENTION_CHECK_INTERVAL)
     }
 
     async fn save_all(&self, records: &[TrashRecord]) -> Result<(), AppError> {
@@ -214,20 +285,40 @@ impl TrashService {
     }
 }
 
-fn restore_sync(record: TrashRecord) -> Result<TrashRecord, AppError> {
-    let target = PathBuf::from(&record.original_real_path);
-    if target.exists() {
-        return Err(AppError::conflict(format!(
-            "原路径已存在，无法恢复: {}",
-            record.original_virtual_path
-        )));
+fn restore_sync(
+    record: TrashRecord,
+    parent: ResolvedParentPath,
+    policy: ConflictPolicy,
+) -> Result<TrashRestoreResult, AppError> {
+    let target = conflict::resolve_child(
+        &parent.parent_real_path,
+        &parent.child_name,
+        &parent.child_virtual_path,
+        policy,
+    )?;
+    if target.existed {
+        match record.kind {
+            TrashEntryKind::File => conflict::ensure_file_overwrite_allowed(&target)?,
+            TrashEntryKind::Folder => return Err(AppError::conflict("不支持覆盖恢复目录")),
+        }
+        conflict::replace_file_sync(Path::new(&record.trash_path), &target.path)?;
+    } else {
+        if target.path.exists() {
+            return Err(AppError::conflict(format!(
+                "路径已存在: {}",
+                join_virtual_path(&parent.parent_virtual_path, &target.name)
+            )));
+        }
+        fs::rename(&record.trash_path, &target.path)?;
     }
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::rename(&record.trash_path, &target)?;
+    let restored_virtual_path = join_virtual_path(&parent.parent_virtual_path, &target.name);
+    let restored_real_path = target.path.to_string_lossy().to_string();
     remove_record_dir(&record)?;
-    Ok(record)
+    Ok(TrashRestoreResult {
+        record,
+        restored_virtual_path,
+        restored_real_path,
+    })
 }
 
 fn purge_record_sync(record: &TrashRecord) -> Result<(), AppError> {
@@ -246,12 +337,70 @@ fn remove_record_dir(record: &TrashRecord) -> Result<(), AppError> {
 }
 
 fn record_size(record: &TrashRecord) -> Result<u64, AppError> {
+    if let Some(size_bytes) = record.size_bytes {
+        return Ok(size_bytes);
+    }
+
     dir_size(
         Path::new(&record.trash_path)
             .parent()
             .ok_or_else(|| AppError::bad_request("回收站记录路径无效"))?,
     )
     .map_err(AppError::from)
+}
+
+fn select_retention_purge_ids(
+    records: &[TrashRecord],
+    retention_days: Option<u64>,
+    max_bytes: Option<u64>,
+) -> Result<Vec<String>, AppError> {
+    if retention_days.is_none() && max_bytes.is_none() {
+        return Ok(Vec::new());
+    }
+
+    let mut purge_ids = Vec::new();
+    let mut purge_set = HashSet::new();
+
+    if let Some(retention_days) = retention_days {
+        let retention_days = retention_days.min(i64::MAX as u64) as i64;
+        let cutoff = OffsetDateTime::now_utc().saturating_sub(time::Duration::days(retention_days));
+        for record in records {
+            if parse_deleted_at(&record.deleted_at)
+                .map(|deleted_at| deleted_at < cutoff)
+                .unwrap_or(false)
+                && purge_set.insert(record.id.clone())
+            {
+                purge_ids.push(record.id.clone());
+            }
+        }
+    }
+
+    if let Some(max_bytes) = max_bytes {
+        let mut total = 0_u64;
+        let mut retained_sizes = Vec::new();
+        for record in records {
+            if purge_set.contains(&record.id) {
+                continue;
+            }
+
+            let size = record_size(record)?;
+            total = total.saturating_add(size);
+            retained_sizes.push((record.id.clone(), size));
+        }
+
+        for (id, size) in retained_sizes {
+            if total <= max_bytes {
+                break;
+            }
+
+            if purge_set.insert(id.clone()) {
+                total = total.saturating_sub(size);
+                purge_ids.push(id);
+            }
+        }
+    }
+
+    Ok(purge_ids)
 }
 
 fn dir_size(path: &Path) -> Result<u64, std::io::Error> {
@@ -284,6 +433,7 @@ fn move_to_trash_sync(
     } else {
         TrashEntryKind::File
     };
+    let size_bytes = matches!(kind, TrashEntryKind::File).then_some(metadata.len());
 
     fs::create_dir_all(&root)?;
     let id = Uuid::new_v4().to_string();
@@ -308,6 +458,7 @@ fn move_to_trash_sync(
         original_virtual_path,
         original_real_path,
         trash_path: payload_path.to_string_lossy().to_string(),
+        size_bytes,
         deleted_at,
         actor,
         kind,
@@ -355,10 +506,17 @@ fn copy_dir_recursively(source: &Path, target: &Path) -> Result<(), std::io::Err
 
 #[cfg(test)]
 mod tests {
-    use super::move_to_trash_sync;
+    use super::{
+        TrashEntryKind, TrashRecord, TrashService, move_to_trash_sync, select_retention_purge_ids,
+    };
+    use crate::{
+        error::AppError,
+        models::{ConflictPolicy, PathMapping},
+        services::path_resolver::MappingSnapshot,
+    };
     use std::{
         fs,
-        path::Path,
+        path::{Path, PathBuf},
         time::{SystemTime, UNIX_EPOCH},
     };
 
@@ -387,7 +545,299 @@ mod tests {
         assert!(!source.exists());
         assert!(Path::new(&record.trash_path).exists());
         assert!(trash_dir.join(&record.id).join("metadata.json").exists());
+        assert_eq!(record.size_bytes, Some(5));
 
         fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[test]
+    fn retention_uses_recorded_file_size_without_stat() {
+        let old = test_record("old", "2000-01-01T00:00:00Z", Some(5));
+        let current = test_record("current", "2000-01-02T00:00:00Z", Some(7));
+
+        let purge_ids =
+            select_retention_purge_ids(&[old.clone(), current.clone()], None, Some(7)).unwrap();
+
+        assert_eq!(purge_ids, vec![old.id]);
+    }
+
+    #[tokio::test]
+    async fn cleanup_retention_removes_records_added_after_startup() {
+        let temp = temp_dir("web-file-browser-trash-retention-test");
+        let source_dir = temp.join("source");
+        let trash_dir = temp.join("trash");
+        fs::create_dir_all(&source_dir).unwrap();
+
+        let service = TrashService::load(trash_dir.clone(), Some(1), None)
+            .await
+            .unwrap();
+
+        let old_source = source_dir.join("old.txt");
+        let current_source = source_dir.join("current.txt");
+        fs::write(&old_source, "old").unwrap();
+        fs::write(&current_source, "current").unwrap();
+
+        let mut old = move_to_trash_sync(
+            trash_dir.clone(),
+            old_source.clone(),
+            "/repo/old.txt".to_string(),
+            old_source.to_string_lossy().to_string(),
+            "admin".to_string(),
+        )
+        .unwrap();
+        old.deleted_at = "2000-01-01T00:00:00Z".to_string();
+        let current = move_to_trash_sync(
+            trash_dir,
+            current_source.clone(),
+            "/repo/current.txt".to_string(),
+            current_source.to_string_lossy().to_string(),
+            "admin".to_string(),
+        )
+        .unwrap();
+
+        let snapshot = {
+            let mut records = service.records.write().await;
+            records.push(old.clone());
+            records.push(current.clone());
+            records.clone()
+        };
+        service.save_all(&snapshot).await.unwrap();
+
+        let removed = service.cleanup_retention().await.unwrap();
+        let records = service.list().await;
+
+        assert_eq!(removed, 1);
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].id, current.id);
+        assert!(!Path::new(&old.trash_path).exists());
+        assert!(Path::new(&current.trash_path).exists());
+
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
+    async fn load_does_not_apply_retention_until_requested() {
+        let temp = temp_dir("web-file-browser-trash-deferred-retention-test");
+        let source_dir = temp.join("source");
+        let trash_dir = temp.join("trash");
+        fs::create_dir_all(&source_dir).unwrap();
+        fs::create_dir_all(&trash_dir).unwrap();
+
+        let old_source = source_dir.join("old.txt");
+        fs::write(&old_source, "old").unwrap();
+        let mut old = move_to_trash_sync(
+            trash_dir.clone(),
+            old_source.clone(),
+            "/repo/old.txt".to_string(),
+            old_source.to_string_lossy().to_string(),
+            "admin".to_string(),
+        )
+        .unwrap();
+        old.deleted_at = "2000-01-01T00:00:00Z".to_string();
+        fs::write(
+            trash_dir.join("index.json"),
+            serde_json::to_vec_pretty(&vec![old.clone()]).unwrap(),
+        )
+        .unwrap();
+
+        let service = TrashService::load(trash_dir, Some(1), None).await.unwrap();
+
+        assert_eq!(service.list().await.len(), 1);
+        assert!(Path::new(&old.trash_path).exists());
+        assert_eq!(service.cleanup_retention_if_due().await.unwrap(), 1);
+        assert!(service.list().await.is_empty());
+        assert!(!Path::new(&old.trash_path).exists());
+
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
+    async fn cleanup_retention_if_due_is_throttled_after_first_run() {
+        let temp = temp_dir("web-file-browser-trash-retention-throttle-test");
+        let source_dir = temp.join("source");
+        let trash_dir = temp.join("trash");
+        fs::create_dir_all(&source_dir).unwrap();
+
+        let service = TrashService::load(trash_dir.clone(), Some(1), None)
+            .await
+            .unwrap();
+        let first_source = source_dir.join("old-1.txt");
+        let second_source = source_dir.join("old-2.txt");
+        fs::write(&first_source, "old 1").unwrap();
+        fs::write(&second_source, "old 2").unwrap();
+
+        let mut first = move_to_trash_sync(
+            trash_dir.clone(),
+            first_source.clone(),
+            "/repo/old-1.txt".to_string(),
+            first_source.to_string_lossy().to_string(),
+            "admin".to_string(),
+        )
+        .unwrap();
+        first.deleted_at = "2000-01-01T00:00:00Z".to_string();
+
+        let snapshot = {
+            let mut records = service.records.write().await;
+            records.push(first.clone());
+            records.clone()
+        };
+        service.save_all(&snapshot).await.unwrap();
+
+        assert_eq!(service.cleanup_retention_if_due().await.unwrap(), 1);
+        assert!(service.list().await.is_empty());
+
+        let mut second = move_to_trash_sync(
+            trash_dir,
+            second_source.clone(),
+            "/repo/old-2.txt".to_string(),
+            second_source.to_string_lossy().to_string(),
+            "admin".to_string(),
+        )
+        .unwrap();
+        second.deleted_at = "2000-01-01T00:00:00Z".to_string();
+
+        let snapshot = {
+            let mut records = service.records.write().await;
+            records.push(second.clone());
+            records.clone()
+        };
+        service.save_all(&snapshot).await.unwrap();
+
+        assert_eq!(service.cleanup_retention_if_due().await.unwrap(), 0);
+        assert_eq!(service.list().await.len(), 1);
+
+        assert_eq!(service.cleanup_retention().await.unwrap(), 1);
+        assert!(service.list().await.is_empty());
+
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
+    async fn restores_with_auto_rename_when_original_path_exists() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp =
+            std::env::temp_dir().join(format!("web-file-browser-trash-restore-test-{nonce}"));
+        let source_dir = temp.join("source");
+        let trash_dir = temp.join("trash");
+        fs::create_dir_all(&source_dir).unwrap();
+        let service = TrashService::load(trash_dir.clone(), None, None)
+            .await
+            .unwrap();
+        let source = source_dir.join("hello.txt");
+        fs::write(&source, "deleted").unwrap();
+
+        let record = move_to_trash_sync(
+            trash_dir,
+            source.clone(),
+            "/repo/hello.txt".to_string(),
+            source.to_string_lossy().to_string(),
+            "admin".to_string(),
+        )
+        .unwrap();
+        let snapshot = {
+            let mut records = service.records.write().await;
+            records.push(record.clone());
+            records.clone()
+        };
+        service.save_all(&snapshot).await.unwrap();
+        fs::write(&source, "current").unwrap();
+
+        let restored = service
+            .restore(
+                snapshot_for_mount(&source_dir, true).await,
+                record.id,
+                ConflictPolicy::AutoRename,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(fs::read_to_string(&source).unwrap(), "current");
+        assert_eq!(
+            fs::read_to_string(source_dir.join("hello (1).txt")).unwrap(),
+            "deleted"
+        );
+        assert_eq!(restored.restored_virtual_path, "/repo/hello (1).txt");
+        assert!(service.list().await.is_empty());
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
+    async fn restore_rejects_readonly_current_mount() {
+        let temp = temp_dir("web-file-browser-trash-readonly-restore-test");
+        let source_dir = temp.join("source");
+        let trash_dir = temp.join("trash");
+        fs::create_dir_all(&source_dir).unwrap();
+        let service = TrashService::load(trash_dir.clone(), None, None)
+            .await
+            .unwrap();
+        let source = source_dir.join("hello.txt");
+        fs::write(&source, "deleted").unwrap();
+
+        let record = move_to_trash_sync(
+            trash_dir,
+            source.clone(),
+            "/repo/hello.txt".to_string(),
+            source.to_string_lossy().to_string(),
+            "admin".to_string(),
+        )
+        .unwrap();
+        let snapshot = {
+            let mut records = service.records.write().await;
+            records.push(record.clone());
+            records.clone()
+        };
+        service.save_all(&snapshot).await.unwrap();
+
+        let error = service
+            .restore(
+                snapshot_for_mount(&source_dir, false).await,
+                record.id.clone(),
+                ConflictPolicy::AutoRename,
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(error, AppError::Forbidden(_)));
+        assert_eq!(service.list().await.len(), 1);
+        assert!(Path::new(&record.trash_path).exists());
+        assert!(!source.exists());
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    fn temp_dir(prefix: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("{prefix}-{nonce}"))
+    }
+
+    fn test_record(id: &str, deleted_at: &str, size_bytes: Option<u64>) -> TrashRecord {
+        TrashRecord {
+            id: id.to_string(),
+            original_virtual_path: format!("/repo/{id}.txt"),
+            original_real_path: format!("missing/{id}.txt"),
+            trash_path: format!("missing-trash/{id}/payload.txt"),
+            size_bytes,
+            deleted_at: deleted_at.to_string(),
+            actor: "admin".to_string(),
+            kind: TrashEntryKind::File,
+        }
+    }
+
+    async fn snapshot_for_mount(path: &Path, writable: bool) -> std::sync::Arc<MappingSnapshot> {
+        MappingSnapshot::build(vec![PathMapping {
+            id: Some(1),
+            mount_path: "/repo".to_string(),
+            folder_path: path.to_string_lossy().to_string(),
+            remark: Some(String::new()),
+            order: Some(0),
+            writable,
+        }])
+        .await
+        .unwrap()
     }
 }

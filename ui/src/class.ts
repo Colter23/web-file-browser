@@ -1,5 +1,5 @@
 
-// JSON Decode Data
+// 接口返回数据结构
 export type FolderInfos = FolderInfo[]
 export type FileInfos = FileInfo[]
 export interface FolderData {
@@ -11,6 +11,30 @@ export interface FolderData {
     offset?: number;
     limit?: number;
     hasMore?: boolean;
+}
+
+export type DirSortKey = "name" | "modified" | "size" | "type";
+export type DirSortOrder = "asc" | "desc";
+export type DirEntryFilter = "all" | "folder" | "file";
+
+export interface FolderQueryParams {
+    offset?: number;
+    limit?: number;
+    detail?: boolean;
+    sort?: DirSortKey;
+    order?: DirSortOrder;
+    type?: DirEntryFilter;
+    includeHidden?: boolean;
+    includeTotal?: boolean;
+}
+
+export type ExplorerViewMode = "details" | "list" | "icons" | "tiles";
+export type ExplorerIconSize = "small" | "medium" | "large";
+
+export interface ExplorerTab {
+    id: string;
+    path: string;
+    title: string;
 }
 
 export interface FolderInfo {
@@ -72,18 +96,30 @@ export interface RuntimeSettings {
     configFile: string;
     trashDir: string;
     staticDir: string;
+    corsAllowedOrigins: string[];
+    trustProxyHeaders: boolean;
+    maxEditBytes: number;
+    editableExtensions: string[];
+    editableMimeTypes: string[];
     maxUploadBytes?: number;
     maxDirPageSize: number;
     maxDirConcurrency: number;
     maxTransferConcurrency: number;
     maxIpConcurrency: number;
     maxTaskConcurrency: number;
+    taskHistoryLimit: number;
     taskSpeedLimitBytesPerSec?: number;
+    maxExtractBytes?: number;
+    maxExtractFiles?: number;
     indexEnabled: boolean;
+    indexRebuildOnStartup: boolean;
     indexScanDelayMs: number;
     auditFile: string;
+    auditMaxBytes?: number;
+    auditRetentionFiles: number;
     trashRetentionDays?: number;
     trashMaxBytes?: number;
+    conflictPolicy: "autoRename" | "reject" | "overwrite";
     authConfigured: boolean;
 }
 
@@ -91,6 +127,102 @@ export interface FileOperationResponse {
     path: string;
 }
 
+export interface FileContentResponse {
+    content: string;
+    etag: string;
+}
+
+export interface SaveFileResponse extends FileOperationResponse {
+    etag: string;
+}
+
 export interface UploadResponse {
     files: FileOperationResponse[];
+}
+
+export type ArchiveFormat = "tarGz" | "zip";
+
+export type TaskKind = "copy" | "move" | "delete" | "archive" | "extract";
+export type TaskState = "queued" | "running" | "completed" | "failed" | "cancelled";
+
+export interface TaskResponse {
+    id: string;
+}
+
+export interface TaskError {
+    path: string;
+    message: string;
+}
+
+export interface TaskStatus {
+    id: string;
+    kind: TaskKind;
+    state: TaskState;
+    progress: number;
+    processedBytes: number;
+    totalBytes: number;
+    speedBytesPerSec: number;
+    processedItems: number;
+    totalItems: number;
+    currentPath?: string;
+    errors: TaskError[];
+    startedAt?: string;
+    finishedAt?: string;
+    createdAt: string;
+    cancelled: boolean;
+}
+
+export interface IndexStatus {
+    enabled: boolean;
+    state: string;
+    indexedEntries: number;
+    lastStartedAt?: string;
+    lastFinishedAt?: string;
+    lastError?: string;
+}
+
+export interface TaskMetrics {
+    total: number;
+    queued: number;
+    running: number;
+    completed: number;
+    failed: number;
+    cancelled: number;
+    errorsTotal: number;
+    processedBytes: number;
+    currentSpeedBytesPerSec: number;
+}
+
+export interface RequestLimitMetrics {
+    dirScanLimit: number;
+    activeDirScans: number;
+    transferLimit: number;
+    activeTransfers: number;
+    ipLimit: number;
+    trackedIps: number;
+    activeIpRequests: number;
+}
+
+export interface MetricsResponse {
+    mappings: number;
+    activeSessions: number;
+    trashEntries: number;
+    tasks: TaskMetrics;
+    limits: RequestLimitMetrics;
+    index: IndexStatus;
+}
+
+export interface HealthResponse {
+    status: string;
+    version: string;
+}
+
+export interface ReadinessCheck {
+    name: string;
+    status: string;
+    message: string;
+}
+
+export interface ReadinessResponse extends HealthResponse {
+    checks: ReadinessCheck[];
 }

@@ -1,5 +1,6 @@
 pub mod audit;
 pub mod auth;
+pub mod conflict;
 pub mod file_ops;
 pub mod mapping_store;
 pub mod path_resolver;

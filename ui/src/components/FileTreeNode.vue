@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import Icon from "./Icon.vue";
-import {PropType, ref} from "vue";
+import {PropType, computed, ref} from "vue";
 import {FileTreeData, LoadData} from "../class.ts";
+import {useFileStore} from "../store";
+
+const fileStore = useFileStore();
 
 const props = defineProps({
   deep: {
@@ -13,12 +16,12 @@ const props = defineProps({
 });
 
 const fold = ref(false)
+const active = computed(() => props.data?.path === fileStore.currentPath);
 
 function clickHandler(file: FileTreeData) {
   if (file.isFile) return
   if (props.data?.children == undefined || props.data?.children.length == 0) {
     props.loadData?.call("node", file).then(() => {
-      console.log(props.data)
       fold.value = true
     })
   }else {
@@ -38,7 +41,7 @@ function clickHandler(file: FileTreeData) {
     <div class="node-icon">
       <icon :icon="data?.isFile?'icon-file':'icon-folder-fill'" size="normal"></icon>
     </div>
-    <div class="node-content">{{ data?.name }}</div>
+    <div class="node-content" :class="{active}">{{ data?.name }}</div>
   </div>
   <div class="flex flex-col overflow-hidden transition-all" :class="fold? 'h-max': 'h-0'">
     <file-tree-node v-for="file in data?.children" :deep="deep + 1" :data="file" :load-data="loadData"></file-tree-node>
@@ -46,8 +49,9 @@ function clickHandler(file: FileTreeData) {
 </template>
 
 <style scoped lang="postcss">
+@reference "tailwindcss";
 .tree-node {
-  @apply flex w-full p-1 break-words rounded-md hover:bg-blue-100
+  @apply flex w-full items-center break-words rounded-md py-0.5 hover:bg-blue-50
 }
 .node-indent {
   @apply w-6 grow-0 shrink-0
@@ -65,6 +69,9 @@ function clickHandler(file: FileTreeData) {
   @apply rotate-0
 }
 .node-content {
-  @apply inline-flex grow items-center cursor-pointer
+  @apply inline-flex h-7 min-w-0 grow cursor-pointer items-center truncate rounded-md px-1 text-sm
+}
+.node-content.active {
+  @apply bg-blue-600 text-white
 }
 </style>

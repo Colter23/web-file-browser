@@ -1,5 +1,13 @@
 import network from "../network";
-import {FileOperationResponse, FolderData, UploadResponse} from "../class";
+import {
+    FileContentResponse,
+    FileOperationResponse,
+    FolderData,
+    FolderQueryParams,
+    SaveFileResponse,
+    UploadResponse
+} from "../class";
+import config from "../config";
 
 const encodeVirtualPath = (path: string = ""): string => {
     return path
@@ -14,15 +22,19 @@ const pathUrl = (base: string, path: string = ""): string => {
     return encoded ? `${base}/${encoded}` : base
 }
 
-export const getFolderData = async (path: string = ""): Promise<FolderData> => {
-    return (await network.get(pathUrl("/api/file", path))).data
+export const getFolderData = async (path: string = "", params: FolderQueryParams = {}): Promise<FolderData> => {
+    return (await network.get(pathUrl("/api/file", path), {params})).data
 }
 
-export const getFile = async (path: string = ""): Promise<string> => {
+export const getFile = async (path: string = ""): Promise<FileContentResponse> => {
     const res = await network.get(pathUrl("/api/content", path), {
+        params: {mode: "edit"},
         transformResponse: res => res
     })
-    return res.data
+    return {
+        content: res.data,
+        etag: res.headers.etag ?? ""
+    }
 }
 
 export const createEntry = async (
@@ -33,10 +45,17 @@ export const createEntry = async (
     return (await network.post(pathUrl("/api/file", parentPath), {type, name})).data
 }
 
-export const saveFile = async (path: string, content: string): Promise<FileOperationResponse> => {
-    return (await network.put(pathUrl("/api/content", path), content, {
-        headers: {"Content-Type": "text/plain;charset=utf-8"}
-    })).data
+export const saveFile = async (path: string, content: string, etag: string): Promise<SaveFileResponse> => {
+    const res = await network.put(pathUrl("/api/content", path), content, {
+        headers: {
+            "Content-Type": "text/plain;charset=utf-8",
+            "If-Match": etag
+        }
+    })
+    return {
+        ...res.data,
+        etag: res.headers.etag ?? etag
+    }
 }
 
 export const moveEntry = async (path: string, targetPath: string): Promise<FileOperationResponse> => {
@@ -55,4 +74,9 @@ export const uploadFiles = async (path: string, files: FileList | File[]): Promi
 
 export const downloadFile = async (path: string): Promise<Blob> => {
     return (await network.get(pathUrl("/api/download", path), {responseType: "blob"})).data
+}
+
+export const downloadUrl = (path: string): string => {
+    const base = config.BASE_URL.replace(/\/$/, "")
+    return `${base}${pathUrl("/api/download", path)}`
 }

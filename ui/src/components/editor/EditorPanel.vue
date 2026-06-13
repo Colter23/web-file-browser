@@ -17,10 +17,10 @@ const fileInfo = ref<FileInfo | null>(null);
 const themeFlag = ref(false);
 const languageFlag = ref(false);
 const settingFlag = ref(false);
-const toolMenuBox = ref();
 const currentTheme = ref('dracula');
 const currentMode = ref('text');
 const content = ref("")
+const contentEtag = ref("");
 const isChange = ref(false);
 const saving = ref(false);
 const statusText = ref("");
@@ -73,8 +73,19 @@ const loadCurrentFile = async () => {
   fileInfo.value = fileStore.currentFile;
   currentMode.value = checkFileLanguageMode(fileStore.currentFile.extension);
   statusText.value = "";
-  content.value = await getFile(fileStore.currentFile.path);
-  isChange.value = false;
+  try {
+    const file = await getFile(fileStore.currentFile.path);
+    content.value = file.content;
+    contentEtag.value = file.etag;
+    isChange.value = false;
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : "打开文件失败");
+    fileStore.showEditor = false;
+    fileStore.currentFile = null;
+    content.value = "";
+    contentEtag.value = "";
+    isChange.value = false;
+  }
 }
 
 watch(() => [fileStore.showEditor, fileStore.currentFile?.path], loadCurrentFile);
@@ -89,7 +100,11 @@ const save = async () => {
   if (!fileInfo.value || saving.value) return;
   saving.value = true;
   try {
-    await saveFile(fileInfo.value.path, content.value);
+    if (!contentEtag.value) {
+      throw new Error("文件版本信息缺失，请重新打开文件后再保存");
+    }
+    const saved = await saveFile(fileInfo.value.path, content.value, contentEtag.value);
+    contentEtag.value = saved.etag;
     isChange.value = false;
     statusText.value = "已保存";
   } catch (error) {
@@ -106,6 +121,7 @@ const close = () => {
   fileStore.showEditor = false;
   fileStore.currentFile = null;
   isChange.value = false;
+  contentEtag.value = "";
   statusText.value = "";
 }
 </script>
@@ -152,7 +168,7 @@ const close = () => {
       </div>
     </div>
 
-    <div class="tool-menu" ref="toolMenuBox">
+    <div class="tool-menu">
       <div class="tool-menu-item tool-menu-language" :class="`${languageFlag? 'inline-flex' : 'hidden'} ${themeClass}`">
         <div class="tool-menu-item-option" v-for="mode in editorConfig.mode" :key="mode.key" @click="changeMode(mode.key)">
           <icon icon="icon-file" color="#ffffff" />
@@ -184,6 +200,7 @@ const close = () => {
 </template>
 
 <style scoped lang="postcss">
+@reference "tailwindcss";
 .editor-box {
   @apply relative w-full h-full flex flex-col text-white
 }

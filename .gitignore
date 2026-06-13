@@ -15,6 +15,7 @@
 *.temp
 /server.log
 /server.err
+/.smoke/
 
 # Frontend dependencies and build output
 /ui/node_modules/

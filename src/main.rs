@@ -17,7 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = app::build(config).await?;
     let listener = TcpListener::bind(address).await?;
 
-    tracing::info!("web-file-browser listening on http://{address}");
+    tracing::info!("web-file-browser 已启动，监听地址: http://{address}");
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
