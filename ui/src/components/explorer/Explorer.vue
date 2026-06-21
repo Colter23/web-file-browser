@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from "vue";
 import type {ComponentPublicInstance} from "vue";
-import type {DirSortKey, ExplorerViewMode, FileInfo, FolderData, FolderQueryParams} from "../../class.ts";
+import type {DirSortKey, DirSortOrder, ExplorerViewMode, FileInfo, FolderData, FolderQueryParams} from "../../class.ts";
 import {useFileStore} from "../../store";
 import {downloadUrl, getFolderData} from "../../network/file-api.ts";
 import Icon from "../Icon.vue";
@@ -146,6 +146,11 @@ const viewMode = computed(() => fileStore.viewMode);
 const isIconLikeMode = computed(() => fileStore.viewMode === "icons" || fileStore.viewMode === "tiles");
 const sortKey = computed(() => fileStore.sortKey);
 const sortOrder = computed(() => fileStore.sortOrder);
+const sortOptions: {key: DirSortKey; label: string}[] = [
+  {key: "name", label: "名称"},
+  {key: "modified", label: "修改"},
+  {key: "size", label: "大小"}
+];
 const selectedCountText = computed(() => {
   const count = selectedPaths.value.length;
   if (!count) return "未选择项目";
@@ -171,14 +176,12 @@ const iconSizeText = computed(() => ({
 }[fileStore.iconSize]));
 
 const sortText = computed(() => {
-  const keyText = {
-    name: "名称",
-    modified: "修改日期",
-    size: "大小"
-  }[fileStore.sortKey];
+  const keyText = sortOptions.find(option => option.key === fileStore.sortKey)?.label ?? "名称";
   const orderText = fileStore.sortOrder === "asc" ? "升序" : "降序";
   return `${keyText} ${orderText}`;
 });
+
+const nextSortOrder = computed<DirSortOrder>(() => fileStore.sortOrder === "asc" ? "desc" : "asc");
 
 const isImageFile = (entry: ExplorerEntry) => {
   if (entry.type !== "file") return false;
@@ -476,6 +479,13 @@ const loadMore = async () => {
 const changeSort = async (key: DirSortKey) => {
   if (loading.value) return;
   fileStore.setSort(key);
+  loadedSignature.value = "";
+  await loadFolder(fileStore.currentPath || "/");
+}
+
+const changeSortOrder = async (order: DirSortOrder) => {
+  if (loading.value || fileStore.sortOrder === order) return;
+  fileStore.setSort(fileStore.sortKey, order);
   loadedSignature.value = "";
   await loadFolder(fileStore.currentPath || "/");
 }
@@ -986,22 +996,39 @@ defineExpose({
         <span>{{ selectedCountText }}</span>
         <span>排序：{{ sortText }}</span>
       </div>
-      <div class="view-switch" aria-label="查看模式">
-        <button :class="{active: viewMode === 'details'}" title="详细信息" @click="setViewMode('details')">
-          <icon icon="icon-view-list" />
-        </button>
-        <button :class="{active: viewMode === 'list'}" title="列表" @click="setViewMode('list')">
-          <icon icon="icon-listview" />
-        </button>
-        <button :class="{active: viewMode === 'icons'}" title="图标" @click="setViewMode('icons')">
-          <icon icon="icon-viewgrid" />
-        </button>
-        <button :class="{active: viewMode === 'tiles'}" title="平铺" @click="setViewMode('tiles')">
-          <icon icon="icon-file-common-filling" />
-        </button>
-        <button title="图标大小" @click="cycleIconSize">
-          <span class="size-mark">{{ iconSizeText }}</span>
-        </button>
+      <div class="explorer-controls">
+        <div class="sort-switch" aria-label="排序方式">
+          <button
+              v-for="option in sortOptions"
+              :key="option.key"
+              :class="{active: sortKey === option.key}"
+              :disabled="loading"
+              :title="`按${option.label}排序`"
+              @click="changeSort(option.key)">
+            <span>{{ option.label }}</span>
+            <span class="sort-chip-indicator">{{ sortIndicator(option.key) }}</span>
+          </button>
+          <button class="order-toggle" :disabled="loading" :title="`切换为${nextSortOrder === 'asc' ? '升序' : '降序'}`" @click="changeSortOrder(nextSortOrder)">
+            {{ sortOrder === "asc" ? "升序" : "降序" }}
+          </button>
+        </div>
+        <div class="view-switch" aria-label="查看模式">
+          <button :class="{active: viewMode === 'details'}" title="详细信息" @click="setViewMode('details')">
+            <icon icon="icon-view-list" />
+          </button>
+          <button :class="{active: viewMode === 'list'}" title="列表" @click="setViewMode('list')">
+            <icon icon="icon-listview" />
+          </button>
+          <button :class="{active: viewMode === 'icons'}" title="图标" @click="setViewMode('icons')">
+            <icon icon="icon-viewgrid" />
+          </button>
+          <button :class="{active: viewMode === 'tiles'}" title="平铺" @click="setViewMode('tiles')">
+            <icon icon="icon-file-common-filling" />
+          </button>
+          <button title="图标大小" @click="cycleIconSize">
+            <span class="size-mark">{{ iconSizeText }}</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -1136,23 +1163,38 @@ defineExpose({
 }
 
 .explorer-command-row {
-  @apply flex h-9 shrink-0 items-center justify-between border-b border-slate-200 px-3 text-xs text-slate-500;
+  @apply flex min-h-9 shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-3 py-1 text-xs text-slate-500;
 }
 
 .explorer-summary {
   @apply flex min-w-0 items-center gap-3 truncate;
 }
 
+.explorer-controls {
+  @apply flex shrink-0 items-center gap-2;
+}
+
+.sort-switch,
 .view-switch {
   @apply inline-flex shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-50;
 }
 
+.sort-switch button,
 .view-switch button {
-  @apply inline-flex h-7 min-w-8 items-center justify-center border-r border-slate-200 px-2 text-slate-600 last:border-r-0 hover:bg-white;
+  @apply inline-flex h-7 min-w-8 items-center justify-center gap-1 border-r border-slate-200 px-2 text-slate-600 last:border-r-0 hover:bg-white disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-slate-50;
 }
 
+.sort-switch button.active,
 .view-switch button.active {
   @apply bg-blue-600 text-white hover:bg-blue-600;
+}
+
+.sort-switch .order-toggle {
+  @apply min-w-12 font-medium;
+}
+
+.sort-chip-indicator {
+  @apply inline-flex w-2 justify-center text-[10px];
 }
 
 .size-mark {
