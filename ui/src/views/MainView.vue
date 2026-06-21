@@ -42,6 +42,7 @@ type ExplorerExpose = {
   getSelectedEntry: () => ExplorerEntry | null;
   getSelectedEntries: () => ExplorerEntry[];
   startRename: () => void;
+  selectPath: (path: string) => Promise<boolean>;
   selectPathForRename: (path: string) => Promise<boolean>;
   selectAllEntries: () => boolean;
 }
@@ -887,9 +888,15 @@ const startRenameSelected = () => {
 const renameSelected = async ({entry, name}: RenamePayload) => {
   const nextName = name.trim();
   if (!nextName || nextName === entry.name) return;
-  await runOperation(async () => {
-    await moveEntry(entry.path, joinPath(parentPath(entry.path), nextName));
-  })
+  try {
+    const renamed = await moveEntry(entry.path, joinPath(parentPath(entry.path), nextName));
+    taskMessage.value = `已重命名：${nextName}`;
+    await refreshCurrent();
+    const selected = await explorerRef.value?.selectPath(renamed.path);
+    if (!selected) showShellNotice("已重命名，但当前页未找到该项目，请刷新或调整排序后查看。", "warning");
+  } catch (error) {
+    showErrorNotice(error, "重命名失败", "重命名失败");
+  }
 }
 
 const deleteSelected = async (entry = selectedEntry()) => {

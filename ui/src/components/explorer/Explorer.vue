@@ -971,12 +971,19 @@ const focusEntryByTypeahead = (entry: ExplorerEntry) => {
   nextTick(() => itemRefs.get(entry.path)?.scrollIntoView({block: "nearest", inline: "nearest"}));
 }
 
-const selectPathForRename = async (path: string) => {
+const selectPath = async (path: string) => {
   const entry = entryByPath(path);
   if (!entry) return false;
   setSelection([entry.path], entry.path);
   await nextTick();
   itemRefs.get(entry.path)?.scrollIntoView({block: "nearest", inline: "nearest"});
+  return true;
+}
+
+const selectPathForRename = async (path: string) => {
+  const entry = entryByPath(path);
+  if (!entry) return false;
+  await selectPath(path);
   startRename(entry);
   return true;
 }
@@ -1294,6 +1301,7 @@ defineExpose({
   getSelectedEntry: primarySelected,
   getSelectedEntries: () => selectedEntries.value,
   startRename: () => startRename(firstSelectedEntry()),
+  selectPath,
   selectPathForRename,
   selectAllEntries
 })
