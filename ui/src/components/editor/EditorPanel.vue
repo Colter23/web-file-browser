@@ -11,6 +11,7 @@ import {isApiError} from "../../network";
 import {checkFileLanguageMode} from "../../utils/common.ts";
 
 type MenuName = "language" | "theme" | "settings" | "";
+type PendingEditorAction = "close" | "reload" | "";
 
 type CodeEditorExpose = ComponentPublicInstance & {
   focus?: () => void;
@@ -79,13 +80,16 @@ const saving = ref(false);
 const statusText = ref("");
 const errorText = ref("");
 const saveConflict = ref(false);
+const pendingAction = ref<PendingEditorAction>("");
+const pendingBusy = ref(false);
 const fontSize = ref(readNumberPreference(storageKeys.fontSize, 16, 12, 28));
 const tabSize = ref(readNumberPreference(storageKeys.tabSize, 2, 2, 8));
 const wrap = ref(readBooleanPreference(storageKeys.wrap, true));
 let loadVersion = 0;
 
 const themeClass = computed(() => `ace-${currentTheme.value.replace(/_/g, "-")}`);
-const canSave = computed(() => Boolean(fileInfo.value && isChange.value && contentEtag.value && !loading.value && !saving.value));
+const canSave = computed(() => Boolean(fileInfo.value && isChange.value && contentEtag.value && !saveConflict.value && !loading.value && !saving.value));
+const editorReadOnly = computed(() => loading.value || saving.value || Boolean(pendingAction.value));
 
 const fileTitle = computed(() => fileInfo.value?.name ?? "未打开文件");
 
@@ -137,6 +141,19 @@ const dirtyText = computed(() => {
 });
 
 const editorMessageText = computed(() => errorText.value || (saveConflict.value ? "文件版本已变化，请重新载入后再保存" : ""));
+
+const confirmTitle = computed(() => pendingAction.value === "reload" ? "重新载入文件？" : "关闭编辑器？");
+
+const confirmDescription = computed(() => pendingAction.value === "reload"
+    ? "当前修改还没有保存，重新载入会用磁盘上的最新内容覆盖编辑区。"
+    : "当前修改还没有保存，关闭后未保存的内容会被丢弃。");
+
+const confirmSaveText = computed(() => {
+  if (pendingBusy.value) return "处理中";
+  return pendingAction.value === "reload" ? "保存并重新载入" : "保存并关闭";
+});
+
+const confirmDiscardText = computed(() => pendingAction.value === "reload" ? "放弃并重新载入" : "放弃并关闭");
 
 const closeMenus = () => {
   activeMenu.value = "";
@@ -214,10 +231,26 @@ const loadCurrentFile = async () => {
   }
 }
 
+const resetEditorState = () => {
+  closeMenus();
+  pendingAction.value = "";
+  pendingBusy.value = false;
+  fileStore.showEditor = false;
+  fileStore.currentFile = null;
+  fileInfo.value = null;
+  isChange.value = false;
+  content.value = "";
+  contentEtag.value = "";
+  statusText.value = "";
+  errorText.value = "";
+  saveConflict.value = false;
+}
+
 watch(() => [fileStore.showEditor, fileStore.currentFile?.path], loadCurrentFile);
 
 const onContentChange = (value: string) => {
   if (loading.value) return;
+  pendingAction.value = "";
   content.value = value;
   isChange.value = true;
   statusText.value = "";
@@ -226,7 +259,7 @@ const onContentChange = (value: string) => {
 }
 
 const save = async () => {
-  if (!fileInfo.value || saving.value || loading.value) return;
+  if (!fileInfo.value || saving.value || loading.value || saveConflict.value) return;
   saving.value = true;
   errorText.value = "";
   saveConflict.value = false;
@@ -253,22 +286,55 @@ const save = async () => {
 }
 
 const reload = async () => {
-  if (isChange.value && !window.confirm("重新载入会放弃未保存的修改，继续？")) return;
+  if (isChange.value) {
+    pendingAction.value = "reload";
+    closeMenus();
+    return;
+  }
   await loadCurrentFile();
 }
 
 const close = () => {
-  if (isChange.value && !window.confirm("放弃未保存的修改？")) return;
-  closeMenus();
-  fileStore.showEditor = false;
-  fileStore.currentFile = null;
-  fileInfo.value = null;
+  if (isChange.value) {
+    pendingAction.value = "close";
+    closeMenus();
+    return;
+  }
+  resetEditorState();
+}
+
+const cancelPendingAction = () => {
+  if (pendingBusy.value) return;
+  pendingAction.value = "";
+  nextTick(() => editorRef.value?.focus?.());
+}
+
+const finishPendingAction = async () => {
+  const action = pendingAction.value;
+  pendingAction.value = "";
+  if (action === "reload") {
+    await loadCurrentFile();
+    return;
+  }
+  if (action === "close") resetEditorState();
+}
+
+const discardPendingAction = async () => {
+  if (pendingBusy.value) return;
+  pendingBusy.value = true;
   isChange.value = false;
-  content.value = "";
-  contentEtag.value = "";
-  statusText.value = "";
-  errorText.value = "";
-  saveConflict.value = false;
+  await finishPendingAction();
+  pendingBusy.value = false;
+}
+
+const savePendingAction = async () => {
+  if (pendingBusy.value || !canSave.value) return;
+  pendingBusy.value = true;
+  await save();
+  pendingBusy.value = false;
+  if (!isChange.value && !saveConflict.value && !errorText.value) {
+    await finishPendingAction();
+  }
 }
 
 const handleKeyDown = (event: KeyboardEvent) => {
@@ -281,6 +347,10 @@ const handleKeyDown = (event: KeyboardEvent) => {
   if (event.key === "Escape") {
     if (activeMenu.value) {
       closeMenus();
+      return;
+    }
+    if (pendingAction.value) {
+      cancelPendingAction();
       return;
     }
     close();
@@ -406,6 +476,7 @@ onBeforeUnmount(() => {
             :font-size="fontSize"
             :wrap="wrap"
             :tab-size="tabSize"
+            :read-only="editorReadOnly"
             @change="onContentChange"
             @save="save">
         </code-editor>
@@ -414,6 +485,22 @@ onBeforeUnmount(() => {
       <div v-else-if="errorText" class="editor-overlay error">
         <span>{{ errorText }}</span>
         <button @click="reload">重试</button>
+      </div>
+      <div v-if="pendingAction" class="editor-confirm-mask" @click.stop>
+        <section class="editor-confirm">
+          <div class="confirm-icon">
+            <icon icon="icon-edit-filling" color="#2563eb" />
+          </div>
+          <div class="confirm-content">
+            <h3>{{ confirmTitle }}</h3>
+            <p>{{ confirmDescription }}</p>
+          </div>
+          <div class="confirm-actions">
+            <button class="confirm-secondary" :disabled="pendingBusy" @click="cancelPendingAction">取消</button>
+            <button class="confirm-danger" :disabled="pendingBusy" @click="discardPendingAction">{{ confirmDiscardText }}</button>
+            <button class="confirm-primary" :disabled="!canSave || pendingBusy" @click="savePendingAction">{{ confirmSaveText }}</button>
+          </div>
+        </section>
       </div>
     </main>
 
@@ -592,6 +679,52 @@ onBeforeUnmount(() => {
 
 .editor-overlay button {
   @apply rounded-md border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:bg-blue-50;
+}
+
+.editor-confirm-mask {
+  @apply absolute inset-2 z-20 flex items-center justify-center rounded-md bg-slate-900/15 px-4 backdrop-blur-sm;
+}
+
+.editor-confirm {
+  @apply grid w-full max-w-lg grid-cols-[2rem_1fr] gap-3 rounded-md border border-slate-200 bg-white p-4 text-slate-700 shadow-2xl;
+}
+
+.confirm-icon {
+  @apply flex h-8 w-8 items-center justify-center rounded-md bg-blue-50;
+}
+
+.confirm-content {
+  @apply min-w-0;
+}
+
+.confirm-content h3 {
+  @apply text-sm font-semibold text-slate-900;
+}
+
+.confirm-content p {
+  @apply mt-1 text-xs leading-5 text-slate-500;
+}
+
+.confirm-actions {
+  @apply col-span-2 mt-1 flex justify-end gap-2;
+}
+
+.confirm-primary,
+.confirm-secondary,
+.confirm-danger {
+  @apply h-8 rounded-md border px-3 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.confirm-primary {
+  @apply border-blue-600 bg-blue-600 text-white hover:bg-blue-700;
+}
+
+.confirm-secondary {
+  @apply border-slate-200 bg-white text-slate-700 hover:bg-slate-50;
+}
+
+.confirm-danger {
+  @apply border-red-200 bg-white text-red-600 hover:bg-red-50;
 }
 
 .editor-statusbar {

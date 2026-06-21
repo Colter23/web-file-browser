@@ -16,6 +16,7 @@ interface CodeEditorProps {
   fontSize?: number;
   wrap?: boolean;
   tabSize?: number;
+  readOnly?: boolean;
 }
 
 const props = withDefaults(defineProps<CodeEditorProps>(), {
@@ -24,7 +25,8 @@ const props = withDefaults(defineProps<CodeEditorProps>(), {
   content: "",
   fontSize: 16,
   wrap: true,
-  tabSize: 2
+  tabSize: 2,
+  readOnly: false
 })
 
 const emit = defineEmits<{
@@ -45,6 +47,7 @@ onMounted(() => {
     fontSize: props.fontSize,
     mode: "ace/mode/" + props.mode,
     value: props.content,
+    readOnly: props.readOnly,
 
     enableBasicAutocompletion: true,
     enableSnippets: true,
@@ -78,6 +81,9 @@ onMounted(() => {
   });
   watch(() => props.tabSize, (tabSize: number) => {
     editor?.session.setTabSize(tabSize);
+  });
+  watch(() => props.readOnly, (readOnly: boolean) => {
+    editor?.setReadOnly(readOnly);
   });
 
   editor.session.on("change", () => {
