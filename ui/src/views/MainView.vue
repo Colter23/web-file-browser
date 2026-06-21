@@ -42,6 +42,7 @@ type ExplorerExpose = {
   getSelectedEntry: () => ExplorerEntry | null;
   getSelectedEntries: () => ExplorerEntry[];
   startRename: () => void;
+  selectPathForRename: (path: string) => Promise<boolean>;
 }
 
 type FileClipboardAction = "copy" | "cut";
@@ -152,6 +153,7 @@ const imageViewerDragging = ref(false);
 const currentSelection = ref<ExplorerEntry[]>([]);
 const fileClipboardAction = ref<FileClipboardAction | null>(null);
 const fileClipboardEntries = ref<ExplorerEntry[]>([]);
+const creatingShortcutFolder = ref(false);
 const operationPanel = ref<OperationPanelState>({
   visible: false,
   kind: null,
@@ -792,6 +794,24 @@ const openCreatePanel = (type: "file" | "folder") => {
   });
 }
 
+const createFolderFromShortcut = async () => {
+  if (creatingShortcutFolder.value) return;
+  creatingShortcutFolder.value = true;
+  closePanels();
+  const folderName = "新建文件夹";
+  try {
+    const created = await createEntry(currentFolder(), "folder", folderName);
+    taskMessage.value = `已创建：${folderName}`;
+    await refreshCurrent();
+    const renamed = await explorerRef.value?.selectPathForRename(created.path);
+    if (!renamed) showShellNotice("新文件夹已创建，但当前页未找到它，请刷新或调整排序后重命名。", "warning");
+  } catch (error) {
+    showErrorNotice(error, "新建文件夹失败");
+  } finally {
+    creatingShortcutFolder.value = false;
+  }
+}
+
 const selectedEntry = () => explorerRef.value?.getSelectedEntry() ?? null;
 
 const selectedEntries = (fallback?: ExplorerEntry | null) => {
@@ -1292,7 +1312,7 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
     }
     if (event.shiftKey && key === "n") {
       event.preventDefault();
-      openCreatePanel("folder");
+      void createFolderFromShortcut();
       return;
     }
     if (!event.shiftKey && key === "r") {
@@ -1641,7 +1661,7 @@ const signOut = async () => {
           <button class="icon-tool" title="新建文件" @click="openCreatePanel('file')">
             <icon icon="icon-file-add-fill" />
           </button>
-          <button class="icon-tool" title="新建文件夹" @click="openCreatePanel('folder')">
+          <button class="icon-tool" title="新建文件夹 (Ctrl+Shift+N)" @click="openCreatePanel('folder')">
             <icon icon="icon-folder-add-fill" />
           </button>
         </div>
@@ -1678,7 +1698,7 @@ const signOut = async () => {
             <icon icon="icon-file-add-fill" />
             <span>新建文件</span>
           </button>
-          <button class="command-button" @click="openCreatePanel('folder')">
+          <button class="command-button" title="新建文件夹 (Ctrl+Shift+N)" @click="openCreatePanel('folder')">
             <icon icon="icon-folder-add-fill" />
             <span>新建文件夹</span>
           </button>
