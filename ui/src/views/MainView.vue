@@ -68,6 +68,13 @@ type DeleteConfirmState = {
   error: string;
 }
 
+type TaskCancelConfirmState = {
+  visible: boolean;
+  task: TaskStatus | null;
+  submitting: boolean;
+  error: string;
+}
+
 type RenamePayload = {
   entry: ExplorerEntry;
   name: string;
@@ -129,6 +136,12 @@ const operationPanel = ref<OperationPanelState>({
 const deleteConfirm = ref<DeleteConfirmState>({
   visible: false,
   entries: [],
+  submitting: false,
+  error: ""
+});
+const taskCancelConfirm = ref<TaskCancelConfirmState>({
+  visible: false,
+  task: null,
   submitting: false,
   error: ""
 });
@@ -238,6 +251,12 @@ const deleteConfirmMessage = computed(() => {
 });
 const deleteConfirmItems = computed(() => deleteConfirm.value.entries.slice(0, 5));
 const deleteConfirmExtraCount = computed(() => Math.max(0, deleteConfirm.value.entries.length - deleteConfirmItems.value.length));
+const taskCancelTitle = computed(() => taskCancelConfirm.value.task ? `取消${taskKindText(taskCancelConfirm.value.task.kind)}任务？` : "取消任务？");
+const taskCancelMessage = computed(() => {
+  const task = taskCancelConfirm.value.task;
+  if (!task) return "任务取消请求会发送给后端。";
+  return `#${shortTaskId(task.id)} · ${taskStateText(task.state)} · ${taskProgress(task)}`;
+});
 const previewKind = computed<"image" | "text" | "audio" | "video" | "unknown">(() => {
   const entry = previewEntry.value;
   if (!entry || entry.type !== "file") return "unknown";
@@ -309,6 +328,7 @@ const closePanels = () => {
   clearPreviewContent();
   operationPanel.value.visible = false;
   resetDeleteConfirm();
+  resetTaskCancelConfirm();
 }
 
 const clearSearch = () => {
@@ -473,13 +493,28 @@ const closeTaskPanel = () => {
 
 const cancelTaskById = async (task: TaskStatus) => {
   if (!canCancelTask(task)) return;
-  if (!window.confirm(`取消${taskKindText(task.kind)}任务？`)) return;
+  taskCancelConfirm.value = {
+    visible: true,
+    task,
+    submitting: false,
+    error: ""
+  };
+}
+
+const submitTaskCancelConfirm = async () => {
+  const task = taskCancelConfirm.value.task;
+  if (!task || !canCancelTask(task) || taskCancelConfirm.value.submitting) return;
+  taskCancelConfirm.value.submitting = true;
+  taskCancelConfirm.value.error = "";
   try {
     await cancelTask(task.id);
     taskMessage.value = `已发送取消请求：${shortTaskId(task.id)}`;
+    resetTaskCancelConfirm();
     await loadTasks();
   } catch (error) {
-    window.alert(error instanceof Error ? error.message : "取消任务失败");
+    taskCancelConfirm.value.error = error instanceof Error ? error.message : "取消任务失败";
+  } finally {
+    if (taskCancelConfirm.value.visible) taskCancelConfirm.value.submitting = false;
   }
 }
 
@@ -524,9 +559,23 @@ const resetDeleteConfirm = () => {
   };
 }
 
+const resetTaskCancelConfirm = () => {
+  taskCancelConfirm.value = {
+    visible: false,
+    task: null,
+    submitting: false,
+    error: ""
+  };
+}
+
 const closeDeleteConfirm = () => {
   if (deleteConfirm.value.submitting) return;
   resetDeleteConfirm();
+}
+
+const closeTaskCancelConfirm = () => {
+  if (taskCancelConfirm.value.submitting) return;
+  resetTaskCancelConfirm();
 }
 
 const openOperationPanel = (next: Omit<OperationPanelState, "visible" | "submitting">) => {
@@ -1369,6 +1418,19 @@ const signOut = async () => {
               <button class="task-cancel" :disabled="!canCancelTask(task)" @click="cancelTaskById(task)">取消</button>
             </div>
           </div>
+          <section v-if="taskCancelConfirm.visible" class="task-cancel-confirm" @keydown.esc.prevent="closeTaskCancelConfirm">
+            <div class="task-cancel-confirm-main">
+              <strong>{{ taskCancelTitle }}</strong>
+              <span>{{ taskCancelMessage }}</span>
+              <span v-if="taskCancelConfirm.error" class="task-cancel-error">{{ taskCancelConfirm.error }}</span>
+            </div>
+            <div class="task-cancel-actions">
+              <button type="button" class="task-cancel-secondary" :disabled="taskCancelConfirm.submitting" @click="closeTaskCancelConfirm">保留任务</button>
+              <button type="button" class="task-cancel-primary" :disabled="taskCancelConfirm.submitting" @click="submitTaskCancelConfirm">
+                {{ taskCancelConfirm.submitting ? "发送中..." : "确认取消" }}
+              </button>
+            </div>
+          </section>
         </div>
 
         <div class="browser-area" :class="{previewing: previewPanelVisible}">
@@ -2019,6 +2081,44 @@ const signOut = async () => {
 
 .task-list {
   @apply flex flex-col gap-2 overflow-auto pr-1;
+}
+
+.task-cancel-confirm {
+  @apply flex shrink-0 items-center justify-between gap-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900;
+}
+
+.task-cancel-confirm-main {
+  @apply flex min-w-0 flex-col gap-0.5;
+}
+
+.task-cancel-confirm-main strong,
+.task-cancel-confirm-main span {
+  @apply truncate;
+}
+
+.task-cancel-confirm-main span {
+  @apply text-xs text-amber-700;
+}
+
+.task-cancel-error {
+  @apply text-red-600;
+}
+
+.task-cancel-actions {
+  @apply flex shrink-0 items-center gap-2;
+}
+
+.task-cancel-secondary,
+.task-cancel-primary {
+  @apply h-8 rounded border px-3 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.task-cancel-secondary {
+  @apply border-amber-200 bg-white text-amber-800 hover:bg-amber-100;
+}
+
+.task-cancel-primary {
+  @apply border-amber-600 bg-amber-600 text-white hover:bg-amber-700;
 }
 
 .task-row {
