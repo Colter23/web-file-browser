@@ -139,6 +139,10 @@ const previewCopied = ref(false);
 const imageViewerVisible = ref(false);
 const imageViewerEntry = ref<ExplorerEntry | null>(null);
 const imageViewerEntries = ref<ExplorerEntry[]>([]);
+const imageViewerLoading = ref(false);
+const imageViewerError = ref("");
+const imageViewerFullscreen = ref(false);
+const imageViewerShowFilmstrip = ref(true);
 const imageViewerFit = ref(true);
 const imageViewerZoom = ref(100);
 const imageViewerOffsetX = ref(0);
@@ -369,6 +373,20 @@ const canShowPreviousImage = computed(() => imageViewerIndex.value > 0);
 
 const canShowNextImage = computed(() => imageViewerIndex.value >= 0 && imageViewerIndex.value < imageViewerEntries.value.length - 1);
 
+const canShowImageViewerFilmstrip = computed(() => imageViewerCount.value > 1 && imageViewerShowFilmstrip.value);
+
+const imageViewerFilmstripEntries = computed(() => {
+  const entries = imageViewerEntries.value;
+  if (entries.length <= 12) return entries.map((entry, index) => ({entry, index}));
+  const currentIndex = Math.max(0, imageViewerIndex.value);
+  const visibleCount = 11;
+  const half = Math.floor(visibleCount / 2);
+  let start = Math.max(0, currentIndex - half);
+  let end = Math.min(entries.length, start + visibleCount);
+  start = Math.max(0, end - visibleCount);
+  return entries.slice(start, end).map((entry, offset) => ({entry, index: start + offset}));
+});
+
 const imageViewerSubtitle = computed(() => {
   const entry = imageViewerEntry.value;
   if (!entry) return "";
@@ -431,10 +449,24 @@ const resetImageViewerZoom = () => {
 }
 
 const closeImageViewer = () => {
+  if (document.fullscreenElement === imageViewerRef.value) void document.exitFullscreen().catch(() => undefined);
   imageViewerVisible.value = false;
   imageViewerEntry.value = null;
   imageViewerEntries.value = [];
+  imageViewerLoading.value = false;
+  imageViewerError.value = "";
   resetImageViewerZoom();
+}
+
+const setImageViewerEntry = (entry: ExplorerEntry) => {
+  imageViewerEntry.value = entry;
+  imageViewerLoading.value = true;
+  imageViewerError.value = "";
+  resetImageViewerZoom();
+}
+
+const handleFullscreenChange = () => {
+  imageViewerFullscreen.value = document.fullscreenElement === imageViewerRef.value;
 }
 
 const showShellNotice = (message: string, kind: ShellNoticeKind = "info", title?: string, timeoutMs?: number) => {
@@ -505,6 +537,7 @@ onMounted(async () => {
   fileStore.ensureActiveTab();
   await loadRoot();
   window.addEventListener("keydown", handleWindowKeyDown);
+  document.addEventListener("fullscreenchange", handleFullscreenChange);
 })
 
 onBeforeUnmount(() => {
@@ -512,6 +545,7 @@ onBeforeUnmount(() => {
   stopShellNoticeTimer();
   stopTaskPolling();
   window.removeEventListener("keydown", handleWindowKeyDown);
+  document.removeEventListener("fullscreenchange", handleFullscreenChange);
 })
 
 watch(() => fileStore.showEditor, (showEditor) => {
@@ -1212,6 +1246,16 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
       resetImageViewerZoom();
       return;
     }
+    if (viewerKey === "f") {
+      event.preventDefault();
+      void toggleImageViewerFullscreen();
+      return;
+    }
+    if (viewerKey === "t") {
+      event.preventDefault();
+      toggleImageViewerFilmstrip();
+      return;
+    }
     if (event.ctrlKey || event.metaKey || event.altKey) event.preventDefault();
     return;
   }
@@ -1325,11 +1369,34 @@ const openEntryInNewTab = (entry: ExplorerEntry) => {
 const openImageViewer = async ({entry, entries}: ImageViewerPayload) => {
   fileStore.showEditor = false;
   imageViewerEntries.value = entries.length ? entries : [entry];
-  imageViewerEntry.value = entry;
   imageViewerVisible.value = true;
-  resetImageViewerZoom();
+  setImageViewerEntry(entry);
   await nextTick();
   imageViewerRef.value?.focus();
+}
+
+const openPreviewImageViewer = async () => {
+  const entry = previewEntry.value;
+  if (!entry || previewKind.value !== "image") return;
+  await openImageViewer({entry, entries: [entry]});
+}
+
+const toggleImageViewerFullscreen = async () => {
+  const target = imageViewerRef.value;
+  if (!target) return;
+  try {
+    if (document.fullscreenElement === target) {
+      await document.exitFullscreen();
+    } else {
+      await target.requestFullscreen();
+    }
+  } catch {
+    showShellNotice("当前浏览器未允许进入全屏，仍可在页面内查看大图。", "warning", "无法全屏");
+  }
+}
+
+const toggleImageViewerFilmstrip = () => {
+  imageViewerShowFilmstrip.value = !imageViewerShowFilmstrip.value;
 }
 
 const showAdjacentImage = (direction: -1 | 1) => {
@@ -1337,8 +1404,13 @@ const showAdjacentImage = (direction: -1 | 1) => {
   if (index < 0) return;
   const next = imageViewerEntries.value[index + direction];
   if (!next) return;
-  imageViewerEntry.value = next;
-  resetImageViewerZoom();
+  setImageViewerEntry(next);
+}
+
+const showImageAt = (index: number) => {
+  const next = imageViewerEntries.value[index];
+  if (!next || next.path === imageViewerEntry.value?.path) return;
+  setImageViewerEntry(next);
 }
 
 const switchTab = (tabId: string) => {
@@ -1418,6 +1490,16 @@ const zoomImageViewer = (delta: number) => {
 const handleImageViewerWheel = (event: WheelEvent) => {
   event.preventDefault();
   zoomImageViewer(event.deltaY < 0 ? 25 : -25);
+}
+
+const handleImageViewerLoad = () => {
+  imageViewerLoading.value = false;
+  imageViewerError.value = "";
+}
+
+const handleImageViewerError = () => {
+  imageViewerLoading.value = false;
+  imageViewerError.value = "图片加载失败，请检查文件是否仍可读取。";
 }
 
 const resetPreviewImageZoom = () => {
@@ -1864,6 +1946,10 @@ const signOut = async () => {
               <button @click="zoomPreviewImage(-25)">-</button>
               <span>{{ previewZoomText }}</span>
               <button @click="zoomPreviewImage(25)">+</button>
+              <button title="全屏查看" @click="openPreviewImageViewer">
+                <icon icon="icon-unfold" color="currentColor" />
+                <span>全屏查看</span>
+              </button>
             </div>
             <div v-else-if="previewKind === 'text'" class="preview-tool-row">
               <button :class="{active: previewTextWrap}" @click="previewTextWrap = !previewTextWrap">
@@ -1916,20 +2002,26 @@ const signOut = async () => {
             </div>
             <div class="image-viewer-actions">
               <button title="上一张 (←)" :disabled="!canShowPreviousImage" @click="showAdjacentImage(-1)">
-                <icon icon="icon-back_android" />
+                <icon icon="icon-back_android" color="currentColor" />
               </button>
               <button title="下一张 (→)" :disabled="!canShowNextImage" @click="showAdjacentImage(1)">
-                <icon icon="icon-back_android" class="rotate-180" />
+                <icon icon="icon-back_android" color="currentColor" class="rotate-180" />
               </button>
               <button :class="{active: imageViewerFit}" title="适应窗口" @click="resetImageViewerZoom">适应</button>
               <button title="缩小" @click="zoomImageViewer(-25)">-</button>
               <span>{{ imageViewerZoomText }}</span>
               <button title="放大" @click="zoomImageViewer(25)">+</button>
+              <button title="全屏 (F)" :class="{active: imageViewerFullscreen}" @click="toggleImageViewerFullscreen">
+                <icon icon="icon-unfold" color="currentColor" />
+              </button>
+              <button title="缩略图 (T)" :class="{active: imageViewerShowFilmstrip}" :disabled="imageViewerCount <= 1" @click="toggleImageViewerFilmstrip">
+                <icon icon="icon-viewgrid" color="currentColor" />
+              </button>
               <button title="下载" @click="downloadSelected(imageViewerEntry)">
-                <icon icon="icon-download" />
+                <icon icon="icon-download" color="currentColor" />
               </button>
               <button title="关闭" @click="closeImageViewer">
-                <icon icon="icon-close" />
+                <icon icon="icon-close" color="currentColor" />
               </button>
             </div>
           </div>
@@ -1943,7 +2035,27 @@ const signOut = async () => {
               @lostpointercapture="imageViewerDragging = false"
               @wheel="handleImageViewerWheel"
               @dblclick="resetImageViewerZoom">
-            <img :src="downloadUrl(imageViewerEntry.path)" :alt="imageViewerEntry.name" :style="imageViewerStyle">
+            <div v-if="imageViewerLoading" class="image-viewer-status">正在加载图片...</div>
+            <div v-if="imageViewerError" class="image-viewer-status error">{{ imageViewerError }}</div>
+            <img
+                :key="imageViewerEntry.path"
+                :src="downloadUrl(imageViewerEntry.path)"
+                :alt="imageViewerEntry.name"
+                :style="imageViewerStyle"
+                @load="handleImageViewerLoad"
+                @error="handleImageViewerError">
+          </div>
+          <div v-if="canShowImageViewerFilmstrip" class="image-viewer-filmstrip" aria-label="图片列表">
+            <button
+                v-for="item in imageViewerFilmstripEntries"
+                :key="item.entry.path"
+                class="image-viewer-thumb"
+                :class="{active: item.entry.path === imageViewerEntry.path}"
+                :title="`${item.index + 1} / ${imageViewerCount} · ${item.entry.name}`"
+                @click="showImageAt(item.index)">
+              <img :src="downloadUrl(item.entry.path)" :alt="item.entry.name" loading="lazy">
+              <span>{{ item.index + 1 }}</span>
+            </button>
           </div>
         </section>
       </section>
@@ -2355,14 +2467,14 @@ const signOut = async () => {
 }
 
 .preview-tool-row button {
-  @apply h-6 rounded border border-transparent px-2 text-slate-600 hover:border-slate-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:border-transparent disabled:hover:bg-transparent;
+  @apply inline-flex h-6 items-center gap-1 rounded border border-transparent px-2 text-slate-600 hover:border-slate-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:border-transparent disabled:hover:bg-transparent;
 }
 
 .preview-tool-row button.active {
   @apply border-blue-200 bg-blue-50 text-blue-700;
 }
 
-.preview-tool-row span {
+.preview-tool-row > span {
   @apply ml-auto tabular-nums;
 }
 
@@ -2432,7 +2544,7 @@ const signOut = async () => {
 }
 
 .image-viewer-toolbar {
-  @apply flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-slate-950/55 px-4 backdrop-blur;
+  @apply flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/15 bg-slate-950/75 px-4 backdrop-blur;
 }
 
 .image-viewer-title {
@@ -2452,15 +2564,15 @@ const signOut = async () => {
 }
 
 .image-viewer-actions button {
-  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-white/10 bg-white/5 px-2 text-sm text-white hover:bg-white/15;
+  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-white/20 bg-white/10 px-2 text-sm font-medium text-white shadow-sm hover:border-white/30 hover:bg-white/20;
 }
 
 .image-viewer-actions button:disabled {
-  @apply cursor-not-allowed opacity-35 hover:bg-white/5;
+  @apply cursor-not-allowed border-white/10 bg-white/5 opacity-35 hover:border-white/10 hover:bg-white/5;
 }
 
 .image-viewer-actions button.active {
-  @apply border-blue-300/50 bg-blue-500/25 text-blue-100;
+  @apply border-blue-200/70 bg-blue-500/35 text-white;
 }
 
 .image-viewer-actions span {
@@ -2468,7 +2580,15 @@ const signOut = async () => {
 }
 
 .image-viewer-stage {
-  @apply flex min-h-0 grow touch-none select-none items-center justify-center overflow-hidden bg-transparent p-5;
+  @apply relative flex min-h-0 grow touch-none select-none items-center justify-center overflow-hidden bg-transparent p-5;
+}
+
+.image-viewer-status {
+  @apply absolute rounded-md border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 shadow-xl backdrop-blur;
+}
+
+.image-viewer-status.error {
+  @apply border-red-300/30 bg-red-950/70 text-red-100;
 }
 
 .image-viewer-stage.panning {
@@ -2483,6 +2603,26 @@ const signOut = async () => {
   @apply max-h-full max-w-full select-none rounded object-contain shadow-2xl;
   user-select: none;
   -webkit-user-drag: none;
+}
+
+.image-viewer-filmstrip {
+  @apply flex h-24 shrink-0 items-center gap-2 overflow-x-auto border-t border-white/10 bg-slate-950/45 px-4 py-2 backdrop-blur;
+}
+
+.image-viewer-thumb {
+  @apply relative h-16 w-20 shrink-0 overflow-hidden rounded-md border border-white/10 bg-white/5 p-0.5 text-white opacity-75 outline-none hover:border-white/35 hover:opacity-100;
+}
+
+.image-viewer-thumb.active {
+  @apply border-blue-300 bg-blue-500/20 opacity-100 shadow-[0_0_0_2px_rgba(96,165,250,0.25)];
+}
+
+.image-viewer-thumb img {
+  @apply h-full w-full rounded object-cover;
+}
+
+.image-viewer-thumb span {
+  @apply absolute bottom-1 right-1 rounded bg-slate-950/70 px-1 text-[10px] leading-4 text-slate-100;
 }
 
 .task-panel {
