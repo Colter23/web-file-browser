@@ -54,9 +54,11 @@ const changeInput = (event?: Event) => {
       stopInput();
     }
   }
-  const keyHandle = (keyEvent: KeyboardEvent) => {
+  const keyHandle = async (keyEvent: KeyboardEvent) => {
     if (keyEvent.code === "Enter") {
+      if (!await fileStore.requestEditorLeave()) return;
       fileStore.setCurrentPath(pathInput.value?.value ?? "/");
+      fileStore.closeEditor();
       stopInput();
     } else if (keyEvent.code === "Escape") {
       stopInput();
@@ -72,8 +74,9 @@ const changeInput = (event?: Event) => {
   void focusInput();
 }
 
-const changePath = (index: number) => {
-  fileStore.showEditor = false;
+const changePath = async (index: number) => {
+  if (!await fileStore.requestEditorLeave()) return;
+  fileStore.closeEditor();
   if (index === -1) fileStore.setCurrentPath("/");
   else fileStore.setCurrentPath(pathList.value.slice(0, index + 1).join("/"));
 }

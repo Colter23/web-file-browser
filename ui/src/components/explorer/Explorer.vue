@@ -498,6 +498,7 @@ const selectAllEntries = () => {
 const openEntry = async (entry: ExplorerEntry) => {
   if (isRenaming(entry)) return;
   if (entry.type === "folder") {
+    if (!await fileStore.requestEditorLeave()) return;
     await loadFolder(entry.path);
     return;
   }
@@ -506,8 +507,8 @@ const openEntry = async (entry: ExplorerEntry) => {
     return;
   }
   if (entry.file && fileStore.extensions.includes(entry.file.extension)) {
-    fileStore.showEditor = true;
-    fileStore.currentFile = entry.file;
+    if (!await fileStore.requestEditorLeave()) return;
+    fileStore.openEditor(entry.file);
   } else {
     emit("preview", entry);
   }
@@ -550,7 +551,7 @@ const loadFolder = async (path: string = fileStore.currentPath || "/") => {
     loadedSignature.value = folderRequestSignature(data.path || path);
     clearSelection();
     fileStore.setCurrentPath(data.path);
-    fileStore.showEditor = false;
+    fileStore.closeEditor();
     await nextTick();
     observePendingThumbnails();
     loaded = true;

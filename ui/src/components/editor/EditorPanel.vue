@@ -11,7 +11,7 @@ import {isApiError} from "../../network";
 import {checkFileLanguageMode} from "../../utils/common.ts";
 
 type MenuName = "language" | "theme" | "settings" | "";
-type PendingEditorAction = "close" | "reload" | "";
+type PendingEditorAction = "close" | "reload" | "external" | "";
 
 type EditorCursorStatus = {
   line: number;
@@ -159,18 +159,29 @@ const dirtyText = computed(() => {
 
 const editorMessageText = computed(() => errorText.value || (saveConflict.value ? "文件版本已变化，请重新载入后再保存" : ""));
 
-const confirmTitle = computed(() => pendingAction.value === "reload" ? "重新载入文件？" : "关闭编辑器？");
+const confirmTitle = computed(() => {
+  if (pendingAction.value === "reload") return "重新载入文件？";
+  if (pendingAction.value === "external") return "离开编辑器？";
+  return "关闭编辑器？";
+});
 
-const confirmDescription = computed(() => pendingAction.value === "reload"
-    ? "当前修改还没有保存，重新载入会用磁盘上的最新内容覆盖编辑区。"
-    : "当前修改还没有保存，关闭后未保存的内容会被丢弃。");
+const confirmDescription = computed(() => {
+  if (pendingAction.value === "reload") return "当前修改还没有保存，重新载入会用磁盘上的最新内容覆盖编辑区。";
+  if (pendingAction.value === "external") return "当前修改还没有保存，继续操作会离开编辑器并丢弃未保存内容。";
+  return "当前修改还没有保存，关闭后未保存的内容会被丢弃。";
+});
 
 const confirmSaveText = computed(() => {
   if (pendingBusy.value) return "处理中";
+  if (pendingAction.value === "external") return "保存并离开";
   return pendingAction.value === "reload" ? "保存并重新载入" : "保存并关闭";
 });
 
-const confirmDiscardText = computed(() => pendingAction.value === "reload" ? "放弃并重新载入" : "放弃并关闭");
+const confirmDiscardText = computed(() => {
+  if (pendingAction.value === "reload") return "放弃并重新载入";
+  if (pendingAction.value === "external") return "放弃并离开";
+  return "放弃并关闭";
+});
 
 const closeMenus = () => {
   activeMenu.value = "";
@@ -253,8 +264,7 @@ const resetEditorState = () => {
   closeMenus();
   pendingAction.value = "";
   pendingBusy.value = false;
-  fileStore.showEditor = false;
-  fileStore.currentFile = null;
+  fileStore.closeEditor();
   fileInfo.value = null;
   isChange.value = false;
   content.value = "";
@@ -266,6 +276,20 @@ const resetEditorState = () => {
 }
 
 watch(() => [fileStore.showEditor, fileStore.currentFile?.path], loadCurrentFile);
+
+watch(isChange, value => {
+  fileStore.setEditorDirty(value);
+});
+
+watch(() => fileStore.editorLeaveRequestId, requestId => {
+  if (!requestId || !fileStore.showEditor) return;
+  if (!isChange.value) {
+    fileStore.resolveEditorLeave(true);
+    return;
+  }
+  pendingAction.value = "external";
+  closeMenus();
+});
 
 const onContentChange = (value: string) => {
   if (loading.value) return;
@@ -328,6 +352,7 @@ const close = () => {
 
 const cancelPendingAction = () => {
   if (pendingBusy.value) return;
+  if (pendingAction.value === "external") fileStore.resolveEditorLeave(false);
   pendingAction.value = "";
   nextTick(() => editorRef.value?.focus?.());
 }
@@ -337,6 +362,10 @@ const finishPendingAction = async () => {
   pendingAction.value = "";
   if (action === "reload") {
     await loadCurrentFile();
+    return;
+  }
+  if (action === "external") {
+    fileStore.resolveEditorLeave(true);
     return;
   }
   if (action === "close") resetEditorState();
@@ -380,13 +409,22 @@ const handleKeyDown = (event: KeyboardEvent) => {
   }
 }
 
+const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+  if (!fileStore.showEditor || !isChange.value) return;
+  event.preventDefault();
+  event.returnValue = "";
+}
+
 onMounted(() => {
   window.addEventListener("keydown", handleKeyDown);
+  window.addEventListener("beforeunload", handleBeforeUnload);
   void loadCurrentFile();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeyDown);
+  window.removeEventListener("beforeunload", handleBeforeUnload);
+  fileStore.resolveEditorLeave(false);
 });
 </script>
 

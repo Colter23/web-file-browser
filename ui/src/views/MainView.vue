@@ -566,10 +566,14 @@ const loadRoot = async () => {
 
 const handleLoad = (node: FileTreeData) => {
   return new Promise<void>(async (resolve) => {
+    if (!await fileStore.requestEditorLeave()) {
+      resolve();
+      return;
+    }
     const data = await getFolderData(node.path);
     node.children = fileStore.saveAndConvertFolderData(data);
     fileStore.setCurrentPath(data.path);
-    fileStore.showEditor = false;
+    fileStore.closeEditor();
     closePanels();
     resolve();
   });
@@ -869,7 +873,7 @@ const handleSelectionChange = (entries: ExplorerEntry[]) => {
   if (!previewPanelVisible.value || fileStore.showEditor) return;
   const entry = entries.length === 1 ? entries[0] : null;
   if (entry?.type === "file") {
-    setPreviewEntry(entry);
+    void setPreviewEntry(entry);
   } else {
     clearPreviewContent();
   }
@@ -1307,19 +1311,19 @@ const focusBreadcrumb = () => {
   breadcrumbRef.value?.focusInput();
 }
 
-const previewSelectedQuietly = () => {
+const previewSelectedQuietly = async () => {
   const entry = singleSelection.value;
   if (!entry || entry.type !== "file") return false;
-  previewSelected(entry);
+  await previewSelected(entry);
   return true;
 }
 
-const togglePreviewFromShortcut = () => {
+const togglePreviewFromShortcut = async () => {
   if (previewPanelVisible.value) {
     closePreview();
     return true;
   }
-  return previewSelectedQuietly();
+  return await previewSelectedQuietly();
 }
 
 const cycleViewMode = () => {
@@ -1330,19 +1334,20 @@ const shouldIgnoreShellShortcut = (target: EventTarget | null) => {
   return fileStore.showEditor || shouldIgnoreNavigationShortcut(target);
 }
 
-const switchRelativeTab = (offset: number) => {
+const switchRelativeTab = async (offset: number) => {
   if (fileStore.tabs.length <= 1) return false;
   const currentIndex = fileStore.tabs.findIndex(tab => tab.id === fileStore.activeTabId);
   const startIndex = currentIndex >= 0 ? currentIndex : 0;
   const nextIndex = (startIndex + offset + fileStore.tabs.length) % fileStore.tabs.length;
   const nextTab = fileStore.tabs[nextIndex];
   if (!nextTab || nextTab.id === fileStore.activeTabId) return false;
-  switchTab(nextTab.id);
+  await switchTab(nextTab.id);
   return true;
 }
 
-const closeActiveTab = () => {
+const closeActiveTab = async () => {
   if (fileStore.tabs.length <= 1) return false;
+  if (!await fileStore.requestEditorLeave()) return false;
   fileStore.closeTab(fileStore.activeTabId);
   closePanels();
   return true;
@@ -1413,22 +1418,22 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
     if (handleSelectAllShortcut(key, event)) return;
     if (key === "t") {
       event.preventDefault();
-      openTab();
+      void openTab();
       return;
     }
     if (key === "w") {
       event.preventDefault();
-      closeActiveTab();
+      void closeActiveTab();
       return;
     }
     if (key === "tab") {
       event.preventDefault();
-      switchRelativeTab(event.shiftKey ? -1 : 1);
+      void switchRelativeTab(event.shiftKey ? -1 : 1);
       return;
     }
     if (key === "pageup" || key === "pagedown") {
       event.preventDefault();
-      switchRelativeTab(key === "pageup" ? -1 : 1);
+      void switchRelativeTab(key === "pageup" ? -1 : 1);
       return;
     }
     if (event.shiftKey && key === "n") {
@@ -1454,11 +1459,14 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
   }
   if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "p" && !shouldIgnoreNavigationShortcut(event.target)) {
     event.preventDefault();
-    togglePreviewFromShortcut();
+    void togglePreviewFromShortcut();
     return;
   }
   if ((event.key === " " || event.code === "Space") && !event.altKey && !event.ctrlKey && !event.metaKey && !shouldIgnoreActionShortcut(event.target)) {
-    if (previewSelectedQuietly()) event.preventDefault();
+    if (singleSelection.value?.type === "file") {
+      event.preventDefault();
+      void previewSelectedQuietly();
+    }
     return;
   }
   if (!event.altKey || event.ctrlKey || event.metaKey || shouldIgnoreNavigationShortcut(event.target)) return;
@@ -1475,6 +1483,7 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
 }
 
 const navigateBack = async () => {
+  if (!await fileStore.requestEditorLeave()) return;
   const path = fileStore.goBack();
   if (!path) return;
   closePanels();
@@ -1482,6 +1491,7 @@ const navigateBack = async () => {
 }
 
 const navigateForward = async () => {
+  if (!await fileStore.requestEditorLeave()) return;
   const path = fileStore.goForward();
   if (!path) return;
   closePanels();
@@ -1490,22 +1500,24 @@ const navigateForward = async () => {
 
 const navigateUp = async () => {
   if (!canNavigateUp.value) return;
-  fileStore.showEditor = false;
-  fileStore.currentFile = null;
+  if (!await fileStore.requestEditorLeave()) return;
+  fileStore.closeEditor();
   closePanels();
   const path = parentPath(currentFolder());
   fileStore.setCurrentPath(path);
   await explorerRef.value?.refresh(path);
 }
 
-const openTab = () => {
+const openTab = async () => {
+  if (!await fileStore.requestEditorLeave()) return;
   closeTabContextMenu();
   fileStore.openTab(currentFolder());
   closePanels();
 }
 
-const openEntryInNewTab = (entry: ExplorerEntry) => {
+const openEntryInNewTab = async (entry: ExplorerEntry) => {
   if (entry.type !== "folder") return;
+  if (!await fileStore.requestEditorLeave()) return;
   closeTabContextMenu();
   fileStore.openPathInNewTab(entry.path);
   closePanels();
@@ -1523,38 +1535,42 @@ const openTabContextMenu = (event: MouseEvent, tabId: string) => {
   tabContextMenu.value = {visible: true, x, y, tabId};
 }
 
-const duplicateTabFromMenu = () => {
+const duplicateTabFromMenu = async () => {
   const tabId = tabContextMenu.value.tabId;
+  if (!await fileStore.requestEditorLeave()) return;
   closeTabContextMenu();
   fileStore.duplicateTab(tabId);
   closePanels();
 }
 
-const closeTabById = (tabId: string) => {
+const closeTabById = async (tabId: string) => {
   if (fileStore.tabs.length <= 1) return false;
   const wasActive = fileStore.activeTabId === tabId;
+  if (wasActive && !await fileStore.requestEditorLeave()) return false;
   fileStore.closeTab(tabId);
   if (wasActive) closePanels();
   return true;
 }
 
-const closeTabFromMenu = () => {
+const closeTabFromMenu = async () => {
   const tabId = tabContextMenu.value.tabId;
   closeTabContextMenu();
-  closeTabById(tabId);
+  await closeTabById(tabId);
 }
 
-const closeOtherTabsFromMenu = () => {
+const closeOtherTabsFromMenu = async () => {
   const tabId = tabContextMenu.value.tabId;
   const changesActiveTab = fileStore.activeTabId !== tabId;
+  if (changesActiveTab && !await fileStore.requestEditorLeave()) return;
   closeTabContextMenu();
   fileStore.closeOtherTabs(tabId);
   if (changesActiveTab) closePanels();
 }
 
-const closeRightTabsFromMenu = () => {
+const closeRightTabsFromMenu = async () => {
   const tabId = tabContextMenu.value.tabId;
   const closesActiveTab = tabContextIndex.value >= 0 && fileStore.tabs.findIndex(tab => tab.id === fileStore.activeTabId) > tabContextIndex.value;
+  if (closesActiveTab && !await fileStore.requestEditorLeave()) return;
   closeTabContextMenu();
   fileStore.closeTabsToRight(tabId);
   if (closesActiveTab) closePanels();
@@ -1565,7 +1581,7 @@ const handleTabAuxClick = (event: MouseEvent, tabId: string) => {
   event.preventDefault();
   event.stopPropagation();
   closeTabContextMenu();
-  closeTabById(tabId);
+  void closeTabById(tabId);
 }
 
 const startTabDrag = (event: DragEvent, tabId: string) => {
@@ -1619,7 +1635,8 @@ const finishTabDrag = () => {
 }
 
 const openImageViewer = async ({entry, entries}: ImageViewerPayload) => {
-  fileStore.showEditor = false;
+  if (!await fileStore.requestEditorLeave()) return;
+  fileStore.closeEditor();
   imageViewerEntries.value = entries.length ? entries : [entry];
   imageViewerVisible.value = true;
   setImageViewerEntry(entry);
@@ -1671,8 +1688,9 @@ const showImageAt = (index: number) => {
   setImageViewerEntry(next);
 }
 
-const switchTab = (tabId: string) => {
+const switchTab = async (tabId: string) => {
   closeTabContextMenu();
+  if (tabId !== fileStore.activeTabId && !await fileStore.requestEditorLeave()) return;
   fileStore.switchTab(tabId);
   closePanels();
 }
@@ -1680,21 +1698,21 @@ const switchTab = (tabId: string) => {
 const closeTab = (event: MouseEvent, tabId: string) => {
   event.stopPropagation();
   closeTabContextMenu();
-  closeTabById(tabId);
+  void closeTabById(tabId);
 }
 
-const previewSelected = (entry = selectedEntry()) => {
+const previewSelected = async (entry = selectedEntry()) => {
   if (!entry || entry.type !== "file") {
     showShellNotice("请选择文件", "warning");
     return;
   }
-  setPreviewEntry(entry, true);
+  await setPreviewEntry(entry, true);
 }
 
-const setPreviewEntry = (entry: ExplorerEntry, force = false) => {
+const setPreviewEntry = async (entry: ExplorerEntry, force = false) => {
   if (!force && previewEntry.value?.path === entry.path && previewPanelVisible.value) return;
-  fileStore.showEditor = false;
-  fileStore.currentFile = null;
+  if (!await fileStore.requestEditorLeave()) return;
+  fileStore.closeEditor();
   previewEntry.value = entry;
   previewPanelVisible.value = true;
   previewImageFit.value = true;
@@ -1708,18 +1726,18 @@ const closePreview = () => {
   closePanels();
 }
 
-const openPreviewInEditor = () => {
+const openPreviewInEditor = async () => {
   const entry = previewEntry.value;
   if (!entry || entry.type !== "file" || !canEditPreview.value) return;
+  if (!await fileStore.requestEditorLeave()) return;
   closePanels();
-  fileStore.currentFile = {
+  fileStore.openEditor({
     path: entry.path,
     name: entry.name,
     size: entry.size ?? 0,
     extension: entry.extension ?? "",
     modified: entry.modified ?? ""
-  };
-  fileStore.showEditor = true;
+  });
 }
 
 const copyPreviewText = async () => {
@@ -1843,7 +1861,13 @@ const loadPreview = async (entry: ExplorerEntry) => {
   }
 }
 
+const openSettings = async () => {
+  if (!await fileStore.requestEditorLeave()) return;
+  await router.push("/setting");
+}
+
 const signOut = async () => {
+  if (!await fileStore.requestEditorLeave()) return;
   await logout();
   await router.replace("/login");
 }
@@ -1896,7 +1920,7 @@ const signOut = async () => {
           <input ref="searchInput" v-model="searchText" type="search" placeholder="搜索当前文件夹" @keydown.escape="clearSearch">
           <icon icon="icon-fenxiang" />
         </label>
-        <button class="square-button" title="设置" @click="router.push('/setting')">
+        <button class="square-button" title="设置" @click="openSettings">
           <icon icon="icon-setting" size="large" />
         </button>
         <button class="plain-button" @click="signOut">退出</button>

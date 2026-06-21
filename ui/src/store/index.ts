@@ -15,6 +15,10 @@ import type {
 declare type FileState = {
     // 是否展示文件编辑器
     showEditor: boolean;
+    // 编辑器是否存在未保存修改
+    editorDirty: boolean;
+    // 请求编辑器确认离开的版本号
+    editorLeaveRequestId: number;
     // 当前文件路径
     currentPath: string;
     // 当前文件信息
@@ -189,6 +193,8 @@ const cloneTab = (tab: ExplorerTab): ExplorerTab => {
     };
 }
 
+let pendingEditorLeaveResolver: ((confirmed: boolean) => void) | null = null;
+
 export const useFileStore = defineStore('file', {
     state: (): FileState => {
         const tabs = readTabs();
@@ -196,6 +202,8 @@ export const useFileStore = defineStore('file', {
         const activeTab = tabs.find(tab => tab.id === activeTabId) ?? tabs[0];
         return {
             showEditor: false,
+            editorDirty: false,
+            editorLeaveRequestId: 0,
             currentPath: activeTab?.path ?? "/",
             currentFile: null,
             folderData: new Map() as Map<string, FolderData>,
@@ -211,6 +219,36 @@ export const useFileStore = defineStore('file', {
     actions: {
         activeTab() {
             return this.tabs.find(tab => tab.id === this.activeTabId) ?? this.tabs[0] ?? null;
+        },
+
+        openEditor(file: FileInfo) {
+            this.currentFile = file;
+            this.showEditor = true;
+            this.editorDirty = false;
+        },
+
+        closeEditor() {
+            this.showEditor = false;
+            this.currentFile = null;
+            this.editorDirty = false;
+        },
+
+        setEditorDirty(dirty: boolean) {
+            this.editorDirty = dirty;
+        },
+
+        requestEditorLeave() {
+            if (!this.showEditor || !this.editorDirty) return Promise.resolve(true);
+            pendingEditorLeaveResolver?.(false);
+            this.editorLeaveRequestId += 1;
+            return new Promise<boolean>(resolve => {
+                pendingEditorLeaveResolver = resolve;
+            });
+        },
+
+        resolveEditorLeave(confirmed: boolean) {
+            pendingEditorLeaveResolver?.(confirmed);
+            pendingEditorLeaveResolver = null;
         },
 
         syncActiveTabPrefs() {
@@ -273,8 +311,7 @@ export const useFileStore = defineStore('file', {
             activeTab.backStack = activeTab.backStack.slice(0, -1);
             activeTab.forwardStack = [current, ...(activeTab.forwardStack ?? [])].slice(0, 50);
             this.applyTabPath(activeTab, target);
-            this.showEditor = false;
-            this.currentFile = null;
+            this.closeEditor();
             this.persistTabs();
             return target;
         },
@@ -287,8 +324,7 @@ export const useFileStore = defineStore('file', {
             activeTab.forwardStack = activeTab.forwardStack.slice(1);
             activeTab.backStack = [...(activeTab.backStack ?? []), current].slice(-50);
             this.applyTabPath(activeTab, target);
-            this.showEditor = false;
-            this.currentFile = null;
+            this.closeEditor();
             this.persistTabs();
             return target;
         },
@@ -340,8 +376,7 @@ export const useFileStore = defineStore('file', {
             this.iconSize = tab.iconSize ?? this.iconSize;
             this.sortKey = tab.sortKey ?? this.sortKey;
             this.sortOrder = tab.sortOrder ?? this.sortOrder;
-            this.showEditor = false;
-            this.currentFile = null;
+            this.closeEditor();
             this.persistTabs();
         },
 
@@ -360,8 +395,7 @@ export const useFileStore = defineStore('file', {
             this.iconSize = tab.iconSize ?? this.iconSize;
             this.sortKey = tab.sortKey ?? this.sortKey;
             this.sortOrder = tab.sortOrder ?? this.sortOrder;
-            this.showEditor = false;
-            this.currentFile = null;
+            this.closeEditor();
             this.persistTabs();
         },
 
@@ -386,8 +420,7 @@ export const useFileStore = defineStore('file', {
             this.iconSize = tab.iconSize ?? this.iconSize;
             this.sortKey = tab.sortKey ?? this.sortKey;
             this.sortOrder = tab.sortOrder ?? this.sortOrder;
-            this.showEditor = false;
-            this.currentFile = null;
+            this.closeEditor();
             this.persistTabs();
         },
 
@@ -405,8 +438,7 @@ export const useFileStore = defineStore('file', {
                 this.iconSize = next.iconSize ?? this.iconSize;
                 this.sortKey = next.sortKey ?? this.sortKey;
                 this.sortOrder = next.sortOrder ?? this.sortOrder;
-                this.showEditor = false;
-                this.currentFile = null;
+                this.closeEditor();
             }
             this.persistTabs();
         },
@@ -414,6 +446,7 @@ export const useFileStore = defineStore('file', {
         closeOtherTabs(tabId: string) {
             const tab = this.tabs.find(item => item.id === tabId);
             if (!tab || this.tabs.length <= 1) return;
+            const wasActive = this.activeTabId === tab.id;
             this.tabs = [tab];
             this.activeTabId = tab.id;
             this.currentPath = tab.path;
@@ -421,8 +454,7 @@ export const useFileStore = defineStore('file', {
             this.iconSize = tab.iconSize ?? this.iconSize;
             this.sortKey = tab.sortKey ?? this.sortKey;
             this.sortOrder = tab.sortOrder ?? this.sortOrder;
-            this.showEditor = false;
-            this.currentFile = null;
+            if (!wasActive) this.closeEditor();
             this.persistTabs();
         },
 
@@ -438,8 +470,7 @@ export const useFileStore = defineStore('file', {
                 this.iconSize = tab.iconSize ?? this.iconSize;
                 this.sortKey = tab.sortKey ?? this.sortKey;
                 this.sortOrder = tab.sortOrder ?? this.sortOrder;
-                this.showEditor = false;
-                this.currentFile = null;
+                this.closeEditor();
             }
             this.persistTabs();
         },
