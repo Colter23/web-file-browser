@@ -108,6 +108,7 @@ const fileStore = useFileStore();
 const treeData = ref<FileTreeData[]>([]);
 const explorerRef = ref<ExplorerExpose | null>(null);
 const deleteConfirmRef = ref<HTMLElement | null>(null);
+const imageViewerRef = ref<HTMLElement | null>(null);
 const uploadInput = ref<HTMLInputElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 const uploadDropActive = ref(false);
@@ -130,6 +131,13 @@ const previewImageOffsetY = ref(0);
 const previewImageDragging = ref(false);
 const previewTextWrap = ref(true);
 const previewCopied = ref(false);
+const imageViewerVisible = ref(false);
+const imageViewerEntry = ref<ExplorerEntry | null>(null);
+const imageViewerFit = ref(true);
+const imageViewerZoom = ref(100);
+const imageViewerOffsetX = ref(0);
+const imageViewerOffsetY = ref(0);
+const imageViewerDragging = ref(false);
 const currentSelection = ref<ExplorerEntry[]>([]);
 const fileClipboardAction = ref<FileClipboardAction | null>(null);
 const fileClipboardEntries = ref<ExplorerEntry[]>([]);
@@ -173,6 +181,11 @@ let previewImageDragStartX = 0;
 let previewImageDragStartY = 0;
 let previewImageDragOriginX = 0;
 let previewImageDragOriginY = 0;
+let imageViewerPointerId: number | null = null;
+let imageViewerDragStartX = 0;
+let imageViewerDragStartY = 0;
+let imageViewerDragOriginX = 0;
+let imageViewerDragOriginY = 0;
 
 const activeTab = computed(() => fileStore.tabs.find(tab => tab.id === fileStore.activeTabId) ?? fileStore.tabs[0]);
 const canNavigateBack = computed(() => Boolean(activeTab.value?.backStack?.length));
@@ -327,6 +340,23 @@ const previewZoomText = computed(() => previewImageFit.value ? "适应" : `${pre
 
 const canPanPreviewImage = computed(() => previewKind.value === "image" && !previewImageFit.value);
 
+const imageViewerStyle = computed(() => ({
+  maxWidth: imageViewerFit.value ? "100%" : "none",
+  maxHeight: imageViewerFit.value ? "100%" : "none",
+  transform: imageViewerFit.value ? "none" : `translate3d(${imageViewerOffsetX.value}px, ${imageViewerOffsetY.value}px, 0) scale(${imageViewerZoom.value / 100})`,
+  transformOrigin: "center center"
+}));
+
+const imageViewerZoomText = computed(() => imageViewerFit.value ? "适应" : `${imageViewerZoom.value}%`);
+
+const canPanImageViewer = computed(() => imageViewerVisible.value && !imageViewerFit.value);
+
+const imageViewerSubtitle = computed(() => {
+  const entry = imageViewerEntry.value;
+  if (!entry) return "";
+  return `${formatBytes(entry.size)} · ${formatDate(entry.modified)}`;
+});
+
 const previewMeta = computed(() => {
   const entry = previewEntry.value;
   if (!entry) return [];
@@ -366,6 +396,25 @@ const resetPreviewImagePan = () => {
   previewImageOffsetY.value = 0;
   previewImageDragging.value = false;
   previewImagePointerId = null;
+}
+
+const resetImageViewerPan = () => {
+  imageViewerOffsetX.value = 0;
+  imageViewerOffsetY.value = 0;
+  imageViewerDragging.value = false;
+  imageViewerPointerId = null;
+}
+
+const resetImageViewerZoom = () => {
+  imageViewerFit.value = true;
+  imageViewerZoom.value = 100;
+  resetImageViewerPan();
+}
+
+const closeImageViewer = () => {
+  imageViewerVisible.value = false;
+  imageViewerEntry.value = null;
+  resetImageViewerZoom();
 }
 
 const showShellNotice = (message: string, kind: ShellNoticeKind = "info", title?: string, timeoutMs?: number) => {
@@ -409,6 +458,7 @@ const closePanels = () => {
   operationPanel.value.visible = false;
   resetDeleteConfirm();
   resetTaskCancelConfirm();
+  closeImageViewer();
 }
 
 const clearSearch = () => {
@@ -1110,6 +1160,31 @@ const closeActiveTab = () => {
 }
 
 const handleWindowKeyDown = (event: KeyboardEvent) => {
+  if (imageViewerVisible.value) {
+    const viewerKey = event.key.toLowerCase();
+    if (viewerKey === "escape") {
+      event.preventDefault();
+      closeImageViewer();
+      return;
+    }
+    if (viewerKey === "+" || viewerKey === "=" || event.code === "NumpadAdd") {
+      event.preventDefault();
+      zoomImageViewer(25);
+      return;
+    }
+    if (viewerKey === "-" || event.code === "NumpadSubtract") {
+      event.preventDefault();
+      zoomImageViewer(-25);
+      return;
+    }
+    if (viewerKey === "0") {
+      event.preventDefault();
+      resetImageViewerZoom();
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey) event.preventDefault();
+    return;
+  }
   const key = event.key.toLowerCase();
   const commandKey = event.ctrlKey || event.metaKey;
   if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "f") {
@@ -1217,6 +1292,16 @@ const openEntryInNewTab = (entry: ExplorerEntry) => {
   closePanels();
 }
 
+const openImageViewer = async (entry: ExplorerEntry) => {
+  if (entry.type !== "file") return;
+  fileStore.showEditor = false;
+  imageViewerEntry.value = entry;
+  imageViewerVisible.value = true;
+  resetImageViewerZoom();
+  await nextTick();
+  imageViewerRef.value?.focus();
+}
+
 const switchTab = (tabId: string) => {
   fileStore.switchTab(tabId);
   closePanels();
@@ -1286,6 +1371,11 @@ const zoomPreviewImage = (delta: number) => {
   previewImageZoom.value = Math.min(300, Math.max(25, previewImageZoom.value + delta));
 }
 
+const zoomImageViewer = (delta: number) => {
+  imageViewerFit.value = false;
+  imageViewerZoom.value = Math.min(500, Math.max(25, imageViewerZoom.value + delta));
+}
+
 const resetPreviewImageZoom = () => {
   previewImageFit.value = true;
   previewImageZoom.value = 100;
@@ -1318,6 +1408,34 @@ const stopPreviewImagePan = (event: PointerEvent) => {
   stage.releasePointerCapture?.(event.pointerId);
   previewImageDragging.value = false;
   previewImagePointerId = null;
+}
+
+const startImageViewerPan = (event: PointerEvent) => {
+  if (!canPanImageViewer.value || event.button !== 0) return;
+  event.preventDefault();
+  const stage = event.currentTarget as HTMLElement;
+  imageViewerPointerId = event.pointerId;
+  imageViewerDragging.value = true;
+  imageViewerDragStartX = event.clientX;
+  imageViewerDragStartY = event.clientY;
+  imageViewerDragOriginX = imageViewerOffsetX.value;
+  imageViewerDragOriginY = imageViewerOffsetY.value;
+  stage.setPointerCapture?.(event.pointerId);
+}
+
+const moveImageViewerPan = (event: PointerEvent) => {
+  if (!imageViewerDragging.value || imageViewerPointerId !== event.pointerId) return;
+  event.preventDefault();
+  imageViewerOffsetX.value = imageViewerDragOriginX + event.clientX - imageViewerDragStartX;
+  imageViewerOffsetY.value = imageViewerDragOriginY + event.clientY - imageViewerDragStartY;
+}
+
+const stopImageViewerPan = (event: PointerEvent) => {
+  if (imageViewerPointerId !== event.pointerId) return;
+  const stage = event.currentTarget as HTMLElement;
+  stage.releasePointerCapture?.(event.pointerId);
+  imageViewerDragging.value = false;
+  imageViewerPointerId = null;
 }
 
 const loadPreview = async (entry: ExplorerEntry) => {
@@ -1573,7 +1691,8 @@ const signOut = async () => {
                 @create-folder="openCreatePanel('folder')"
                 @drop-entries="dropEntriesToFolder"
                 @selection-change="handleSelectionChange"
-                @open-new-tab="openEntryInNewTab">
+                @open-new-tab="openEntryInNewTab"
+                @open-image-viewer="openImageViewer">
             </explorer>
             <section v-if="shellNotice.visible" :class="['shell-notice', shellNotice.kind]" role="status" aria-live="polite">
               <div class="shell-notice-mark" aria-hidden="true"></div>
@@ -1739,6 +1858,43 @@ const signOut = async () => {
             </div>
           </aside>
         </div>
+
+        <section
+            v-if="imageViewerVisible && imageViewerEntry"
+            ref="imageViewerRef"
+            class="image-viewer"
+            tabindex="-1"
+            @keydown.esc.prevent="closeImageViewer">
+          <div class="image-viewer-toolbar">
+            <div class="image-viewer-title">
+              <strong>{{ imageViewerEntry.name }}</strong>
+              <span>{{ imageViewerSubtitle }}</span>
+            </div>
+            <div class="image-viewer-actions">
+              <button :class="{active: imageViewerFit}" title="适应窗口" @click="resetImageViewerZoom">适应</button>
+              <button title="缩小" @click="zoomImageViewer(-25)">-</button>
+              <span>{{ imageViewerZoomText }}</span>
+              <button title="放大" @click="zoomImageViewer(25)">+</button>
+              <button title="下载" @click="downloadSelected(imageViewerEntry)">
+                <icon icon="icon-download" />
+              </button>
+              <button title="关闭" @click="closeImageViewer">
+                <icon icon="icon-close" />
+              </button>
+            </div>
+          </div>
+          <div
+              class="image-viewer-stage"
+              :class="{fit: imageViewerFit, panning: canPanImageViewer, dragging: imageViewerDragging}"
+              @pointerdown="startImageViewerPan"
+              @pointermove="moveImageViewerPan"
+              @pointerup="stopImageViewerPan"
+              @pointercancel="stopImageViewerPan"
+              @lostpointercapture="imageViewerDragging = false"
+              @dblclick="resetImageViewerZoom">
+            <img :src="downloadUrl(imageViewerEntry.path)" :alt="imageViewerEntry.name" :style="imageViewerStyle">
+          </div>
+        </section>
       </section>
     </main>
   </div>
@@ -2218,6 +2374,60 @@ const signOut = async () => {
 
 .preview-placeholder button {
   @apply rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-blue-50;
+}
+
+.image-viewer {
+  @apply fixed inset-3 z-50 flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-950/92 text-white shadow-2xl outline-none backdrop-blur;
+}
+
+.image-viewer-toolbar {
+  @apply flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-slate-900/85 px-4;
+}
+
+.image-viewer-title {
+  @apply flex min-w-0 flex-col;
+}
+
+.image-viewer-title strong {
+  @apply truncate text-sm font-semibold;
+}
+
+.image-viewer-title span {
+  @apply truncate text-xs text-slate-300;
+}
+
+.image-viewer-actions {
+  @apply flex shrink-0 items-center gap-1 text-xs text-slate-300;
+}
+
+.image-viewer-actions button {
+  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-white/10 bg-white/5 px-2 text-sm text-white hover:bg-white/15;
+}
+
+.image-viewer-actions button.active {
+  @apply border-blue-300/50 bg-blue-500/25 text-blue-100;
+}
+
+.image-viewer-actions span {
+  @apply w-14 text-center tabular-nums;
+}
+
+.image-viewer-stage {
+  @apply flex min-h-0 grow touch-none select-none items-center justify-center overflow-hidden bg-slate-950 p-5;
+}
+
+.image-viewer-stage.panning {
+  @apply cursor-grab;
+}
+
+.image-viewer-stage.dragging {
+  @apply cursor-grabbing;
+}
+
+.image-viewer-stage img {
+  @apply max-h-full max-w-full select-none rounded object-contain shadow-2xl;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .task-panel {

@@ -48,6 +48,7 @@ const emit = defineEmits<{
   (e: "archive", entry: ExplorerEntry): void;
   (e: "extract", entry: ExplorerEntry): void;
   (e: "preview", entry: ExplorerEntry): void;
+  (e: "open-image-viewer", entry: ExplorerEntry): void;
   (e: "copy", entry: ExplorerEntry): void;
   (e: "cut", entry: ExplorerEntry): void;
   (e: "paste"): void;
@@ -423,6 +424,10 @@ const openEntry = async (entry: ExplorerEntry) => {
   if (isRenaming(entry)) return;
   if (entry.type === "folder") {
     await loadFolder(entry.path);
+    return;
+  }
+  if (isImageFile(entry)) {
+    emit("open-image-viewer", entry);
     return;
   }
   if (entry.file && fileStore.extensions.includes(entry.file.extension)) {
