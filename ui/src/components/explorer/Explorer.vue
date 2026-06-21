@@ -41,6 +41,11 @@ type DropEntriesPayload = {
   action: "copy" | "move";
 }
 
+type DropToCurrentFolderPayload = {
+  entries: ExplorerEntry[];
+  action: "copy" | "move";
+}
+
 type ImageViewerPayload = {
   entry: ExplorerEntry;
   entries: ExplorerEntry[];
@@ -65,6 +70,7 @@ const emit = defineEmits<{
   (e: "create-file"): void;
   (e: "create-folder"): void;
   (e: "drop-entries", payload: DropEntriesPayload): void;
+  (e: "drop-to-current-folder", payload: DropToCurrentFolderPayload): void;
   (e: "open-new-tab", entry: ExplorerEntry): void;
   (e: "selection-change", entries: ExplorerEntry[]): void;
 }>()
@@ -99,7 +105,7 @@ const renamingPath = ref("");
 const renameDraft = ref("");
 const renameSubmitting = ref(false);
 const draggingEntries = ref<ExplorerEntry[]>([]);
-const dragState = reactive({active: false, overPath: "", copy: false});
+const dragState = reactive({active: false, overPath: "", overCurrentFolder: false, copy: false});
 const selectionBox = reactive<SelectionBox>({
   active: false,
   additive: false,
@@ -787,6 +793,7 @@ const resetEntryDrag = () => {
   draggingEntries.value = [];
   dragState.active = false;
   dragState.overPath = "";
+  dragState.overCurrentFolder = false;
   dragState.copy = false;
 }
 
@@ -795,6 +802,7 @@ const dragOverEntry = (event: DragEvent, entry: ExplorerEntry) => {
   event.preventDefault();
   event.stopPropagation();
   dragState.overPath = entry.path;
+  dragState.overCurrentFolder = false;
   dragState.copy = Boolean(event.ctrlKey || event.metaKey);
   if (event.dataTransfer) event.dataTransfer.dropEffect = dragState.copy ? "copy" : "move";
 }
@@ -815,6 +823,45 @@ const dropOnEntry = (event: DragEvent, entry: ExplorerEntry) => {
   const action = event.ctrlKey || event.metaKey ? "copy" : "move";
   resetEntryDrag();
   emit("drop-entries", {entries: entriesToDrop, target: entry, action});
+}
+
+const isInternalEntryDrag = (event: DragEvent) => {
+  const types = Array.from(event.dataTransfer?.types ?? []);
+  return dragState.active && types.includes("text/plain");
+}
+
+const isEntryDragSurface = (target: EventTarget | null) => target instanceof HTMLElement && Boolean(target.closest(".entry-item"));
+
+const dragOverCurrentFolder = (event: DragEvent) => {
+  if (!isInternalEntryDrag(event)) return;
+  if (isEntryDragSurface(event.target)) {
+    dragState.overCurrentFolder = false;
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  dragState.overPath = "";
+  dragState.overCurrentFolder = true;
+  dragState.copy = Boolean(event.ctrlKey || event.metaKey);
+  if (event.dataTransfer) event.dataTransfer.dropEffect = dragState.copy ? "copy" : "move";
+}
+
+const dragLeaveCurrentFolder = (event: DragEvent) => {
+  if (!dragState.overCurrentFolder) return;
+  const related = event.relatedTarget;
+  if (related instanceof Node && viewportRef.value?.contains(related)) return;
+  dragState.overCurrentFolder = false;
+}
+
+const dropOnCurrentFolder = (event: DragEvent) => {
+  if (!isInternalEntryDrag(event) || !dragState.overCurrentFolder) return;
+  if (isEntryDragSurface(event.target)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const entriesToDrop = draggingEntries.value;
+  const action = event.ctrlKey || event.metaKey ? "copy" : "move";
+  resetEntryDrag();
+  emit("drop-to-current-folder", {entries: entriesToDrop, action});
 }
 
 const formatDate = (srcDate: string) => {
@@ -1401,12 +1448,15 @@ defineExpose({
     <div
         ref="viewportRef"
         class="explorer-viewport"
-        :class="[viewMode, itemSizeClass]"
+        :class="[viewMode, itemSizeClass, {dropCurrent: dragState.overCurrentFolder}]"
         tabindex="0"
         @click="activateViewport"
         @mousedown="beginMarqueeSelection"
         @scroll="maybeLoadMoreOnScroll"
         @wheel="handleViewportWheel"
+        @dragover="dragOverCurrentFolder"
+        @dragleave="dragLeaveCurrentFolder"
+        @drop="dropOnCurrentFolder"
         @contextmenu.prevent="openBackgroundContextMenu">
       <div v-if="viewMode === 'details'" class="details-header">
         <button class="sort-button name-cell" :class="sortButtonClass('name')" :disabled="loading" @click.stop="changeSort('name')">
@@ -1575,6 +1625,10 @@ defineExpose({
 
 .explorer-viewport:focus-visible {
   @apply ring-2 ring-inset ring-blue-500;
+}
+
+.explorer-viewport.dropCurrent {
+  @apply bg-blue-50/25 ring-2 ring-inset ring-blue-400;
 }
 
 .details-header {

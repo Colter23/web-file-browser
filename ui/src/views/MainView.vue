@@ -112,6 +112,11 @@ type DropEntriesPayload = {
   action: "copy" | "move";
 }
 
+type DropToCurrentFolderPayload = {
+  entries: ExplorerEntry[];
+  action: "copy" | "move";
+}
+
 type ImageViewerPayload = {
   entry: ExplorerEntry;
   entries: ExplorerEntry[];
@@ -1046,14 +1051,21 @@ const pasteSelected = async () => {
   }
 }
 
-const dropEntriesToFolder = async ({entries, target, action}: DropEntriesPayload) => {
-  if (target.type !== "folder" || !entries.length) return;
-  const nestedFolder = entries.find(entry => entry.type === "folder" && isSameOrDescendantPath(target.path, entry.path));
+const removeMovedEntriesFromCutClipboard = (sources: string[]) => {
+  if (fileClipboardAction.value !== "cut") return;
+  const moved = new Set(sources);
+  fileClipboardEntries.value = fileClipboardEntries.value.filter(item => !moved.has(item.path));
+  if (!fileClipboardEntries.value.length) fileClipboardAction.value = null;
+}
+
+const runDroppedEntriesTask = async (entries: ExplorerEntry[], targetPath: string, action: "copy" | "move") => {
+  if (!entries.length) return;
+  const nestedFolder = entries.find(entry => entry.type === "folder" && isSameOrDescendantPath(targetPath, entry.path));
   if (nestedFolder) {
     showShellNotice(`不能将 ${nestedFolder.name} 放入它自身或子文件夹中`, "warning");
     return;
   }
-  const sameFolder = entries.some(entry => parentPath(entry.path) === target.path);
+  const sameFolder = entries.some(entry => parentPath(entry.path) === targetPath);
   if (action === "move" && sameFolder) {
     taskMessage.value = "拖拽目标已经是当前位置";
     return;
@@ -1061,18 +1073,23 @@ const dropEntriesToFolder = async ({entries, target, action}: DropEntriesPayload
   try {
     const sources = entries.map(item => item.path);
     const task = action === "copy"
-        ? await createCopyTask(sources, target.path)
-        : await createMoveTask(sources, target.path);
+        ? await createCopyTask(sources, targetPath)
+        : await createMoveTask(sources, targetPath);
     await taskStarted(task.id, action === "copy" ? "复制任务" : "移动任务");
-    if (action === "move" && fileClipboardAction.value === "cut") {
-      const moved = new Set(sources);
-      fileClipboardEntries.value = fileClipboardEntries.value.filter(item => !moved.has(item.path));
-      if (!fileClipboardEntries.value.length) fileClipboardAction.value = null;
-    }
+    if (action === "move") removeMovedEntriesFromCutClipboard(sources);
     await refreshCurrent();
   } catch (error) {
     showErrorNotice(error, "创建拖拽任务失败", "拖拽失败");
   }
+}
+
+const dropEntriesToFolder = async ({entries, target, action}: DropEntriesPayload) => {
+  if (target.type !== "folder") return;
+  await runDroppedEntriesTask(entries, target.path, action);
+}
+
+const dropEntriesToCurrentFolder = async ({entries, action}: DropToCurrentFolderPayload) => {
+  await runDroppedEntriesTask(entries, currentFolder(), action);
 }
 
 const archiveSelected = (entry = selectedEntry()) => {
@@ -2079,6 +2096,7 @@ const signOut = async () => {
                 @create-file="openCreatePanel('file')"
                 @create-folder="openCreatePanel('folder')"
                 @drop-entries="dropEntriesToFolder"
+                @drop-to-current-folder="dropEntriesToCurrentFolder"
                 @selection-change="handleSelectionChange"
                 @open-new-tab="openEntryInNewTab"
                 @open-image-viewer="openImageViewer">
