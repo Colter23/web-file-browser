@@ -95,6 +95,11 @@ type DropEntriesPayload = {
   action: "copy" | "move";
 }
 
+type ImageViewerPayload = {
+  entry: ExplorerEntry;
+  entries: ExplorerEntry[];
+}
+
 const viewModeOrder: ExplorerViewMode[] = ["details", "list", "icons", "tiles"];
 const viewModeMeta: Record<ExplorerViewMode, {label: string; icon: string}> = {
   details: {label: "详细信息", icon: "icon-view-list"},
@@ -133,6 +138,7 @@ const previewTextWrap = ref(true);
 const previewCopied = ref(false);
 const imageViewerVisible = ref(false);
 const imageViewerEntry = ref<ExplorerEntry | null>(null);
+const imageViewerEntries = ref<ExplorerEntry[]>([]);
 const imageViewerFit = ref(true);
 const imageViewerZoom = ref(100);
 const imageViewerOffsetX = ref(0);
@@ -351,10 +357,23 @@ const imageViewerZoomText = computed(() => imageViewerFit.value ? "适应" : `${
 
 const canPanImageViewer = computed(() => imageViewerVisible.value && !imageViewerFit.value);
 
+const imageViewerIndex = computed(() => {
+  const entry = imageViewerEntry.value;
+  if (!entry) return -1;
+  return imageViewerEntries.value.findIndex(item => item.path === entry.path);
+});
+
+const imageViewerCount = computed(() => imageViewerEntries.value.length);
+
+const canShowPreviousImage = computed(() => imageViewerIndex.value > 0);
+
+const canShowNextImage = computed(() => imageViewerIndex.value >= 0 && imageViewerIndex.value < imageViewerEntries.value.length - 1);
+
 const imageViewerSubtitle = computed(() => {
   const entry = imageViewerEntry.value;
   if (!entry) return "";
-  return `${formatBytes(entry.size)} · ${formatDate(entry.modified)}`;
+  const position = imageViewerIndex.value >= 0 && imageViewerCount.value > 1 ? `${imageViewerIndex.value + 1} / ${imageViewerCount.value} · ` : "";
+  return `${position}${formatBytes(entry.size)} · ${formatDate(entry.modified)}`;
 });
 
 const previewMeta = computed(() => {
@@ -414,6 +433,7 @@ const resetImageViewerZoom = () => {
 const closeImageViewer = () => {
   imageViewerVisible.value = false;
   imageViewerEntry.value = null;
+  imageViewerEntries.value = [];
   resetImageViewerZoom();
 }
 
@@ -1167,6 +1187,16 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
       closeImageViewer();
       return;
     }
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      showAdjacentImage(-1);
+      return;
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      showAdjacentImage(1);
+      return;
+    }
     if (viewerKey === "+" || viewerKey === "=" || event.code === "NumpadAdd") {
       event.preventDefault();
       zoomImageViewer(25);
@@ -1292,14 +1322,23 @@ const openEntryInNewTab = (entry: ExplorerEntry) => {
   closePanels();
 }
 
-const openImageViewer = async (entry: ExplorerEntry) => {
-  if (entry.type !== "file") return;
+const openImageViewer = async ({entry, entries}: ImageViewerPayload) => {
   fileStore.showEditor = false;
+  imageViewerEntries.value = entries.length ? entries : [entry];
   imageViewerEntry.value = entry;
   imageViewerVisible.value = true;
   resetImageViewerZoom();
   await nextTick();
   imageViewerRef.value?.focus();
+}
+
+const showAdjacentImage = (direction: -1 | 1) => {
+  const index = imageViewerIndex.value;
+  if (index < 0) return;
+  const next = imageViewerEntries.value[index + direction];
+  if (!next) return;
+  imageViewerEntry.value = next;
+  resetImageViewerZoom();
 }
 
 const switchTab = (tabId: string) => {
@@ -1374,6 +1413,11 @@ const zoomPreviewImage = (delta: number) => {
 const zoomImageViewer = (delta: number) => {
   imageViewerFit.value = false;
   imageViewerZoom.value = Math.min(500, Math.max(25, imageViewerZoom.value + delta));
+}
+
+const handleImageViewerWheel = (event: WheelEvent) => {
+  event.preventDefault();
+  zoomImageViewer(event.deltaY < 0 ? 25 : -25);
 }
 
 const resetPreviewImageZoom = () => {
@@ -1871,6 +1915,12 @@ const signOut = async () => {
               <span>{{ imageViewerSubtitle }}</span>
             </div>
             <div class="image-viewer-actions">
+              <button title="上一张 (←)" :disabled="!canShowPreviousImage" @click="showAdjacentImage(-1)">
+                <icon icon="icon-back_android" />
+              </button>
+              <button title="下一张 (→)" :disabled="!canShowNextImage" @click="showAdjacentImage(1)">
+                <icon icon="icon-back_android" class="rotate-180" />
+              </button>
               <button :class="{active: imageViewerFit}" title="适应窗口" @click="resetImageViewerZoom">适应</button>
               <button title="缩小" @click="zoomImageViewer(-25)">-</button>
               <span>{{ imageViewerZoomText }}</span>
@@ -1891,6 +1941,7 @@ const signOut = async () => {
               @pointerup="stopImageViewerPan"
               @pointercancel="stopImageViewerPan"
               @lostpointercapture="imageViewerDragging = false"
+              @wheel="handleImageViewerWheel"
               @dblclick="resetImageViewerZoom">
             <img :src="downloadUrl(imageViewerEntry.path)" :alt="imageViewerEntry.name" :style="imageViewerStyle">
           </div>
@@ -2377,11 +2428,11 @@ const signOut = async () => {
 }
 
 .image-viewer {
-  @apply fixed inset-3 z-50 flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-950/92 text-white shadow-2xl outline-none backdrop-blur;
+  @apply fixed inset-0 z-50 flex flex-col overflow-hidden bg-slate-950/72 text-white outline-none backdrop-blur-sm;
 }
 
 .image-viewer-toolbar {
-  @apply flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-slate-900/85 px-4;
+  @apply flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-slate-950/55 px-4 backdrop-blur;
 }
 
 .image-viewer-title {
@@ -2404,6 +2455,10 @@ const signOut = async () => {
   @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-white/10 bg-white/5 px-2 text-sm text-white hover:bg-white/15;
 }
 
+.image-viewer-actions button:disabled {
+  @apply cursor-not-allowed opacity-35 hover:bg-white/5;
+}
+
 .image-viewer-actions button.active {
   @apply border-blue-300/50 bg-blue-500/25 text-blue-100;
 }
@@ -2413,7 +2468,7 @@ const signOut = async () => {
 }
 
 .image-viewer-stage {
-  @apply flex min-h-0 grow touch-none select-none items-center justify-center overflow-hidden bg-slate-950 p-5;
+  @apply flex min-h-0 grow touch-none select-none items-center justify-center overflow-hidden bg-transparent p-5;
 }
 
 .image-viewer-stage.panning {

@@ -41,6 +41,11 @@ type DropEntriesPayload = {
   action: "copy" | "move";
 }
 
+type ImageViewerPayload = {
+  entry: ExplorerEntry;
+  entries: ExplorerEntry[];
+}
+
 const emit = defineEmits<{
   (e: "rename", payload: RenamePayload): void;
   (e: "delete", entry: ExplorerEntry): void;
@@ -48,7 +53,7 @@ const emit = defineEmits<{
   (e: "archive", entry: ExplorerEntry): void;
   (e: "extract", entry: ExplorerEntry): void;
   (e: "preview", entry: ExplorerEntry): void;
-  (e: "open-image-viewer", entry: ExplorerEntry): void;
+  (e: "open-image-viewer", payload: ImageViewerPayload): void;
   (e: "copy", entry: ExplorerEntry): void;
   (e: "cut", entry: ExplorerEntry): void;
   (e: "paste"): void;
@@ -427,7 +432,7 @@ const openEntry = async (entry: ExplorerEntry) => {
     return;
   }
   if (isImageFile(entry)) {
-    emit("open-image-viewer", entry);
+    emit("open-image-viewer", {entry, entries: entries.value.filter(isImageFile)});
     return;
   }
   if (entry.file && fileStore.extensions.includes(entry.file.extension)) {
