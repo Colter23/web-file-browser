@@ -900,11 +900,72 @@ const cycleViewMode = () => {
   fileStore.setViewMode(nextViewMode.value);
 }
 
+const shouldIgnoreShellShortcut = (target: EventTarget | null) => {
+  return fileStore.showEditor || shouldIgnoreNavigationShortcut(target);
+}
+
+const switchRelativeTab = (offset: number) => {
+  if (fileStore.tabs.length <= 1) return false;
+  const currentIndex = fileStore.tabs.findIndex(tab => tab.id === fileStore.activeTabId);
+  const startIndex = currentIndex >= 0 ? currentIndex : 0;
+  const nextIndex = (startIndex + offset + fileStore.tabs.length) % fileStore.tabs.length;
+  const nextTab = fileStore.tabs[nextIndex];
+  if (!nextTab || nextTab.id === fileStore.activeTabId) return false;
+  switchTab(nextTab.id);
+  return true;
+}
+
+const closeActiveTab = () => {
+  if (fileStore.tabs.length <= 1) return false;
+  fileStore.closeTab(fileStore.activeTabId);
+  closePanels();
+  return true;
+}
+
 const handleWindowKeyDown = (event: KeyboardEvent) => {
+  const key = event.key.toLowerCase();
+  const commandKey = event.ctrlKey || event.metaKey;
   if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "f") {
     if (shouldKeepEditorFindShortcut(event.target)) return;
     event.preventDefault();
     focusSearch();
+    return;
+  }
+  if (commandKey && !event.altKey && !shouldIgnoreShellShortcut(event.target)) {
+    if (key === "t") {
+      event.preventDefault();
+      openTab();
+      return;
+    }
+    if (key === "w") {
+      event.preventDefault();
+      closeActiveTab();
+      return;
+    }
+    if (key === "tab") {
+      event.preventDefault();
+      switchRelativeTab(event.shiftKey ? -1 : 1);
+      return;
+    }
+    if (key === "pageup" || key === "pagedown") {
+      event.preventDefault();
+      switchRelativeTab(key === "pageup" ? -1 : 1);
+      return;
+    }
+    if (event.shiftKey && key === "n") {
+      event.preventDefault();
+      openCreatePanel("folder");
+      return;
+    }
+    if (!event.shiftKey && key === "r") {
+      event.preventDefault();
+      void refreshCurrent();
+      return;
+    }
+  }
+  if (event.key === "F5" && !event.altKey && !event.ctrlKey && !event.metaKey && !shouldIgnoreShellShortcut(event.target)) {
+    event.preventDefault();
+    void refreshCurrent();
     return;
   }
   if (event.key === "Backspace" && !event.altKey && !event.ctrlKey && !event.metaKey && !shouldIgnoreNavigationShortcut(event.target)) {
@@ -1077,15 +1138,15 @@ const signOut = async () => {
             :key="tab.id"
             class="tab-button"
             :class="{active: tab.id === activeTab?.id}"
-            :title="tab.path"
+            :title="`${tab.path} · Ctrl+Tab 切换`"
             @click="switchTab(tab.id)">
           <icon icon="icon-folder-fill" />
           <span>{{ tab.title }}</span>
-          <span class="tab-close" @click="closeTab($event, tab.id)">
+          <span class="tab-close" title="关闭标签页 (Ctrl+W)" @click="closeTab($event, tab.id)">
             <icon icon="icon-close" size="small" />
           </span>
         </button>
-        <button class="tab-add" title="新建标签页" @click="openTab">
+        <button class="tab-add" title="新建标签页 (Ctrl+T)" @click="openTab">
           <icon icon="icon-add" />
         </button>
       </nav>
@@ -1129,7 +1190,7 @@ const signOut = async () => {
           <button class="nav-button" :disabled="!canNavigateUp" title="返回上级 (Alt+↑)" @click="navigateUp">
             <icon icon="icon-back_android" size="large" class="rotate-90" />
           </button>
-          <button class="nav-button" title="刷新" @click="refreshCurrent">
+          <button class="nav-button" title="刷新 (F5 / Ctrl+R)" @click="refreshCurrent">
             <icon icon="icon-refresh" size="large" />
           </button>
           <breadcrumb></breadcrumb>
