@@ -99,6 +99,8 @@ type TabContextMenuState = {
   tabId: string;
 }
 
+type TabDropPlacement = "before" | "after";
+
 type RenamePayload = {
   entry: ExplorerEntry;
   name: string;
@@ -205,6 +207,9 @@ const tabContextMenu = ref<TabContextMenuState>({
   y: 0,
   tabId: ""
 });
+const draggingTabId = ref("");
+const tabDropTargetId = ref("");
+const tabDropPlacement = ref<TabDropPlacement | "">("");
 let previewLoadVersion = 0;
 let previewCopyTimer: number | undefined;
 let uploadDragDepth = 0;
@@ -1546,6 +1551,56 @@ const handleTabAuxClick = (event: MouseEvent, tabId: string) => {
   closeTabById(tabId);
 }
 
+const startTabDrag = (event: DragEvent, tabId: string) => {
+  if (event.target instanceof HTMLElement && event.target.closest(".tab-close")) {
+    event.preventDefault();
+    return;
+  }
+  draggingTabId.value = tabId;
+  tabDropTargetId.value = "";
+  tabDropPlacement.value = "";
+  closeTabContextMenu();
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.dropEffect = "move";
+    event.dataTransfer.setData("text/plain", tabId);
+  }
+}
+
+const dragOverTab = (event: DragEvent, tabId: string) => {
+  if (!draggingTabId.value || draggingTabId.value === tabId) return;
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  const rect = target?.getBoundingClientRect();
+  tabDropTargetId.value = tabId;
+  tabDropPlacement.value = rect && event.clientX > rect.left + rect.width / 2 ? "after" : "before";
+}
+
+const leaveTabDropTarget = (event: DragEvent, tabId: string) => {
+  if (tabDropTargetId.value !== tabId) return;
+  const related = event.relatedTarget;
+  if (related instanceof Node && event.currentTarget instanceof HTMLElement && event.currentTarget.contains(related)) return;
+  tabDropTargetId.value = "";
+  tabDropPlacement.value = "";
+}
+
+const dropTab = (event: DragEvent, tabId: string) => {
+  if (!draggingTabId.value || draggingTabId.value === tabId || !tabDropPlacement.value) return;
+  event.preventDefault();
+  event.stopPropagation();
+  fileStore.reorderTab(draggingTabId.value, tabId, tabDropPlacement.value);
+  draggingTabId.value = "";
+  tabDropTargetId.value = "";
+  tabDropPlacement.value = "";
+}
+
+const finishTabDrag = () => {
+  draggingTabId.value = "";
+  tabDropTargetId.value = "";
+  tabDropPlacement.value = "";
+}
+
 const openImageViewer = async ({entry, entries}: ImageViewerPayload) => {
   fileStore.showEditor = false;
   imageViewerEntries.value = entries.length ? entries : [entry];
@@ -1785,11 +1840,17 @@ const signOut = async () => {
             v-for="tab in fileStore.tabs"
             :key="tab.id"
             class="tab-button"
-            :class="{active: tab.id === activeTab?.id}"
+            :class="{active: tab.id === activeTab?.id, dragging: draggingTabId === tab.id, dropBefore: tabDropTargetId === tab.id && tabDropPlacement === 'before', dropAfter: tabDropTargetId === tab.id && tabDropPlacement === 'after'}"
             :title="`${tab.path} · Ctrl+Tab 切换 · 中键关闭`"
+            draggable="true"
             @click="switchTab(tab.id)"
             @auxclick="handleTabAuxClick($event, tab.id)"
-            @contextmenu="openTabContextMenu($event, tab.id)">
+            @contextmenu="openTabContextMenu($event, tab.id)"
+            @dragstart="startTabDrag($event, tab.id)"
+            @dragover="dragOverTab($event, tab.id)"
+            @dragleave="leaveTabDropTarget($event, tab.id)"
+            @drop="dropTab($event, tab.id)"
+            @dragend="finishTabDrag">
           <icon icon="icon-folder-fill" />
           <span>{{ tab.title }}</span>
           <span class="tab-close" title="关闭标签页 (Ctrl+W)" @click="closeTab($event, tab.id)">
@@ -2287,11 +2348,47 @@ const signOut = async () => {
 }
 
 .tab-button {
-  @apply inline-flex h-9 min-w-32 max-w-52 shrink items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 shadow-sm hover:bg-slate-50;
+  @apply relative inline-flex h-9 min-w-32 max-w-52 shrink items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 shadow-sm hover:bg-slate-50;
 }
 
 .tab-button.active {
   @apply border-blue-600 bg-blue-600 text-white;
+}
+
+.tab-button.dragging {
+  @apply opacity-55;
+}
+
+.tab-button.dropBefore {
+  @apply bg-blue-50 ring-2 ring-blue-200;
+}
+
+.tab-button.dropAfter {
+  @apply bg-blue-50 ring-2 ring-blue-200;
+}
+
+.tab-button.active.dropBefore,
+.tab-button.active.dropAfter {
+  @apply bg-blue-600 ring-blue-200;
+}
+
+.tab-button.dropBefore::before,
+.tab-button.dropAfter::after {
+  content: "";
+  @apply absolute bottom-1 top-1 w-0.5 rounded-full bg-blue-500;
+}
+
+.tab-button.dropBefore::before {
+  @apply left-1;
+}
+
+.tab-button.dropAfter::after {
+  @apply right-1;
+}
+
+.tab-button.active.dropBefore::before,
+.tab-button.active.dropAfter::after {
+  @apply bg-white;
 }
 
 .tab-button span:not(.tab-close) {

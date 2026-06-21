@@ -365,6 +365,18 @@ export const useFileStore = defineStore('file', {
             this.persistTabs();
         },
 
+        reorderTab(sourceTabId: string, targetTabId: string, placement: "before" | "after") {
+            if (sourceTabId === targetTabId) return;
+            const sourceIndex = this.tabs.findIndex(tab => tab.id === sourceTabId);
+            const targetIndex = this.tabs.findIndex(tab => tab.id === targetTabId);
+            if (sourceIndex < 0 || targetIndex < 0) return;
+            const [tab] = this.tabs.splice(sourceIndex, 1);
+            const nextTargetIndex = this.tabs.findIndex(item => item.id === targetTabId);
+            const insertIndex = placement === "after" ? nextTargetIndex + 1 : nextTargetIndex;
+            this.tabs.splice(insertIndex, 0, tab);
+            this.persistTabs();
+        },
+
         switchTab(tabId: string) {
             const tab = this.tabs.find(item => item.id === tabId);
             if (!tab) return;
