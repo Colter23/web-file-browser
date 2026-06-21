@@ -43,10 +43,12 @@ type ExplorerExpose = {
   getSelectedEntries: () => ExplorerEntry[];
   startRename: () => void;
   selectPath: (path: string) => Promise<boolean>;
-  selectPaths: (paths: string[]) => Promise<boolean>;
+  selectPaths: (paths: string[], scrollToSelection?: boolean) => Promise<boolean>;
   selectPathForRename: (path: string) => Promise<boolean>;
   selectAllEntries: () => boolean;
   getImageEntries: () => ExplorerEntry[];
+  getScrollTop: () => number;
+  setScrollTop: (scrollTop: number) => Promise<void>;
 }
 
 type BreadcrumbExpose = {
@@ -273,7 +275,9 @@ let imageViewerDragOriginY = 0;
 const tabContextMenuWidth = 184;
 const tabContextMenuHeight = 220;
 let suppressSelectionPersistence = false;
+let suppressScrollPersistence = false;
 let tabContextRestoreToken = 0;
+let scrollPersistTimer: number | undefined;
 
 const activeTab = computed(() => fileStore.tabs.find(tab => tab.id === fileStore.activeTabId) ?? fileStore.tabs[0]);
 const tabContextTarget = computed(() => fileStore.tabs.find(tab => tab.id === tabContextMenu.value.tabId) ?? null);
@@ -677,7 +681,8 @@ const clearSearch = (focus = true) => {
 }
 
 const finishTabContextRestore = (token: number) => {
-  if (token === tabContextRestoreToken) suppressSelectionPersistence = false;
+  if (token !== tabContextRestoreToken) return;
+  suppressSelectionPersistence = false;
 }
 
 const restoreActiveTabSelection = async (paths: string[], token: number, attempt = 0) => {
@@ -685,7 +690,7 @@ const restoreActiveTabSelection = async (paths: string[], token: number, attempt
     finishTabContextRestore(token);
     return;
   }
-  const restored = await explorerRef.value?.selectPaths(paths);
+  const restored = await explorerRef.value?.selectPaths(paths, false);
   if (restored || token !== tabContextRestoreToken || attempt >= 6) {
     finishTabContextRestore(token);
     return;
@@ -695,14 +700,42 @@ const restoreActiveTabSelection = async (paths: string[], token: number, attempt
   }, 80);
 }
 
+const finishTabScrollRestore = (token: number) => {
+  if (token !== tabContextRestoreToken) return;
+  suppressScrollPersistence = false;
+}
+
+const persistActiveTabScrollTop = (scrollTop: number, tabId = fileStore.activeTabId, path = fileStore.currentPath) => {
+  if (suppressScrollPersistence || fileStore.showEditor) return;
+  if (scrollPersistTimer) window.clearTimeout(scrollPersistTimer);
+  scrollPersistTimer = window.setTimeout(() => {
+    scrollPersistTimer = undefined;
+    if (suppressScrollPersistence || fileStore.showEditor || tabId !== fileStore.activeTabId || path !== fileStore.currentPath) return;
+    fileStore.setActiveTabScrollTop(scrollTop);
+  }, 120);
+}
+
+const persistCurrentExplorerScrollTop = () => {
+  if (suppressScrollPersistence || fileStore.showEditor) return;
+  if (scrollPersistTimer) {
+    window.clearTimeout(scrollPersistTimer);
+    scrollPersistTimer = undefined;
+  }
+  fileStore.setActiveTabScrollTop(explorerRef.value?.getScrollTop() ?? 0);
+}
+
 const syncActiveTabContext = async () => {
   const tab = activeTab.value;
   const selectedPaths = [...(tab?.selectedPaths ?? [])];
+  const scrollTop = tab?.scrollTop ?? 0;
   const token = ++tabContextRestoreToken;
   suppressSelectionPersistence = true;
+  suppressScrollPersistence = true;
   searchText.value = tab?.filterText ?? "";
   await nextTick();
   await restoreActiveTabSelection(selectedPaths, token);
+  await explorerRef.value?.setScrollTop(scrollTop);
+  finishTabScrollRestore(token);
 }
 
 const handleSearchEscape = () => {
@@ -749,6 +782,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (previewCopyTimer) window.clearTimeout(previewCopyTimer);
+  if (scrollPersistTimer) window.clearTimeout(scrollPersistTimer);
   stopShellNoticeTimer();
   stopTaskPolling();
   window.removeEventListener("keydown", handleWindowKeyDown);
@@ -1534,6 +1568,7 @@ const switchRelativeTab = async (offset: number) => {
 const closeActiveTab = async () => {
   if (fileStore.tabs.length <= 1) return false;
   if (!await fileStore.requestEditorLeave()) return false;
+  persistCurrentExplorerScrollTop();
   fileStore.closeTab(fileStore.activeTabId);
   closePanels();
   await syncActiveTabContext();
@@ -1671,6 +1706,7 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
 
 const navigateBack = async () => {
   if (!await fileStore.requestEditorLeave()) return;
+  persistCurrentExplorerScrollTop();
   const path = fileStore.goBack();
   if (!path) return;
   closePanels();
@@ -1680,6 +1716,7 @@ const navigateBack = async () => {
 
 const navigateForward = async () => {
   if (!await fileStore.requestEditorLeave()) return;
+  persistCurrentExplorerScrollTop();
   const path = fileStore.goForward();
   if (!path) return;
   closePanels();
@@ -1690,6 +1727,7 @@ const navigateForward = async () => {
 const navigateUp = async () => {
   if (!canNavigateUp.value) return;
   if (!await fileStore.requestEditorLeave()) return;
+  persistCurrentExplorerScrollTop();
   fileStore.closeEditor();
   closePanels();
   const path = parentPath(currentFolder());
@@ -1700,6 +1738,7 @@ const navigateUp = async () => {
 
 const openTab = async () => {
   if (!await fileStore.requestEditorLeave()) return;
+  persistCurrentExplorerScrollTop();
   closeTabContextMenu();
   fileStore.openTab(currentFolder());
   closePanels();
@@ -1709,6 +1748,7 @@ const openTab = async () => {
 const openEntryInNewTab = async (entry: ExplorerEntry) => {
   if (entry.type !== "folder") return;
   if (!await fileStore.requestEditorLeave()) return;
+  persistCurrentExplorerScrollTop();
   closeTabContextMenu();
   fileStore.openPathInNewTab(entry.path);
   closePanels();
@@ -1730,6 +1770,7 @@ const openTabContextMenu = (event: MouseEvent, tabId: string) => {
 const duplicateTabFromMenu = async () => {
   const tabId = tabContextMenu.value.tabId;
   if (!await fileStore.requestEditorLeave()) return;
+  persistCurrentExplorerScrollTop();
   closeTabContextMenu();
   fileStore.duplicateTab(tabId);
   closePanels();
@@ -1740,6 +1781,7 @@ const closeTabById = async (tabId: string) => {
   if (fileStore.tabs.length <= 1) return false;
   const wasActive = fileStore.activeTabId === tabId;
   if (wasActive && !await fileStore.requestEditorLeave()) return false;
+  if (wasActive) persistCurrentExplorerScrollTop();
   fileStore.closeTab(tabId);
   if (wasActive) {
     closePanels();
@@ -1758,6 +1800,7 @@ const closeOtherTabsFromMenu = async () => {
   const tabId = tabContextMenu.value.tabId;
   const changesActiveTab = fileStore.activeTabId !== tabId;
   if (changesActiveTab && !await fileStore.requestEditorLeave()) return;
+  if (changesActiveTab) persistCurrentExplorerScrollTop();
   closeTabContextMenu();
   fileStore.closeOtherTabs(tabId);
   if (changesActiveTab) {
@@ -1770,6 +1813,7 @@ const closeRightTabsFromMenu = async () => {
   const tabId = tabContextMenu.value.tabId;
   const closesActiveTab = tabContextIndex.value >= 0 && fileStore.tabs.findIndex(tab => tab.id === fileStore.activeTabId) > tabContextIndex.value;
   if (closesActiveTab && !await fileStore.requestEditorLeave()) return;
+  if (closesActiveTab) persistCurrentExplorerScrollTop();
   closeTabContextMenu();
   fileStore.closeTabsToRight(tabId);
   if (closesActiveTab) {
@@ -1894,6 +1938,7 @@ const showImageAt = (index: number) => {
 const switchTab = async (tabId: string) => {
   closeTabContextMenu();
   if (tabId !== fileStore.activeTabId && !await fileStore.requestEditorLeave()) return;
+  if (tabId !== fileStore.activeTabId) persistCurrentExplorerScrollTop();
   fileStore.switchTab(tabId);
   closePanels();
   await syncActiveTabContext();
@@ -2336,6 +2381,7 @@ const signOut = async () => {
                 @drop-entries="dropEntriesToFolder"
                 @drop-to-current-folder="dropEntriesToCurrentFolder"
                 @selection-change="handleSelectionChange"
+                @scroll-change="persistActiveTabScrollTop"
                 @clear-filter="() => clearSearch()"
                 @open-new-tab="openEntryInNewTab"
                 @open-image-viewer="openImageViewer">

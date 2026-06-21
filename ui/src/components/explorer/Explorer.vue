@@ -74,6 +74,7 @@ const emit = defineEmits<{
   (e: "open-new-tab", entry: ExplorerEntry): void;
   (e: "selection-change", entries: ExplorerEntry[]): void;
   (e: "clear-filter"): void;
+  (e: "scroll-change", scrollTop: number): void;
 }>()
 
 const props = withDefaults(defineProps<{
@@ -344,6 +345,14 @@ const setRenameInputRef = (path: string, element: Element | ComponentPublicInsta
 
 const focusViewport = () => {
   viewportRef.value?.focus({preventScroll: true});
+}
+
+const getScrollTop = () => viewportRef.value?.scrollTop ?? 0;
+
+const setScrollTop = async (scrollTop: number) => {
+  await nextTick();
+  if (!viewportRef.value) return;
+  viewportRef.value.scrollTop = Math.max(0, scrollTop);
 }
 
 const selectedSet = () => new Set(selectedPaths.value);
@@ -637,6 +646,11 @@ const maybeLoadMoreOnScroll = () => {
   if (!viewport || props.filterText.trim() || loading.value || loadingMore.value || !folderData.value.hasMore) return;
   const distanceToBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
   if (distanceToBottom <= autoLoadMoreDistance) void loadMore();
+}
+
+const handleViewportScroll = () => {
+  emit("scroll-change", getScrollTop());
+  maybeLoadMoreOnScroll();
 }
 
 const changeSort = async (key: DirSortKey) => {
@@ -1119,11 +1133,11 @@ const selectPath = async (path: string, additive = false) => {
   return true;
 }
 
-const selectPaths = async (paths: string[]) => {
+const selectPaths = async (paths: string[], scrollToSelection = true) => {
   const existingPaths = paths.filter(path => Boolean(entryByPath(path)));
   if (!existingPaths.length) return false;
   setSelection(existingPaths, existingPaths[existingPaths.length - 1]);
-  await scrollEntryIntoView(existingPaths[existingPaths.length - 1]);
+  if (scrollToSelection) await scrollEntryIntoView(existingPaths[existingPaths.length - 1]);
   return true;
 }
 
@@ -1453,7 +1467,9 @@ defineExpose({
   selectPath,
   selectPaths,
   selectPathForRename,
-  selectAllEntries
+  selectAllEntries,
+  getScrollTop,
+  setScrollTop
 })
 </script>
 
@@ -1508,7 +1524,7 @@ defineExpose({
         tabindex="0"
         @click="activateViewport"
         @mousedown="beginMarqueeSelection"
-        @scroll="maybeLoadMoreOnScroll"
+        @scroll="handleViewportScroll"
         @wheel="handleViewportWheel"
         @dragover="dragOverCurrentFolder"
         @dragleave="dragLeaveCurrentFolder"

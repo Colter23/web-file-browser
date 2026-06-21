@@ -69,6 +69,11 @@ const normalizeSelectedPaths = (paths?: string[]): string[] => {
 
 const normalizeFilterText = (text?: string): string => typeof text === "string" ? text.slice(0, 200) : "";
 
+const normalizeScrollTop = (scrollTop?: number): number => {
+    if (!Number.isFinite(scrollTop)) return 0;
+    return Math.max(0, Math.round(scrollTop ?? 0));
+}
+
 const createTabId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const createTab = (path: string): ExplorerTab => {
@@ -79,6 +84,7 @@ const createTab = (path: string): ExplorerTab => {
         title: pathTitle(normalized),
         filterText: "",
         selectedPaths: [],
+        scrollTop: 0,
         backStack: [],
         forwardStack: [],
         viewMode: readViewMode(),
@@ -153,6 +159,7 @@ const normalizeTab = (tab: Partial<ExplorerTab>): ExplorerTab | null => {
         title: pathTitle(path),
         filterText: normalizeFilterText(tab.filterText),
         selectedPaths: normalizeSelectedPaths(tab.selectedPaths),
+        scrollTop: normalizeScrollTop(tab.scrollTop),
         backStack: normalizePathStack(tab.backStack),
         forwardStack: normalizePathStack(tab.forwardStack),
         viewMode,
@@ -197,6 +204,7 @@ const cloneTab = (tab: ExplorerTab): ExplorerTab => {
         title: pathTitle(path),
         filterText: normalizeFilterText(tab.filterText),
         selectedPaths: normalizeSelectedPaths(tab.selectedPaths),
+        scrollTop: normalizeScrollTop(tab.scrollTop),
         backStack: [...(tab.backStack ?? [])],
         forwardStack: [...(tab.forwardStack ?? [])],
         viewMode: tab.viewMode,
@@ -284,6 +292,7 @@ export const useFileStore = defineStore('file', {
         resetTabBrowserState(tab: ExplorerTab) {
             tab.filterText = "";
             tab.selectedPaths = [];
+            tab.scrollTop = 0;
         },
 
         setActiveTabFilterText(text: string) {
@@ -297,6 +306,13 @@ export const useFileStore = defineStore('file', {
             const activeTab = this.activeTab();
             if (!activeTab) return;
             activeTab.selectedPaths = normalizeSelectedPaths(paths);
+            this.persistTabs();
+        },
+
+        setActiveTabScrollTop(scrollTop: number) {
+            const activeTab = this.activeTab();
+            if (!activeTab) return;
+            activeTab.scrollTop = normalizeScrollTop(scrollTop);
             this.persistTabs();
         },
 

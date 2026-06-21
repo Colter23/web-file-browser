@@ -38,6 +38,7 @@ export interface ExplorerTab {
     title: string;
     filterText?: string;
     selectedPaths?: string[];
+    scrollTop?: number;
     backStack?: string[];
     forwardStack?: string[];
     viewMode?: ExplorerViewMode;
