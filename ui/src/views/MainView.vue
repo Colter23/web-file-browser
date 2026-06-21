@@ -1188,6 +1188,37 @@ const shouldKeepEditorFindShortcut = (target: EventTarget | null) => {
   return Boolean(target.closest(".ace_editor, .operation-panel"));
 }
 
+const hasPageTextSelection = () => {
+  const selection = window.getSelection();
+  return Boolean(selection && !selection.isCollapsed && selection.toString().trim());
+}
+
+const isExplorerShortcutTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(target.closest(".explorer-viewport"));
+}
+
+const handleClipboardShortcut = (key: string, event: KeyboardEvent) => {
+  if (event.shiftKey || shouldIgnoreShellShortcut(event.target) || isExplorerShortcutTarget(event.target)) return false;
+  if ((key === "c" || key === "x") && hasPageTextSelection()) return false;
+  if (key === "c") {
+    event.preventDefault();
+    copySelected();
+    return true;
+  }
+  if (key === "x") {
+    event.preventDefault();
+    cutSelected();
+    return true;
+  }
+  if (key === "v") {
+    event.preventDefault();
+    void pasteSelected();
+    return true;
+  }
+  return false;
+}
+
 const focusSearch = () => {
   if (fileStore.showEditor) return;
   searchInput.value?.focus();
@@ -1290,6 +1321,7 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
     return;
   }
   if (commandKey && !event.altKey && !shouldIgnoreShellShortcut(event.target)) {
+    if (handleClipboardShortcut(key, event)) return;
     if (key === "t") {
       event.preventDefault();
       openTab();
@@ -1703,15 +1735,15 @@ const signOut = async () => {
             <span>新建文件夹</span>
           </button>
           <span class="command-separator"></span>
-          <button class="command-button" :disabled="!hasSelection" @click="cutSelected()">
+          <button class="command-button" :disabled="!hasSelection" title="剪切 (Ctrl+X)" @click="cutSelected()">
             <icon icon="icon-scissors" />
             <span>剪切</span>
           </button>
-          <button class="command-button" :disabled="!hasSelection" @click="copySelected()">
+          <button class="command-button" :disabled="!hasSelection" title="复制 (Ctrl+C)" @click="copySelected()">
             <icon icon="icon-copy" />
             <span>复制</span>
           </button>
-          <button class="command-button" :disabled="!canPasteSelection" @click="pasteSelected()">
+          <button class="command-button" :disabled="!canPasteSelection" title="粘贴 (Ctrl+V)" @click="pasteSelected()">
             <icon icon="icon-paste" />
             <span>粘贴</span>
           </button>
