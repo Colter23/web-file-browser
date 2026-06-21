@@ -48,6 +48,10 @@ type ExplorerExpose = {
   selectAllEntries: () => boolean;
 }
 
+type BreadcrumbExpose = {
+  focusInput: () => void;
+}
+
 type FileClipboardAction = "copy" | "cut";
 
 type OperationPanelKind = "createFile" | "createFolder" | "archive" | "extract";
@@ -116,6 +120,7 @@ const router = useRouter();
 const fileStore = useFileStore();
 const treeData = ref<FileTreeData[]>([]);
 const explorerRef = ref<ExplorerExpose | null>(null);
+const breadcrumbRef = ref<BreadcrumbExpose | null>(null);
 const deleteConfirmRef = ref<HTMLElement | null>(null);
 const imageViewerRef = ref<HTMLElement | null>(null);
 const uploadInput = ref<HTMLInputElement | null>(null);
@@ -1199,6 +1204,13 @@ const shouldKeepEditorFindShortcut = (target: EventTarget | null) => {
   return Boolean(target.closest(".ace_editor, .operation-panel"));
 }
 
+const shouldIgnoreAddressShortcut = (target: EventTarget | null) => {
+  if (fileStore.showEditor) return true;
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return Boolean(target.closest(".ace_editor, .operation-panel, .delete-confirm-panel, .context-menu, .task-panel"));
+}
+
 const hasPageTextSelection = () => {
   const selection = window.getSelection();
   return Boolean(selection && !selection.isCollapsed && selection.toString().trim());
@@ -1242,6 +1254,11 @@ const focusSearch = () => {
   if (fileStore.showEditor) return;
   searchInput.value?.focus();
   searchInput.value?.select();
+}
+
+const focusBreadcrumb = () => {
+  if (fileStore.showEditor) return;
+  breadcrumbRef.value?.focusInput();
 }
 
 const previewSelectedQuietly = () => {
@@ -1333,6 +1350,12 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
   }
   const key = event.key.toLowerCase();
   const commandKey = event.ctrlKey || event.metaKey;
+  if ((commandKey && !event.altKey && key === "l") || (event.altKey && !event.ctrlKey && !event.metaKey && key === "d")) {
+    if (shouldIgnoreAddressShortcut(event.target)) return;
+    event.preventDefault();
+    focusBreadcrumb();
+    return;
+  }
   if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "f") {
     if (shouldKeepEditorFindShortcut(event.target)) return;
     event.preventDefault();
@@ -1734,7 +1757,7 @@ const signOut = async () => {
           <button class="nav-button" title="刷新 (F5 / Ctrl+R)" @click="refreshCurrent(true)">
             <icon icon="icon-refresh" size="large" />
           </button>
-          <breadcrumb></breadcrumb>
+          <breadcrumb ref="breadcrumbRef"></breadcrumb>
           <button class="view-button" :title="viewModeButtonTitle" @click="cycleViewMode">
             <icon :icon="currentViewModeMeta.icon" />
             <span>{{ currentViewModeMeta.label }}</span>

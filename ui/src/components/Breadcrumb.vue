@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, onMounted, ref, watch} from "vue";
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import Icon from "./Icon.vue";
 import {useFileStore} from "../store";
 
@@ -26,33 +26,50 @@ onMounted(() => {
   });
 });
 
-const stopInput = (mouseHandle: (event: MouseEvent) => void, keyHandle: (event: KeyboardEvent) => void) => {
-  isInput.value = false;
-  document.removeEventListener("mousedown", mouseHandle);
-  document.removeEventListener("keydown", keyHandle);
+let stopInputListeners: (() => void) | null = null;
+
+const cleanupInputListeners = () => {
+  stopInputListeners?.();
+  stopInputListeners = null;
 }
 
-const changeInput = (event: Event) => {
-  event.stopPropagation();
+const stopInput = () => {
+  isInput.value = false;
+  cleanupInputListeners();
+}
+
+const focusInput = async () => {
   isInput.value = true;
-  requestAnimationFrame(() => pathInput.value?.focus());
+  await nextTick();
+  pathInput.value?.focus();
+  pathInput.value?.select();
+}
+
+const changeInput = (event?: Event) => {
+  event?.stopPropagation();
+  cleanupInputListeners();
 
   const mouseHandle = (mouseEvent: MouseEvent) => {
     if (input.value != null && !input.value.contains(mouseEvent.target as Node)) {
-      stopInput(mouseHandle, keyHandle);
+      stopInput();
     }
   }
   const keyHandle = (keyEvent: KeyboardEvent) => {
     if (keyEvent.code === "Enter") {
       fileStore.setCurrentPath(pathInput.value?.value ?? "/");
-      stopInput(mouseHandle, keyHandle);
+      stopInput();
     } else if (keyEvent.code === "Escape") {
-      stopInput(mouseHandle, keyHandle);
+      stopInput();
     }
   }
 
   document.addEventListener("mousedown", mouseHandle);
   document.addEventListener("keydown", keyHandle);
+  stopInputListeners = () => {
+    document.removeEventListener("mousedown", mouseHandle);
+    document.removeEventListener("keydown", keyHandle);
+  };
+  void focusInput();
 }
 
 const changePath = (index: number) => {
@@ -60,10 +77,16 @@ const changePath = (index: number) => {
   if (index === -1) fileStore.setCurrentPath("/");
   else fileStore.setCurrentPath(pathList.value.slice(0, index + 1).join("/"));
 }
+
+defineExpose({
+  focusInput: changeInput
+});
+
+onBeforeUnmount(cleanupInputListeners);
 </script>
 
 <template>
-  <div class="path-card">
+  <div class="path-card" title="地址栏 (Ctrl+L / Alt+D)">
     <div class="flex items-center gap-1 pl-2">
       <div class="path-item px-1" title="主页" @click="changePath(-1)">
         <icon icon="icon-homefill" size="large" />
