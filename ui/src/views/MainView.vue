@@ -37,6 +37,10 @@ type ExplorerEntry = {
   file?: FileInfo;
 }
 
+type CopyPathPayload = {
+  paths: string[];
+}
+
 type ExplorerExpose = {
   refresh: (path?: string) => Promise<void>;
   getSelectedEntry: () => ExplorerEntry | null;
@@ -1237,6 +1241,18 @@ const cutSelected = (entry?: ExplorerEntry) => {
   setFileClipboard("cut", entry ?? selectedEntry());
 }
 
+const copyEntryPaths = async ({paths}: CopyPathPayload) => {
+  const normalizedPaths = paths.map(path => path.trim()).filter(Boolean);
+  if (!normalizedPaths.length) return;
+  try {
+    await navigator.clipboard.writeText(normalizedPaths.join("\n"));
+    const message = normalizedPaths.length === 1 ? "已复制路径" : `已复制 ${normalizedPaths.length} 个路径`;
+    showShellNotice(message, "success", "路径已复制");
+  } catch {
+    showShellNotice("浏览器未允许写入剪贴板，请手动复制路径。", "error", "复制路径失败");
+  }
+}
+
 const pasteSelected = async () => {
   if (!hasClipboard.value || !fileClipboardAction.value) {
     showShellNotice("剪贴板为空", "warning");
@@ -2375,6 +2391,7 @@ const signOut = async () => {
                 @preview="previewSelected"
                 @copy="copySelected"
                 @cut="cutSelected"
+                @copy-path="copyEntryPaths"
                 @paste="pasteSelected"
                 @create-file="openCreatePanel('file')"
                 @create-folder="openCreatePanel('folder')"

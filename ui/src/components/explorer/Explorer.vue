@@ -51,6 +51,10 @@ type ImageViewerPayload = {
   entries: ExplorerEntry[];
 }
 
+type CopyPathPayload = {
+  paths: string[];
+}
+
 type ViewDensityStep = {
   mode: ExplorerViewMode;
   iconSize: ExplorerIconSize;
@@ -72,6 +76,7 @@ const emit = defineEmits<{
   (e: "drop-entries", payload: DropEntriesPayload): void;
   (e: "drop-to-current-folder", payload: DropToCurrentFolderPayload): void;
   (e: "open-new-tab", entry: ExplorerEntry): void;
+  (e: "copy-path", payload: CopyPathPayload): void;
   (e: "selection-change", entries: ExplorerEntry[]): void;
   (e: "clear-filter"): void;
   (e: "scroll-change", scrollTop: number): void;
@@ -128,8 +133,8 @@ const marqueeMaxScrollSpeed = 24;
 const contextMenuViewportPadding = 8;
 const contextMenuEstimatedWidth = 176;
 const contextMenuEstimatedHeights = {
-  entry: 360,
-  background: 184
+  entry: 432,
+  background: 224
 };
 const viewWheelStepThreshold = 80;
 const autoLoadMoreDistance = 360;
@@ -549,6 +554,11 @@ const selectAllEntries = () => {
   return true;
 }
 
+const copySelectedPaths = () => {
+  const paths = selectedEntries.value.length ? selectedEntries.value.map(entry => entry.path) : [fileStore.currentPath || "/"];
+  emit("copy-path", {paths});
+}
+
 const openEntry = async (entry: ExplorerEntry) => {
   if (isRenaming(entry)) return;
   if (entry.type === "folder") {
@@ -560,9 +570,8 @@ const openEntry = async (entry: ExplorerEntry) => {
     emit("open-image-viewer", {entry, entries: imageEntries.value});
     return;
   }
-  if (entry.file && fileStore.extensions.includes(entry.file.extension)) {
-    if (!await fileStore.requestEditorLeave()) return;
-    fileStore.openEditor(entry.file);
+  if (canEditEntry(entry)) {
+    await editEntry(entry);
   } else {
     emit("preview", entry);
   }
@@ -799,6 +808,17 @@ const isTextLike = (entry: ExplorerEntry) => {
   return fileStore.extensions.includes(extension) || ["txt", "log", "md", "json", "yaml", "yml", "toml", "xml", "csv"].includes(extension);
 }
 
+const canEditEntry = (entry: ExplorerEntry | null) => {
+  if (!entry || entry.type !== "file" || !entry.file) return false;
+  return fileStore.extensions.includes(entry.file.extension);
+}
+
+const editEntry = async (entry: ExplorerEntry) => {
+  if (!canEditEntry(entry) || !entry.file) return;
+  if (!await fileStore.requestEditorLeave()) return;
+  fileStore.openEditor(entry.file);
+}
+
 const fileIcon = (entry: ExplorerEntry) => {
   if (entry.type === "folder") return "icon-folder-fill";
   const extension = entry.extension?.toLowerCase() ?? "";
@@ -1011,6 +1031,11 @@ const handleKeyDown = async (event: KeyboardEvent) => {
   }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
     event.preventDefault();
+    if (event.shiftKey) {
+      contextMenu.visible = false;
+      copySelectedPaths();
+      return;
+    }
     const entry = firstSelectedEntry();
     if (entry) emit("copy", entry);
     return;
@@ -1390,10 +1415,28 @@ const previewContextEntry = () => {
   if (entry) emit("preview", entry);
 }
 
+const viewImageContextEntry = () => {
+  const entry = primaryContextEntry.value;
+  closeContextMenu();
+  if (entry && isImageFile(entry)) emit("open-image-viewer", {entry, entries: imageEntries.value});
+}
+
+const editContextEntry = async () => {
+  const entry = primaryContextEntry.value;
+  closeContextMenu();
+  if (entry) await editEntry(entry);
+}
+
 const downloadContextEntry = () => {
   const entry = primaryContextEntry.value;
   closeContextMenu();
   if (entry) emit("download", entry);
+}
+
+const copyPathContextEntries = () => {
+  const paths = contextMenu.background ? [fileStore.currentPath || "/"] : contextEntries.value.map(entry => entry.path);
+  closeContextMenu();
+  if (paths.length) emit("copy-path", {paths});
 }
 
 const copyContextEntries = () => {
@@ -1627,16 +1670,20 @@ defineExpose({
       <button @click="createFolderFromContext">新建文件夹</button>
       <div class="context-separator"></div>
       <button :disabled="!props.canPaste" @click="pasteIntoCurrentFolder">粘贴</button>
+      <button @click="copyPathContextEntries">复制当前路径</button>
       <button :disabled="!entries.length" @click="selectAllFromContext">全选</button>
     </div>
 
     <div v-else-if="contextMenu.visible" class="context-menu" :style="{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}">
       <button @click="openEntryFromContext">打开</button>
       <button :disabled="!primaryContextEntry || primaryContextEntry.type !== 'folder'" @click="openContextEntryInNewTab">在新标签页中打开</button>
+      <button :disabled="!primaryContextEntry || !isImageFile(primaryContextEntry)" @click="viewImageContextEntry">查看图片</button>
+      <button :disabled="!canEditEntry(primaryContextEntry)" @click="editContextEntry">编辑</button>
       <button :disabled="!primaryContextEntry || primaryContextEntry.type !== 'file'" @click="previewContextEntry">预览</button>
       <div class="context-separator"></div>
       <button :disabled="!contextSelectionCount" @click="cutContextEntries">{{ contextLabel("剪切", "剪切选中项") }}</button>
       <button :disabled="!contextSelectionCount" @click="copyContextEntries">{{ contextLabel("复制", "复制选中项") }}</button>
+      <button :disabled="!contextSelectionCount" @click="copyPathContextEntries">{{ contextLabel("复制路径", "复制选中项路径") }}</button>
       <button :disabled="!props.canPaste" @click="pasteIntoCurrentFolder">粘贴</button>
       <div class="context-separator"></div>
       <button :disabled="!primaryContextEntry || primaryContextEntry.type !== 'file'" @click="downloadContextEntry">下载</button>
