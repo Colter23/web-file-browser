@@ -103,6 +103,7 @@ const loadingMore = ref(false);
 const message = ref("");
 const loadedSignature = ref("");
 const viewportRef = ref<HTMLElement | null>(null);
+const contextMenuRef = ref<HTMLElement | null>(null);
 const itemRefs = new Map<string, HTMLElement>();
 const renameInputRefs = new Map<string, HTMLInputElement>();
 const visibleThumbnailPaths = ref<Set<string>>(new Set());
@@ -773,6 +774,65 @@ const closeContextMenu = () => {
   contextMenu.visible = false;
 }
 
+const contextMenuButtons = () => {
+  const menu = contextMenuRef.value;
+  if (!menu) return [];
+  return Array.from(menu.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
+}
+
+const focusContextMenuButton = (index: number) => {
+  const buttons = contextMenuButtons();
+  if (!buttons.length) return;
+  const nextIndex = (index + buttons.length) % buttons.length;
+  buttons[nextIndex]?.focus({preventScroll: true});
+}
+
+const focusFirstContextMenuButton = async () => {
+  await nextTick();
+  focusContextMenuButton(0);
+}
+
+const moveContextMenuFocus = (direction: -1 | 1) => {
+  const buttons = contextMenuButtons();
+  if (!buttons.length) return;
+  const currentIndex = buttons.findIndex(button => button === document.activeElement);
+  focusContextMenuButton(currentIndex < 0 ? 0 : currentIndex + direction);
+}
+
+const handleContextMenuKeyDown = (event: KeyboardEvent) => {
+  if (!contextMenu.visible) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeContextMenu();
+    focusViewport();
+    return;
+  }
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    moveContextMenuFocus(1);
+    return;
+  }
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    moveContextMenuFocus(-1);
+    return;
+  }
+  if (event.key === "Home") {
+    event.preventDefault();
+    focusContextMenuButton(0);
+    return;
+  }
+  if (event.key === "End") {
+    event.preventDefault();
+    focusContextMenuButton(contextMenuButtons().length - 1);
+    return;
+  }
+  if (event.key === "Tab") {
+    event.preventDefault();
+    moveContextMenuFocus(event.shiftKey ? -1 : 1);
+  }
+}
+
 const clampContextMenuPosition = (x: number, y: number, background: boolean) => {
   const maxX = Math.max(contextMenuViewportPadding, window.innerWidth - contextMenuEstimatedWidth - contextMenuViewportPadding);
   const maxY = Math.max(
@@ -792,6 +852,7 @@ const showContextMenu = (x: number, y: number, targetPath = "", background = fal
   contextMenu.targetPath = targetPath;
   contextMenu.background = background;
   contextMenu.visible = true;
+  void focusFirstContextMenuButton();
 }
 
 const openContextMenu = (event: MouseEvent, entry: ExplorerEntry) => {
@@ -1728,7 +1789,12 @@ defineExpose({
       <span class="selection" :title="selectedStatusText">{{ selectedStatusText }}</span>
     </div>
 
-    <div v-if="contextMenu.visible && contextMenu.background" class="context-menu" :style="{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}">
+    <div
+        v-if="contextMenu.visible && contextMenu.background"
+        ref="contextMenuRef"
+        class="context-menu"
+        :style="{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}"
+        @keydown="handleContextMenuKeyDown">
       <button @click="createFileFromContext">新建文件</button>
       <button @click="createFolderFromContext">新建文件夹</button>
       <div class="context-separator"></div>
@@ -1737,7 +1803,12 @@ defineExpose({
       <button :disabled="!entries.length" @click="selectAllFromContext">全选</button>
     </div>
 
-    <div v-else-if="contextMenu.visible" class="context-menu" :style="{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}">
+    <div
+        v-else-if="contextMenu.visible"
+        ref="contextMenuRef"
+        class="context-menu"
+        :style="{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}"
+        @keydown="handleContextMenuKeyDown">
       <button @click="openEntryFromContext">打开</button>
       <button :disabled="!primaryContextEntry || primaryContextEntry.type !== 'folder'" @click="openContextEntryInNewTab">在新标签页中打开</button>
       <button :disabled="!primaryContextEntry || !isImageFile(primaryContextEntry)" @click="viewImageContextEntry">查看图片</button>
@@ -2096,6 +2167,10 @@ defineExpose({
 
 .context-menu button {
   @apply block h-8 w-full px-3 text-left text-slate-700 hover:bg-blue-50 disabled:text-slate-300 disabled:hover:bg-white;
+}
+
+.context-menu button:focus-visible {
+  @apply bg-blue-50 text-blue-700 outline-none ring-1 ring-inset ring-blue-300;
 }
 
 .context-separator {
