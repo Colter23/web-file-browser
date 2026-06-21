@@ -13,6 +13,13 @@ import {checkFileLanguageMode} from "../../utils/common.ts";
 type MenuName = "language" | "theme" | "settings" | "";
 type PendingEditorAction = "close" | "reload" | "";
 
+type EditorCursorStatus = {
+  line: number;
+  column: number;
+  selectedRows: number;
+  selectedCharacters: number;
+}
+
 type CodeEditorExpose = ComponentPublicInstance & {
   focus?: () => void;
 }
@@ -67,6 +74,7 @@ const readBooleanPreference = (key: string, fallback: boolean) => {
 }
 
 const fileStore = useFileStore();
+const defaultCursorStatus = (): EditorCursorStatus => ({line: 1, column: 1, selectedRows: 0, selectedCharacters: 0});
 const fileInfo = ref<FileInfo | null>(null);
 const editorRef = ref<CodeEditorExpose | null>(null);
 const activeMenu = ref<MenuName>("");
@@ -82,6 +90,7 @@ const errorText = ref("");
 const saveConflict = ref(false);
 const pendingAction = ref<PendingEditorAction>("");
 const pendingBusy = ref(false);
+const cursorStatus = ref<EditorCursorStatus>(defaultCursorStatus());
 const fontSize = ref(readNumberPreference(storageKeys.fontSize, 16, 12, 28));
 const tabSize = ref(readNumberPreference(storageKeys.tabSize, 2, 2, 8));
 const wrap = ref(readBooleanPreference(storageKeys.wrap, true));
@@ -130,6 +139,14 @@ const formatDate = (srcDate?: string) => {
 const editorMetaText = computed(() => {
   const parts = [selectedModeName.value, formatSize(fileInfo.value?.size), wrap.value ? "自动换行" : "不换行"];
   return parts.join(" · ");
+});
+
+const cursorStatusText = computed(() => `第 ${cursorStatus.value.line} 行，第 ${cursorStatus.value.column} 列`);
+
+const selectionStatusText = computed(() => {
+  if (!cursorStatus.value.selectedCharacters) return "";
+  const rows = cursorStatus.value.selectedRows > 1 ? `${cursorStatus.value.selectedRows} 行，` : "";
+  return `已选中 ${rows}${cursorStatus.value.selectedCharacters} 字符`;
 });
 
 const dirtyText = computed(() => {
@@ -210,6 +227,7 @@ const loadCurrentFile = async () => {
   statusText.value = "";
   errorText.value = "";
   saveConflict.value = false;
+  cursorStatus.value = defaultCursorStatus();
   loading.value = true;
   try {
     const file = await getFile(target.path);
@@ -244,6 +262,7 @@ const resetEditorState = () => {
   statusText.value = "";
   errorText.value = "";
   saveConflict.value = false;
+  cursorStatus.value = defaultCursorStatus();
 }
 
 watch(() => [fileStore.showEditor, fileStore.currentFile?.path], loadCurrentFile);
@@ -256,6 +275,10 @@ const onContentChange = (value: string) => {
   statusText.value = "";
   errorText.value = "";
   if (saveConflict.value) saveConflict.value = false;
+}
+
+const onCursorChange = (status: EditorCursorStatus) => {
+  cursorStatus.value = status;
 }
 
 const save = async () => {
@@ -478,6 +501,7 @@ onBeforeUnmount(() => {
             :tab-size="tabSize"
             :read-only="editorReadOnly"
             @change="onContentChange"
+            @cursor-change="onCursorChange"
             @save="save">
         </code-editor>
       </div>
@@ -511,6 +535,8 @@ onBeforeUnmount(() => {
       </div>
       <div class="status-right">
         <button v-if="saveConflict" class="status-action" @click="reload">重新载入</button>
+        <span>{{ cursorStatusText }}</span>
+        <span v-if="selectionStatusText">{{ selectionStatusText }}</span>
         <span>{{ selectedModeName }}</span>
         <span>{{ formatSize(fileInfo?.size) }}</span>
         <span>{{ wrap ? "自动换行" : "不换行" }}</span>

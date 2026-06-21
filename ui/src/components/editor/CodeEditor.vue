@@ -19,6 +19,13 @@ interface CodeEditorProps {
   readOnly?: boolean;
 }
 
+type CodeEditorCursorStatus = {
+  line: number;
+  column: number;
+  selectedRows: number;
+  selectedCharacters: number;
+}
+
 const props = withDefaults(defineProps<CodeEditorProps>(), {
   mode: "text",
   theme: "dracula",
@@ -32,10 +39,25 @@ const props = withDefaults(defineProps<CodeEditorProps>(), {
 const emit = defineEmits<{
   (e: "change", content: string): void;
   (e: "save"): void;
+  (e: "cursor-change", status: CodeEditorCursorStatus): void;
 }>()
 
 const editorRef = ref<HTMLElement | null>(null);
 let editor: ReturnType<typeof ace.edit> | null = null;
+
+const emitCursorStatus = () => {
+  if (!editor) return;
+  const cursor = editor.getCursorPosition();
+  const range = editor.getSelectionRange();
+  const selectedCharacters = editor.getSelectedText().length;
+  const selectedRows = selectedCharacters > 0 ? Math.abs(range.end.row - range.start.row) + 1 : 0;
+  emit("cursor-change", {
+    line: cursor.row + 1,
+    column: cursor.column + 1,
+    selectedRows,
+    selectedCharacters
+  });
+}
 
 onMounted(() => {
   if (!editorRef.value) return;
@@ -60,6 +82,9 @@ onMounted(() => {
     bindKey: {win: "Ctrl-S", mac: "Command-S"},
     exec: () => emit("save")
   });
+  editor.selection.on("changeCursor", emitCursorStatus);
+  editor.selection.on("changeSelection", emitCursorStatus);
+  emitCursorStatus();
 
   watch(() => props.theme, (theme: string) => {
     editor?.setTheme("ace/theme/" + theme);
@@ -72,6 +97,7 @@ onMounted(() => {
     syncing = true;
     editor.session.setValue(content);
     syncing = false;
+    emitCursorStatus();
   });
   watch(() => props.fontSize, (fontSize: number) => {
     editor?.setOption("fontSize", fontSize);
@@ -89,6 +115,7 @@ onMounted(() => {
   editor.session.on("change", () => {
     if (editor && !syncing) {
       emit("change", editor.getValue());
+      emitCursorStatus();
     }
   });
 })
