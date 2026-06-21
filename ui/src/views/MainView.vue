@@ -75,6 +75,15 @@ type TaskCancelConfirmState = {
   error: string;
 }
 
+type ShellNoticeKind = "info" | "success" | "warning" | "error";
+
+type ShellNoticeState = {
+  visible: boolean;
+  kind: ShellNoticeKind;
+  title: string;
+  message: string;
+}
+
 type RenamePayload = {
   entry: ExplorerEntry;
   name: string;
@@ -145,10 +154,17 @@ const taskCancelConfirm = ref<TaskCancelConfirmState>({
   submitting: false,
   error: ""
 });
+const shellNotice = ref<ShellNoticeState>({
+  visible: false,
+  kind: "info",
+  title: "提示",
+  message: ""
+});
 let previewLoadVersion = 0;
 let previewCopyTimer: number | undefined;
 let uploadDragDepth = 0;
 let taskPollTimer: number | undefined;
+let shellNoticeTimer: number | undefined;
 
 const activeTab = computed(() => fileStore.tabs.find(tab => tab.id === fileStore.activeTabId) ?? fileStore.tabs[0]);
 const canNavigateBack = computed(() => Boolean(activeTab.value?.backStack?.length));
@@ -312,6 +328,52 @@ const previewMeta = computed(() => {
   ];
 });
 
+const shellNoticeLabel = computed(() => ({
+  info: "提示",
+  success: "完成",
+  warning: "需要注意",
+  error: "操作失败"
+}[shellNotice.value.kind]));
+
+const errorMessage = (error: unknown, fallback: string) => {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+const stopShellNoticeTimer = () => {
+  if (shellNoticeTimer) {
+    window.clearTimeout(shellNoticeTimer);
+    shellNoticeTimer = undefined;
+  }
+}
+
+const closeShellNotice = () => {
+  stopShellNoticeTimer();
+  shellNotice.value.visible = false;
+}
+
+const showShellNotice = (message: string, kind: ShellNoticeKind = "info", title?: string, timeoutMs?: number) => {
+  stopShellNoticeTimer();
+  shellNotice.value = {
+    visible: true,
+    kind,
+    title: title ?? ({
+      info: "提示",
+      success: "完成",
+      warning: "需要注意",
+      error: "操作失败"
+    }[kind]),
+    message
+  };
+  const duration = timeoutMs ?? (kind === "error" ? 7000 : 3500);
+  if (duration > 0) {
+    shellNoticeTimer = window.setTimeout(closeShellNotice, duration);
+  }
+}
+
+const showErrorNotice = (error: unknown, fallback: string, title = "操作失败") => {
+  showShellNotice(errorMessage(error, fallback), "error", title);
+}
+
 const clearPreviewContent = () => {
   previewLoadVersion += 1;
   previewEntry.value = null;
@@ -359,6 +421,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (previewCopyTimer) window.clearTimeout(previewCopyTimer);
+  stopShellNoticeTimer();
   stopTaskPolling();
   window.removeEventListener("keydown", handleWindowKeyDown);
 })
@@ -471,7 +534,7 @@ const loadTasks = async (silent = false) => {
     scheduleTaskPolling();
   } catch (error) {
     stopTaskPolling();
-    window.alert(error instanceof Error ? error.message : "加载任务失败");
+    showErrorNotice(error, "加载任务失败", "任务加载失败");
   } finally {
     if (!silent) tasksLoading.value = false;
   }
@@ -531,7 +594,7 @@ const runOperation = async (operation: () => Promise<void>) => {
     await operation();
     await refreshCurrent();
   } catch (error) {
-    window.alert(error instanceof Error ? error.message : "操作失败");
+    showErrorNotice(error, "操作失败");
   }
 }
 
@@ -670,7 +733,7 @@ const taskStarted = async (id: string, label = "后台任务") => {
 
 const startRenameSelected = () => {
   if (!singleSelection.value) {
-    window.alert("请选择一个文件或文件夹");
+    showShellNotice("请选择一个文件或文件夹", "warning");
     return;
   }
   explorerRef.value?.startRename();
@@ -687,7 +750,7 @@ const renameSelected = async ({entry, name}: RenamePayload) => {
 const deleteSelected = async (entry = selectedEntry()) => {
   const entries = selectedEntries(entry);
   if (!entries.length) {
-    window.alert("请选择文件或文件夹");
+    showShellNotice("请选择文件或文件夹", "warning");
     return;
   }
   closePanels();
@@ -725,7 +788,7 @@ const submitDeleteConfirm = async () => {
 
 const downloadSelected = async (entry = singleSelectedEntry()) => {
   if (!entry || entry.type !== "file") {
-    window.alert("请选择一个文件");
+    showShellNotice("请选择一个文件", "warning");
     return;
   }
   try {
@@ -737,19 +800,20 @@ const downloadSelected = async (entry = singleSelectedEntry()) => {
     anchor.click();
     window.URL.revokeObjectURL(url);
   } catch (error) {
-    window.alert(error instanceof Error ? error.message : "下载失败");
+    showErrorNotice(error, "下载失败", "下载失败");
   }
 }
 
 const setFileClipboard = (action: FileClipboardAction, entry = selectedEntry()) => {
   const entries = selectedEntries(entry);
   if (!entries.length) {
-    window.alert("请选择文件或文件夹");
+    showShellNotice("请选择文件或文件夹", "warning");
     return;
   }
   fileClipboardAction.value = action;
   fileClipboardEntries.value = entries;
   taskMessage.value = `${action === "cut" ? "已剪切" : "已复制"} ${entries.length} 项`;
+  showShellNotice(taskMessage.value, "success", "剪贴板已更新");
 }
 
 const copySelected = (entry?: ExplorerEntry) => {
@@ -762,19 +826,19 @@ const cutSelected = (entry?: ExplorerEntry) => {
 
 const pasteSelected = async () => {
   if (!hasClipboard.value || !fileClipboardAction.value) {
-    window.alert("剪贴板为空");
+    showShellNotice("剪贴板为空", "warning");
     return;
   }
   const targetPath = currentFolder();
   const entries = fileClipboardEntries.value;
   const nestedFolder = entries.find(entry => entry.type === "folder" && isSameOrDescendantPath(targetPath, entry.path));
   if (nestedFolder) {
-    window.alert(`不能将 ${nestedFolder.name} 粘贴到它自身或子文件夹中`);
+    showShellNotice(`不能将 ${nestedFolder.name} 粘贴到它自身或子文件夹中`, "warning");
     return;
   }
   const sameFolder = entries.some(entry => parentPath(entry.path) === targetPath);
   if (fileClipboardAction.value === "cut" && sameFolder) {
-    window.alert("剪切项已经在当前文件夹中");
+    showShellNotice("剪切项已经在当前文件夹中", "warning");
     return;
   }
   try {
@@ -789,7 +853,7 @@ const pasteSelected = async () => {
     }
     await refreshCurrent();
   } catch (error) {
-    window.alert(error instanceof Error ? error.message : "创建粘贴任务失败");
+    showErrorNotice(error, "创建粘贴任务失败", "粘贴失败");
   }
 }
 
@@ -797,7 +861,7 @@ const dropEntriesToFolder = async ({entries, target, action}: DropEntriesPayload
   if (target.type !== "folder" || !entries.length) return;
   const nestedFolder = entries.find(entry => entry.type === "folder" && isSameOrDescendantPath(target.path, entry.path));
   if (nestedFolder) {
-    window.alert(`不能将 ${nestedFolder.name} 放入它自身或子文件夹中`);
+    showShellNotice(`不能将 ${nestedFolder.name} 放入它自身或子文件夹中`, "warning");
     return;
   }
   const sameFolder = entries.some(entry => parentPath(entry.path) === target.path);
@@ -818,14 +882,14 @@ const dropEntriesToFolder = async ({entries, target, action}: DropEntriesPayload
     }
     await refreshCurrent();
   } catch (error) {
-    window.alert(error instanceof Error ? error.message : "创建拖拽任务失败");
+    showErrorNotice(error, "创建拖拽任务失败", "拖拽失败");
   }
 }
 
 const archiveSelected = (entry = selectedEntry()) => {
   const entries = selectedEntries(entry);
   if (!entries.length) {
-    window.alert("请选择文件或文件夹");
+    showShellNotice("请选择文件或文件夹", "warning");
     return;
   }
   const format: ArchiveFormat = "zip";
@@ -844,7 +908,7 @@ const archiveSelected = (entry = selectedEntry()) => {
 
 const extractSelected = (entry = singleSelectedEntry()) => {
   if (!isArchiveFile(entry)) {
-    window.alert("请选择一个 zip、tar.gz 或 tgz 压缩包");
+    showShellNotice("请选择一个 zip、tar.gz 或 tgz 压缩包", "warning");
     return;
   }
   openOperationPanel({
@@ -864,7 +928,7 @@ const submitOperationPanel = async () => {
   if (!panel.kind || panel.submitting) return;
   const name = panel.name.trim();
   if (!name) {
-    window.alert(`${operationPanelNameLabel.value}不能为空`);
+    showShellNotice(`${operationPanelNameLabel.value}不能为空`, "warning");
     return;
   }
   panel.submitting = true;
@@ -889,7 +953,7 @@ const submitOperationPanel = async () => {
     }
   } catch (error) {
     operationPanel.value.submitting = false;
-    window.alert(error instanceof Error ? error.message : "操作失败");
+    showErrorNotice(error, "操作失败");
   }
 }
 
@@ -1148,7 +1212,7 @@ const closeTab = (event: MouseEvent, tabId: string) => {
 
 const previewSelected = (entry = selectedEntry()) => {
   if (!entry || entry.type !== "file") {
-    window.alert("请选择文件");
+    showShellNotice("请选择文件", "warning");
     return;
   }
   setPreviewEntry(entry, true);
@@ -1194,7 +1258,7 @@ const copyPreviewText = async () => {
       previewCopied.value = false;
     }, 1500);
   } catch {
-    window.alert("复制失败，请手动选择文本复制");
+    showShellNotice("复制失败，请手动选择文本复制", "error", "复制失败");
   }
 }
 
@@ -1463,6 +1527,16 @@ const signOut = async () => {
                 @selection-change="handleSelectionChange"
                 @open-new-tab="openEntryInNewTab">
             </explorer>
+            <section v-if="shellNotice.visible" :class="['shell-notice', shellNotice.kind]" role="status" aria-live="polite">
+              <div class="shell-notice-mark" aria-hidden="true"></div>
+              <div class="shell-notice-body">
+                <strong>{{ shellNotice.title || shellNoticeLabel }}</strong>
+                <span>{{ shellNotice.message }}</span>
+              </div>
+              <button type="button" class="shell-notice-close" title="关闭提示" @click="closeShellNotice">
+                <icon icon="icon-close" />
+              </button>
+            </section>
             <div v-if="uploadDropActive || uploadDropUploading" class="upload-drop-layer">
               <div class="upload-drop-card">
                 <div class="upload-drop-icon">
@@ -1789,6 +1863,54 @@ const signOut = async () => {
 
 .upload-drop-icon {
   @apply flex h-12 w-12 items-center justify-center rounded-lg bg-blue-600 text-2xl text-white shadow-sm;
+}
+
+.shell-notice {
+  @apply absolute right-4 top-4 z-20 flex w-[min(24rem,calc(100%-2rem))] items-start gap-3 rounded-lg border bg-white/95 px-3 py-2 text-sm text-slate-700 shadow-xl backdrop-blur;
+}
+
+.shell-notice-mark {
+  @apply mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500 shadow-[0_0_0_3px_rgba(59,130,246,0.15)];
+}
+
+.shell-notice-body {
+  @apply flex min-w-0 grow flex-col gap-0.5;
+}
+
+.shell-notice-body strong {
+  @apply truncate text-sm font-semibold text-slate-900;
+}
+
+.shell-notice-body span {
+  @apply break-words text-xs leading-5 text-slate-600;
+}
+
+.shell-notice-close {
+  @apply -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700;
+}
+
+.shell-notice.success {
+  @apply border-emerald-100;
+}
+
+.shell-notice.success .shell-notice-mark {
+  @apply bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)];
+}
+
+.shell-notice.warning {
+  @apply border-amber-100;
+}
+
+.shell-notice.warning .shell-notice-mark {
+  @apply bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.16)];
+}
+
+.shell-notice.error {
+  @apply border-red-100;
+}
+
+.shell-notice.error .shell-notice-mark {
+  @apply bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.16)];
 }
 
 .operation-panel {
