@@ -92,6 +92,13 @@ type ShellNoticeState = {
   message: string;
 }
 
+type TabContextMenuState = {
+  visible: boolean;
+  x: number;
+  y: number;
+  tabId: string;
+}
+
 type RenamePayload = {
   entry: ExplorerEntry;
   name: string;
@@ -192,6 +199,12 @@ const shellNotice = ref<ShellNoticeState>({
   title: "提示",
   message: ""
 });
+const tabContextMenu = ref<TabContextMenuState>({
+  visible: false,
+  x: 0,
+  y: 0,
+  tabId: ""
+});
 let previewLoadVersion = 0;
 let previewCopyTimer: number | undefined;
 let uploadDragDepth = 0;
@@ -207,8 +220,15 @@ let imageViewerDragStartX = 0;
 let imageViewerDragStartY = 0;
 let imageViewerDragOriginX = 0;
 let imageViewerDragOriginY = 0;
+const tabContextMenuWidth = 184;
+const tabContextMenuHeight = 220;
 
 const activeTab = computed(() => fileStore.tabs.find(tab => tab.id === fileStore.activeTabId) ?? fileStore.tabs[0]);
+const tabContextTarget = computed(() => fileStore.tabs.find(tab => tab.id === tabContextMenu.value.tabId) ?? null);
+const tabContextIndex = computed(() => fileStore.tabs.findIndex(tab => tab.id === tabContextMenu.value.tabId));
+const canCloseTabContext = computed(() => fileStore.tabs.length > 1);
+const canCloseOtherTabsContext = computed(() => fileStore.tabs.length > 1 && Boolean(tabContextTarget.value));
+const canCloseRightTabsContext = computed(() => tabContextIndex.value >= 0 && tabContextIndex.value < fileStore.tabs.length - 1);
 const canNavigateBack = computed(() => Boolean(activeTab.value?.backStack?.length));
 const canNavigateForward = computed(() => Boolean(activeTab.value?.forwardStack?.length));
 const canNavigateUp = computed(() => currentFolder() !== "/");
@@ -549,6 +569,8 @@ onMounted(async () => {
   fileStore.ensureActiveTab();
   await loadRoot();
   window.addEventListener("keydown", handleWindowKeyDown);
+  window.addEventListener("click", closeTabContextMenu);
+  window.addEventListener("scroll", closeTabContextMenu, true);
   document.addEventListener("fullscreenchange", handleFullscreenChange);
 })
 
@@ -557,6 +579,8 @@ onBeforeUnmount(() => {
   stopShellNoticeTimer();
   stopTaskPolling();
   window.removeEventListener("keydown", handleWindowKeyDown);
+  window.removeEventListener("click", closeTabContextMenu);
+  window.removeEventListener("scroll", closeTabContextMenu, true);
   document.removeEventListener("fullscreenchange", handleFullscreenChange);
 })
 
@@ -1453,14 +1477,73 @@ const navigateUp = async () => {
 }
 
 const openTab = () => {
+  closeTabContextMenu();
   fileStore.openTab(currentFolder());
   closePanels();
 }
 
 const openEntryInNewTab = (entry: ExplorerEntry) => {
   if (entry.type !== "folder") return;
+  closeTabContextMenu();
   fileStore.openPathInNewTab(entry.path);
   closePanels();
+}
+
+const closeTabContextMenu = () => {
+  tabContextMenu.value.visible = false;
+}
+
+const openTabContextMenu = (event: MouseEvent, tabId: string) => {
+  event.preventDefault();
+  event.stopPropagation();
+  const x = Math.min(Math.max(8, event.clientX), Math.max(8, window.innerWidth - tabContextMenuWidth - 8));
+  const y = Math.min(Math.max(8, event.clientY), Math.max(8, window.innerHeight - tabContextMenuHeight - 8));
+  tabContextMenu.value = {visible: true, x, y, tabId};
+}
+
+const duplicateTabFromMenu = () => {
+  const tabId = tabContextMenu.value.tabId;
+  closeTabContextMenu();
+  fileStore.duplicateTab(tabId);
+  closePanels();
+}
+
+const closeTabById = (tabId: string) => {
+  if (fileStore.tabs.length <= 1) return false;
+  const wasActive = fileStore.activeTabId === tabId;
+  fileStore.closeTab(tabId);
+  if (wasActive) closePanels();
+  return true;
+}
+
+const closeTabFromMenu = () => {
+  const tabId = tabContextMenu.value.tabId;
+  closeTabContextMenu();
+  closeTabById(tabId);
+}
+
+const closeOtherTabsFromMenu = () => {
+  const tabId = tabContextMenu.value.tabId;
+  const changesActiveTab = fileStore.activeTabId !== tabId;
+  closeTabContextMenu();
+  fileStore.closeOtherTabs(tabId);
+  if (changesActiveTab) closePanels();
+}
+
+const closeRightTabsFromMenu = () => {
+  const tabId = tabContextMenu.value.tabId;
+  const closesActiveTab = tabContextIndex.value >= 0 && fileStore.tabs.findIndex(tab => tab.id === fileStore.activeTabId) > tabContextIndex.value;
+  closeTabContextMenu();
+  fileStore.closeTabsToRight(tabId);
+  if (closesActiveTab) closePanels();
+}
+
+const handleTabAuxClick = (event: MouseEvent, tabId: string) => {
+  if (event.button !== 1) return;
+  event.preventDefault();
+  event.stopPropagation();
+  closeTabContextMenu();
+  closeTabById(tabId);
 }
 
 const openImageViewer = async ({entry, entries}: ImageViewerPayload) => {
@@ -1517,14 +1600,15 @@ const showImageAt = (index: number) => {
 }
 
 const switchTab = (tabId: string) => {
+  closeTabContextMenu();
   fileStore.switchTab(tabId);
   closePanels();
 }
 
 const closeTab = (event: MouseEvent, tabId: string) => {
   event.stopPropagation();
-  fileStore.closeTab(tabId);
-  closePanels();
+  closeTabContextMenu();
+  closeTabById(tabId);
 }
 
 const previewSelected = (entry = selectedEntry()) => {
@@ -1702,8 +1786,10 @@ const signOut = async () => {
             :key="tab.id"
             class="tab-button"
             :class="{active: tab.id === activeTab?.id}"
-            :title="`${tab.path} · Ctrl+Tab 切换`"
-            @click="switchTab(tab.id)">
+            :title="`${tab.path} · Ctrl+Tab 切换 · 中键关闭`"
+            @click="switchTab(tab.id)"
+            @auxclick="handleTabAuxClick($event, tab.id)"
+            @contextmenu="openTabContextMenu($event, tab.id)">
           <icon icon="icon-folder-fill" />
           <span>{{ tab.title }}</span>
           <span class="tab-close" title="关闭标签页 (Ctrl+W)" @click="closeTab($event, tab.id)">
@@ -1714,6 +1800,19 @@ const signOut = async () => {
           <icon icon="icon-add" />
         </button>
       </nav>
+      <div
+          v-if="tabContextMenu.visible"
+          class="tab-context-menu"
+          :style="{left: `${tabContextMenu.x}px`, top: `${tabContextMenu.y}px`}"
+          @click.stop
+          @contextmenu.prevent>
+        <button @click="openTab">新建标签页</button>
+        <button :disabled="!tabContextTarget" @click="duplicateTabFromMenu">复制标签页</button>
+        <div class="tab-context-separator"></div>
+        <button :disabled="!canCloseTabContext" @click="closeTabFromMenu">关闭标签页</button>
+        <button :disabled="!canCloseOtherTabsContext" @click="closeOtherTabsFromMenu">关闭其他标签页</button>
+        <button :disabled="!canCloseRightTabsContext" @click="closeRightTabsFromMenu">关闭右侧标签页</button>
+      </div>
       <div class="top-actions">
         <label class="search-box">
           <input ref="searchInput" v-model="searchText" type="search" placeholder="搜索当前文件夹" @keydown.escape="clearSearch">
@@ -2205,6 +2304,18 @@ const signOut = async () => {
 
 .tab-add {
   @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-slate-700 shadow-sm hover:bg-blue-50;
+}
+
+.tab-context-menu {
+  @apply fixed z-50 w-46 rounded-md border border-slate-200 bg-white py-1 text-sm shadow-xl;
+}
+
+.tab-context-menu button {
+  @apply block h-8 w-full px-3 text-left text-slate-700 hover:bg-blue-50 disabled:text-slate-300 disabled:hover:bg-white;
+}
+
+.tab-context-separator {
+  @apply my-1 border-t border-slate-100;
 }
 
 .top-actions {

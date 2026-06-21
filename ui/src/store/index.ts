@@ -58,10 +58,12 @@ const normalizePathStack = (stack?: string[]): string[] => {
     return stack.filter(path => typeof path === "string").map(normalizePath);
 }
 
+const createTabId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
 const createTab = (path: string): ExplorerTab => {
     const normalized = normalizePath(path);
     return {
-        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        id: createTabId(),
         path: normalized,
         title: pathTitle(normalized),
         backStack: [],
@@ -170,6 +172,21 @@ const readTabs = (): ExplorerTab[] => {
 const readActiveTabId = (tabs: ExplorerTab[]) => {
     const id = readStorageItem(storageKeys.activeTabId);
     return id && tabs.some(tab => tab.id === id) ? id : tabs[0]?.id ?? "";
+}
+
+const cloneTab = (tab: ExplorerTab): ExplorerTab => {
+    const path = normalizePath(tab.path);
+    return {
+        id: createTabId(),
+        path,
+        title: pathTitle(path),
+        backStack: [...(tab.backStack ?? [])],
+        forwardStack: [...(tab.forwardStack ?? [])],
+        viewMode: tab.viewMode,
+        iconSize: tab.iconSize,
+        sortKey: tab.sortKey,
+        sortOrder: tab.sortOrder
+    };
 }
 
 export const useFileStore = defineStore('file', {
@@ -332,6 +349,22 @@ export const useFileStore = defineStore('file', {
             this.openTab(path);
         },
 
+        duplicateTab(tabId: string) {
+            const index = this.tabs.findIndex(tab => tab.id === tabId);
+            if (index < 0) return;
+            const tab = cloneTab(this.tabs[index]);
+            this.tabs.splice(index + 1, 0, tab);
+            this.activeTabId = tab.id;
+            this.currentPath = tab.path;
+            this.viewMode = tab.viewMode ?? this.viewMode;
+            this.iconSize = tab.iconSize ?? this.iconSize;
+            this.sortKey = tab.sortKey ?? this.sortKey;
+            this.sortOrder = tab.sortOrder ?? this.sortOrder;
+            this.showEditor = false;
+            this.currentFile = null;
+            this.persistTabs();
+        },
+
         switchTab(tabId: string) {
             const tab = this.tabs.find(item => item.id === tabId);
             if (!tab) return;
@@ -360,6 +393,39 @@ export const useFileStore = defineStore('file', {
                 this.iconSize = next.iconSize ?? this.iconSize;
                 this.sortKey = next.sortKey ?? this.sortKey;
                 this.sortOrder = next.sortOrder ?? this.sortOrder;
+                this.showEditor = false;
+                this.currentFile = null;
+            }
+            this.persistTabs();
+        },
+
+        closeOtherTabs(tabId: string) {
+            const tab = this.tabs.find(item => item.id === tabId);
+            if (!tab || this.tabs.length <= 1) return;
+            this.tabs = [tab];
+            this.activeTabId = tab.id;
+            this.currentPath = tab.path;
+            this.viewMode = tab.viewMode ?? this.viewMode;
+            this.iconSize = tab.iconSize ?? this.iconSize;
+            this.sortKey = tab.sortKey ?? this.sortKey;
+            this.sortOrder = tab.sortOrder ?? this.sortOrder;
+            this.showEditor = false;
+            this.currentFile = null;
+            this.persistTabs();
+        },
+
+        closeTabsToRight(tabId: string) {
+            const index = this.tabs.findIndex(tab => tab.id === tabId);
+            if (index < 0 || index === this.tabs.length - 1) return;
+            this.tabs = this.tabs.slice(0, index + 1);
+            if (!this.tabs.some(tab => tab.id === this.activeTabId)) {
+                const tab = this.tabs[index];
+                this.activeTabId = tab.id;
+                this.currentPath = tab.path;
+                this.viewMode = tab.viewMode ?? this.viewMode;
+                this.iconSize = tab.iconSize ?? this.iconSize;
+                this.sortKey = tab.sortKey ?? this.sortKey;
+                this.sortOrder = tab.sortOrder ?? this.sortOrder;
                 this.showEditor = false;
                 this.currentFile = null;
             }
