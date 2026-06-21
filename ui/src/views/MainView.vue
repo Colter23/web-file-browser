@@ -125,6 +125,9 @@ const previewText = ref("");
 const previewError = ref("");
 const previewImageFit = ref(true);
 const previewImageZoom = ref(100);
+const previewImageOffsetX = ref(0);
+const previewImageOffsetY = ref(0);
+const previewImageDragging = ref(false);
 const previewTextWrap = ref(true);
 const previewCopied = ref(false);
 const currentSelection = ref<ExplorerEntry[]>([]);
@@ -165,6 +168,11 @@ let previewCopyTimer: number | undefined;
 let uploadDragDepth = 0;
 let taskPollTimer: number | undefined;
 let shellNoticeTimer: number | undefined;
+let previewImagePointerId: number | null = null;
+let previewImageDragStartX = 0;
+let previewImageDragStartY = 0;
+let previewImageDragOriginX = 0;
+let previewImageDragOriginY = 0;
 
 const activeTab = computed(() => fileStore.tabs.find(tab => tab.id === fileStore.activeTabId) ?? fileStore.tabs[0]);
 const canNavigateBack = computed(() => Boolean(activeTab.value?.backStack?.length));
@@ -311,11 +319,13 @@ const canEditPreview = computed(() => {
 const previewImageStyle = computed(() => ({
   maxWidth: previewImageFit.value ? "100%" : "none",
   maxHeight: previewImageFit.value ? "100%" : "none",
-  transform: previewImageFit.value ? "none" : `scale(${previewImageZoom.value / 100})`,
+  transform: previewImageFit.value ? "none" : `translate3d(${previewImageOffsetX.value}px, ${previewImageOffsetY.value}px, 0) scale(${previewImageZoom.value / 100})`,
   transformOrigin: "center center"
 }));
 
 const previewZoomText = computed(() => previewImageFit.value ? "适应" : `${previewImageZoom.value}%`);
+
+const canPanPreviewImage = computed(() => previewKind.value === "image" && !previewImageFit.value);
 
 const previewMeta = computed(() => {
   const entry = previewEntry.value;
@@ -351,6 +361,13 @@ const closeShellNotice = () => {
   shellNotice.value.visible = false;
 }
 
+const resetPreviewImagePan = () => {
+  previewImageOffsetX.value = 0;
+  previewImageOffsetY.value = 0;
+  previewImageDragging.value = false;
+  previewImagePointerId = null;
+}
+
 const showShellNotice = (message: string, kind: ShellNoticeKind = "info", title?: string, timeoutMs?: number) => {
   stopShellNoticeTimer();
   shellNotice.value = {
@@ -382,6 +399,7 @@ const clearPreviewContent = () => {
   previewError.value = "";
   previewImageFit.value = true;
   previewImageZoom.value = 100;
+  resetPreviewImagePan();
   previewCopied.value = false;
 }
 
@@ -1226,6 +1244,7 @@ const setPreviewEntry = (entry: ExplorerEntry, force = false) => {
   previewPanelVisible.value = true;
   previewImageFit.value = true;
   previewImageZoom.value = 100;
+  resetPreviewImagePan();
   previewCopied.value = false;
   void loadPreview(entry);
 }
@@ -1270,6 +1289,35 @@ const zoomPreviewImage = (delta: number) => {
 const resetPreviewImageZoom = () => {
   previewImageFit.value = true;
   previewImageZoom.value = 100;
+  resetPreviewImagePan();
+}
+
+const startPreviewImagePan = (event: PointerEvent) => {
+  if (!canPanPreviewImage.value || event.button !== 0) return;
+  event.preventDefault();
+  const stage = event.currentTarget as HTMLElement;
+  previewImagePointerId = event.pointerId;
+  previewImageDragging.value = true;
+  previewImageDragStartX = event.clientX;
+  previewImageDragStartY = event.clientY;
+  previewImageDragOriginX = previewImageOffsetX.value;
+  previewImageDragOriginY = previewImageOffsetY.value;
+  stage.setPointerCapture?.(event.pointerId);
+}
+
+const movePreviewImagePan = (event: PointerEvent) => {
+  if (!previewImageDragging.value || previewImagePointerId !== event.pointerId) return;
+  event.preventDefault();
+  previewImageOffsetX.value = previewImageDragOriginX + event.clientX - previewImageDragStartX;
+  previewImageOffsetY.value = previewImageDragOriginY + event.clientY - previewImageDragStartY;
+}
+
+const stopPreviewImagePan = (event: PointerEvent) => {
+  if (previewImagePointerId !== event.pointerId) return;
+  const stage = event.currentTarget as HTMLElement;
+  stage.releasePointerCapture?.(event.pointerId);
+  previewImageDragging.value = false;
+  previewImagePointerId = null;
 }
 
 const loadPreview = async (entry: ExplorerEntry) => {
@@ -1668,7 +1716,16 @@ const signOut = async () => {
               </div>
               <div v-else-if="previewLoading" class="preview-placeholder">正在加载预览...</div>
               <div v-else-if="previewError" class="preview-placeholder error">{{ previewError }}</div>
-              <div v-else-if="previewEntry && previewKind === 'image'" class="image-stage" :class="{fit: previewImageFit}">
+              <div
+                  v-else-if="previewEntry && previewKind === 'image'"
+                  class="image-stage"
+                  :class="{fit: previewImageFit, panning: canPanPreviewImage, dragging: previewImageDragging}"
+                  @pointerdown="startPreviewImagePan"
+                  @pointermove="movePreviewImagePan"
+                  @pointerup="stopPreviewImagePan"
+                  @pointercancel="stopPreviewImagePan"
+                  @lostpointercapture="previewImageDragging = false"
+                  @dblclick="resetPreviewImageZoom">
                 <img :src="downloadUrl(previewEntry.path)" :alt="previewEntry.name" :style="previewImageStyle">
               </div>
               <pre v-else-if="previewKind === 'text'" :class="{nowrap: !previewTextWrap}">{{ previewText }}</pre>
@@ -2113,15 +2170,25 @@ const signOut = async () => {
 }
 
 .image-stage {
-  @apply flex h-full min-h-0 w-full items-center justify-center overflow-auto p-3;
+  @apply flex h-full min-h-0 w-full touch-none select-none items-center justify-center overflow-hidden p-3;
 }
 
 .image-stage.fit {
   @apply overflow-hidden;
 }
 
+.image-stage.panning {
+  @apply cursor-grab;
+}
+
+.image-stage.dragging {
+  @apply cursor-grabbing;
+}
+
 .image-stage img {
   @apply rounded object-contain shadow-sm;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .preview-body pre {
