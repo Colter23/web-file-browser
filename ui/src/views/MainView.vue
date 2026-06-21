@@ -2,7 +2,7 @@
 import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import FileTree from "../components/FileTree.vue";
-import {ArchiveFormat, ExplorerViewMode, FileInfo, FileTreeData, TaskKind, TaskState, TaskStatus} from "../class";
+import {ArchiveFormat, ExplorerIconSize, ExplorerViewMode, FileInfo, FileTreeData, TaskKind, TaskState, TaskStatus} from "../class";
 import {useFileStore} from "../store";
 import {
   cancelTask,
@@ -50,6 +50,7 @@ type ExplorerExpose = {
   selectPaths: (paths: string[], scrollToSelection?: boolean) => Promise<boolean>;
   selectPathForRename: (path: string) => Promise<boolean>;
   selectAllEntries: () => boolean;
+  focus: () => void;
   getImageEntries: () => ExplorerEntry[];
   getScrollTop: () => number;
   setScrollTop: (scrollTop: number) => Promise<void>;
@@ -141,6 +142,17 @@ const viewModeMeta: Record<ExplorerViewMode, {label: string; icon: string}> = {
   icons: {label: "图标", icon: "icon-viewgrid"},
   tiles: {label: "平铺", icon: "icon-file-common-filling"}
 };
+const viewShortcutMap: Record<string, {mode: ExplorerViewMode; iconSize: ExplorerIconSize; label: string}> = {
+  Digit1: {mode: "icons", iconSize: "large", label: "大图标"},
+  Digit2: {mode: "icons", iconSize: "large", label: "大图标"},
+  Digit3: {mode: "icons", iconSize: "medium", label: "中图标"},
+  Digit4: {mode: "icons", iconSize: "small", label: "小图标"},
+  Digit5: {mode: "list", iconSize: "small", label: "列表"},
+  Digit6: {mode: "details", iconSize: "small", label: "详细信息"},
+  Digit7: {mode: "tiles", iconSize: "medium", label: "平铺"}
+};
+
+const viewShortcut = (code: string) => viewShortcutMap[code] ?? viewShortcutMap[code.replace("Numpad", "Digit")];
 const previewPaneStorageKey = "explorer.previewPaneWidth";
 const previewPaneDefaultWidth = 352;
 const previewPaneMinWidth = 280;
@@ -374,7 +386,7 @@ const nextViewMode = computed(() => {
   const index = viewModeOrder.indexOf(fileStore.viewMode);
   return viewModeOrder[(index + 1) % viewModeOrder.length];
 });
-const viewModeButtonTitle = computed(() => `当前：${currentViewModeMeta.value.label}，切换到${viewModeMeta[nextViewMode.value].label}`);
+const viewModeButtonTitle = computed(() => `当前：${currentViewModeMeta.value.label}，切换到${viewModeMeta[nextViewMode.value].label}。Ctrl+Shift+1-7 可直接切换查看模式`);
 const taskStats = computed(() => {
   const stats = {
     running: 0,
@@ -1643,8 +1655,17 @@ const togglePreviewFromShortcut = async () => {
   return true;
 }
 
+const applyViewShortcut = (shortcut: {mode: ExplorerViewMode; iconSize: ExplorerIconSize; label: string}) => {
+  fileStore.setViewMode(shortcut.mode);
+  fileStore.setIconSize(shortcut.iconSize);
+  closeTabContextMenu();
+  void nextTick(() => explorerRef.value?.focus());
+  showShellNotice(`已切换为${shortcut.label}`, "info", "查看模式", 1400);
+}
+
 const cycleViewMode = () => {
   fileStore.setViewMode(nextViewMode.value);
+  void nextTick(() => explorerRef.value?.focus());
 }
 
 const shouldIgnoreShellShortcut = (target: EventTarget | null) => {
@@ -1720,6 +1741,14 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
   }
   const key = event.key.toLowerCase();
   const commandKey = event.ctrlKey || event.metaKey;
+  if (commandKey && event.shiftKey && !event.altKey && !shouldIgnoreShellShortcut(event.target)) {
+    const shortcut = viewShortcut(event.code);
+    if (shortcut) {
+      event.preventDefault();
+      applyViewShortcut(shortcut);
+      return;
+    }
+  }
   if ((commandKey && !event.altKey && key === "l") || (event.altKey && !event.ctrlKey && !event.metaKey && key === "d")) {
     if (shouldIgnoreAddressShortcut(event.target)) return;
     event.preventDefault();

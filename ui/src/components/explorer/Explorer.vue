@@ -1526,6 +1526,7 @@ defineExpose({
   selectPaths,
   selectPathForRename,
   selectAllEntries,
+  focus: focusViewport,
   getScrollTop,
   setScrollTop
 })
@@ -1556,19 +1557,19 @@ defineExpose({
           </button>
         </div>
         <div class="view-switch" aria-label="查看模式">
-          <button :class="{active: viewMode === 'details'}" title="详细信息" @click="setViewMode('details')">
+          <button :class="{active: viewMode === 'details'}" title="详细信息 (Ctrl+Shift+6)" @click="setViewMode('details')">
             <icon icon="icon-view-list" />
           </button>
-          <button :class="{active: viewMode === 'list'}" title="列表" @click="setViewMode('list')">
+          <button :class="{active: viewMode === 'list'}" title="列表 (Ctrl+Shift+5)" @click="setViewMode('list')">
             <icon icon="icon-listview" />
           </button>
-          <button :class="{active: viewMode === 'icons'}" title="图标" @click="setViewMode('icons')">
+          <button :class="{active: viewMode === 'icons'}" title="图标 (Ctrl+Shift+1-4)" @click="setViewMode('icons')">
             <icon icon="icon-viewgrid" />
           </button>
-          <button :class="{active: viewMode === 'tiles'}" title="平铺" @click="setViewMode('tiles')">
+          <button :class="{active: viewMode === 'tiles'}" title="平铺 (Ctrl+Shift+7)" @click="setViewMode('tiles')">
             <icon icon="icon-file-common-filling" />
           </button>
-          <button title="图标大小" @click="cycleIconSize">
+          <button title="图标大小 (Ctrl+鼠标滚轮)" @click="cycleIconSize">
             <span class="size-mark">{{ iconSizeText }}</span>
           </button>
         </div>
