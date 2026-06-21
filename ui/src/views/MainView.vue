@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch} from "vue";
+import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import FileTree from "../components/FileTree.vue";
 import {ArchiveFormat, ExplorerViewMode, FileInfo, FileTreeData, TaskKind, TaskState, TaskStatus} from "../class";
@@ -61,6 +61,13 @@ type OperationPanelState = {
   submitting: boolean;
 }
 
+type DeleteConfirmState = {
+  visible: boolean;
+  entries: ExplorerEntry[];
+  submitting: boolean;
+  error: string;
+}
+
 type RenamePayload = {
   entry: ExplorerEntry;
   name: string;
@@ -84,6 +91,7 @@ const router = useRouter();
 const fileStore = useFileStore();
 const treeData = ref<FileTreeData[]>([]);
 const explorerRef = ref<ExplorerExpose | null>(null);
+const deleteConfirmRef = ref<HTMLElement | null>(null);
 const uploadInput = ref<HTMLInputElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 const uploadDropActive = ref(false);
@@ -117,6 +125,12 @@ const operationPanel = ref<OperationPanelState>({
   entries: [],
   sourceEntry: null,
   submitting: false
+});
+const deleteConfirm = ref<DeleteConfirmState>({
+  visible: false,
+  entries: [],
+  submitting: false,
+  error: ""
 });
 let previewLoadVersion = 0;
 let previewCopyTimer: number | undefined;
@@ -214,6 +228,16 @@ const operationPanelIcon = computed(() => {
       return "icon-file-common-filling";
   }
 });
+const deleteConfirmTitle = computed(() => {
+  const count = deleteConfirm.value.entries.length;
+  return count > 1 ? `删除 ${count} 项？` : `删除 ${deleteConfirm.value.entries[0]?.name ?? "所选项目"}？`;
+});
+const deleteConfirmMessage = computed(() => {
+  const count = deleteConfirm.value.entries.length;
+  return count > 1 ? "这些项目会被移动到回收站，之后可从回收站恢复。" : "该项目会被移动到回收站，之后可从回收站恢复。";
+});
+const deleteConfirmItems = computed(() => deleteConfirm.value.entries.slice(0, 5));
+const deleteConfirmExtraCount = computed(() => Math.max(0, deleteConfirm.value.entries.length - deleteConfirmItems.value.length));
 const previewKind = computed<"image" | "text" | "audio" | "video" | "unknown">(() => {
   const entry = previewEntry.value;
   if (!entry || entry.type !== "file") return "unknown";
@@ -284,6 +308,7 @@ const closePanels = () => {
   previewPanelVisible.value = false;
   clearPreviewContent();
   operationPanel.value.visible = false;
+  resetDeleteConfirm();
 }
 
 const clearSearch = () => {
@@ -490,6 +515,20 @@ const resetOperationPanel = () => {
   };
 }
 
+const resetDeleteConfirm = () => {
+  deleteConfirm.value = {
+    visible: false,
+    entries: [],
+    submitting: false,
+    error: ""
+  };
+}
+
+const closeDeleteConfirm = () => {
+  if (deleteConfirm.value.submitting) return;
+  resetDeleteConfirm();
+}
+
 const openOperationPanel = (next: Omit<OperationPanelState, "visible" | "submitting">) => {
   closePanels();
   operationPanel.value = {
@@ -602,8 +641,22 @@ const deleteSelected = async (entry = selectedEntry()) => {
     window.alert("请选择文件或文件夹");
     return;
   }
-  const message = entries.length === 1 ? `删除 ${entries[0].name}？` : `删除选中的 ${entries.length} 项？`;
-  if (!window.confirm(message)) return;
+  closePanels();
+  deleteConfirm.value = {
+    visible: true,
+    entries,
+    submitting: false,
+    error: ""
+  };
+  await nextTick();
+  deleteConfirmRef.value?.focus();
+}
+
+const submitDeleteConfirm = async () => {
+  const entries = deleteConfirm.value.entries;
+  if (!entries.length || deleteConfirm.value.submitting) return;
+  deleteConfirm.value.submitting = true;
+  deleteConfirm.value.error = "";
   try {
     const task = await createDeleteTask(entries.map(item => item.path));
     await taskStarted(task.id, "删除任务");
@@ -612,9 +665,12 @@ const deleteSelected = async (entry = selectedEntry()) => {
       fileClipboardEntries.value = fileClipboardEntries.value.filter(item => !deleted.has(item.path));
       if (!fileClipboardEntries.value.length) fileClipboardAction.value = null;
     }
+    resetDeleteConfirm();
     await refreshCurrent();
   } catch (error) {
-    window.alert(error instanceof Error ? error.message : "创建删除任务失败");
+    deleteConfirm.value.error = error instanceof Error ? error.message : "创建删除任务失败";
+  } finally {
+    if (deleteConfirm.value.visible) deleteConfirm.value.submitting = false;
   }
 }
 
@@ -860,13 +916,13 @@ const handleUploadDrop = async (event: DragEvent) => {
 const shouldIgnoreNavigationShortcut = (target: EventTarget | null) => {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
-  return Boolean(target.closest("input, textarea, select, [contenteditable='true'], .ace_editor, .operation-panel"));
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true'], .ace_editor, .operation-panel, .delete-confirm-panel"));
 }
 
 const shouldIgnoreActionShortcut = (target: EventTarget | null) => {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
-  return Boolean(target.closest("button, a, input, textarea, select, [contenteditable='true'], .ace_editor, .operation-panel, .context-menu, .task-panel"));
+  return Boolean(target.closest("button, a, input, textarea, select, [contenteditable='true'], .ace_editor, .operation-panel, .delete-confirm-panel, .context-menu, .task-panel"));
 }
 
 const shouldKeepEditorFindShortcut = (target: EventTarget | null) => {
@@ -1396,6 +1452,41 @@ const signOut = async () => {
                 </button>
               </div>
             </form>
+            <section
+                v-if="deleteConfirm.visible"
+                ref="deleteConfirmRef"
+                class="delete-confirm-panel"
+                tabindex="-1"
+                @keydown.esc.prevent="closeDeleteConfirm">
+              <div class="delete-confirm-header">
+                <div class="delete-confirm-icon">
+                  <icon icon="icon-delete-fill" />
+                </div>
+                <div class="delete-confirm-title">
+                  <strong>{{ deleteConfirmTitle }}</strong>
+                  <span>{{ deleteConfirmMessage }}</span>
+                </div>
+                <button type="button" class="operation-panel-close" title="关闭" @click="closeDeleteConfirm">
+                  <icon icon="icon-close" />
+                </button>
+              </div>
+              <div class="delete-confirm-list">
+                <div v-for="item in deleteConfirmItems" :key="item.path" :title="item.path">
+                  <icon :icon="item.type === 'folder' ? 'icon-folder-fill' : 'icon-file-fill'" />
+                  <span>{{ item.name }}</span>
+                </div>
+                <div v-if="deleteConfirmExtraCount" class="delete-confirm-more">
+                  另有 {{ deleteConfirmExtraCount }} 项
+                </div>
+              </div>
+              <p v-if="deleteConfirm.error" class="delete-confirm-error">{{ deleteConfirm.error }}</p>
+              <div class="delete-confirm-actions">
+                <button type="button" class="operation-secondary" :disabled="deleteConfirm.submitting" @click="closeDeleteConfirm">取消</button>
+                <button type="button" class="delete-confirm-primary" :disabled="deleteConfirm.submitting" @click="submitDeleteConfirm">
+                  {{ deleteConfirm.submitting ? "创建任务中..." : "移动到回收站" }}
+                </button>
+              </div>
+            </section>
           </div>
           <aside v-if="previewPanelVisible" class="preview-pane">
             <div class="preview-header">
@@ -1642,7 +1733,15 @@ const signOut = async () => {
   @apply absolute left-1/2 top-6 z-30 flex w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm shadow-2xl;
 }
 
+.delete-confirm-panel {
+  @apply absolute left-1/2 top-6 z-30 flex w-[min(30rem,calc(100%-2rem))] -translate-x-1/2 flex-col gap-3 rounded-lg border border-red-100 bg-white p-4 text-sm text-slate-700 shadow-2xl outline-none;
+}
+
 .operation-panel-header {
+  @apply flex items-start gap-3;
+}
+
+.delete-confirm-header {
   @apply flex items-start gap-3;
 }
 
@@ -1650,7 +1749,15 @@ const signOut = async () => {
   @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-xl text-blue-600;
 }
 
+.delete-confirm-icon {
+  @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 text-xl text-red-600;
+}
+
 .operation-panel-title {
+  @apply flex min-w-0 grow flex-col gap-0.5;
+}
+
+.delete-confirm-title {
   @apply flex min-w-0 grow flex-col gap-0.5;
 }
 
@@ -1658,8 +1765,16 @@ const signOut = async () => {
   @apply truncate text-base font-semibold text-slate-900;
 }
 
+.delete-confirm-title strong {
+  @apply truncate text-base font-semibold text-slate-900;
+}
+
 .operation-panel-title span {
   @apply truncate text-xs text-slate-500;
+}
+
+.delete-confirm-title span {
+  @apply text-xs leading-5 text-slate-500;
 }
 
 .operation-panel-close {
@@ -1694,6 +1809,30 @@ const signOut = async () => {
   @apply flex justify-end gap-2 pt-1;
 }
 
+.delete-confirm-list {
+  @apply flex max-h-40 flex-col gap-1 overflow-auto rounded-md border border-slate-100 bg-slate-50 p-2;
+}
+
+.delete-confirm-list div {
+  @apply flex min-h-7 min-w-0 items-center gap-2 rounded px-2 text-xs text-slate-600;
+}
+
+.delete-confirm-list span {
+  @apply min-w-0 truncate;
+}
+
+.delete-confirm-more {
+  @apply text-slate-400;
+}
+
+.delete-confirm-error {
+  @apply rounded-md border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600;
+}
+
+.delete-confirm-actions {
+  @apply flex justify-end gap-2 pt-1;
+}
+
 .operation-secondary,
 .operation-primary {
   @apply h-9 rounded-md px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50;
@@ -1705,6 +1844,10 @@ const signOut = async () => {
 
 .operation-primary {
   @apply bg-blue-600 text-white hover:bg-blue-700;
+}
+
+.delete-confirm-primary {
+  @apply h-9 rounded-md bg-red-600 px-4 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 .preview-pane {
