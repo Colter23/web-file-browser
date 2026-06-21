@@ -63,6 +63,12 @@ type ViewDensityStep = {
 type DetailsColumnKey = "name" | "modified" | "type" | "size";
 type DetailsColumnWidths = Record<DetailsColumnKey, number>;
 
+type SelectionSnapshot = {
+  paths: string[];
+  focusedPath: string;
+  anchorPath: string;
+};
+
 const emit = defineEmits<{
   (e: "rename", payload: RenamePayload): void;
   (e: "delete", entry: ExplorerEntry): void;
@@ -775,16 +781,18 @@ const handleViewportScroll = () => {
 
 const changeSort = async (key: DirSortKey) => {
   if (loading.value) return;
+  const snapshot = captureSelectionSnapshot();
   fileStore.setSort(key);
   loadedSignature.value = "";
-  await loadFolder(fileStore.currentPath || "/");
+  if (await loadFolder(fileStore.currentPath || "/")) await restoreSelectionSnapshot(snapshot);
 }
 
 const changeSortOrder = async (order: DirSortOrder) => {
   if (loading.value || fileStore.sortOrder === order) return;
+  const snapshot = captureSelectionSnapshot();
   fileStore.setSort(fileStore.sortKey, order);
   loadedSignature.value = "";
-  await loadFolder(fileStore.currentPath || "/");
+  if (await loadFolder(fileStore.currentPath || "/")) await restoreSelectionSnapshot(snapshot);
 }
 
 const sortButtonClass = (key: DirSortKey) => ({
@@ -1348,6 +1356,26 @@ const selectPaths = async (paths: string[], scrollToSelection = true) => {
   if (!existingPaths.length) return false;
   setSelection(existingPaths, existingPaths[existingPaths.length - 1]);
   if (scrollToSelection) await scrollEntryIntoView(existingPaths[existingPaths.length - 1]);
+  return true;
+}
+
+const captureSelectionSnapshot = (): SelectionSnapshot => ({
+  paths: [...selectedPaths.value],
+  focusedPath: focusedPath.value,
+  anchorPath: anchorPath.value
+})
+
+const restoreSelectionSnapshot = async (snapshot: SelectionSnapshot) => {
+  const existingPaths = snapshot.paths.filter(path => Boolean(entryByPath(path)));
+  const nextFocus = snapshot.focusedPath && entryByPath(snapshot.focusedPath)
+    ? snapshot.focusedPath
+    : existingPaths[existingPaths.length - 1] ?? "";
+  const nextAnchor = snapshot.anchorPath && entryByPath(snapshot.anchorPath) ? snapshot.anchorPath : nextFocus;
+  if (!existingPaths.length && !nextFocus) return false;
+  selectedPaths.value = existingPaths;
+  focusedPath.value = nextFocus;
+  anchorPath.value = nextAnchor;
+  if (nextFocus) await scrollEntryIntoView(nextFocus);
   return true;
 }
 
