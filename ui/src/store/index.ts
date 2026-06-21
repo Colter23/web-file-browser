@@ -62,6 +62,13 @@ const normalizePathStack = (stack?: string[]): string[] => {
     return stack.filter(path => typeof path === "string").map(normalizePath);
 }
 
+const normalizeSelectedPaths = (paths?: string[]): string[] => {
+    if (!Array.isArray(paths)) return [];
+    return Array.from(new Set(paths.filter(path => typeof path === "string").map(normalizePath)));
+}
+
+const normalizeFilterText = (text?: string): string => typeof text === "string" ? text.slice(0, 200) : "";
+
 const createTabId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const createTab = (path: string): ExplorerTab => {
@@ -70,6 +77,8 @@ const createTab = (path: string): ExplorerTab => {
         id: createTabId(),
         path: normalized,
         title: pathTitle(normalized),
+        filterText: "",
+        selectedPaths: [],
         backStack: [],
         forwardStack: [],
         viewMode: readViewMode(),
@@ -142,6 +151,8 @@ const normalizeTab = (tab: Partial<ExplorerTab>): ExplorerTab | null => {
         id: tab.id,
         path,
         title: pathTitle(path),
+        filterText: normalizeFilterText(tab.filterText),
+        selectedPaths: normalizeSelectedPaths(tab.selectedPaths),
         backStack: normalizePathStack(tab.backStack),
         forwardStack: normalizePathStack(tab.forwardStack),
         viewMode,
@@ -184,6 +195,8 @@ const cloneTab = (tab: ExplorerTab): ExplorerTab => {
         id: createTabId(),
         path,
         title: pathTitle(path),
+        filterText: normalizeFilterText(tab.filterText),
+        selectedPaths: normalizeSelectedPaths(tab.selectedPaths),
         backStack: [...(tab.backStack ?? [])],
         forwardStack: [...(tab.forwardStack ?? [])],
         viewMode: tab.viewMode,
@@ -268,6 +281,25 @@ export const useFileStore = defineStore('file', {
             this.activeTabId = tab.id;
         },
 
+        resetTabBrowserState(tab: ExplorerTab) {
+            tab.filterText = "";
+            tab.selectedPaths = [];
+        },
+
+        setActiveTabFilterText(text: string) {
+            const activeTab = this.activeTab();
+            if (!activeTab) return;
+            activeTab.filterText = normalizeFilterText(text);
+            this.persistTabs();
+        },
+
+        setActiveTabSelectedPaths(paths: string[]) {
+            const activeTab = this.activeTab();
+            if (!activeTab) return;
+            activeTab.selectedPaths = normalizeSelectedPaths(paths);
+            this.persistTabs();
+        },
+
         persistTabs() {
             this.syncActiveTabPrefs();
             writeStorageItem(storageKeys.tabs, JSON.stringify(this.tabs));
@@ -283,6 +315,7 @@ export const useFileStore = defineStore('file', {
                 if (current !== normalized) {
                     activeTab.backStack = [...(activeTab.backStack ?? []), current].slice(-50);
                     activeTab.forwardStack = [];
+                    this.resetTabBrowserState(activeTab);
                 }
                 this.applyTabPath(activeTab, normalized);
                 activeTab.viewMode = this.viewMode;
@@ -310,6 +343,7 @@ export const useFileStore = defineStore('file', {
             const target = activeTab.backStack[activeTab.backStack.length - 1];
             activeTab.backStack = activeTab.backStack.slice(0, -1);
             activeTab.forwardStack = [current, ...(activeTab.forwardStack ?? [])].slice(0, 50);
+            this.resetTabBrowserState(activeTab);
             this.applyTabPath(activeTab, target);
             this.closeEditor();
             this.persistTabs();
@@ -323,6 +357,7 @@ export const useFileStore = defineStore('file', {
             const target = activeTab.forwardStack[0];
             activeTab.forwardStack = activeTab.forwardStack.slice(1);
             activeTab.backStack = [...(activeTab.backStack ?? []), current].slice(-50);
+            this.resetTabBrowserState(activeTab);
             this.applyTabPath(activeTab, target);
             this.closeEditor();
             this.persistTabs();

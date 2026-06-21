@@ -36,6 +36,8 @@ export interface ExplorerTab {
     id: string;
     path: string;
     title: string;
+    filterText?: string;
+    selectedPaths?: string[];
     backStack?: string[];
     forwardStack?: string[];
     viewMode?: ExplorerViewMode;
