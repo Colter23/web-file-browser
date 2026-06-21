@@ -117,6 +117,12 @@ let marqueePointerY = 0;
 let marqueeScrollFrame = 0;
 const marqueeScrollEdge = 48;
 const marqueeMaxScrollSpeed = 24;
+const contextMenuViewportPadding = 8;
+const contextMenuEstimatedWidth = 176;
+const contextMenuEstimatedHeights = {
+  entry: 360,
+  background: 184
+};
 const viewWheelStepThreshold = 80;
 const typeaheadQuery = ref("");
 const typeaheadResetMs = 900;
@@ -614,23 +620,50 @@ const closeContextMenu = () => {
   contextMenu.visible = false;
 }
 
+const clampContextMenuPosition = (x: number, y: number, background: boolean) => {
+  const maxX = Math.max(contextMenuViewportPadding, window.innerWidth - contextMenuEstimatedWidth - contextMenuViewportPadding);
+  const maxY = Math.max(
+      contextMenuViewportPadding,
+      window.innerHeight - (background ? contextMenuEstimatedHeights.background : contextMenuEstimatedHeights.entry) - contextMenuViewportPadding
+  );
+  return {
+    x: Math.min(Math.max(contextMenuViewportPadding, x), maxX),
+    y: Math.min(Math.max(contextMenuViewportPadding, y), maxY)
+  };
+}
+
+const showContextMenu = (x: number, y: number, targetPath = "", background = false) => {
+  const position = clampContextMenuPosition(x, y, background);
+  contextMenu.x = position.x;
+  contextMenu.y = position.y;
+  contextMenu.targetPath = targetPath;
+  contextMenu.background = background;
+  contextMenu.visible = true;
+}
+
 const openContextMenu = (event: MouseEvent, entry: ExplorerEntry) => {
   ensureEntrySelected(entry);
-  contextMenu.x = event.clientX;
-  contextMenu.y = event.clientY;
-  contextMenu.targetPath = entry.path;
-  contextMenu.background = false;
-  contextMenu.visible = true;
+  showContextMenu(event.clientX, event.clientY, entry.path);
 }
 
 const openBackgroundContextMenu = (event: MouseEvent) => {
   if (event.target instanceof HTMLElement && event.target.closest(".entry-item")) return;
   viewportRef.value?.focus();
-  contextMenu.x = event.clientX;
-  contextMenu.y = event.clientY;
-  contextMenu.targetPath = "";
-  contextMenu.background = true;
-  contextMenu.visible = true;
+  showContextMenu(event.clientX, event.clientY, "", true);
+}
+
+const openKeyboardContextMenu = () => {
+  const entry = entryByPath(focusedPath.value) ?? firstSelectedEntry();
+  if (entry) {
+    ensureEntrySelected(entry);
+    const rect = itemRefs.get(entry.path)?.getBoundingClientRect();
+    const x = rect ? rect.left + Math.min(36, rect.width - 8) : window.innerWidth / 2;
+    const y = rect ? rect.top + Math.min(28, rect.height) : window.innerHeight / 2;
+    showContextMenu(x, y, entry.path);
+    return;
+  }
+  const viewportRect = viewportRef.value?.getBoundingClientRect();
+  showContextMenu(viewportRect ? viewportRect.left + 16 : window.innerWidth / 2, viewportRect ? viewportRect.top + 16 : window.innerHeight / 2, "", true);
 }
 
 const contextEntry = () => contextMenu.background ? null : entryByPath(contextMenu.targetPath) ?? firstSelectedEntry();
@@ -798,6 +831,11 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     resetSelectionBox();
     clearSelection();
     contextMenu.visible = false;
+    return;
+  }
+  if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+    event.preventDefault();
+    openKeyboardContextMenu();
     return;
   }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
