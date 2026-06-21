@@ -159,10 +159,31 @@ const viewShortcutMap: Record<string, {mode: ExplorerViewMode; iconSize: Explore
 
 const viewShortcut = (code: string) => viewShortcutMap[code] ?? viewShortcutMap[code.replace("Numpad", "Digit")];
 const previewPaneStorageKey = "explorer.previewPaneWidth";
+const imageViewerFilmstripStorageKey = "explorer.imageViewer.showFilmstrip";
 const previewPaneDefaultWidth = 352;
 const previewPaneMinWidth = 280;
 const previewPaneMaxWidth = 720;
 const previewPaneViewportReserve = 520;
+
+const readBooleanStorage = (key: string, fallback: boolean) => {
+  if (typeof localStorage === "undefined") return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    return raw === "true";
+  } catch {
+    return fallback;
+  }
+}
+
+const writeBooleanStorage = (key: string, value: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(key, String(value));
+  } catch {
+    // 本地存储不可用时，只保留本次会话里的查看器设置。
+  }
+}
 
 const previewPaneMaxForViewport = () => {
   if (typeof window === "undefined") return previewPaneMaxWidth;
@@ -233,7 +254,7 @@ const imageViewerLoading = ref(false);
 const imageViewerError = ref("");
 const imageViewerPageFullscreen = ref(false);
 const imageViewerFullscreen = ref(false);
-const imageViewerShowFilmstrip = ref(true);
+const imageViewerShowFilmstrip = ref(readBooleanStorage(imageViewerFilmstripStorageKey, true));
 const imageViewerFit = ref(true);
 const imageViewerZoom = ref(100);
 const imageViewerOffsetX = ref(0);
@@ -533,6 +554,8 @@ const imageViewerZoomText = computed(() => imageViewerFit.value ? "适应" : `${
 
 const canPanImageViewer = computed(() => imageViewerVisible.value && !imageViewerFit.value);
 
+const imageViewerActualSizeActive = computed(() => !imageViewerFit.value && imageViewerZoom.value === 100);
+
 const imageViewerIndex = computed(() => {
   const entry = imageViewerEntry.value;
   if (!entry) return -1;
@@ -565,6 +588,14 @@ const imageViewerSubtitle = computed(() => {
   const position = imageViewerIndex.value >= 0 && imageViewerCount.value > 1 ? `${imageViewerIndex.value + 1} / ${imageViewerCount.value} · ` : "";
   return `${position}${formatBytes(entry.size)} · ${formatDate(entry.modified)}`;
 });
+
+const imageViewerPageFullscreenTitle = computed(() => imageViewerPageFullscreen.value ? "退出网页全屏 (F)" : "网页全屏 (F)");
+
+const imageViewerBrowserFullscreenTitle = computed(() => imageViewerFullscreen.value ? "退出浏览器全屏" : "浏览器全屏");
+
+const imageViewerFilmstripTitle = computed(() => imageViewerShowFilmstrip.value ? "隐藏缩略图 (T)" : "显示缩略图 (T)");
+
+const imageViewerStageTitle = computed(() => imageViewerFit.value ? "双击按原始大小查看" : "双击适应窗口，拖拽移动图片");
 
 const previewMeta = computed(() => {
   const entry = previewEntry.value;
@@ -676,6 +707,11 @@ const handlePreviewPaneResizeKeyDown = (event: KeyboardEvent) => {
 const resetImageViewerPan = () => {
   imageViewerOffsetX.value = 0;
   imageViewerOffsetY.value = 0;
+  imageViewerDragging.value = false;
+  imageViewerPointerId = null;
+}
+
+const releaseImageViewerPointer = () => {
   imageViewerDragging.value = false;
   imageViewerPointerId = null;
 }
@@ -1795,6 +1831,11 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
       resetImageViewerZoom();
       return;
     }
+    if (viewerKey === "1" || event.code === "Numpad1") {
+      event.preventDefault();
+      setImageViewerActualSize();
+      return;
+    }
     if (viewerKey === "f") {
       event.preventDefault();
       void toggleImageViewerPageFullscreen();
@@ -2133,7 +2174,9 @@ const toggleImageViewerFullscreen = async () => {
 }
 
 const toggleImageViewerFilmstrip = () => {
+  if (imageViewerCount.value <= 1) return;
   imageViewerShowFilmstrip.value = !imageViewerShowFilmstrip.value;
+  writeBooleanStorage(imageViewerFilmstripStorageKey, imageViewerShowFilmstrip.value);
 }
 
 const showAdjacentImage = (direction: -1 | 1) => {
@@ -2233,11 +2276,15 @@ const zoomImageViewer = (delta: number) => {
   imageViewerZoom.value = Math.min(500, Math.max(25, imageViewerZoom.value + delta));
 }
 
+const setImageViewerActualSize = () => {
+  imageViewerFit.value = false;
+  imageViewerZoom.value = 100;
+  resetImageViewerPan();
+}
+
 const toggleImageViewerZoomMode = () => {
   if (imageViewerFit.value) {
-    imageViewerFit.value = false;
-    imageViewerZoom.value = 100;
-    resetImageViewerPan();
+    setImageViewerActualSize();
     return;
   }
   resetImageViewerZoom();
@@ -2849,17 +2896,18 @@ const signOut = async () => {
                 <button title="下一张 (→)" :disabled="!canShowNextImage" @click="showAdjacentImage(1)">
                   <icon icon="icon-back_android" color="currentColor" class="rotate-180" />
                 </button>
-                <button :class="{active: imageViewerFit}" title="适应窗口" @click="resetImageViewerZoom">适应</button>
-                <button title="缩小" @click="zoomImageViewer(-25)">-</button>
+                <button class="text-action" :class="{active: imageViewerFit}" title="适应窗口 (0)" @click="resetImageViewerZoom">适应</button>
+                <button class="text-action" :class="{active: imageViewerActualSizeActive}" title="原始大小" @click="setImageViewerActualSize">1:1</button>
+                <button title="缩小 (-)" @click="zoomImageViewer(-25)">-</button>
                 <span>{{ imageViewerZoomText }}</span>
-                <button title="放大" @click="zoomImageViewer(25)">+</button>
-                <button title="网页全屏 (F)" :class="{active: imageViewerPageFullscreen}" @click="toggleImageViewerPageFullscreen">
+                <button title="放大 (+)" @click="zoomImageViewer(25)">+</button>
+                <button :title="imageViewerPageFullscreenTitle" :class="{active: imageViewerPageFullscreen}" @click="toggleImageViewerPageFullscreen">
                   <icon icon="icon-renamebox" color="currentColor" />
                 </button>
-                <button title="浏览器全屏" :class="{active: imageViewerFullscreen}" @click="toggleImageViewerFullscreen">
+                <button :title="imageViewerBrowserFullscreenTitle" :class="{active: imageViewerFullscreen}" @click="toggleImageViewerFullscreen">
                   <icon icon="icon-unfold" color="currentColor" />
                 </button>
-                <button title="缩略图 (T)" :class="{active: imageViewerShowFilmstrip}" :disabled="imageViewerCount <= 1" @click="toggleImageViewerFilmstrip">
+                <button :title="imageViewerFilmstripTitle" :class="{active: imageViewerShowFilmstrip}" :disabled="imageViewerCount <= 1" @click="toggleImageViewerFilmstrip">
                   <icon icon="icon-viewgrid" color="currentColor" />
                 </button>
                 <button title="下载" @click="downloadSelected(imageViewerEntry)">
@@ -2873,11 +2921,12 @@ const signOut = async () => {
             <div
                 class="image-viewer-stage"
                 :class="{fit: imageViewerFit, panning: canPanImageViewer, dragging: imageViewerDragging}"
+                :title="imageViewerStageTitle"
                 @pointerdown="startImageViewerPan"
                 @pointermove="moveImageViewerPan"
                 @pointerup="stopImageViewerPan"
                 @pointercancel="stopImageViewerPan"
-                @lostpointercapture="imageViewerDragging = false"
+                @lostpointercapture="releaseImageViewerPointer"
                 @wheel="handleImageViewerWheel"
                 @dblclick="toggleImageViewerZoomMode">
               <div v-if="imageViewerLoading" class="image-viewer-status">正在加载图片...</div>
@@ -3529,11 +3578,11 @@ const signOut = async () => {
 }
 
 .image-viewer-actions {
-  @apply flex shrink-0 items-center gap-1 text-xs text-slate-300;
+  @apply flex shrink-0 items-center gap-1 text-xs text-slate-100;
 }
 
 .image-viewer-actions button {
-  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-white/20 bg-white/10 px-2 text-sm font-medium text-white shadow-sm hover:border-white/30 hover:bg-white/20;
+  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-white/30 bg-white/15 px-2 text-sm font-medium text-white shadow-sm hover:border-white/45 hover:bg-white/25;
 }
 
 .image-viewer-actions button:disabled {
@@ -3541,11 +3590,15 @@ const signOut = async () => {
 }
 
 .image-viewer-actions button.active {
-  @apply border-blue-200/70 bg-blue-500/35 text-white;
+  @apply border-blue-200/80 bg-blue-500/50 text-white shadow-[0_0_0_1px_rgba(191,219,254,0.22)];
+}
+
+.image-viewer-actions button.text-action {
+  @apply min-w-11 px-3;
 }
 
 .image-viewer-actions span {
-  @apply w-14 text-center tabular-nums;
+  @apply w-14 text-center font-medium tabular-nums text-white;
 }
 
 .image-viewer-stage {
