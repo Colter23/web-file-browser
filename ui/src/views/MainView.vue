@@ -309,6 +309,7 @@ let suppressSelectionPersistence = false;
 let suppressScrollPersistence = false;
 let tabContextRestoreToken = 0;
 let scrollPersistTimer: number | undefined;
+let historyMouseButton = -1;
 
 const activeTab = computed(() => fileStore.tabs.find(tab => tab.id === fileStore.activeTabId) ?? fileStore.tabs[0]);
 const tabContextTarget = computed(() => fileStore.tabs.find(tab => tab.id === tabContextMenu.value.tabId) ?? null);
@@ -319,6 +320,15 @@ const canCloseRightTabsContext = computed(() => tabContextIndex.value >= 0 && ta
 const canNavigateBack = computed(() => Boolean(activeTab.value?.backStack?.length));
 const canNavigateForward = computed(() => Boolean(activeTab.value?.forwardStack?.length));
 const canNavigateUp = computed(() => currentFolder() !== "/");
+const navigateBackTarget = computed(() => {
+  const stack = activeTab.value?.backStack ?? [];
+  return stack[stack.length - 1] ?? "";
+});
+const navigateForwardTarget = computed(() => activeTab.value?.forwardStack?.[0] ?? "");
+const navigateUpTarget = computed(() => canNavigateUp.value ? parentPath(currentFolder()) : "");
+const navigateBackTitle = computed(() => navigateBackTarget.value ? `后退到 ${navigateBackTarget.value} (Alt+← / 鼠标后退键)` : "后退 (Alt+← / 鼠标后退键)");
+const navigateForwardTitle = computed(() => navigateForwardTarget.value ? `前进到 ${navigateForwardTarget.value} (Alt+→ / 鼠标前进键)` : "前进 (Alt+→ / 鼠标前进键)");
+const navigateUpTitle = computed(() => navigateUpTarget.value ? `返回上级 ${navigateUpTarget.value} (Alt+↑)` : "返回上级 (Alt+↑)");
 const selectedList = computed(() => currentSelection.value);
 const selectedCount = computed(() => selectedList.value.length);
 const hasSelection = computed(() => selectedCount.value > 0);
@@ -856,6 +866,9 @@ onMounted(async () => {
   await loadRoot();
   await syncActiveTabContext();
   window.addEventListener("keydown", handleWindowKeyDown);
+  window.addEventListener("mousedown", handleHistoryMouseDown);
+  window.addEventListener("mouseup", handleHistoryMouseUp);
+  window.addEventListener("auxclick", handleHistoryAuxClick);
   window.addEventListener("click", closeTabContextMenu);
   window.addEventListener("scroll", closeTabContextMenu, true);
   window.addEventListener("pointermove", handlePreviewPaneResizeMove);
@@ -871,6 +884,9 @@ onBeforeUnmount(() => {
   stopShellNoticeTimer();
   stopTaskPolling();
   window.removeEventListener("keydown", handleWindowKeyDown);
+  window.removeEventListener("mousedown", handleHistoryMouseDown);
+  window.removeEventListener("mouseup", handleHistoryMouseUp);
+  window.removeEventListener("auxclick", handleHistoryAuxClick);
   window.removeEventListener("click", closeTabContextMenu);
   window.removeEventListener("scroll", closeTabContextMenu, true);
   window.removeEventListener("pointermove", handlePreviewPaneResizeMove);
@@ -1708,6 +1724,44 @@ const closeActiveTab = async () => {
   return true;
 }
 
+const handleBackspaceNavigation = () => {
+  if (canNavigateBack.value) {
+    void navigateBack();
+    return;
+  }
+  void navigateUp();
+}
+
+const handleHistoryMouseButton = (event: MouseEvent) => {
+  if (fileStore.showEditor || shouldIgnoreNavigationShortcut(event.target)) return false;
+  if (event.button === 3 && canNavigateBack.value) {
+    event.preventDefault();
+    void navigateBack();
+    return true;
+  }
+  if (event.button === 4 && canNavigateForward.value) {
+    event.preventDefault();
+    void navigateForward();
+    return true;
+  }
+  return false;
+}
+
+const handleHistoryMouseDown = (event: MouseEvent) => {
+  historyMouseButton = handleHistoryMouseButton(event) ? event.button : -1;
+}
+
+const handleHistoryMouseUp = (event: MouseEvent) => {
+  if (historyMouseButton >= 0 && event.button === historyMouseButton) {
+    event.preventDefault();
+    historyMouseButton = -1;
+  }
+}
+
+const handleHistoryAuxClick = (event: MouseEvent) => {
+  if (event.button === 3 || event.button === 4) event.preventDefault();
+}
+
 const handleWindowKeyDown = (event: KeyboardEvent) => {
   if (imageViewerVisible.value) {
     const viewerKey = event.key.toLowerCase();
@@ -1817,7 +1871,7 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
   }
   if (event.key === "Backspace" && !event.altKey && !event.ctrlKey && !event.metaKey && !shouldIgnoreNavigationShortcut(event.target)) {
     event.preventDefault();
-    void navigateUp();
+    handleBackspaceNavigation();
     return;
   }
   if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "p" && !shouldIgnoreNavigationShortcut(event.target)) {
@@ -2366,13 +2420,13 @@ const signOut = async () => {
 
       <section class="content-pane">
         <div class="path-row">
-          <button class="nav-button" :disabled="!canNavigateBack" title="后退 (Alt+←)" @click="navigateBack">
+          <button class="nav-button" :disabled="!canNavigateBack" :title="navigateBackTitle" @click="navigateBack">
             <icon icon="icon-back_android" size="large" />
           </button>
-          <button class="nav-button" :disabled="!canNavigateForward" title="前进 (Alt+→)" @click="navigateForward">
+          <button class="nav-button" :disabled="!canNavigateForward" :title="navigateForwardTitle" @click="navigateForward">
             <icon icon="icon-back_android" size="large" class="rotate-180" />
           </button>
-          <button class="nav-button" :disabled="!canNavigateUp" title="返回上级 (Alt+↑)" @click="navigateUp">
+          <button class="nav-button" :disabled="!canNavigateUp" :title="navigateUpTitle" @click="navigateUp">
             <icon icon="icon-back_android" size="large" class="rotate-90" />
           </button>
           <button class="nav-button" title="刷新 (F5 / Ctrl+R)" @click="refreshCurrent(true)">
