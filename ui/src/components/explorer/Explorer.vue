@@ -327,6 +327,10 @@ const setRenameInputRef = (path: string, element: Element | ComponentPublicInsta
   }
 }
 
+const focusViewport = () => {
+  viewportRef.value?.focus({preventScroll: true});
+}
+
 const selectedSet = () => new Set(selectedPaths.value);
 
 const setSelection = (paths: string[], focusPath = paths[paths.length - 1] ?? "", keepAnchor = false) => {
@@ -340,6 +344,31 @@ const clearSelection = () => {
   focusedPath.value = "";
   anchorPath.value = "";
 }
+
+const scrollEntryIntoView = async (path: string) => {
+  await nextTick();
+  itemRefs.get(path)?.scrollIntoView({block: "nearest", inline: "nearest"});
+}
+
+const syncSelectionWithEntries = () => {
+  const visiblePaths = new Set(entries.value.map(entry => entry.path));
+  if (!visiblePaths.size) {
+    if (selectedPaths.value.length || focusedPath.value || anchorPath.value) clearSelection();
+    return;
+  }
+  const nextSelected = selectedPaths.value.filter(path => visiblePaths.has(path));
+  const nextFocus = focusedPath.value && visiblePaths.has(focusedPath.value)
+      ? focusedPath.value
+      : nextSelected[nextSelected.length - 1] ?? "";
+  const nextAnchor = anchorPath.value && visiblePaths.has(anchorPath.value) ? anchorPath.value : nextFocus;
+  const selectionChanged = nextSelected.length !== selectedPaths.value.length
+      || nextSelected.some((path, index) => path !== selectedPaths.value[index]);
+  if (selectionChanged) selectedPaths.value = nextSelected;
+  if (focusedPath.value !== nextFocus) focusedPath.value = nextFocus;
+  if (anchorPath.value !== nextAnchor) anchorPath.value = nextAnchor;
+}
+
+watch(entries, syncSelectionWithEntries);
 
 const stopMarqueeAutoScroll = () => {
   if (!marqueeScrollFrame) return;
@@ -399,6 +428,7 @@ const selectRange = (targetPath: string, additive: boolean) => {
 }
 
 const selectEntry = (entry: ExplorerEntry, event?: MouseEvent) => {
+  focusViewport();
   const ctrl = Boolean(event?.ctrlKey || event?.metaKey);
   const shift = Boolean(event?.shiftKey);
   if (shift) {
@@ -684,13 +714,14 @@ const showContextMenu = (x: number, y: number, targetPath = "", background = fal
 }
 
 const openContextMenu = (event: MouseEvent, entry: ExplorerEntry) => {
+  focusViewport();
   ensureEntrySelected(entry);
   showContextMenu(event.clientX, event.clientY, entry.path);
 }
 
 const openBackgroundContextMenu = (event: MouseEvent) => {
   if (event.target instanceof HTMLElement && event.target.closest(".entry-item")) return;
-  viewportRef.value?.focus();
+  focusViewport();
   showContextMenu(event.clientX, event.clientY, "", true);
 }
 
@@ -775,6 +806,7 @@ const selectedEntriesForDrag = (entry: ExplorerEntry) => {
 
 const beginEntryDrag = (event: DragEvent, entry: ExplorerEntry) => {
   if (isRenaming(entry)) return;
+  focusViewport();
   const entriesToDrag = selectedEntriesForDrag(entry);
   if (!entriesToDrag.length) return;
   if (!isSelected(entry.path)) setSelection([entry.path], entry.path);
@@ -934,7 +966,14 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     toggleFocusedSelection();
     return;
   }
-  if ((event.key === " " || event.code === "Space") && !event.altKey && !event.ctrlKey && !event.metaKey) {
+  if ((event.key === " " || event.code === "Space") && event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+    event.preventDefault();
+    contextMenu.visible = false;
+    const entry = focusedOrSelectedEntry();
+    if (entry) selectRange(entry.path, false);
+    return;
+  }
+  if ((event.key === " " || event.code === "Space") && !event.altKey && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
     event.preventDefault();
     contextMenu.visible = false;
     const entry = focusedOrSelectedEntry();
@@ -1043,25 +1082,25 @@ const moveFocus = (key: string, extend: boolean, preserveSelection = false) => {
   if (!entry) return;
   if (preserveSelection) {
     focusedPath.value = entry.path;
+    anchorPath.value = entry.path;
   } else if (extend) {
     selectRange(entry.path, false);
   } else {
     setSelection([entry.path], entry.path);
   }
-  nextTick(() => itemRefs.get(entry.path)?.scrollIntoView({block: "nearest", inline: "nearest"}));
+  void scrollEntryIntoView(entry.path);
 }
 
 const focusEntryByTypeahead = (entry: ExplorerEntry) => {
   setSelection([entry.path], entry.path);
-  nextTick(() => itemRefs.get(entry.path)?.scrollIntoView({block: "nearest", inline: "nearest"}));
+  void scrollEntryIntoView(entry.path);
 }
 
 const selectPath = async (path: string, additive = false) => {
   const entry = entryByPath(path);
   if (!entry) return false;
   setSelection(additive ? [...selectedPaths.value, entry.path] : [entry.path], entry.path);
-  await nextTick();
-  itemRefs.get(entry.path)?.scrollIntoView({block: "nearest", inline: "nearest"});
+  await scrollEntryIntoView(entry.path);
   return true;
 }
 
@@ -1069,8 +1108,7 @@ const selectPaths = async (paths: string[]) => {
   const existingPaths = paths.filter(path => Boolean(entryByPath(path)));
   if (!existingPaths.length) return false;
   setSelection(existingPaths, existingPaths[existingPaths.length - 1]);
-  await nextTick();
-  itemRefs.get(existingPaths[existingPaths.length - 1])?.scrollIntoView({block: "nearest", inline: "nearest"});
+  await scrollEntryIntoView(existingPaths[existingPaths.length - 1]);
   return true;
 }
 
@@ -1128,13 +1166,14 @@ const canBeginMarquee = (target: EventTarget | null) => {
 
 const beginMarqueeSelection = (event: MouseEvent) => {
   if (renamingPath.value) return;
+  if (event.button === 0) focusViewport();
   if (event.button !== 0 || !canBeginMarquee(event.target)) return;
   const viewport = viewportRef.value;
   if (!viewport) return;
   const rect = viewport.getBoundingClientRect();
   marqueePointerX = event.clientX;
   marqueePointerY = event.clientY;
-  viewport.focus();
+  focusViewport();
   if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
     clearSelection();
   }
@@ -1239,7 +1278,7 @@ const finishMarqueeSelection = () => {
 }
 
 const activateViewport = () => {
-  viewportRef.value?.focus();
+  focusViewport();
 }
 
 const setViewMode = (mode: ExplorerViewMode) => {
@@ -1479,7 +1518,7 @@ defineExpose({
       <div v-else-if="message" class="explorer-empty error">{{ message }}</div>
       <div v-else-if="!entries.length" class="explorer-empty">此文件夹为空</div>
 
-      <div v-else class="entry-surface" @mousedown="beginMarqueeSelection">
+      <div v-else class="entry-surface">
         <article
             v-for="entry in entries"
             :key="entry.path"
