@@ -971,12 +971,21 @@ const focusEntryByTypeahead = (entry: ExplorerEntry) => {
   nextTick(() => itemRefs.get(entry.path)?.scrollIntoView({block: "nearest", inline: "nearest"}));
 }
 
-const selectPath = async (path: string) => {
+const selectPath = async (path: string, additive = false) => {
   const entry = entryByPath(path);
   if (!entry) return false;
-  setSelection([entry.path], entry.path);
+  setSelection(additive ? [...selectedPaths.value, entry.path] : [entry.path], entry.path);
   await nextTick();
   itemRefs.get(entry.path)?.scrollIntoView({block: "nearest", inline: "nearest"});
+  return true;
+}
+
+const selectPaths = async (paths: string[]) => {
+  const existingPaths = paths.filter(path => Boolean(entryByPath(path)));
+  if (!existingPaths.length) return false;
+  setSelection(existingPaths, existingPaths[existingPaths.length - 1]);
+  await nextTick();
+  itemRefs.get(existingPaths[existingPaths.length - 1])?.scrollIntoView({block: "nearest", inline: "nearest"});
   return true;
 }
 
@@ -1302,6 +1311,7 @@ defineExpose({
   getSelectedEntries: () => selectedEntries.value,
   startRename: () => startRename(firstSelectedEntry()),
   selectPath,
+  selectPaths,
   selectPathForRename,
   selectAllEntries
 })

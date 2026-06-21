@@ -43,6 +43,7 @@ type ExplorerExpose = {
   getSelectedEntries: () => ExplorerEntry[];
   startRename: () => void;
   selectPath: (path: string) => Promise<boolean>;
+  selectPaths: (paths: string[]) => Promise<boolean>;
   selectPathForRename: (path: string) => Promise<boolean>;
   selectAllEntries: () => boolean;
 }
@@ -709,12 +710,14 @@ const submitTaskCancelConfirm = async () => {
   }
 }
 
-const refreshCurrent = async () => {
+const refreshCurrent = async (keepSelection = false) => {
+  const selectedPaths = keepSelection ? currentSelection.value.map(entry => entry.path) : [];
   closePanels();
   if (currentFolder() === "/") {
     await loadRoot();
   }
   await explorerRef.value?.refresh(currentFolder());
+  if (selectedPaths.length) await explorerRef.value?.selectPaths(selectedPaths);
 }
 
 const runOperation = async (operation: () => Promise<void>) => {
@@ -1366,13 +1369,13 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
     }
     if (!event.shiftKey && key === "r") {
       event.preventDefault();
-      void refreshCurrent();
+      void refreshCurrent(true);
       return;
     }
   }
   if (event.key === "F5" && !event.altKey && !event.ctrlKey && !event.metaKey && !shouldIgnoreShellShortcut(event.target)) {
     event.preventDefault();
-    void refreshCurrent();
+    void refreshCurrent(true);
     return;
   }
   if (event.key === "Backspace" && !event.altKey && !event.ctrlKey && !event.metaKey && !shouldIgnoreNavigationShortcut(event.target)) {
@@ -1728,7 +1731,7 @@ const signOut = async () => {
           <button class="nav-button" :disabled="!canNavigateUp" title="返回上级 (Alt+↑)" @click="navigateUp">
             <icon icon="icon-back_android" size="large" class="rotate-90" />
           </button>
-          <button class="nav-button" title="刷新 (F5 / Ctrl+R)" @click="refreshCurrent">
+          <button class="nav-button" title="刷新 (F5 / Ctrl+R)" @click="refreshCurrent(true)">
             <icon icon="icon-refresh" size="large" />
           </button>
           <breadcrumb></breadcrumb>
