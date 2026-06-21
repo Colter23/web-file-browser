@@ -77,6 +77,7 @@ const fileStore = useFileStore();
 const treeData = ref<FileTreeData[]>([]);
 const explorerRef = ref<ExplorerExpose | null>(null);
 const uploadInput = ref<HTMLInputElement | null>(null);
+const searchInput = ref<HTMLInputElement | null>(null);
 const uploadDropActive = ref(false);
 const uploadDropUploading = ref(false);
 const taskPanelVisible = ref(false);
@@ -832,10 +833,58 @@ const shouldIgnoreNavigationShortcut = (target: EventTarget | null) => {
   return Boolean(target.closest("input, textarea, select, [contenteditable='true'], .ace_editor, .operation-panel"));
 }
 
+const shouldIgnoreActionShortcut = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return Boolean(target.closest("button, a, input, textarea, select, [contenteditable='true'], .ace_editor, .operation-panel, .context-menu, .task-panel"));
+}
+
+const shouldKeepEditorFindShortcut = (target: EventTarget | null) => {
+  if (fileStore.showEditor) return true;
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(target.closest(".ace_editor, .operation-panel"));
+}
+
+const focusSearch = () => {
+  if (fileStore.showEditor) return;
+  searchInput.value?.focus();
+  searchInput.value?.select();
+}
+
+const previewSelectedQuietly = () => {
+  const entry = singleSelection.value;
+  if (!entry || entry.type !== "file") return false;
+  previewSelected(entry);
+  return true;
+}
+
+const togglePreviewFromShortcut = () => {
+  if (previewPanelVisible.value) {
+    closePreview();
+    return true;
+  }
+  return previewSelectedQuietly();
+}
+
 const handleWindowKeyDown = (event: KeyboardEvent) => {
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "f") {
+    if (shouldKeepEditorFindShortcut(event.target)) return;
+    event.preventDefault();
+    focusSearch();
+    return;
+  }
   if (event.key === "Backspace" && !event.altKey && !event.ctrlKey && !event.metaKey && !shouldIgnoreNavigationShortcut(event.target)) {
     event.preventDefault();
     void navigateUp();
+    return;
+  }
+  if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "p" && !shouldIgnoreNavigationShortcut(event.target)) {
+    event.preventDefault();
+    togglePreviewFromShortcut();
+    return;
+  }
+  if ((event.key === " " || event.code === "Space") && !event.altKey && !event.ctrlKey && !event.metaKey && !shouldIgnoreActionShortcut(event.target)) {
+    if (previewSelectedQuietly()) event.preventDefault();
     return;
   }
   if (!event.altKey || event.ctrlKey || event.metaKey || shouldIgnoreNavigationShortcut(event.target)) return;
@@ -1003,7 +1052,7 @@ const signOut = async () => {
       </nav>
       <div class="top-actions">
         <label class="search-box">
-          <input v-model="searchText" type="search" placeholder="搜索当前文件夹" @keydown.escape="clearSearch">
+          <input ref="searchInput" v-model="searchText" type="search" placeholder="搜索当前文件夹" @keydown.escape="clearSearch">
           <icon icon="icon-fenxiang" />
         </label>
         <button class="square-button" title="设置" @click="router.push('/setting')">
