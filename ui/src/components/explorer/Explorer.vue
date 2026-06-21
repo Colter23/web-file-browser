@@ -60,6 +60,9 @@ type ViewDensityStep = {
   iconSize: ExplorerIconSize;
 }
 
+type DetailsColumnKey = "name" | "modified" | "type" | "size";
+type DetailsColumnWidths = Record<DetailsColumnKey, number>;
+
 const emit = defineEmits<{
   (e: "rename", payload: RenamePayload): void;
   (e: "delete", entry: ExplorerEntry): void;
@@ -145,6 +148,31 @@ const typeaheadResetMs = 900;
 let typeaheadResetTimer = 0;
 let viewWheelDelta = 0;
 
+const detailsColumnStorageKey = "explorer.detailsColumnWidths";
+const detailsColumnDefaults: DetailsColumnWidths = {
+  name: 320,
+  modified: 176,
+  type: 144,
+  size: 112
+};
+const detailsColumnMinWidths: DetailsColumnWidths = {
+  name: 160,
+  modified: 132,
+  type: 96,
+  size: 88
+};
+const detailsColumnMaxWidths: DetailsColumnWidths = {
+  name: 960,
+  modified: 320,
+  type: 280,
+  size: 220
+};
+const detailsColumnResize = reactive<{key: DetailsColumnKey | null; startX: number; startWidth: number}>({
+  key: null,
+  startX: 0,
+  startWidth: 0
+});
+
 const viewDensitySteps: ViewDensityStep[] = [
   {mode: "details", iconSize: "small"},
   {mode: "list", iconSize: "small"},
@@ -153,6 +181,45 @@ const viewDensitySteps: ViewDensityStep[] = [
   {mode: "icons", iconSize: "medium"},
   {mode: "icons", iconSize: "large"}
 ];
+
+const clampDetailsColumnWidth = (key: DetailsColumnKey, width: number) => {
+  const safeWidth = Number.isFinite(width) ? width : detailsColumnDefaults[key];
+  return Math.round(Math.min(Math.max(safeWidth, detailsColumnMinWidths[key]), detailsColumnMaxWidths[key]));
+}
+
+const readDetailsColumnWidths = (): DetailsColumnWidths => {
+  if (typeof localStorage === "undefined") return {...detailsColumnDefaults};
+  try {
+    const raw = localStorage.getItem(detailsColumnStorageKey);
+    const parsed = raw ? JSON.parse(raw) as Partial<DetailsColumnWidths> : {};
+    return {
+      name: clampDetailsColumnWidth("name", parsed.name ?? detailsColumnDefaults.name),
+      modified: clampDetailsColumnWidth("modified", parsed.modified ?? detailsColumnDefaults.modified),
+      type: clampDetailsColumnWidth("type", parsed.type ?? detailsColumnDefaults.type),
+      size: clampDetailsColumnWidth("size", parsed.size ?? detailsColumnDefaults.size)
+    };
+  } catch {
+    return {...detailsColumnDefaults};
+  }
+}
+
+const writeDetailsColumnWidths = (widths: DetailsColumnWidths) => {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(detailsColumnStorageKey, JSON.stringify(widths));
+  } catch {
+    // 本地存储不可用时，只保留本次会话的列宽。
+  }
+}
+
+const detailsColumnWidths = ref<DetailsColumnWidths>(readDetailsColumnWidths());
+
+const detailsGridStyle = computed(() => ({
+  "--details-name-width": `${detailsColumnWidths.value.name}px`,
+  "--details-modified-width": `${detailsColumnWidths.value.modified}px`,
+  "--details-type-width": `${detailsColumnWidths.value.type}px`,
+  "--details-size-width": `${detailsColumnWidths.value.size}px`
+}));
 
 const normalizeFolderData = (data: FolderData): FolderData => ({
   path: data.path || "/",
@@ -756,6 +823,9 @@ onMounted(async () => {
   window.addEventListener("keydown", handleKeyDown);
   window.addEventListener("mousemove", handleSelectionMove);
   window.addEventListener("mouseup", finishMarqueeSelection);
+  window.addEventListener("pointermove", handleDetailsColumnResizeMove);
+  window.addEventListener("pointerup", finishDetailsColumnResize);
+  window.addEventListener("pointercancel", finishDetailsColumnResize);
 });
 
 onBeforeUnmount(() => {
@@ -763,6 +833,9 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeyDown);
   window.removeEventListener("mousemove", handleSelectionMove);
   window.removeEventListener("mouseup", finishMarqueeSelection);
+  window.removeEventListener("pointermove", handleDetailsColumnResizeMove);
+  window.removeEventListener("pointerup", finishDetailsColumnResize);
+  window.removeEventListener("pointercancel", finishDetailsColumnResize);
   stopMarqueeAutoScroll();
   resetTypeahead();
   thumbnailObserver?.disconnect();
@@ -1500,6 +1573,30 @@ const cycleIconSize = () => {
   nextTick(() => viewportRef.value?.focus());
 }
 
+const startDetailsColumnResize = (event: PointerEvent, key: DetailsColumnKey) => {
+  event.preventDefault();
+  event.stopPropagation();
+  detailsColumnResize.key = key;
+  detailsColumnResize.startX = event.clientX;
+  detailsColumnResize.startWidth = detailsColumnWidths.value[key];
+}
+
+const handleDetailsColumnResizeMove = (event: PointerEvent) => {
+  const key = detailsColumnResize.key;
+  if (!key) return;
+  const width = clampDetailsColumnWidth(key, detailsColumnResize.startWidth + event.clientX - detailsColumnResize.startX);
+  detailsColumnWidths.value = {
+    ...detailsColumnWidths.value,
+    [key]: width
+  };
+}
+
+const finishDetailsColumnResize = () => {
+  if (!detailsColumnResize.key) return;
+  detailsColumnResize.key = null;
+  writeDetailsColumnWidths(detailsColumnWidths.value);
+}
+
 const primaryContextEntry = computed(() => contextEntry());
 
 const primarySelected = () => firstSelectedEntry();
@@ -1692,19 +1789,25 @@ defineExpose({
         @dragleave="dragLeaveCurrentFolder"
         @drop="dropOnCurrentFolder"
         @contextmenu.prevent="openBackgroundContextMenu">
-      <div v-if="viewMode === 'details'" class="details-header">
+      <div v-if="viewMode === 'details'" class="details-header" :style="detailsGridStyle">
         <button class="sort-button name-cell" :class="sortButtonClass('name')" :disabled="loading" @click.stop="changeSort('name')">
           <span>名称</span>
           <span class="sort-indicator">{{ sortIndicator('name') }}</span>
+          <span class="column-resizer" title="拖拽调整名称列宽" @click.stop @pointerdown="startDetailsColumnResize($event, 'name')"></span>
         </button>
         <button class="sort-button" :class="sortButtonClass('modified')" :disabled="loading" @click.stop="changeSort('modified')">
           <span>修改日期</span>
           <span class="sort-indicator">{{ sortIndicator('modified') }}</span>
+          <span class="column-resizer" title="拖拽调整修改日期列宽" @click.stop @pointerdown="startDetailsColumnResize($event, 'modified')"></span>
         </button>
-        <span class="header-cell">类型</span>
+        <span class="header-cell">
+          类型
+          <span class="column-resizer" title="拖拽调整类型列宽" @click.stop @pointerdown="startDetailsColumnResize($event, 'type')"></span>
+        </span>
         <button class="sort-button size-cell" :class="sortButtonClass('size')" :disabled="loading" @click.stop="changeSort('size')">
           <span>大小</span>
           <span class="sort-indicator">{{ sortIndicator('size') }}</span>
+          <span class="column-resizer" title="拖拽调整大小列宽" @click.stop @pointerdown="startDetailsColumnResize($event, 'size')"></span>
         </button>
       </div>
 
@@ -1723,6 +1826,7 @@ defineExpose({
             :ref="element => setItemRef(entry.path, element)"
             class="entry-item"
             :class="{selected: isSelected(entry.path), focused: focusedPath === entry.path, image: isImageFile(entry), dimmed: isDimmed(entry), dragging: isDragged(entry), dropTarget: isDropTarget(entry)}"
+            :style="viewMode === 'details' ? detailsGridStyle : undefined"
             :title="entry.name"
             draggable="true"
             @click.stop="selectEntry(entry, $event)"
@@ -1890,6 +1994,10 @@ defineExpose({
   @apply bg-blue-50/25 ring-2 ring-inset ring-blue-400;
 }
 
+.explorer-viewport.details {
+  @apply min-w-0;
+}
+
 .explorer-status-row {
   @apply flex h-8 shrink-0 items-center justify-between gap-4 border-t border-slate-200 bg-slate-50 px-3 text-xs text-slate-500;
 }
@@ -1904,15 +2012,17 @@ defineExpose({
 }
 
 .details-header {
-  @apply sticky top-0 z-10 grid h-9 grid-cols-[minmax(14rem,1fr)_11rem_9rem_7rem] items-center border-b border-slate-200 bg-white px-4 text-sm text-slate-600;
+  @apply sticky top-0 z-10 grid h-9 items-center border-b border-slate-200 bg-white px-4 text-sm text-slate-600;
+  grid-template-columns: minmax(var(--details-name-width), 1fr) var(--details-modified-width) var(--details-type-width) var(--details-size-width);
+  min-width: calc(var(--details-name-width) + var(--details-modified-width) + var(--details-type-width) + var(--details-size-width) + 2rem);
 }
 
 .details-header > .header-cell {
-  @apply truncate px-2;
+  @apply relative flex h-full items-center truncate px-2;
 }
 
 .sort-button {
-  @apply flex h-full min-w-0 items-center justify-between gap-1 truncate px-2 text-left text-sm text-slate-600 hover:bg-blue-50 disabled:pointer-events-none;
+  @apply relative flex h-full min-w-0 items-center justify-between gap-1 truncate px-2 text-left text-sm text-slate-600 hover:bg-blue-50 disabled:pointer-events-none;
 }
 
 .sort-button.active {
@@ -1929,6 +2039,19 @@ defineExpose({
 
 .sort-indicator {
   @apply inline-flex w-3 shrink-0 justify-center text-[11px] text-blue-600;
+}
+
+.column-resizer {
+  @apply absolute -right-1 top-0 z-20 h-full w-2 cursor-col-resize touch-none;
+}
+
+.column-resizer::after {
+  content: "";
+  @apply absolute left-1 top-1/2 h-5 -translate-y-1/2 border-l border-slate-200;
+}
+
+.column-resizer:hover::after {
+  @apply border-blue-500;
 }
 
 .entry-surface {
@@ -1989,7 +2112,9 @@ defineExpose({
 }
 
 .details .entry-item {
-  @apply grid h-8 grid-cols-[minmax(14rem,1fr)_11rem_9rem_7rem] items-center px-3;
+  @apply grid h-8 items-center px-3;
+  grid-template-columns: minmax(var(--details-name-width), 1fr) var(--details-modified-width) var(--details-type-width) var(--details-size-width);
+  min-width: calc(var(--details-name-width) + var(--details-modified-width) + var(--details-type-width) + var(--details-size-width) + 1.5rem);
 }
 
 .list .entry-item {
