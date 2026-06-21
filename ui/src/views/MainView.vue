@@ -46,6 +46,7 @@ type ExplorerExpose = {
   selectPaths: (paths: string[]) => Promise<boolean>;
   selectPathForRename: (path: string) => Promise<boolean>;
   selectAllEntries: () => boolean;
+  getImageEntries: () => ExplorerEntry[];
 }
 
 type BreadcrumbExpose = {
@@ -594,7 +595,7 @@ const resetImageViewerZoom = () => {
   resetImageViewerPan();
 }
 
-const closeImageViewer = () => {
+const resetImageViewerState = () => {
   if (document.fullscreenElement === imageViewerRef.value) void document.exitFullscreen().catch(() => undefined);
   imageViewerVisible.value = false;
   imageViewerEntry.value = null;
@@ -603,6 +604,14 @@ const closeImageViewer = () => {
   imageViewerError.value = "";
   imageViewerPageFullscreen.value = false;
   resetImageViewerZoom();
+}
+
+const closeImageViewer = () => {
+  const nextPreviewEntry = previewPanelVisible.value && imageViewerEntry.value?.path !== previewEntry.value?.path
+      ? imageViewerEntry.value
+      : null;
+  resetImageViewerState();
+  if (nextPreviewEntry) void setPreviewEntry(nextPreviewEntry, true);
 }
 
 const setImageViewerEntry = (entry: ExplorerEntry) => {
@@ -1783,7 +1792,8 @@ const openImageViewer = async ({entry, entries}: ImageViewerPayload) => {
 const openPreviewImageViewer = async () => {
   const entry = previewEntry.value;
   if (!entry || previewKind.value !== "image") return;
-  await openImageViewer({entry, entries: [entry]});
+  const entries = explorerRef.value?.getImageEntries() ?? [];
+  await openImageViewer({entry, entries: entries.some(item => item.path === entry.path) ? entries : [entry]});
 }
 
 const toggleImageViewerPageFullscreen = async () => {
@@ -2439,7 +2449,7 @@ const signOut = async () => {
                   @pointerup="stopPreviewImagePan"
                   @pointercancel="stopPreviewImagePan"
                   @lostpointercapture="previewImageDragging = false"
-                  @dblclick="resetPreviewImageZoom">
+                  @dblclick="openPreviewImageViewer">
                 <img :src="downloadUrl(previewEntry.path)" :alt="previewEntry.name" :style="previewImageStyle">
               </div>
               <pre v-else-if="previewKind === 'text'" :class="{nowrap: !previewTextWrap}">{{ previewText }}</pre>

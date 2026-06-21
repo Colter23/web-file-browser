@@ -249,6 +249,8 @@ const isImageFile = (entry: ExplorerEntry) => {
   return ["apng", "avif", "bmp", "gif", "ico", "jpeg", "jpg", "png", "svg", "webp"].includes(extension);
 }
 
+const imageEntries = computed(() => entries.value.filter(isImageFile));
+
 const shouldLoadThumbnail = (entry: ExplorerEntry) => {
   return isIconLikeMode.value && isImageFile(entry) && visibleThumbnailPaths.value.has(entry.path) && !failedThumbnailPaths.value.has(entry.path);
 }
@@ -546,7 +548,7 @@ const openEntry = async (entry: ExplorerEntry) => {
     return;
   }
   if (isImageFile(entry)) {
-    emit("open-image-viewer", {entry, entries: entries.value.filter(isImageFile)});
+    emit("open-image-viewer", {entry, entries: imageEntries.value});
     return;
   }
   if (entry.file && fileStore.extensions.includes(entry.file.extension)) {
@@ -1446,6 +1448,7 @@ defineExpose({
   refresh: loadFolder,
   getSelectedEntry: primarySelected,
   getSelectedEntries: () => selectedEntries.value,
+  getImageEntries: () => imageEntries.value,
   startRename: () => startRename(firstSelectedEntry()),
   selectPath,
   selectPaths,
