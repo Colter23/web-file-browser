@@ -124,6 +124,7 @@ const contextMenuEstimatedHeights = {
   background: 184
 };
 const viewWheelStepThreshold = 80;
+const autoLoadMoreDistance = 360;
 const typeaheadQuery = ref("");
 const typeaheadResetMs = 900;
 let typeaheadResetTimer = 0;
@@ -515,6 +516,7 @@ const mergeFolderData = (current: FolderData, next: FolderData): FolderData => (
 const loadFolder = async (path: string = fileStore.currentPath || "/") => {
   loading.value = true;
   message.value = "";
+  let loaded = false;
   renamingPath.value = "";
   renameDraft.value = "";
   resetTypeahead();
@@ -530,10 +532,12 @@ const loadFolder = async (path: string = fileStore.currentPath || "/") => {
     fileStore.showEditor = false;
     await nextTick();
     observePendingThumbnails();
+    loaded = true;
   } catch (error) {
     message.value = error instanceof Error ? error.message : "加载目录失败";
   } finally {
     loading.value = false;
+    if (loaded) window.requestAnimationFrame(maybeLoadMoreOnScroll);
   }
 }
 
@@ -541,6 +545,7 @@ const loadMore = async () => {
   if (loading.value || loadingMore.value || !folderData.value.hasMore) return;
   loadingMore.value = true;
   message.value = "";
+  let loaded = false;
   try {
     const current = folderData.value;
     const offset = (current.offset ?? 0) + (current.limit ?? allEntries.value.length);
@@ -551,11 +556,20 @@ const loadMore = async () => {
     loadedSignature.value = folderRequestSignature(merged.path || current.path);
     await nextTick();
     observePendingThumbnails();
+    loaded = true;
   } catch (error) {
     message.value = error instanceof Error ? error.message : "加载更多失败";
   } finally {
     loadingMore.value = false;
+    if (loaded) window.requestAnimationFrame(maybeLoadMoreOnScroll);
   }
+}
+
+const maybeLoadMoreOnScroll = () => {
+  const viewport = viewportRef.value;
+  if (!viewport || props.filterText.trim() || loading.value || loadingMore.value || !folderData.value.hasMore) return;
+  const distanceToBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+  if (distanceToBottom <= autoLoadMoreDistance) void loadMore();
 }
 
 const changeSort = async (key: DirSortKey) => {
@@ -1336,6 +1350,7 @@ defineExpose({
         tabindex="0"
         @click="activateViewport"
         @mousedown="beginMarqueeSelection"
+        @scroll="maybeLoadMoreOnScroll"
         @wheel="handleViewportWheel"
         @contextmenu.prevent="openBackgroundContextMenu">
       <div v-if="viewMode === 'details'" class="details-header">
