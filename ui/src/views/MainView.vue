@@ -233,6 +233,10 @@ const previewTypeText = computed(() => ({
   unknown: "文件"
 }[previewKind.value]));
 
+const previewTitleText = computed(() => previewEntry.value?.name ?? "预览窗格");
+
+const previewSubtitleText = computed(() => previewEntry.value ? previewTypeText.value : "选择一个文件");
+
 const previewTextStats = computed(() => {
   if (previewKind.value !== "text") return "";
   const lines = previewText.value ? previewText.value.split(/\r\n|\r|\n/).length : 0;
@@ -265,9 +269,8 @@ const previewMeta = computed(() => {
   ];
 });
 
-const closePanels = () => {
+const clearPreviewContent = () => {
   previewLoadVersion += 1;
-  previewPanelVisible.value = false;
   previewEntry.value = null;
   previewLoading.value = false;
   previewText.value = "";
@@ -275,6 +278,11 @@ const closePanels = () => {
   previewImageFit.value = true;
   previewImageZoom.value = 100;
   previewCopied.value = false;
+}
+
+const closePanels = () => {
+  previewPanelVisible.value = false;
+  clearPreviewContent();
   operationPanel.value.visible = false;
 }
 
@@ -519,6 +527,13 @@ const selectedEntries = (fallback?: ExplorerEntry | null) => {
 
 const handleSelectionChange = (entries: ExplorerEntry[]) => {
   currentSelection.value = entries;
+  if (!previewPanelVisible.value || fileStore.showEditor) return;
+  const entry = entries.length === 1 ? entries[0] : null;
+  if (entry?.type === "file") {
+    setPreviewEntry(entry);
+  } else {
+    clearPreviewContent();
+  }
 }
 
 const singleSelectedEntry = (entry = selectedEntry()) => {
@@ -970,6 +985,11 @@ const previewSelected = (entry = selectedEntry()) => {
     window.alert("请选择文件");
     return;
   }
+  setPreviewEntry(entry, true);
+}
+
+const setPreviewEntry = (entry: ExplorerEntry, force = false) => {
+  if (!force && previewEntry.value?.path === entry.path && previewPanelVisible.value) return;
   fileStore.showEditor = false;
   fileStore.currentFile = null;
   previewEntry.value = entry;
@@ -1319,14 +1339,14 @@ const signOut = async () => {
           <aside v-if="previewPanelVisible" class="preview-pane">
             <div class="preview-header">
               <div class="preview-title-block">
-                <span class="preview-title">{{ previewEntry?.name }}</span>
-                <span class="preview-subtitle">{{ previewTypeText }}</span>
+                <span class="preview-title">{{ previewTitleText }}</span>
+                <span class="preview-subtitle">{{ previewSubtitleText }}</span>
               </div>
               <div class="preview-actions">
                 <button v-if="canEditPreview" title="编辑" @click="openPreviewInEditor">
                   <icon icon="icon-edit-filling" />
                 </button>
-                <button title="下载" @click="downloadSelected(previewEntry ?? undefined)">
+                <button title="下载" :disabled="!previewEntry" @click="downloadSelected(previewEntry ?? undefined)">
                   <icon icon="icon-download" />
                 </button>
                 <button title="关闭预览" @click="closePreview">
@@ -1354,7 +1374,11 @@ const signOut = async () => {
               <span>{{ previewTextStats }}</span>
             </div>
             <div class="preview-body" :class="previewKind">
-              <div v-if="previewLoading" class="preview-placeholder">正在加载预览...</div>
+              <div v-if="!previewEntry" class="preview-placeholder muted">
+                <icon icon="icon-file-fill" size="3rem" />
+                <span>选择一个文件以预览</span>
+              </div>
+              <div v-else-if="previewLoading" class="preview-placeholder">正在加载预览...</div>
               <div v-else-if="previewError" class="preview-placeholder error">{{ previewError }}</div>
               <div v-else-if="previewEntry && previewKind === 'image'" class="image-stage" :class="{fit: previewImageFit}">
                 <img :src="downloadUrl(previewEntry.path)" :alt="previewEntry.name" :style="previewImageStyle">
@@ -1647,7 +1671,7 @@ const signOut = async () => {
 }
 
 .preview-header button {
-  @apply h-7 w-7 shrink-0;
+  @apply h-7 w-7 shrink-0 disabled:cursor-not-allowed disabled:opacity-40;
 }
 
 .preview-meta-list {
@@ -1731,6 +1755,10 @@ const signOut = async () => {
 
 .preview-placeholder.error {
   @apply text-red-600;
+}
+
+.preview-placeholder.muted {
+  @apply text-slate-400;
 }
 
 .preview-placeholder button {
