@@ -42,7 +42,7 @@ type CopyPathPayload = {
 }
 
 type ExplorerExpose = {
-  refresh: (path?: string) => Promise<void>;
+  refresh: (path?: string) => Promise<boolean>;
   getSelectedEntry: () => ExplorerEntry | null;
   getSelectedEntries: () => ExplorerEntry[];
   startRename: () => void;
@@ -133,6 +133,11 @@ type DropToCurrentFolderPayload = {
 type ImageViewerPayload = {
   entry: ExplorerEntry;
   entries: ExplorerEntry[];
+}
+
+type NavigateToPathOptions = {
+  skipEditorLeave?: boolean;
+  focusExplorer?: boolean;
 }
 
 const viewModeOrder: ExplorerViewMode[] = ["details", "list", "icons", "tiles"];
@@ -835,11 +840,13 @@ const handleLoad = (node: FileTreeData) => {
       resolve();
       return;
     }
-    const data = await getFolderData(node.path);
-    node.children = fileStore.saveAndConvertFolderData(data);
-    fileStore.setCurrentPath(data.path);
-    fileStore.closeEditor();
-    closePanels();
+    try {
+      const data = await getFolderData(node.path);
+      node.children = fileStore.saveAndConvertFolderData(data);
+      await navigateToPath(data.path, {skipEditorLeave: true});
+    } catch (error) {
+      showErrorNotice(error, "加载目录失败");
+    }
     resolve();
   });
 }
@@ -1197,8 +1204,16 @@ const singleSelectedEntry = (entry = selectedEntry()) => {
   return selected[0] ?? null;
 }
 
+const normalizePathText = (path: string) => {
+  let normalized = path.trim() || "/";
+  normalized = normalized.replace(/\/+/g, "/");
+  if (!normalized.startsWith("/")) normalized = `/${normalized}`;
+  if (normalized.length > 1) normalized = normalized.replace(/\/+$/, "");
+  return normalized || "/";
+}
+
 const parentPath = (path: string) => {
-  const parts = path.split("/").filter(Boolean);
+  const parts = normalizePathText(path).split("/").filter(Boolean);
   parts.pop();
   return parts.length ? `/${parts.join("/")}` : "/";
 }
@@ -1835,9 +1850,7 @@ const navigateBack = async () => {
   persistCurrentExplorerScrollTop();
   const path = fileStore.goBack();
   if (!path) return;
-  closePanels();
-  await explorerRef.value?.refresh(path);
-  await syncActiveTabContext();
+  await finishPathNavigation(path);
 }
 
 const navigateForward = async () => {
@@ -1845,21 +1858,43 @@ const navigateForward = async () => {
   persistCurrentExplorerScrollTop();
   const path = fileStore.goForward();
   if (!path) return;
+  await finishPathNavigation(path);
+}
+
+const finishPathNavigation = async (path: string, focusExplorer = true) => {
   closePanels();
-  await explorerRef.value?.refresh(path);
+  const loaded = await explorerRef.value?.refresh(path) ?? false;
+  if (!loaded) {
+    if (focusExplorer) {
+      await nextTick();
+      explorerRef.value?.focus();
+    }
+    return false;
+  }
   await syncActiveTabContext();
+  if (focusExplorer) {
+    await nextTick();
+    explorerRef.value?.focus();
+  }
+  return true;
+}
+
+const navigateToPath = async (path: string, options: NavigateToPathOptions = {}) => {
+  const targetPath = normalizePathText(path);
+  if (!options.skipEditorLeave && !await fileStore.requestEditorLeave()) return false;
+  persistCurrentExplorerScrollTop();
+  const loaded = await finishPathNavigation(targetPath, options.focusExplorer ?? true);
+  return loaded;
+}
+
+const handleBreadcrumbNavigate = async (path: string, complete?: (navigated: boolean) => void) => {
+  const navigated = await navigateToPath(path);
+  complete?.(navigated);
 }
 
 const navigateUp = async () => {
   if (!canNavigateUp.value) return;
-  if (!await fileStore.requestEditorLeave()) return;
-  persistCurrentExplorerScrollTop();
-  fileStore.closeEditor();
-  closePanels();
-  const path = parentPath(currentFolder());
-  fileStore.setCurrentPath(path);
-  await explorerRef.value?.refresh(path);
-  await syncActiveTabContext();
+  await navigateToPath(parentPath(currentFolder()));
 }
 
 const openTab = async () => {
@@ -2343,7 +2378,7 @@ const signOut = async () => {
           <button class="nav-button" title="刷新 (F5 / Ctrl+R)" @click="refreshCurrent(true)">
             <icon icon="icon-refresh" size="large" />
           </button>
-          <breadcrumb ref="breadcrumbRef"></breadcrumb>
+          <breadcrumb ref="breadcrumbRef" @navigate="handleBreadcrumbNavigate"></breadcrumb>
           <button class="view-button" :title="viewModeButtonTitle" @click="cycleViewMode">
             <icon :icon="currentViewModeMeta.icon" />
             <span>{{ currentViewModeMeta.label }}</span>

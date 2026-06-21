@@ -4,8 +4,13 @@ import Icon from "./Icon.vue";
 import {useFileStore} from "../store";
 
 const fileStore = useFileStore();
+type NavigateComplete = (navigated: boolean) => void;
+const emit = defineEmits<{
+  (e: "navigate", path: string, complete?: NavigateComplete): void;
+}>();
 
 const splitPath = (path: string) => path.substring(1).split("/").filter(Boolean);
+const toPath = (parts: string[]) => parts.length ? `/${parts.join("/")}` : "/";
 const pathList = ref(splitPath(fileStore.currentPath));
 const pathText = computed(() => fileStore.currentPath || "/");
 const pathBox = ref<HTMLElement | null>(null);
@@ -54,12 +59,12 @@ const changeInput = (event?: Event) => {
       stopInput();
     }
   }
-  const keyHandle = async (keyEvent: KeyboardEvent) => {
+  const keyHandle = (keyEvent: KeyboardEvent) => {
     if (keyEvent.code === "Enter") {
-      if (!await fileStore.requestEditorLeave()) return;
-      fileStore.setCurrentPath(pathInput.value?.value ?? "/");
-      fileStore.closeEditor();
-      stopInput();
+      keyEvent.preventDefault();
+      emit("navigate", pathInput.value?.value ?? "/", (navigated) => {
+        if (navigated) stopInput();
+      });
     } else if (keyEvent.code === "Escape") {
       stopInput();
     }
@@ -74,11 +79,8 @@ const changeInput = (event?: Event) => {
   void focusInput();
 }
 
-const changePath = async (index: number) => {
-  if (!await fileStore.requestEditorLeave()) return;
-  fileStore.closeEditor();
-  if (index === -1) fileStore.setCurrentPath("/");
-  else fileStore.setCurrentPath(pathList.value.slice(0, index + 1).join("/"));
+const changePath = (index: number) => {
+  emit("navigate", index === -1 ? "/" : toPath(pathList.value.slice(0, index + 1)));
 }
 
 defineExpose({

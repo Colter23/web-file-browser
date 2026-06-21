@@ -666,6 +666,7 @@ const loadFolder = async (path: string = fileStore.currentPath || "/") => {
     loading.value = false;
     if (loaded) window.requestAnimationFrame(maybeLoadMoreOnScroll);
   }
+  return loaded;
 }
 
 const loadMore = async () => {
