@@ -826,28 +826,49 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     return;
   }
   if (handleTypeahead(event)) return;
-  if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End", "PageDown", "PageUp"].includes(event.key)) return;
   event.preventDefault();
   moveFocus(event.key, event.shiftKey);
 }
 
 const currentColumns = () => {
-  if (!isIconLikeMode.value || !viewportRef.value) return 1;
+  if (!viewportRef.value) return 1;
   const first = entries.value[0] ? itemRefs.get(entries.value[0].path) : null;
   if (!first) return 1;
-  const itemWidth = first.getBoundingClientRect().width + 8;
-  return Math.max(1, Math.floor(viewportRef.value.clientWidth / itemWidth));
+  const firstTop = Math.round(first.getBoundingClientRect().top);
+  let columns = 0;
+  for (const entry of entries.value) {
+    const element = itemRefs.get(entry.path);
+    if (!element) break;
+    if (Math.abs(Math.round(element.getBoundingClientRect().top) - firstTop) > 2) break;
+    columns += 1;
+  }
+  return Math.max(1, columns);
+}
+
+const currentPageStep = (columns: number) => {
+  const viewport = viewportRef.value;
+  const first = entries.value[0] ? itemRefs.get(entries.value[0].path) : null;
+  if (!viewport || !first) return Math.max(1, columns * 5);
+  const rowHeight = Math.max(1, first.getBoundingClientRect().height);
+  const visibleRows = Math.max(1, Math.floor(viewport.clientHeight / rowHeight) - 1);
+  return Math.max(1, visibleRows * columns);
 }
 
 const moveFocus = (key: string, extend: boolean) => {
   if (!entries.value.length) return;
   const current = focusedPath.value ? indexOfPath(focusedPath.value) : -1;
   const columns = currentColumns();
+  const pageStep = currentPageStep(columns);
   let nextIndex = current < 0 ? 0 : current;
-  if (key === "ArrowDown") nextIndex = Math.min(entries.value.length - 1, current + columns);
-  if (key === "ArrowUp") nextIndex = Math.max(0, current - columns);
-  if (key === "ArrowRight") nextIndex = Math.min(entries.value.length - 1, current + 1);
-  if (key === "ArrowLeft") nextIndex = Math.max(0, current - 1);
+  if (current >= 0) {
+    if (key === "ArrowDown") nextIndex = Math.min(entries.value.length - 1, current + columns);
+    if (key === "ArrowUp") nextIndex = Math.max(0, current - columns);
+    if (key === "ArrowRight") nextIndex = Math.min(entries.value.length - 1, current + 1);
+    if (key === "ArrowLeft") nextIndex = Math.max(0, current - 1);
+    if (key === "PageDown") nextIndex = Math.min(entries.value.length - 1, current + pageStep);
+    if (key === "PageUp") nextIndex = Math.max(0, current - pageStep);
+  }
   if (key === "Home") nextIndex = 0;
   if (key === "End") nextIndex = entries.value.length - 1;
   const entry = entries.value[nextIndex];
