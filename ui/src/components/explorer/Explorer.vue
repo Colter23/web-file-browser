@@ -371,6 +371,8 @@ const firstSelectedEntry = () => {
   return entryByPath(selectedPaths.value[0]) ?? null;
 }
 
+const focusedOrSelectedEntry = () => entryByPath(focusedPath.value) ?? firstSelectedEntry();
+
 const isSelected = (path: string) => selectedPaths.value.includes(path);
 
 const indexOfPath = (path: string) => entries.value.findIndex(entry => entry.path === path);
@@ -408,6 +410,19 @@ const selectEntry = (entry: ExplorerEntry, event?: MouseEvent) => {
     return;
   }
   setSelection([entry.path], entry.path);
+}
+
+const toggleFocusedSelection = () => {
+  const entry = focusedOrSelectedEntry();
+  if (!entry) return false;
+  const selected = selectedSet();
+  if (selected.has(entry.path)) {
+    selected.delete(entry.path);
+  } else {
+    selected.add(entry.path);
+  }
+  setSelection(Array.from(selected), entry.path);
+  return true;
 }
 
 const ensureEntrySelected = (entry: ExplorerEntry) => {
@@ -848,9 +863,16 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     return;
   }
   if (event.key === "Escape") {
-    resetSelectionBox();
+    event.preventDefault();
+    if (contextMenu.visible) {
+      contextMenu.visible = false;
+      return;
+    }
+    if (selectionBox.active) {
+      resetSelectionBox();
+      return;
+    }
     clearSelection();
-    contextMenu.visible = false;
     return;
   }
   if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
@@ -858,9 +880,16 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     openKeyboardContextMenu();
     return;
   }
+  if ((event.key === " " || event.code === "Space") && !event.altKey && !event.shiftKey && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    contextMenu.visible = false;
+    toggleFocusedSelection();
+    return;
+  }
   if ((event.key === " " || event.code === "Space") && !event.altKey && !event.ctrlKey && !event.metaKey) {
     event.preventDefault();
-    const entry = entryByPath(focusedPath.value) ?? firstSelectedEntry();
+    contextMenu.visible = false;
+    const entry = focusedOrSelectedEntry();
     if (entry?.type === "file") emit("preview", entry);
     return;
   }
@@ -888,7 +917,8 @@ const handleKeyDown = async (event: KeyboardEvent) => {
   }
   if (event.key === "Enter") {
     event.preventDefault();
-    const entry = entryByPath(focusedPath.value) ?? firstSelectedEntry();
+    contextMenu.visible = false;
+    const entry = focusedOrSelectedEntry();
     if ((event.ctrlKey || event.metaKey) && entry?.type === "folder") {
       emit("open-new-tab", entry);
       return;
@@ -901,19 +931,24 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     return;
   }
   if (event.key === "Delete") {
+    event.preventDefault();
+    contextMenu.visible = false;
     const entry = firstSelectedEntry();
     if (entry) emit("delete", entry);
     return;
   }
   if (event.key === "F2") {
-    const entry = firstSelectedEntry();
+    event.preventDefault();
+    contextMenu.visible = false;
+    const entry = selectedEntries.value.length <= 1 ? focusedOrSelectedEntry() : null;
     if (entry) startRename(entry);
     return;
   }
   if (handleTypeahead(event)) return;
   if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End", "PageDown", "PageUp"].includes(event.key)) return;
   event.preventDefault();
-  moveFocus(event.key, event.shiftKey);
+  contextMenu.visible = false;
+  moveFocus(event.key, event.shiftKey, (event.ctrlKey || event.metaKey) && !event.shiftKey);
 }
 
 const currentColumns = () => {
@@ -940,7 +975,7 @@ const currentPageStep = (columns: number) => {
   return Math.max(1, visibleRows * columns);
 }
 
-const moveFocus = (key: string, extend: boolean) => {
+const moveFocus = (key: string, extend: boolean, preserveSelection = false) => {
   if (!entries.value.length) return;
   const current = focusedPath.value ? indexOfPath(focusedPath.value) : -1;
   const columns = currentColumns();
@@ -958,7 +993,9 @@ const moveFocus = (key: string, extend: boolean) => {
   if (key === "End") nextIndex = entries.value.length - 1;
   const entry = entries.value[nextIndex];
   if (!entry) return;
-  if (extend) {
+  if (preserveSelection) {
+    focusedPath.value = entry.path;
+  } else if (extend) {
     selectRange(entry.path, false);
   } else {
     setSelection([entry.path], entry.path);
