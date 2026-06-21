@@ -129,6 +129,40 @@ const viewModeMeta: Record<ExplorerViewMode, {label: string; icon: string}> = {
   icons: {label: "图标", icon: "icon-viewgrid"},
   tiles: {label: "平铺", icon: "icon-file-common-filling"}
 };
+const previewPaneStorageKey = "explorer.previewPaneWidth";
+const previewPaneDefaultWidth = 352;
+const previewPaneMinWidth = 280;
+const previewPaneMaxWidth = 720;
+const previewPaneViewportReserve = 520;
+
+const previewPaneMaxForViewport = () => {
+  if (typeof window === "undefined") return previewPaneMaxWidth;
+  return Math.max(previewPaneMinWidth, Math.min(previewPaneMaxWidth, window.innerWidth - previewPaneViewportReserve));
+}
+
+const clampPreviewPaneWidth = (width: number) => {
+  const safeWidth = Number.isFinite(width) ? width : previewPaneDefaultWidth;
+  return Math.round(Math.min(Math.max(safeWidth, previewPaneMinWidth), previewPaneMaxForViewport()));
+}
+
+const readPreviewPaneWidth = () => {
+  if (typeof localStorage === "undefined") return clampPreviewPaneWidth(previewPaneDefaultWidth);
+  try {
+    const raw = localStorage.getItem(previewPaneStorageKey);
+    return clampPreviewPaneWidth(raw ? Number(raw) : previewPaneDefaultWidth);
+  } catch {
+    return clampPreviewPaneWidth(previewPaneDefaultWidth);
+  }
+}
+
+const writePreviewPaneWidth = (width: number) => {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(previewPaneStorageKey, String(clampPreviewPaneWidth(width)));
+  } catch {
+    // 本地存储不可用时，只保留本次会话里的宽度。
+  }
+}
 
 const router = useRouter();
 const fileStore = useFileStore();
@@ -159,6 +193,8 @@ const previewImageOffsetY = ref(0);
 const previewImageDragging = ref(false);
 const previewTextWrap = ref(true);
 const previewCopied = ref(false);
+const previewPaneWidth = ref(readPreviewPaneWidth());
+const previewPaneResizing = ref(false);
 const imageViewerVisible = ref(false);
 const imageViewerEntry = ref<ExplorerEntry | null>(null);
 const imageViewerEntries = ref<ExplorerEntry[]>([]);
@@ -225,6 +261,8 @@ let previewImageDragStartX = 0;
 let previewImageDragStartY = 0;
 let previewImageDragOriginX = 0;
 let previewImageDragOriginY = 0;
+let previewPaneResizeStartX = 0;
+let previewPaneResizeStartWidth = 0;
 let imageViewerPointerId: number | null = null;
 let imageViewerDragStartX = 0;
 let imageViewerDragStartY = 0;
@@ -446,6 +484,10 @@ const previewMeta = computed(() => {
   ];
 });
 
+const browserAreaStyle = computed(() => ({
+  "--preview-pane-width": `${previewPaneWidth.value}px`
+}));
+
 const shellNoticeLabel = computed(() => ({
   info: "提示",
   success: "完成",
@@ -474,6 +516,68 @@ const resetPreviewImagePan = () => {
   previewImageOffsetY.value = 0;
   previewImageDragging.value = false;
   previewImagePointerId = null;
+}
+
+const setPreviewPaneWidth = (width: number, persist = true) => {
+  previewPaneWidth.value = clampPreviewPaneWidth(width);
+  if (persist) writePreviewPaneWidth(previewPaneWidth.value);
+}
+
+const resetPreviewPaneWidth = () => {
+  setPreviewPaneWidth(previewPaneDefaultWidth);
+}
+
+const finishPreviewPaneResize = () => {
+  if (previewPaneResizing.value) writePreviewPaneWidth(previewPaneWidth.value);
+  previewPaneResizing.value = false;
+}
+
+const resizePreviewPane = (clientX: number) => {
+  setPreviewPaneWidth(previewPaneResizeStartWidth + previewPaneResizeStartX - clientX, false);
+}
+
+const handlePreviewPaneResizeMove = (event: PointerEvent) => {
+  if (!previewPaneResizing.value) return;
+  event.preventDefault();
+  resizePreviewPane(event.clientX);
+}
+
+const startPreviewPaneResize = (event: PointerEvent) => {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  previewPaneResizeStartX = event.clientX;
+  previewPaneResizeStartWidth = previewPaneWidth.value;
+  previewPaneResizing.value = true;
+}
+
+const handleWindowResize = () => {
+  setPreviewPaneWidth(previewPaneWidth.value);
+}
+
+const adjustPreviewPaneWidth = (delta: number) => {
+  setPreviewPaneWidth(previewPaneWidth.value + delta);
+}
+
+const handlePreviewPaneResizeKeyDown = (event: KeyboardEvent) => {
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    adjustPreviewPaneWidth(event.shiftKey ? 64 : 24);
+    return;
+  }
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    adjustPreviewPaneWidth(event.shiftKey ? -64 : -24);
+    return;
+  }
+  if (event.key === "Home") {
+    event.preventDefault();
+    setPreviewPaneWidth(previewPaneMinWidth);
+    return;
+  }
+  if (event.key === "End") {
+    event.preventDefault();
+    setPreviewPaneWidth(previewPaneMaxWidth);
+  }
 }
 
 const resetImageViewerPan = () => {
@@ -585,6 +689,10 @@ onMounted(async () => {
   window.addEventListener("keydown", handleWindowKeyDown);
   window.addEventListener("click", closeTabContextMenu);
   window.addEventListener("scroll", closeTabContextMenu, true);
+  window.addEventListener("pointermove", handlePreviewPaneResizeMove);
+  window.addEventListener("pointerup", finishPreviewPaneResize);
+  window.addEventListener("pointercancel", finishPreviewPaneResize);
+  window.addEventListener("resize", handleWindowResize);
   document.addEventListener("fullscreenchange", handleFullscreenChange);
 })
 
@@ -595,6 +703,10 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleWindowKeyDown);
   window.removeEventListener("click", closeTabContextMenu);
   window.removeEventListener("scroll", closeTabContextMenu, true);
+  window.removeEventListener("pointermove", handlePreviewPaneResizeMove);
+  window.removeEventListener("pointerup", finishPreviewPaneResize);
+  window.removeEventListener("pointercancel", finishPreviewPaneResize);
+  window.removeEventListener("resize", handleWindowResize);
   document.removeEventListener("fullscreenchange", handleFullscreenChange);
 })
 
@@ -2107,7 +2219,7 @@ const signOut = async () => {
           </section>
         </div>
 
-        <div class="browser-area" :class="{previewing: previewPanelVisible}">
+        <div class="browser-area" :class="{previewing: previewPanelVisible, resizingPreview: previewPaneResizing}" :style="browserAreaStyle">
           <div
               class="browser-main"
               :class="{dropActive: uploadDropActive || uploadDropUploading}"
@@ -2237,6 +2349,19 @@ const signOut = async () => {
             </section>
           </div>
           <aside v-if="previewPanelVisible" class="preview-pane">
+            <div
+                class="preview-resizer"
+                role="separator"
+                aria-orientation="vertical"
+                :aria-valuemin="previewPaneMinWidth"
+                :aria-valuemax="previewPaneMaxWidth"
+                :aria-valuenow="previewPaneWidth"
+                tabindex="0"
+                title="拖动调整预览窗格宽度，双击恢复默认"
+                @pointerdown="startPreviewPaneResize"
+                @keydown="handlePreviewPaneResizeKeyDown"
+                @dblclick="resetPreviewPaneWidth">
+            </div>
             <div class="preview-header">
               <div class="preview-title-block">
                 <span class="preview-title">{{ previewTitleText }}</span>
@@ -2584,10 +2709,15 @@ const signOut = async () => {
 
 .browser-area {
   @apply grid min-h-0 grow grid-cols-[minmax(0,1fr)] overflow-hidden;
+  --preview-pane-width: 22rem;
 }
 
 .browser-area.previewing {
-  @apply grid-cols-[minmax(0,1fr)_22rem];
+  grid-template-columns: minmax(0, 1fr) minmax(17.5rem, var(--preview-pane-width));
+}
+
+.browser-area.resizingPreview {
+  @apply cursor-col-resize select-none;
 }
 
 .browser-main {
@@ -2784,7 +2914,21 @@ const signOut = async () => {
 }
 
 .preview-pane {
-  @apply flex min-h-0 flex-col border-l border-slate-200 bg-white;
+  @apply relative flex min-h-0 flex-col border-l border-slate-200 bg-white;
+}
+
+.preview-resizer {
+  @apply absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize touch-none;
+}
+
+.preview-resizer::after {
+  content: "";
+  @apply absolute left-1 top-0 h-full w-px bg-transparent;
+}
+
+.preview-resizer:hover::after,
+.browser-area.resizingPreview .preview-resizer::after {
+  @apply bg-blue-500;
 }
 
 .preview-header {
