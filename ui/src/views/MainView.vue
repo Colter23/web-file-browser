@@ -1700,7 +1700,7 @@ const signOut = async () => {
             <icon icon="icon-download" />
             <span>下载</span>
           </button>
-          <button class="command-button" :disabled="!canPreviewSelection" title="预览 (Ctrl+Enter)" @click="previewSelected()">
+          <button class="command-button" :disabled="!canPreviewSelection" title="预览 (Space / Ctrl+Enter)" @click="previewSelected()">
             <icon icon="icon-file-image-fill" />
             <span>预览</span>
           </button>

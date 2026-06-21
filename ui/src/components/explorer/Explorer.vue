@@ -838,6 +838,12 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     openKeyboardContextMenu();
     return;
   }
+  if ((event.key === " " || event.code === "Space") && !event.altKey && !event.ctrlKey && !event.metaKey) {
+    event.preventDefault();
+    const entry = entryByPath(focusedPath.value) ?? firstSelectedEntry();
+    if (entry?.type === "file") emit("preview", entry);
+    return;
+  }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
     event.preventDefault();
     const entry = firstSelectedEntry();
