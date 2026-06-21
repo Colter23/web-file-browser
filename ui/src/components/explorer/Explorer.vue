@@ -467,6 +467,12 @@ const commitRename = async () => {
 
 const isRenaming = (entry: ExplorerEntry) => renamingPath.value === entry.path;
 
+const selectAllEntries = () => {
+  if (!entries.value.length) return false;
+  setSelection(entries.value.map(entry => entry.path), focusedPath.value || entries.value[0]?.path || "");
+  return true;
+}
+
 const openEntry = async (entry: ExplorerEntry) => {
   if (isRenaming(entry)) return;
   if (entry.type === "folder") {
@@ -863,7 +869,7 @@ const handleKeyDown = async (event: KeyboardEvent) => {
   }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
     event.preventDefault();
-    setSelection(entries.value.map(entry => entry.path), focusedPath.value || entries.value[0]?.path || "");
+    selectAllEntries();
     return;
   }
   if (event.key === "Enter") {
@@ -1236,7 +1242,7 @@ const createFolderFromContext = () => {
 
 const selectAllFromContext = () => {
   closeContextMenu();
-  setSelection(entries.value.map(entry => entry.path), focusedPath.value || entries.value[0]?.path || "");
+  selectAllEntries();
 }
 
 const archiveContextEntries = () => {
@@ -1274,7 +1280,8 @@ defineExpose({
   getSelectedEntry: primarySelected,
   getSelectedEntries: () => selectedEntries.value,
   startRename: () => startRename(firstSelectedEntry()),
-  selectPathForRename
+  selectPathForRename,
+  selectAllEntries
 })
 </script>
 

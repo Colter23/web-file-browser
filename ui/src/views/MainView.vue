@@ -43,6 +43,7 @@ type ExplorerExpose = {
   getSelectedEntries: () => ExplorerEntry[];
   startRename: () => void;
   selectPathForRename: (path: string) => Promise<boolean>;
+  selectAllEntries: () => boolean;
 }
 
 type FileClipboardAction = "copy" | "cut";
@@ -1219,6 +1220,14 @@ const handleClipboardShortcut = (key: string, event: KeyboardEvent) => {
   return false;
 }
 
+const handleSelectAllShortcut = (key: string, event: KeyboardEvent) => {
+  if (key !== "a" || event.shiftKey || shouldIgnoreShellShortcut(event.target) || isExplorerShortcutTarget(event.target)) return false;
+  if (hasPageTextSelection()) return false;
+  event.preventDefault();
+  explorerRef.value?.selectAllEntries();
+  return true;
+}
+
 const focusSearch = () => {
   if (fileStore.showEditor) return;
   searchInput.value?.focus();
@@ -1322,6 +1331,7 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
   }
   if (commandKey && !event.altKey && !shouldIgnoreShellShortcut(event.target)) {
     if (handleClipboardShortcut(key, event)) return;
+    if (handleSelectAllShortcut(key, event)) return;
     if (key === "t") {
       event.preventDefault();
       openTab();
@@ -1772,7 +1782,7 @@ const signOut = async () => {
             <icon icon="icon-delete-fill" />
             <span>删除</span>
           </button>
-          <span class="command-status" :title="selectionStatusText">{{ selectionStatusText }}</span>
+          <span class="command-status" :title="`${selectionStatusText} · Ctrl+A 全选`">{{ selectionStatusText }}</span>
           <button :class="['command-button', {active: taskPanelVisible}]" @click="toggleTaskPanel">
             <icon icon="icon-file-common-filling" />
             <span>{{ taskButtonText }}</span>
