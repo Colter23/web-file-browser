@@ -300,10 +300,10 @@ const setRenameInputRef = (path: string, element: Element | ComponentPublicInsta
 
 const selectedSet = () => new Set(selectedPaths.value);
 
-const setSelection = (paths: string[], focusPath = paths[paths.length - 1] ?? "") => {
+const setSelection = (paths: string[], focusPath = paths[paths.length - 1] ?? "", keepAnchor = false) => {
   selectedPaths.value = Array.from(new Set(paths));
   focusedPath.value = focusPath;
-  anchorPath.value = focusPath || anchorPath.value;
+  if (!keepAnchor) anchorPath.value = focusPath || anchorPath.value;
 }
 
 const clearSelection = () => {
@@ -355,14 +355,15 @@ const indexOfPath = (path: string) => entries.value.findIndex(entry => entry.pat
 const selectRange = (targetPath: string, additive: boolean) => {
   const targetIndex = indexOfPath(targetPath);
   if (targetIndex < 0) return;
-  const anchorIndex = anchorPath.value ? indexOfPath(anchorPath.value) : targetIndex;
+  const anchorCandidate = anchorPath.value || focusedPath.value || targetPath;
+  const anchorIndex = indexOfPath(anchorCandidate);
   const start = Math.min(anchorIndex < 0 ? targetIndex : anchorIndex, targetIndex);
   const end = Math.max(anchorIndex < 0 ? targetIndex : anchorIndex, targetIndex);
   const range = entries.value.slice(start, end + 1).map(entry => entry.path);
   if (additive) {
-    setSelection([...selectedPaths.value, ...range], targetPath);
+    setSelection([...selectedPaths.value, ...range], targetPath, true);
   } else {
-    setSelection(range, targetPath);
+    setSelection(range, targetPath, true);
   }
 }
 
