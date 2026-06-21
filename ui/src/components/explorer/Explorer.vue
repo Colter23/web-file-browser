@@ -205,6 +205,19 @@ const selectedEntries = computed(() => {
   return entries.value.filter(entry => selected.has(entry.path));
 });
 
+const selectedFileEntries = computed(() => selectedEntries.value.filter(entry => entry.type === "file"));
+const selectedFolderCount = computed(() => selectedEntries.value.length - selectedFileEntries.value.length);
+
+const hasLoadedFileSize = (entry: ExplorerEntry): entry is ExplorerEntry & {type: "file"; size: number} => {
+  return entry.type === "file" && Number.isFinite(entry.size);
+}
+
+const selectedKnownSize = computed(() => selectedFileEntries.value.reduce((total, entry) => {
+  return hasLoadedFileSize(entry) ? total + entry.size : total;
+}, 0));
+
+const selectedMissingSizeCount = computed(() => selectedFileEntries.value.filter(entry => !hasLoadedFileSize(entry)).length);
+
 watch(selectedEntries, selected => {
   emit("selection-change", selected);
 }, {immediate: true});
@@ -228,6 +241,34 @@ const totalCountText = computed(() => {
   const loadedCount = allEntries.value.length;
   const hasMore = folderData.value.hasMore ? "，还有更多" : "";
   return filterKeyword.value ? `已加载 ${loadedCount} 项，筛选 ${entries.value.length} 项${hasMore}` : `已加载 ${loadedCount} 项${hasMore}`;
+});
+
+const folderStatusText = computed(() => {
+  const source = filterKeyword.value ? entries.value : allEntries.value;
+  const folderCount = source.filter(entry => entry.type === "folder").length;
+  const fileCount = source.length - folderCount;
+  const prefix = filterKeyword.value ? "筛选结果" : "当前已加载";
+  const suffix = folderData.value.hasMore && !filterKeyword.value ? "，还有更多" : "";
+  return `${prefix}：${folderCount} 个文件夹，${fileCount} 个文件${suffix}`;
+});
+
+const selectedSizeText = computed(() => {
+  const fileCount = selectedFileEntries.value.length;
+  if (!fileCount) return "";
+  const missing = selectedMissingSizeCount.value;
+  if (missing === fileCount) return `${fileCount} 个文件大小未加载`;
+  if (missing) return `${formatSize(selectedKnownSize.value)} 已知，${missing} 个文件未加载大小`;
+  return formatSize(selectedKnownSize.value);
+});
+
+const selectedStatusText = computed(() => {
+  const selectedCount = selectedEntries.value.length;
+  if (!selectedCount) return "未选择项目";
+  const detail = [];
+  if (selectedFileEntries.value.length) detail.push(`${selectedFileEntries.value.length} 个文件`);
+  if (selectedFolderCount.value) detail.push(`${selectedFolderCount.value} 个文件夹`);
+  if (selectedSizeText.value) detail.push(selectedSizeText.value);
+  return `已选择 ${selectedCount} 项${detail.length ? ` · ${detail.join("，")}` : ""}`;
 });
 
 const itemSizeClass = computed(() => ({
@@ -961,9 +1002,9 @@ const formatDate = (srcDate: string) => {
 }
 
 const formatSize = (size?: number) => {
-  if (!size) return "-";
+  if (!Number.isFinite(size)) return "-";
   const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = size;
+  let value = size ?? 0;
   let index = 0;
   while (value >= 1024 && index < units.length - 1) {
     value /= 1024;
@@ -1681,6 +1722,11 @@ defineExpose({
       </div>
     </div>
 
+    <div class="explorer-status-row">
+      <span :title="folderStatusText">{{ folderStatusText }}</span>
+      <span class="selection" :title="selectedStatusText">{{ selectedStatusText }}</span>
+    </div>
+
     <div v-if="contextMenu.visible && contextMenu.background" class="context-menu" :style="{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}">
       <button @click="createFileFromContext">新建文件</button>
       <button @click="createFolderFromContext">新建文件夹</button>
@@ -1770,6 +1816,19 @@ defineExpose({
 
 .explorer-viewport.dropCurrent {
   @apply bg-blue-50/25 ring-2 ring-inset ring-blue-400;
+}
+
+.explorer-status-row {
+  @apply flex h-8 shrink-0 items-center justify-between gap-4 border-t border-slate-200 bg-slate-50 px-3 text-xs text-slate-500;
+}
+
+.explorer-status-row span {
+  @apply min-w-0 truncate;
+}
+
+.explorer-status-row .selection {
+  @apply shrink-0 text-right text-slate-600;
+  max-width: min(32rem, 58%);
 }
 
 .details-header {
