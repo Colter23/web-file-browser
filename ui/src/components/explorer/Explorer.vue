@@ -20,6 +20,8 @@ type ExplorerEntry = {
 
 type SelectionBox = {
   active: boolean;
+  additive: boolean;
+  basePaths: string[];
   originX: number;
   originY: number;
   x: number;
@@ -89,6 +91,8 @@ const draggingEntries = ref<ExplorerEntry[]>([]);
 const dragState = reactive({active: false, overPath: "", copy: false});
 const selectionBox = reactive<SelectionBox>({
   active: false,
+  additive: false,
+  basePaths: [],
   originX: 0,
   originY: 0,
   x: 0,
@@ -294,6 +298,12 @@ const clearSelection = () => {
   anchorPath.value = "";
 }
 
+const resetSelectionBox = () => {
+  selectionBox.active = false;
+  selectionBox.additive = false;
+  selectionBox.basePaths = [];
+}
+
 const entryByPath = (path: string) => entries.value.find(entry => entry.path === path);
 
 const firstSelectedEntry = () => {
@@ -437,6 +447,7 @@ const loadFolder = async (path: string = fileStore.currentPath || "/") => {
   message.value = "";
   renamingPath.value = "";
   renameDraft.value = "";
+  resetSelectionBox();
   clearThumbnailState();
   try {
     const data = normalizeFolderData(await getFolderData(path, folderQuery()));
@@ -720,6 +731,7 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     return;
   }
   if (event.key === "Escape") {
+    resetSelectionBox();
     clearSelection();
     contextMenu.visible = false;
     return;
@@ -817,6 +829,8 @@ const beginMarqueeSelection = (event: MouseEvent) => {
     clearSelection();
   }
   selectionBox.active = true;
+  selectionBox.additive = Boolean(event.ctrlKey || event.metaKey);
+  selectionBox.basePaths = selectionBox.additive ? [...selectedPaths.value] : [];
   selectionBox.originX = event.clientX - rect.left + viewport.scrollLeft;
   selectionBox.originY = event.clientY - rect.top + viewport.scrollTop;
   selectionBox.x = selectionBox.originX;
@@ -848,7 +862,7 @@ const updateMarqueeSelection = () => {
     right: selectionBox.x + selectionBox.width,
     bottom: selectionBox.y + selectionBox.height
   };
-  const selected = entries.value.filter(entry => {
+  const marqueePaths = entries.value.filter(entry => {
     const element = itemRefs.get(entry.path);
     if (!element) return false;
     const rect = element.getBoundingClientRect();
@@ -860,13 +874,16 @@ const updateMarqueeSelection = () => {
     };
     return item.left <= box.right && item.right >= box.left && item.top <= box.bottom && item.bottom >= box.top;
   }).map(entry => entry.path);
+  const selected = selectionBox.additive
+      ? Array.from(new Set([...selectionBox.basePaths, ...marqueePaths]))
+      : marqueePaths;
   selectedPaths.value = selected;
-  focusedPath.value = selected[selected.length - 1] ?? "";
+  focusedPath.value = marqueePaths[marqueePaths.length - 1] ?? selected[selected.length - 1] ?? "";
 }
 
 const finishMarqueeSelection = () => {
   if (!selectionBox.active) return;
-  selectionBox.active = false;
+  resetSelectionBox();
   if (focusedPath.value) anchorPath.value = focusedPath.value;
 }
 
