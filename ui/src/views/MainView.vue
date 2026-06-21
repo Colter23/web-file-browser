@@ -141,6 +141,7 @@ const imageViewerEntry = ref<ExplorerEntry | null>(null);
 const imageViewerEntries = ref<ExplorerEntry[]>([]);
 const imageViewerLoading = ref(false);
 const imageViewerError = ref("");
+const imageViewerPageFullscreen = ref(false);
 const imageViewerFullscreen = ref(false);
 const imageViewerShowFilmstrip = ref(true);
 const imageViewerFit = ref(true);
@@ -455,6 +456,7 @@ const closeImageViewer = () => {
   imageViewerEntries.value = [];
   imageViewerLoading.value = false;
   imageViewerError.value = "";
+  imageViewerPageFullscreen.value = false;
   resetImageViewerZoom();
 }
 
@@ -1248,7 +1250,7 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
     }
     if (viewerKey === "f") {
       event.preventDefault();
-      void toggleImageViewerFullscreen();
+      toggleImageViewerPageFullscreen();
       return;
     }
     if (viewerKey === "t") {
@@ -1379,6 +1381,10 @@ const openPreviewImageViewer = async () => {
   const entry = previewEntry.value;
   if (!entry || previewKind.value !== "image") return;
   await openImageViewer({entry, entries: [entry]});
+}
+
+const toggleImageViewerPageFullscreen = () => {
+  imageViewerPageFullscreen.value = !imageViewerPageFullscreen.value;
 }
 
 const toggleImageViewerFullscreen = async () => {
@@ -1946,9 +1952,9 @@ const signOut = async () => {
               <button @click="zoomPreviewImage(-25)">-</button>
               <span>{{ previewZoomText }}</span>
               <button @click="zoomPreviewImage(25)">+</button>
-              <button title="全屏查看" @click="openPreviewImageViewer">
+              <button title="打开图片查看" @click="openPreviewImageViewer">
                 <icon icon="icon-unfold" color="currentColor" />
-                <span>全屏查看</span>
+                <span>打开查看</span>
               </button>
             </div>
             <div v-else-if="previewKind === 'text'" class="preview-tool-row">
@@ -1993,6 +1999,7 @@ const signOut = async () => {
             v-if="imageViewerVisible && imageViewerEntry"
             ref="imageViewerRef"
             class="image-viewer"
+            :class="{pageFullscreen: imageViewerPageFullscreen}"
             tabindex="-1"
             @keydown.esc.prevent="closeImageViewer">
           <div class="image-viewer-toolbar">
@@ -2011,7 +2018,10 @@ const signOut = async () => {
               <button title="缩小" @click="zoomImageViewer(-25)">-</button>
               <span>{{ imageViewerZoomText }}</span>
               <button title="放大" @click="zoomImageViewer(25)">+</button>
-              <button title="全屏 (F)" :class="{active: imageViewerFullscreen}" @click="toggleImageViewerFullscreen">
+              <button title="网页全屏 (F)" :class="{active: imageViewerPageFullscreen}" @click="toggleImageViewerPageFullscreen">
+                <icon icon="icon-renamebox" color="currentColor" />
+              </button>
+              <button title="浏览器全屏" :class="{active: imageViewerFullscreen}" @click="toggleImageViewerFullscreen">
                 <icon icon="icon-unfold" color="currentColor" />
               </button>
               <button title="缩略图 (T)" :class="{active: imageViewerShowFilmstrip}" :disabled="imageViewerCount <= 1" @click="toggleImageViewerFilmstrip">
@@ -2149,7 +2159,7 @@ const signOut = async () => {
 }
 
 .content-pane {
-  @apply flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white/80 shadow-sm backdrop-blur;
+  @apply relative flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white/80 shadow-sm backdrop-blur;
 }
 
 .path-row {
@@ -2540,7 +2550,11 @@ const signOut = async () => {
 }
 
 .image-viewer {
-  @apply fixed inset-0 z-50 flex flex-col overflow-hidden bg-slate-950/72 text-white outline-none backdrop-blur-sm;
+  @apply absolute inset-0 z-40 flex flex-col overflow-hidden rounded-lg bg-slate-950/72 text-white outline-none backdrop-blur-sm;
+}
+
+.image-viewer.pageFullscreen {
+  @apply fixed inset-0 z-50 rounded-none;
 }
 
 .image-viewer-toolbar {
