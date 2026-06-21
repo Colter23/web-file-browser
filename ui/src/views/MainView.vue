@@ -259,7 +259,7 @@ const selectionStatusText = computed(() => {
 });
 const canDownloadSelection = computed(() => singleSelection.value?.type === "file");
 const canPreviewSelection = computed(() => singleSelection.value?.type === "file");
-const canTogglePreviewPane = computed(() => previewPanelVisible.value || canPreviewSelection.value);
+const canTogglePreviewPane = computed(() => !fileStore.showEditor);
 const canRenameSelection = computed(() => Boolean(singleSelection.value));
 const canArchiveSelection = computed(() => hasSelection.value);
 const canDeleteSelection = computed(() => hasSelection.value);
@@ -754,8 +754,17 @@ const submitTaskCancelConfirm = async () => {
 }
 
 const refreshCurrent = async (keepSelection = false) => {
+  const keepPreview = keepSelection && previewPanelVisible.value && !fileStore.showEditor;
   const selectedPaths = keepSelection ? currentSelection.value.map(entry => entry.path) : [];
-  closePanels();
+  if (keepPreview) {
+    clearPreviewContent();
+    resetOperationPanel();
+    resetDeleteConfirm();
+    resetTaskCancelConfirm();
+    closeImageViewer();
+  } else {
+    closePanels();
+  }
   if (currentFolder() === "/") {
     await loadRoot();
   }
@@ -1323,7 +1332,12 @@ const togglePreviewFromShortcut = async () => {
     closePreview();
     return true;
   }
-  return await previewSelectedQuietly();
+  const previewed = await previewSelectedQuietly();
+  if (previewed) return true;
+  if (fileStore.showEditor) return false;
+  clearPreviewContent();
+  previewPanelVisible.value = true;
+  return true;
 }
 
 const cycleViewMode = () => {
@@ -2240,7 +2254,7 @@ const signOut = async () => {
                 </button>
               </div>
             </div>
-            <div class="preview-meta-list">
+            <div v-if="previewEntry" class="preview-meta-list">
               <div v-for="item in previewMeta" :key="item.label" :title="item.value">
                 <span>{{ item.label }}</span>
                 <strong>{{ item.value }}</strong>
