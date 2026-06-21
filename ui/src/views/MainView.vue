@@ -2,7 +2,7 @@
 import {computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import FileTree from "../components/FileTree.vue";
-import {ArchiveFormat, FileInfo, FileTreeData, TaskKind, TaskState, TaskStatus} from "../class";
+import {ArchiveFormat, ExplorerViewMode, FileInfo, FileTreeData, TaskKind, TaskState, TaskStatus} from "../class";
 import {useFileStore} from "../store";
 import {
   cancelTask,
@@ -72,6 +72,14 @@ type DropEntriesPayload = {
   action: "copy" | "move";
 }
 
+const viewModeOrder: ExplorerViewMode[] = ["details", "list", "icons", "tiles"];
+const viewModeMeta: Record<ExplorerViewMode, {label: string; icon: string}> = {
+  details: {label: "详细信息", icon: "icon-view-list"},
+  list: {label: "列表", icon: "icon-listview"},
+  icons: {label: "图标", icon: "icon-viewgrid"},
+  tiles: {label: "平铺", icon: "icon-file-common-filling"}
+};
+
 const router = useRouter();
 const fileStore = useFileStore();
 const treeData = ref<FileTreeData[]>([]);
@@ -136,11 +144,18 @@ const selectionStatusText = computed(() => {
 });
 const canDownloadSelection = computed(() => singleSelection.value?.type === "file");
 const canPreviewSelection = computed(() => singleSelection.value?.type === "file");
+const canTogglePreviewPane = computed(() => previewPanelVisible.value || canPreviewSelection.value);
 const canRenameSelection = computed(() => Boolean(singleSelection.value));
 const canArchiveSelection = computed(() => hasSelection.value);
 const canDeleteSelection = computed(() => hasSelection.value);
 const canExtractSelection = computed(() => isArchiveFile(singleSelection.value));
 const canPasteSelection = computed(() => hasClipboard.value);
+const currentViewModeMeta = computed(() => viewModeMeta[fileStore.viewMode]);
+const nextViewMode = computed(() => {
+  const index = viewModeOrder.indexOf(fileStore.viewMode);
+  return viewModeOrder[(index + 1) % viewModeOrder.length];
+});
+const viewModeButtonTitle = computed(() => `当前：${currentViewModeMeta.value.label}，切换到${viewModeMeta[nextViewMode.value].label}`);
 const taskStats = computed(() => {
   const stats = {
     running: 0,
@@ -866,6 +881,10 @@ const togglePreviewFromShortcut = () => {
   return previewSelectedQuietly();
 }
 
+const cycleViewMode = () => {
+  fileStore.setViewMode(nextViewMode.value);
+}
+
 const handleWindowKeyDown = (event: KeyboardEvent) => {
   if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "f") {
     if (shouldKeepEditorFindShortcut(event.target)) return;
@@ -1094,9 +1113,13 @@ const signOut = async () => {
             <icon icon="icon-refresh" size="large" />
           </button>
           <breadcrumb></breadcrumb>
-          <button class="view-button" @click="fileStore.setViewMode(fileStore.viewMode === 'details' ? 'icons' : 'details')">
-            <icon :icon="fileStore.viewMode === 'details' ? 'icon-viewgrid' : 'icon-view-list'" />
-            <span>{{ fileStore.viewMode === 'details' ? '图标模式' : '详细信息' }}</span>
+          <button class="view-button" :title="viewModeButtonTitle" @click="cycleViewMode">
+            <icon :icon="currentViewModeMeta.icon" />
+            <span>{{ currentViewModeMeta.label }}</span>
+          </button>
+          <button class="view-button" :class="{active: previewPanelVisible}" :disabled="!canTogglePreviewPane" title="预览窗格 (Alt+P)" @click="togglePreviewFromShortcut">
+            <icon icon="icon-file-image-fill" />
+            <span>{{ previewPanelVisible ? "关闭预览" : "预览窗格" }}</span>
           </button>
         </div>
 
@@ -1455,6 +1478,14 @@ const signOut = async () => {
 
 .view-button {
   @apply h-10 shrink-0 gap-2 px-3 text-sm;
+}
+
+.view-button.active {
+  @apply border-blue-200 bg-blue-50 text-blue-700;
+}
+
+.view-button:disabled {
+  @apply cursor-not-allowed text-slate-300 hover:bg-white;
 }
 
 .command-bar {
