@@ -1250,7 +1250,7 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
     }
     if (viewerKey === "f") {
       event.preventDefault();
-      toggleImageViewerPageFullscreen();
+      void toggleImageViewerPageFullscreen();
       return;
     }
     if (viewerKey === "t") {
@@ -1383,8 +1383,10 @@ const openPreviewImageViewer = async () => {
   await openImageViewer({entry, entries: [entry]});
 }
 
-const toggleImageViewerPageFullscreen = () => {
+const toggleImageViewerPageFullscreen = async () => {
   imageViewerPageFullscreen.value = !imageViewerPageFullscreen.value;
+  await nextTick();
+  imageViewerRef.value?.focus();
 }
 
 const toggleImageViewerFullscreen = async () => {
@@ -1995,79 +1997,81 @@ const signOut = async () => {
           </aside>
         </div>
 
-        <section
-            v-if="imageViewerVisible && imageViewerEntry"
-            ref="imageViewerRef"
-            class="image-viewer"
-            :class="{pageFullscreen: imageViewerPageFullscreen}"
-            tabindex="-1"
-            @keydown.esc.prevent="closeImageViewer">
-          <div class="image-viewer-toolbar">
-            <div class="image-viewer-title">
-              <strong>{{ imageViewerEntry.name }}</strong>
-              <span>{{ imageViewerSubtitle }}</span>
+        <Teleport to="body" :disabled="!imageViewerPageFullscreen">
+          <section
+              v-if="imageViewerVisible && imageViewerEntry"
+              ref="imageViewerRef"
+              class="image-viewer"
+              :class="{pageFullscreen: imageViewerPageFullscreen}"
+              tabindex="-1"
+              @keydown.esc.prevent="closeImageViewer">
+            <div class="image-viewer-toolbar">
+              <div class="image-viewer-title">
+                <strong>{{ imageViewerEntry.name }}</strong>
+                <span>{{ imageViewerSubtitle }}</span>
+              </div>
+              <div class="image-viewer-actions">
+                <button title="上一张 (←)" :disabled="!canShowPreviousImage" @click="showAdjacentImage(-1)">
+                  <icon icon="icon-back_android" color="currentColor" />
+                </button>
+                <button title="下一张 (→)" :disabled="!canShowNextImage" @click="showAdjacentImage(1)">
+                  <icon icon="icon-back_android" color="currentColor" class="rotate-180" />
+                </button>
+                <button :class="{active: imageViewerFit}" title="适应窗口" @click="resetImageViewerZoom">适应</button>
+                <button title="缩小" @click="zoomImageViewer(-25)">-</button>
+                <span>{{ imageViewerZoomText }}</span>
+                <button title="放大" @click="zoomImageViewer(25)">+</button>
+                <button title="网页全屏 (F)" :class="{active: imageViewerPageFullscreen}" @click="toggleImageViewerPageFullscreen">
+                  <icon icon="icon-renamebox" color="currentColor" />
+                </button>
+                <button title="浏览器全屏" :class="{active: imageViewerFullscreen}" @click="toggleImageViewerFullscreen">
+                  <icon icon="icon-unfold" color="currentColor" />
+                </button>
+                <button title="缩略图 (T)" :class="{active: imageViewerShowFilmstrip}" :disabled="imageViewerCount <= 1" @click="toggleImageViewerFilmstrip">
+                  <icon icon="icon-viewgrid" color="currentColor" />
+                </button>
+                <button title="下载" @click="downloadSelected(imageViewerEntry)">
+                  <icon icon="icon-download" color="currentColor" />
+                </button>
+                <button title="关闭" @click="closeImageViewer">
+                  <icon icon="icon-close" color="currentColor" />
+                </button>
+              </div>
             </div>
-            <div class="image-viewer-actions">
-              <button title="上一张 (←)" :disabled="!canShowPreviousImage" @click="showAdjacentImage(-1)">
-                <icon icon="icon-back_android" color="currentColor" />
-              </button>
-              <button title="下一张 (→)" :disabled="!canShowNextImage" @click="showAdjacentImage(1)">
-                <icon icon="icon-back_android" color="currentColor" class="rotate-180" />
-              </button>
-              <button :class="{active: imageViewerFit}" title="适应窗口" @click="resetImageViewerZoom">适应</button>
-              <button title="缩小" @click="zoomImageViewer(-25)">-</button>
-              <span>{{ imageViewerZoomText }}</span>
-              <button title="放大" @click="zoomImageViewer(25)">+</button>
-              <button title="网页全屏 (F)" :class="{active: imageViewerPageFullscreen}" @click="toggleImageViewerPageFullscreen">
-                <icon icon="icon-renamebox" color="currentColor" />
-              </button>
-              <button title="浏览器全屏" :class="{active: imageViewerFullscreen}" @click="toggleImageViewerFullscreen">
-                <icon icon="icon-unfold" color="currentColor" />
-              </button>
-              <button title="缩略图 (T)" :class="{active: imageViewerShowFilmstrip}" :disabled="imageViewerCount <= 1" @click="toggleImageViewerFilmstrip">
-                <icon icon="icon-viewgrid" color="currentColor" />
-              </button>
-              <button title="下载" @click="downloadSelected(imageViewerEntry)">
-                <icon icon="icon-download" color="currentColor" />
-              </button>
-              <button title="关闭" @click="closeImageViewer">
-                <icon icon="icon-close" color="currentColor" />
+            <div
+                class="image-viewer-stage"
+                :class="{fit: imageViewerFit, panning: canPanImageViewer, dragging: imageViewerDragging}"
+                @pointerdown="startImageViewerPan"
+                @pointermove="moveImageViewerPan"
+                @pointerup="stopImageViewerPan"
+                @pointercancel="stopImageViewerPan"
+                @lostpointercapture="imageViewerDragging = false"
+                @wheel="handleImageViewerWheel"
+                @dblclick="resetImageViewerZoom">
+              <div v-if="imageViewerLoading" class="image-viewer-status">正在加载图片...</div>
+              <div v-if="imageViewerError" class="image-viewer-status error">{{ imageViewerError }}</div>
+              <img
+                  :key="imageViewerEntry.path"
+                  :src="downloadUrl(imageViewerEntry.path)"
+                  :alt="imageViewerEntry.name"
+                  :style="imageViewerStyle"
+                  @load="handleImageViewerLoad"
+                  @error="handleImageViewerError">
+            </div>
+            <div v-if="canShowImageViewerFilmstrip" class="image-viewer-filmstrip" aria-label="图片列表">
+              <button
+                  v-for="item in imageViewerFilmstripEntries"
+                  :key="item.entry.path"
+                  class="image-viewer-thumb"
+                  :class="{active: item.entry.path === imageViewerEntry.path}"
+                  :title="`${item.index + 1} / ${imageViewerCount} · ${item.entry.name}`"
+                  @click="showImageAt(item.index)">
+                <img :src="downloadUrl(item.entry.path)" :alt="item.entry.name" loading="lazy">
+                <span>{{ item.index + 1 }}</span>
               </button>
             </div>
-          </div>
-          <div
-              class="image-viewer-stage"
-              :class="{fit: imageViewerFit, panning: canPanImageViewer, dragging: imageViewerDragging}"
-              @pointerdown="startImageViewerPan"
-              @pointermove="moveImageViewerPan"
-              @pointerup="stopImageViewerPan"
-              @pointercancel="stopImageViewerPan"
-              @lostpointercapture="imageViewerDragging = false"
-              @wheel="handleImageViewerWheel"
-              @dblclick="resetImageViewerZoom">
-            <div v-if="imageViewerLoading" class="image-viewer-status">正在加载图片...</div>
-            <div v-if="imageViewerError" class="image-viewer-status error">{{ imageViewerError }}</div>
-            <img
-                :key="imageViewerEntry.path"
-                :src="downloadUrl(imageViewerEntry.path)"
-                :alt="imageViewerEntry.name"
-                :style="imageViewerStyle"
-                @load="handleImageViewerLoad"
-                @error="handleImageViewerError">
-          </div>
-          <div v-if="canShowImageViewerFilmstrip" class="image-viewer-filmstrip" aria-label="图片列表">
-            <button
-                v-for="item in imageViewerFilmstripEntries"
-                :key="item.entry.path"
-                class="image-viewer-thumb"
-                :class="{active: item.entry.path === imageViewerEntry.path}"
-                :title="`${item.index + 1} / ${imageViewerCount} · ${item.entry.name}`"
-                @click="showImageAt(item.index)">
-              <img :src="downloadUrl(item.entry.path)" :alt="item.entry.name" loading="lazy">
-              <span>{{ item.index + 1 }}</span>
-            </button>
-          </div>
-        </section>
+          </section>
+        </Teleport>
       </section>
     </main>
   </div>
