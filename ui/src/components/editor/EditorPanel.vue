@@ -15,11 +15,60 @@ type CodeEditorExpose = ComponentPublicInstance & {
   focus?: () => void;
 }
 
+const storageKeys = {
+  theme: "editor.theme",
+  fontSize: "editor.fontSize",
+  tabSize: "editor.tabSize",
+  wrap: "editor.wrap"
+};
+
+const allThemeKeys = [...editorConfig.theme.light, ...editorConfig.theme.dark].map(theme => theme.key);
+
+const readStorageItem = (key: string): string | null => {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+const writeStorageItem = (key: string, value: string) => {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // 本地存储不可用时，仍保留当前会话内的编辑设置。
+  }
+}
+
+const normalizeNumberPreference = (value: unknown, fallback: number, min: number, max: number) => {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(numeric)));
+}
+
+const readThemePreference = () => {
+  const theme = readStorageItem(storageKeys.theme);
+  return theme && allThemeKeys.includes(theme) ? theme : "github";
+}
+
+const readNumberPreference = (key: string, fallback: number, min: number, max: number) => {
+  return normalizeNumberPreference(readStorageItem(key), fallback, min, max);
+}
+
+const readBooleanPreference = (key: string, fallback: boolean) => {
+  const value = readStorageItem(key);
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
+}
+
 const fileStore = useFileStore();
 const fileInfo = ref<FileInfo | null>(null);
 const editorRef = ref<CodeEditorExpose | null>(null);
 const activeMenu = ref<MenuName>("");
-const currentTheme = ref("github");
+const currentTheme = ref(readThemePreference());
 const currentMode = ref("text");
 const content = ref("");
 const contentEtag = ref("");
@@ -28,9 +77,9 @@ const loading = ref(false);
 const saving = ref(false);
 const statusText = ref("");
 const errorText = ref("");
-const fontSize = ref(16);
-const tabSize = ref(2);
-const wrap = ref(true);
+const fontSize = ref(readNumberPreference(storageKeys.fontSize, 16, 12, 28));
+const tabSize = ref(readNumberPreference(storageKeys.tabSize, 2, 2, 8));
+const wrap = ref(readBooleanPreference(storageKeys.wrap, true));
 let loadVersion = 0;
 
 const themeClass = computed(() => `ace-${currentTheme.value.replace(/_/g, "-")}`);
@@ -103,6 +152,32 @@ const changeTheme = (theme: string) => {
   closeMenus();
   nextTick(() => editorRef.value?.focus?.());
 }
+
+watch(currentTheme, theme => {
+  if (allThemeKeys.includes(theme)) writeStorageItem(storageKeys.theme, theme);
+});
+
+watch(fontSize, value => {
+  const normalized = normalizeNumberPreference(value, 16, 12, 28);
+  if (value !== normalized) {
+    fontSize.value = normalized;
+    return;
+  }
+  writeStorageItem(storageKeys.fontSize, String(normalized));
+});
+
+watch(tabSize, value => {
+  const normalized = normalizeNumberPreference(value, 2, 2, 8);
+  if (value !== normalized) {
+    tabSize.value = normalized;
+    return;
+  }
+  writeStorageItem(storageKeys.tabSize, String(normalized));
+});
+
+watch(wrap, value => {
+  writeStorageItem(storageKeys.wrap, String(Boolean(value)));
+});
 
 const loadCurrentFile = async () => {
   if (!fileStore.showEditor || fileStore.currentFile == null) return;
