@@ -101,6 +101,11 @@ const selectionBox = reactive<SelectionBox>({
   height: 0
 });
 let thumbnailObserver: IntersectionObserver | null = null;
+let marqueePointerX = 0;
+let marqueePointerY = 0;
+let marqueeScrollFrame = 0;
+const marqueeScrollEdge = 48;
+const marqueeMaxScrollSpeed = 24;
 
 const normalizeFolderData = (data: FolderData): FolderData => ({
   path: data.path || "/",
@@ -298,7 +303,14 @@ const clearSelection = () => {
   anchorPath.value = "";
 }
 
+const stopMarqueeAutoScroll = () => {
+  if (!marqueeScrollFrame) return;
+  window.cancelAnimationFrame(marqueeScrollFrame);
+  marqueeScrollFrame = 0;
+}
+
 const resetSelectionBox = () => {
+  stopMarqueeAutoScroll();
   selectionBox.active = false;
   selectionBox.additive = false;
   selectionBox.basePaths = [];
@@ -541,6 +553,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeyDown);
   window.removeEventListener("mousemove", handleSelectionMove);
   window.removeEventListener("mouseup", finishMarqueeSelection);
+  stopMarqueeAutoScroll();
   thumbnailObserver?.disconnect();
   itemRefs.clear();
   renameInputRefs.clear();
@@ -824,6 +837,8 @@ const beginMarqueeSelection = (event: MouseEvent) => {
   const viewport = viewportRef.value;
   if (!viewport) return;
   const rect = viewport.getBoundingClientRect();
+  marqueePointerX = event.clientX;
+  marqueePointerY = event.clientY;
   viewport.focus();
   if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
     clearSelection();
@@ -839,17 +854,58 @@ const beginMarqueeSelection = (event: MouseEvent) => {
   selectionBox.height = 0;
 }
 
-const handleSelectionMove = (event: MouseEvent) => {
-  if (!selectionBox.active || !viewportRef.value) return;
+const updateSelectionBoxFromPointer = (clientX: number, clientY: number) => {
+  if (!viewportRef.value) return;
   const viewport = viewportRef.value;
   const rect = viewport.getBoundingClientRect();
-  const currentX = event.clientX - rect.left + viewport.scrollLeft;
-  const currentY = event.clientY - rect.top + viewport.scrollTop;
+  const currentX = clientX - rect.left + viewport.scrollLeft;
+  const currentY = clientY - rect.top + viewport.scrollTop;
   selectionBox.x = Math.min(selectionBox.originX, currentX);
   selectionBox.y = Math.min(selectionBox.originY, currentY);
   selectionBox.width = Math.abs(currentX - selectionBox.originX);
   selectionBox.height = Math.abs(currentY - selectionBox.originY);
   updateMarqueeSelection();
+}
+
+const marqueeScrollSpeed = (pointer: number, start: number, end: number) => {
+  if (pointer < start + marqueeScrollEdge) {
+    const ratio = Math.min(1, (start + marqueeScrollEdge - pointer) / marqueeScrollEdge);
+    return -Math.ceil(ratio * marqueeMaxScrollSpeed);
+  }
+  if (pointer > end - marqueeScrollEdge) {
+    const ratio = Math.min(1, (pointer - (end - marqueeScrollEdge)) / marqueeScrollEdge);
+    return Math.ceil(ratio * marqueeMaxScrollSpeed);
+  }
+  return 0;
+}
+
+const runMarqueeAutoScroll = () => {
+  marqueeScrollFrame = 0;
+  const viewport = viewportRef.value;
+  if (!selectionBox.active || !viewport) return;
+  const rect = viewport.getBoundingClientRect();
+  const dx = marqueeScrollSpeed(marqueePointerX, rect.left, rect.right);
+  const dy = marqueeScrollSpeed(marqueePointerY, rect.top, rect.bottom);
+  if (!dx && !dy) return;
+  const beforeLeft = viewport.scrollLeft;
+  const beforeTop = viewport.scrollTop;
+  viewport.scrollBy({left: dx, top: dy});
+  if (viewport.scrollLeft === beforeLeft && viewport.scrollTop === beforeTop) return;
+  updateSelectionBoxFromPointer(marqueePointerX, marqueePointerY);
+  marqueeScrollFrame = window.requestAnimationFrame(runMarqueeAutoScroll);
+}
+
+const scheduleMarqueeAutoScroll = () => {
+  if (marqueeScrollFrame) return;
+  marqueeScrollFrame = window.requestAnimationFrame(runMarqueeAutoScroll);
+}
+
+const handleSelectionMove = (event: MouseEvent) => {
+  if (!selectionBox.active) return;
+  marqueePointerX = event.clientX;
+  marqueePointerY = event.clientY;
+  updateSelectionBoxFromPointer(event.clientX, event.clientY);
+  scheduleMarqueeAutoScroll();
 }
 
 const updateMarqueeSelection = () => {
