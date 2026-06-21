@@ -181,6 +181,7 @@ const tasks = ref<TaskStatus[]>([]);
 const taskMessage = ref("");
 const taskLastUpdatedAt = ref("");
 const searchText = ref("");
+const isFiltering = computed(() => Boolean(searchText.value.trim()));
 const previewPanelVisible = ref(false);
 const previewEntry = ref<ExplorerEntry | null>(null);
 const previewLoading = ref(false);
@@ -659,8 +660,17 @@ const closePanels = () => {
   closeImageViewer();
 }
 
-const clearSearch = () => {
+const clearSearch = (focus = true) => {
   searchText.value = "";
+  if (focus) searchInput.value?.focus();
+}
+
+const handleSearchEscape = () => {
+  if (isFiltering.value) {
+    clearSearch();
+    return;
+  }
+  searchInput.value?.blur();
 }
 
 const loadRoot = async () => {
@@ -2042,9 +2052,19 @@ const signOut = async () => {
         <button :disabled="!canCloseRightTabsContext" @click="closeRightTabsFromMenu">关闭右侧标签页</button>
       </div>
       <div class="top-actions">
-        <label class="search-box">
-          <input ref="searchInput" v-model="searchText" type="search" placeholder="搜索当前文件夹" @keydown.escape="clearSearch">
-          <icon icon="icon-fenxiang" />
+        <label class="search-box" :class="{active: isFiltering}">
+          <input
+              ref="searchInput"
+              v-model="searchText"
+              type="search"
+              placeholder="搜索当前文件夹"
+              aria-label="搜索当前文件夹"
+              title="搜索当前文件夹 (Ctrl+F)"
+              @keydown.escape.prevent="handleSearchEscape">
+          <button v-if="isFiltering" type="button" title="清除筛选" @click.prevent="() => clearSearch()">
+            <icon icon="icon-close" />
+          </button>
+          <icon v-else icon="icon-fenxiang" />
         </label>
         <button class="square-button" title="设置" @click="openSettings">
           <icon icon="icon-setting" size="large" />
@@ -2248,6 +2268,7 @@ const signOut = async () => {
                 @drop-entries="dropEntriesToFolder"
                 @drop-to-current-folder="dropEntriesToCurrentFolder"
                 @selection-change="handleSelectionChange"
+                @clear-filter="() => clearSearch()"
                 @open-new-tab="openEntryInNewTab"
                 @open-image-viewer="openImageViewer">
             </explorer>
@@ -2604,8 +2625,16 @@ const signOut = async () => {
   @apply flex h-10 w-72 items-center gap-2 rounded-xl border border-white bg-white/70 px-3 shadow-sm backdrop-blur;
 }
 
+.search-box.active {
+  @apply border-blue-200 bg-white text-blue-700 ring-2 ring-blue-100;
+}
+
 .search-box input {
   @apply min-w-0 grow bg-transparent text-sm outline-none placeholder:text-slate-400;
+}
+
+.search-box button {
+  @apply -mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700;
 }
 
 .square-button {

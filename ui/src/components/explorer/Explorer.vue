@@ -73,6 +73,7 @@ const emit = defineEmits<{
   (e: "drop-to-current-folder", payload: DropToCurrentFolderPayload): void;
   (e: "open-new-tab", entry: ExplorerEntry): void;
   (e: "selection-change", entries: ExplorerEntry[]): void;
+  (e: "clear-filter"): void;
 }>()
 
 const props = withDefaults(defineProps<{
@@ -174,10 +175,22 @@ const allEntries = computed<ExplorerEntry[]>(() => [
   }))
 ]);
 
+const filterKeyword = computed(() => props.filterText.trim());
+
 const entries = computed<ExplorerEntry[]>(() => {
-  const keyword = props.filterText.trim().toLowerCase();
+  const keyword = filterKeyword.value.toLowerCase();
   if (!keyword) return allEntries.value;
   return allEntries.value.filter(entry => entry.name.toLowerCase().includes(keyword));
+});
+
+const emptyText = computed(() => {
+  if (filterKeyword.value) return `没有匹配“${filterKeyword.value}”的项目`;
+  return "此文件夹为空";
+});
+
+const emptyHintText = computed(() => {
+  if (!filterKeyword.value) return "";
+  return folderData.value.hasMore ? "当前只筛选已加载项目，清除筛选后可继续加载更多。" : "清除筛选可查看全部已加载项目。";
 });
 
 const selectedEntries = computed(() => {
@@ -207,7 +220,7 @@ const selectedCountText = computed(() => {
 const totalCountText = computed(() => {
   const loadedCount = allEntries.value.length;
   const hasMore = folderData.value.hasMore ? "，还有更多" : "";
-  return props.filterText.trim() ? `已加载 ${loadedCount} 项，筛选 ${entries.value.length} 项${hasMore}` : `已加载 ${loadedCount} 项${hasMore}`;
+  return filterKeyword.value ? `已加载 ${loadedCount} 项，筛选 ${entries.value.length} 项${hasMore}` : `已加载 ${loadedCount} 项${hasMore}`;
 });
 
 const itemSizeClass = computed(() => ({
@@ -1516,7 +1529,11 @@ defineExpose({
 
       <div v-if="loading" class="explorer-empty">正在加载...</div>
       <div v-else-if="message" class="explorer-empty error">{{ message }}</div>
-      <div v-else-if="!entries.length" class="explorer-empty">此文件夹为空</div>
+      <div v-else-if="!entries.length" class="explorer-empty">
+        <span>{{ emptyText }}</span>
+        <small v-if="emptyHintText">{{ emptyHintText }}</small>
+        <button v-if="filterKeyword" type="button" class="empty-action" @click.stop="emit('clear-filter')">清除筛选</button>
+      </div>
 
       <div v-else class="entry-surface">
         <article
@@ -1902,7 +1919,15 @@ defineExpose({
 }
 
 .explorer-empty {
-  @apply flex h-48 items-center justify-center text-sm text-slate-500;
+  @apply flex h-48 flex-col items-center justify-center gap-1 text-center text-sm text-slate-500;
+}
+
+.explorer-empty small {
+  @apply max-w-md px-4 text-xs leading-5 text-slate-400;
+}
+
+.empty-action {
+  @apply mt-2 h-8 rounded-md border border-blue-200 bg-white px-3 text-xs font-medium text-blue-700 shadow-sm hover:border-blue-300 hover:bg-blue-50;
 }
 
 .explorer-empty.error {
