@@ -2223,9 +2223,24 @@ const zoomPreviewImage = (delta: number) => {
   previewImageZoom.value = Math.min(300, Math.max(25, previewImageZoom.value + delta));
 }
 
+const handlePreviewImageWheel = (event: WheelEvent) => {
+  event.preventDefault();
+  zoomPreviewImage(event.deltaY < 0 ? 25 : -25);
+}
+
 const zoomImageViewer = (delta: number) => {
   imageViewerFit.value = false;
   imageViewerZoom.value = Math.min(500, Math.max(25, imageViewerZoom.value + delta));
+}
+
+const toggleImageViewerZoomMode = () => {
+  if (imageViewerFit.value) {
+    imageViewerFit.value = false;
+    imageViewerZoom.value = 100;
+    resetImageViewerPan();
+    return;
+  }
+  resetImageViewerZoom();
 }
 
 const handleImageViewerWheel = (event: WheelEvent) => {
@@ -2798,6 +2813,7 @@ const signOut = async () => {
                   @pointerup="stopPreviewImagePan"
                   @pointercancel="stopPreviewImagePan"
                   @lostpointercapture="previewImageDragging = false"
+                  @wheel="handlePreviewImageWheel"
                   @dblclick="openPreviewImageViewer">
                 <img :src="downloadUrl(previewEntry.path)" :alt="previewEntry.name" :style="previewImageStyle">
               </div>
@@ -2863,7 +2879,7 @@ const signOut = async () => {
                 @pointercancel="stopImageViewerPan"
                 @lostpointercapture="imageViewerDragging = false"
                 @wheel="handleImageViewerWheel"
-                @dblclick="resetImageViewerZoom">
+                @dblclick="toggleImageViewerZoomMode">
               <div v-if="imageViewerLoading" class="image-viewer-status">正在加载图片...</div>
               <div v-if="imageViewerError" class="image-viewer-status error">{{ imageViewerError }}</div>
               <img
