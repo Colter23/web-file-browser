@@ -1838,31 +1838,33 @@ defineExpose({
             @dragleave="dragLeaveEntry($event, entry)"
             @drop="dropOnEntry($event, entry)"
             @contextmenu.prevent.stop="openContextMenu($event, entry)">
-          <div class="entry-visual">
-            <img
-                v-if="shouldLoadThumbnail(entry)"
-                :src="thumbnailUrl(entry)"
-                :alt="entry.name"
-                loading="lazy"
-                decoding="async"
-                @error="handleThumbnailError(entry)">
-            <icon v-else :icon="fileIcon(entry)" />
-          </div>
-          <div class="entry-main">
-            <input
-                v-if="isRenaming(entry)"
-                :ref="element => setRenameInputRef(entry.path, element)"
-                v-model="renameDraft"
-                class="entry-rename-input"
-                :disabled="renameSubmitting"
-                @click.stop
-                @mousedown.stop
-                @dblclick.stop
-                @keydown.enter.prevent="commitRename"
-                @keydown.esc.prevent="cancelRename"
-                @blur="commitRename">
-            <span v-else class="entry-name">{{ entry.name }}</span>
-            <span v-if="viewMode !== 'details'" class="entry-meta">{{ entryTypeText(entry) }}</span>
+          <div class="entry-name-cell">
+            <div class="entry-visual">
+              <img
+                  v-if="shouldLoadThumbnail(entry)"
+                  :src="thumbnailUrl(entry)"
+                  :alt="entry.name"
+                  loading="lazy"
+                  decoding="async"
+                  @error="handleThumbnailError(entry)">
+              <icon v-else :icon="fileIcon(entry)" />
+            </div>
+            <div class="entry-main">
+              <input
+                  v-if="isRenaming(entry)"
+                  :ref="element => setRenameInputRef(entry.path, element)"
+                  v-model="renameDraft"
+                  class="entry-rename-input"
+                  :disabled="renameSubmitting"
+                  @click.stop
+                  @mousedown.stop
+                  @dblclick.stop
+                  @keydown.enter.prevent="commitRename"
+                  @keydown.esc.prevent="cancelRename"
+                  @blur="commitRename">
+              <span v-else class="entry-name">{{ entry.name }}</span>
+              <span v-if="viewMode !== 'details'" class="entry-meta">{{ entryTypeText(entry) }}</span>
+            </div>
           </div>
           <span v-if="viewMode === 'details'" class="entry-date">{{ formatDate(entry.modified) }}</span>
           <span v-if="viewMode === 'details'" class="entry-type">{{ entryTypeText(entry) }}</span>
@@ -2137,6 +2139,22 @@ defineExpose({
   @apply grid min-h-20 grid-cols-[3.5rem_minmax(0,1fr)] grid-rows-[auto_auto] items-center gap-x-3 gap-y-1 p-2;
 }
 
+.entry-name-cell {
+  @apply flex min-w-0 items-center gap-2;
+}
+
+.details .entry-name-cell {
+  @apply min-w-0 px-2;
+}
+
+.icons .entry-name-cell {
+  @apply flex-col justify-start gap-2 text-center;
+}
+
+.tiles .entry-name-cell {
+  @apply contents;
+}
+
 .entry-visual {
   @apply inline-flex shrink-0 items-center justify-center overflow-hidden text-slate-700;
 }
@@ -2178,10 +2196,6 @@ defineExpose({
 
 .entry-main {
   @apply flex min-w-0 items-center gap-2;
-}
-
-.details .entry-main {
-  @apply px-2;
 }
 
 .icons .entry-main {
