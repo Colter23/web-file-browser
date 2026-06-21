@@ -66,6 +66,7 @@ const emit = defineEmits<{
   (e: "download", entry: ExplorerEntry): void;
   (e: "archive", entry: ExplorerEntry): void;
   (e: "extract", entry: ExplorerEntry): void;
+  (e: "properties", entries: ExplorerEntry[]): void;
   (e: "preview", entry: ExplorerEntry): void;
   (e: "open-image-viewer", payload: ImageViewerPayload): void;
   (e: "copy", entry: ExplorerEntry): void;
@@ -133,7 +134,7 @@ const marqueeMaxScrollSpeed = 24;
 const contextMenuViewportPadding = 8;
 const contextMenuEstimatedWidth = 176;
 const contextMenuEstimatedHeights = {
-  entry: 432,
+  entry: 464,
   background: 224
 };
 const viewWheelStepThreshold = 80;
@@ -1009,6 +1010,14 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     openKeyboardContextMenu();
     return;
   }
+  if (event.altKey && !event.ctrlKey && !event.metaKey && event.key === "Enter") {
+    event.preventDefault();
+    contextMenu.visible = false;
+    const focused = focusedOrSelectedEntry();
+    const entriesToShow = selectedEntries.value.length ? selectedEntries.value : focused ? [focused] : [];
+    if (entriesToShow.length) emit("properties", entriesToShow);
+    return;
+  }
   if ((event.key === " " || event.code === "Space") && !event.altKey && !event.shiftKey && (event.ctrlKey || event.metaKey)) {
     event.preventDefault();
     contextMenu.visible = false;
@@ -1494,6 +1503,12 @@ const deleteContextEntries = () => {
   if (entry) emit("delete", entry);
 }
 
+const showContextProperties = () => {
+  const entries = contextEntries.value;
+  closeContextMenu();
+  if (entries.length) emit("properties", entries);
+}
+
 const handleAuxClick = (event: MouseEvent, entry: ExplorerEntry) => {
   if (event.button !== 1 || entry.type !== "folder") return;
   event.preventDefault();
@@ -1692,6 +1707,8 @@ defineExpose({
       <div class="context-separator"></div>
       <button :disabled="!primaryContextEntry || isContextMultiSelect" @click="renameContextEntry">重命名</button>
       <button class="danger" :disabled="!primaryContextEntry" @click="deleteContextEntries">{{ contextLabel("删除", "删除选中项") }}</button>
+      <div class="context-separator"></div>
+      <button :disabled="!contextSelectionCount" @click="showContextProperties">属性</button>
     </div>
   </section>
 </template>

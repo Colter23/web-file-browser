@@ -83,6 +83,11 @@ type DeleteConfirmState = {
   error: string;
 }
 
+type PropertiesPanelState = {
+  visible: boolean;
+  entries: ExplorerEntry[];
+}
+
 type TaskCancelConfirmState = {
   visible: boolean;
   task: TaskStatus | null;
@@ -177,6 +182,7 @@ const treeData = ref<FileTreeData[]>([]);
 const explorerRef = ref<ExplorerExpose | null>(null);
 const breadcrumbRef = ref<BreadcrumbExpose | null>(null);
 const deleteConfirmRef = ref<HTMLElement | null>(null);
+const propertiesPanelRef = ref<HTMLElement | null>(null);
 const imageViewerRef = ref<HTMLElement | null>(null);
 const uploadInput = ref<HTMLInputElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
@@ -237,6 +243,10 @@ const deleteConfirm = ref<DeleteConfirmState>({
   entries: [],
   submitting: false,
   error: ""
+});
+const propertiesPanel = ref<PropertiesPanelState>({
+  visible: false,
+  entries: []
 });
 const taskCancelConfirm = ref<TaskCancelConfirmState>({
   visible: false,
@@ -315,6 +325,50 @@ const canArchiveSelection = computed(() => hasSelection.value);
 const canDeleteSelection = computed(() => hasSelection.value);
 const canExtractSelection = computed(() => isArchiveFile(singleSelection.value));
 const canPasteSelection = computed(() => hasClipboard.value);
+const propertiesEntries = computed(() => propertiesPanel.value.entries);
+const propertiesEntryCount = computed(() => propertiesEntries.value.length);
+const propertiesSingleEntry = computed(() => propertiesEntryCount.value === 1 ? propertiesEntries.value[0] : null);
+const propertiesFolderCount = computed(() => propertiesEntries.value.filter(entry => entry.type === "folder").length);
+const propertiesFileEntries = computed(() => propertiesEntries.value.filter(entry => entry.type === "file"));
+const propertiesKnownSize = computed(() => propertiesFileEntries.value.reduce((total, entry) => total + (entry.size ?? 0), 0));
+const propertiesMissingSizeCount = computed(() => propertiesFileEntries.value.filter(entry => entry.size === undefined).length);
+const propertiesTitle = computed(() => propertiesSingleEntry.value?.name ?? `${propertiesEntryCount.value} 个项目`);
+const propertiesSubtitle = computed(() => propertiesSingleEntry.value ? "项目属性" : "选中项目属性");
+const propertiesIcon = computed(() => {
+  const entry = propertiesSingleEntry.value;
+  if (!entry) return "icon-file-common-filling";
+  if (entry.type === "folder") return "icon-folder-fill";
+  return "icon-file-fill";
+});
+const entryTypeText = (entry: ExplorerEntry) => {
+  if (entry.type === "folder") return "文件夹";
+  return entry.extension ? `${entry.extension.toUpperCase()} 文件` : "文件";
+}
+const propertiesSizeText = computed(() => {
+  if (propertiesSingleEntry.value) return propertiesSingleEntry.value.type === "file" ? formatBytes(propertiesSingleEntry.value.size) : "-";
+  const suffix = propertiesMissingSizeCount.value ? `，${propertiesMissingSizeCount.value} 个文件未加载大小` : "";
+  return `${formatBytes(propertiesKnownSize.value)}${suffix}`;
+});
+const propertiesRows = computed(() => {
+  const entry = propertiesSingleEntry.value;
+  if (entry) {
+    return [
+      {label: "名称", value: entry.name},
+      {label: "类型", value: entryTypeText(entry)},
+      {label: "位置", value: parentPath(entry.path)},
+      {label: "路径", value: entry.path},
+      {label: "大小", value: propertiesSizeText.value},
+      {label: "修改时间", value: formatDate(entry.modified)}
+    ];
+  }
+  return [
+    {label: "项目", value: `${propertiesEntryCount.value} 项`},
+    {label: "文件夹", value: `${propertiesFolderCount.value} 项`},
+    {label: "文件", value: `${propertiesFileEntries.value.length} 项`},
+    {label: "已知文件大小", value: propertiesSizeText.value},
+    {label: "当前位置", value: currentFolder()}
+  ];
+});
 const currentViewModeMeta = computed(() => viewModeMeta[fileStore.viewMode]);
 const nextViewMode = computed(() => {
   const index = viewModeOrder.indexOf(fileStore.viewMode);
@@ -670,11 +724,19 @@ const clearPreviewContent = () => {
   previewCopied.value = false;
 }
 
+const closePropertiesPanel = () => {
+  propertiesPanel.value = {
+    visible: false,
+    entries: []
+  };
+}
+
 const closePanels = () => {
   previewPanelVisible.value = false;
   clearPreviewContent();
   operationPanel.value.visible = false;
   resetDeleteConfirm();
+  closePropertiesPanel();
   resetTaskCancelConfirm();
   closeImageViewer();
 }
@@ -1026,6 +1088,25 @@ const resetTaskCancelConfirm = () => {
 const closeDeleteConfirm = () => {
   if (deleteConfirm.value.submitting) return;
   resetDeleteConfirm();
+}
+
+const showProperties = async (entries = selectedEntries()) => {
+  if (!entries.length) {
+    showShellNotice("请选择文件或文件夹", "warning");
+    return;
+  }
+  clearPreviewContent();
+  previewPanelVisible.value = false;
+  resetOperationPanel();
+  resetDeleteConfirm();
+  resetTaskCancelConfirm();
+  closeImageViewer();
+  propertiesPanel.value = {
+    visible: true,
+    entries
+  };
+  await nextTick();
+  propertiesPanelRef.value?.focus();
 }
 
 const closeTaskCancelConfirm = () => {
@@ -1470,13 +1551,13 @@ const handleUploadDrop = async (event: DragEvent) => {
 const shouldIgnoreNavigationShortcut = (target: EventTarget | null) => {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
-  return Boolean(target.closest("input, textarea, select, [contenteditable='true'], .ace_editor, .operation-panel, .delete-confirm-panel"));
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true'], .ace_editor, .operation-panel, .delete-confirm-panel, .properties-panel"));
 }
 
 const shouldIgnoreActionShortcut = (target: EventTarget | null) => {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
-  return Boolean(target.closest("button, a, input, textarea, select, [contenteditable='true'], .ace_editor, .operation-panel, .delete-confirm-panel, .context-menu, .task-panel"));
+  return Boolean(target.closest("button, a, input, textarea, select, [contenteditable='true'], .ace_editor, .operation-panel, .delete-confirm-panel, .properties-panel, .context-menu, .task-panel"));
 }
 
 const shouldKeepEditorFindShortcut = (target: EventTarget | null) => {
@@ -1489,7 +1570,7 @@ const shouldIgnoreAddressShortcut = (target: EventTarget | null) => {
   if (fileStore.showEditor) return true;
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
-  return Boolean(target.closest(".ace_editor, .operation-panel, .delete-confirm-panel, .context-menu, .task-panel"));
+  return Boolean(target.closest(".ace_editor, .operation-panel, .delete-confirm-panel, .properties-panel, .context-menu, .task-panel"));
 }
 
 const hasPageTextSelection = () => {
@@ -2388,6 +2469,7 @@ const signOut = async () => {
                 @download="downloadSelected"
                 @archive="archiveSelected"
                 @extract="extractSelected"
+                @properties="showProperties"
                 @preview="previewSelected"
                 @copy="copySelected"
                 @cut="cutSelected"
@@ -2497,6 +2579,34 @@ const signOut = async () => {
                 <button type="button" class="delete-confirm-primary" :disabled="deleteConfirm.submitting" @click="submitDeleteConfirm">
                   {{ deleteConfirm.submitting ? "创建任务中..." : "移动到回收站" }}
                 </button>
+              </div>
+            </section>
+            <section
+                v-if="propertiesPanel.visible"
+                ref="propertiesPanelRef"
+                class="properties-panel"
+                tabindex="-1"
+                @keydown.esc.prevent="closePropertiesPanel">
+              <div class="properties-header">
+                <div class="properties-icon">
+                  <icon :icon="propertiesIcon" />
+                </div>
+                <div class="properties-title">
+                  <strong>{{ propertiesTitle }}</strong>
+                  <span>{{ propertiesSubtitle }}</span>
+                </div>
+                <button type="button" class="operation-panel-close" title="关闭" @click="closePropertiesPanel">
+                  <icon icon="icon-close" />
+                </button>
+              </div>
+              <div class="properties-list">
+                <div v-for="item in propertiesRows" :key="item.label" :title="item.value">
+                  <span>{{ item.label }}</span>
+                  <strong>{{ item.value }}</strong>
+                </div>
+              </div>
+              <div class="properties-actions">
+                <button type="button" class="operation-primary" @click="closePropertiesPanel">确定</button>
               </div>
             </section>
           </div>
@@ -2960,11 +3070,19 @@ const signOut = async () => {
   @apply absolute left-1/2 top-6 z-30 flex w-[min(30rem,calc(100%-2rem))] -translate-x-1/2 flex-col gap-3 rounded-lg border border-red-100 bg-white p-4 text-sm text-slate-700 shadow-2xl outline-none;
 }
 
+.properties-panel {
+  @apply absolute left-1/2 top-6 z-30 flex w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-2xl outline-none;
+}
+
 .operation-panel-header {
   @apply flex items-start gap-3;
 }
 
 .delete-confirm-header {
+  @apply flex items-start gap-3;
+}
+
+.properties-header {
   @apply flex items-start gap-3;
 }
 
@@ -2976,11 +3094,19 @@ const signOut = async () => {
   @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 text-xl text-red-600;
 }
 
+.properties-icon {
+  @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xl text-slate-600;
+}
+
 .operation-panel-title {
   @apply flex min-w-0 grow flex-col gap-0.5;
 }
 
 .delete-confirm-title {
+  @apply flex min-w-0 grow flex-col gap-0.5;
+}
+
+.properties-title {
   @apply flex min-w-0 grow flex-col gap-0.5;
 }
 
@@ -2992,11 +3118,19 @@ const signOut = async () => {
   @apply truncate text-base font-semibold text-slate-900;
 }
 
+.properties-title strong {
+  @apply truncate text-base font-semibold text-slate-900;
+}
+
 .operation-panel-title span {
   @apply truncate text-xs text-slate-500;
 }
 
 .delete-confirm-title span {
+  @apply text-xs leading-5 text-slate-500;
+}
+
+.properties-title span {
   @apply text-xs leading-5 text-slate-500;
 }
 
@@ -3053,6 +3187,26 @@ const signOut = async () => {
 }
 
 .delete-confirm-actions {
+  @apply flex justify-end gap-2 pt-1;
+}
+
+.properties-list {
+  @apply flex max-h-72 flex-col overflow-auto rounded-md border border-slate-100 bg-slate-50;
+}
+
+.properties-list div {
+  @apply grid min-h-9 grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 px-3 py-2 text-xs last:border-b-0;
+}
+
+.properties-list span {
+  @apply text-slate-500;
+}
+
+.properties-list strong {
+  @apply min-w-0 truncate font-medium text-slate-800;
+}
+
+.properties-actions {
   @apply flex justify-end gap-2 pt-1;
 }
 
