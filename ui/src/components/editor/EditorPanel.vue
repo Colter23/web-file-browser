@@ -7,6 +7,7 @@ import editorConfig from "../../assets/editor-config.json";
 import {useFileStore} from "../../store";
 import type {FileInfo} from "../../class.ts";
 import {getFile, saveFile} from "../../network/file-api.ts";
+import {isApiError} from "../../network";
 import {checkFileLanguageMode} from "../../utils/common.ts";
 
 type MenuName = "language" | "theme" | "settings" | "";
@@ -77,6 +78,7 @@ const loading = ref(false);
 const saving = ref(false);
 const statusText = ref("");
 const errorText = ref("");
+const saveConflict = ref(false);
 const fontSize = ref(readNumberPreference(storageKeys.fontSize, 16, 12, 28));
 const tabSize = ref(readNumberPreference(storageKeys.tabSize, 2, 2, 8));
 const wrap = ref(readBooleanPreference(storageKeys.wrap, true));
@@ -129,9 +131,12 @@ const editorMetaText = computed(() => {
 const dirtyText = computed(() => {
   if (saving.value) return "保存中";
   if (loading.value) return "加载中";
+  if (saveConflict.value) return "需重新载入";
   if (isChange.value) return "未保存";
   return statusText.value || "已同步";
 });
+
+const editorMessageText = computed(() => errorText.value || (saveConflict.value ? "文件版本已变化，请重新载入后再保存" : ""));
 
 const closeMenus = () => {
   activeMenu.value = "";
@@ -187,6 +192,7 @@ const loadCurrentFile = async () => {
   currentMode.value = checkFileLanguageMode(target.extension);
   statusText.value = "";
   errorText.value = "";
+  saveConflict.value = false;
   loading.value = true;
   try {
     const file = await getFile(target.path);
@@ -216,12 +222,14 @@ const onContentChange = (value: string) => {
   isChange.value = true;
   statusText.value = "";
   errorText.value = "";
+  if (saveConflict.value) saveConflict.value = false;
 }
 
 const save = async () => {
   if (!fileInfo.value || saving.value || loading.value) return;
   saving.value = true;
   errorText.value = "";
+  saveConflict.value = false;
   try {
     if (!contentEtag.value) {
       throw new Error("文件版本信息缺失，请重新打开文件后再保存");
@@ -231,7 +239,14 @@ const save = async () => {
     isChange.value = false;
     statusText.value = "已保存";
   } catch (error) {
-    errorText.value = error instanceof Error ? error.message : "保存失败";
+    if (isApiError(error) && (error.status === 412 || error.status === 428 || error.code === "PRECONDITION_FAILED" || error.code === "PRECONDITION_REQUIRED")) {
+      saveConflict.value = true;
+      errorText.value = error.status === 428
+          ? "缺少文件版本信息，请重新载入后再保存"
+          : "文件已被外部修改，请重新载入最新版本后再保存";
+    } else {
+      errorText.value = error instanceof Error ? error.message : "保存失败";
+    }
   } finally {
     saving.value = false;
   }
@@ -253,6 +268,7 @@ const close = () => {
   contentEtag.value = "";
   statusText.value = "";
   errorText.value = "";
+  saveConflict.value = false;
 }
 
 const handleKeyDown = (event: KeyboardEvent) => {
@@ -324,7 +340,7 @@ onBeforeUnmount(() => {
 
     <div class="editor-infobar" @click.stop>
       <div class="editor-info-left">
-        <span :class="['status-pill', {dirty: isChange, saving}]">{{ dirtyText }}</span>
+        <span :class="['status-pill', {dirty: isChange, saving, conflict: saveConflict}]">{{ dirtyText }}</span>
         <span>{{ editorMetaText }}</span>
       </div>
       <div class="editor-info-right">
@@ -403,9 +419,11 @@ onBeforeUnmount(() => {
 
     <footer class="editor-statusbar">
       <div class="status-left">
-        <span>{{ filePathText }}</span>
+        <span v-if="editorMessageText" :class="['editor-message', {conflict: saveConflict}]">{{ editorMessageText }}</span>
+        <span v-else>{{ filePathText }}</span>
       </div>
       <div class="status-right">
+        <button v-if="saveConflict" class="status-action" @click="reload">重新载入</button>
         <span>{{ selectedModeName }}</span>
         <span>{{ formatSize(fileInfo?.size) }}</span>
         <span>{{ wrap ? "自动换行" : "不换行" }}</span>
@@ -600,5 +618,18 @@ onBeforeUnmount(() => {
 
 .status-pill.saving {
   @apply bg-blue-100 text-blue-700;
+}
+
+.status-pill.conflict,
+.editor-message.conflict {
+  @apply bg-red-50 text-red-600;
+}
+
+.editor-message {
+  @apply truncate rounded px-2 py-0.5 text-red-600;
+}
+
+.status-action {
+  @apply h-5 shrink-0 rounded border border-red-200 bg-white px-2 text-xs text-red-600 hover:bg-red-50;
 }
 </style>
