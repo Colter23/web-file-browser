@@ -867,6 +867,10 @@ const handleKeyDown = async (event: KeyboardEvent) => {
       emit("open-new-tab", entry);
       return;
     }
+    if ((event.ctrlKey || event.metaKey) && entry?.type === "file") {
+      emit("preview", entry);
+      return;
+    }
     if (entry) await openEntry(entry);
     return;
   }
