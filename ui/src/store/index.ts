@@ -1,5 +1,7 @@
 import {defineStore} from "pinia";
-import {
+import type {
+    DirSortKey,
+    DirSortOrder,
     ExplorerIconSize,
     ExplorerTab,
     ExplorerViewMode,
@@ -25,6 +27,10 @@ declare type FileState = {
     viewMode: ExplorerViewMode;
     // 图标视图尺寸
     iconSize: ExplorerIconSize;
+    // 当前目录排序字段
+    sortKey: DirSortKey;
+    // 当前目录排序方向
+    sortOrder: DirSortOrder;
     // 目录标签页
     tabs: ExplorerTab[];
     activeTabId: string;
@@ -47,24 +53,39 @@ const pathTitle = (path: string): string => {
     return parts[parts.length - 1] || normalized;
 }
 
+const normalizePathStack = (stack?: string[]): string[] => {
+    if (!Array.isArray(stack)) return [];
+    return stack.filter(path => typeof path === "string").map(normalizePath);
+}
+
 const createTab = (path: string): ExplorerTab => {
     const normalized = normalizePath(path);
     return {
         id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
         path: normalized,
-        title: pathTitle(normalized)
+        title: pathTitle(normalized),
+        backStack: [],
+        forwardStack: [],
+        viewMode: readViewMode(),
+        iconSize: readIconSize(),
+        sortKey: "name",
+        sortOrder: "asc"
     }
 }
 
 const storageKeys = {
     viewMode: "explorer.viewMode",
     iconSize: "explorer.iconSize",
+    sortKey: "explorer.sortKey",
+    sortOrder: "explorer.sortOrder",
     tabs: "explorer.tabs",
     activeTabId: "explorer.activeTabId"
 }
 
 const viewModes: ExplorerViewMode[] = ["details", "list", "icons", "tiles"];
 const iconSizes: ExplorerIconSize[] = ["small", "medium", "large"];
+const sortKeys: DirSortKey[] = ["name", "modified", "size"];
+const sortOrders: DirSortOrder[] = ["asc", "desc"];
 
 const readStorageItem = (key: string): string | null => {
     if (typeof localStorage === "undefined") return null;
@@ -94,6 +115,36 @@ const readIconSize = (): ExplorerIconSize => {
     return iconSizes.includes(value as ExplorerIconSize) ? value as ExplorerIconSize : "medium";
 }
 
+const readSortKey = (): DirSortKey => {
+    const value = readStorageItem(storageKeys.sortKey);
+    return sortKeys.includes(value as DirSortKey) ? value as DirSortKey : "name";
+}
+
+const readSortOrder = (): DirSortOrder => {
+    const value = readStorageItem(storageKeys.sortOrder);
+    return sortOrders.includes(value as DirSortOrder) ? value as DirSortOrder : "asc";
+}
+
+const normalizeTab = (tab: Partial<ExplorerTab>): ExplorerTab | null => {
+    if (typeof tab.id !== "string" || typeof tab.path !== "string") return null;
+    const path = normalizePath(tab.path);
+    const viewMode = viewModes.includes(tab.viewMode as ExplorerViewMode) ? tab.viewMode as ExplorerViewMode : readViewMode();
+    const iconSize = iconSizes.includes(tab.iconSize as ExplorerIconSize) ? tab.iconSize as ExplorerIconSize : readIconSize();
+    const sortKey = sortKeys.includes(tab.sortKey as DirSortKey) ? tab.sortKey as DirSortKey : readSortKey();
+    const sortOrder = sortOrders.includes(tab.sortOrder as DirSortOrder) ? tab.sortOrder as DirSortOrder : readSortOrder();
+    return {
+        id: tab.id,
+        path,
+        title: pathTitle(path),
+        backStack: normalizePathStack(tab.backStack),
+        forwardStack: normalizePathStack(tab.forwardStack),
+        viewMode,
+        iconSize,
+        sortKey,
+        sortOrder
+    };
+}
+
 const readTabs = (): ExplorerTab[] => {
     const raw = readStorageItem(storageKeys.tabs);
     if (!raw) return [createTab("/")];
@@ -104,15 +155,11 @@ const readTabs = (): ExplorerTab[] => {
         const tabs = parsed.flatMap((item): ExplorerTab[] => {
             if (!item || typeof item !== "object") return [];
             const tab = item as Partial<ExplorerTab>;
-            if (typeof tab.id !== "string" || typeof tab.path !== "string") return [];
-            if (seen.has(tab.id)) return [];
-            seen.add(tab.id);
-            const path = normalizePath(tab.path);
-            return [{
-                id: tab.id,
-                path,
-                title: pathTitle(path)
-            }];
+            const normalized = normalizeTab(tab);
+            if (!normalized) return [];
+            if (seen.has(normalized.id)) return [];
+            seen.add(normalized.id);
+            return [normalized];
         });
         return tabs.length ? tabs : [createTab("/")];
     } catch {
@@ -136,14 +183,38 @@ export const useFileStore = defineStore('file', {
             currentFile: null,
             folderData: new Map() as Map<string, FolderData>,
             extensions: [],
-            viewMode: readViewMode(),
-            iconSize: readIconSize(),
+            viewMode: activeTab?.viewMode ?? readViewMode(),
+            iconSize: activeTab?.iconSize ?? readIconSize(),
+            sortKey: activeTab?.sortKey ?? readSortKey(),
+            sortOrder: activeTab?.sortOrder ?? readSortOrder(),
             tabs,
             activeTabId
         }
     },
     actions: {
+        activeTab() {
+            return this.tabs.find(tab => tab.id === this.activeTabId) ?? this.tabs[0] ?? null;
+        },
+
+        syncActiveTabPrefs() {
+            const activeTab = this.activeTab();
+            if (!activeTab) return;
+            activeTab.viewMode = this.viewMode;
+            activeTab.iconSize = this.iconSize;
+            activeTab.sortKey = this.sortKey;
+            activeTab.sortOrder = this.sortOrder;
+        },
+
+        applyTabPath(tab: ExplorerTab, path: string) {
+            const normalized = normalizePath(path);
+            tab.path = normalized;
+            tab.title = pathTitle(normalized);
+            this.currentPath = normalized;
+            this.activeTabId = tab.id;
+        },
+
         persistTabs() {
+            this.syncActiveTabPrefs();
             writeStorageItem(storageKeys.tabs, JSON.stringify(this.tabs));
             writeStorageItem(storageKeys.activeTabId, this.activeTabId);
         },
@@ -151,24 +222,79 @@ export const useFileStore = defineStore('file', {
         // 设置当前路径
         setCurrentPath(path: string) {
             const normalized = normalizePath(path);
-            this.currentPath = normalized;
             const activeTab = this.tabs.find(tab => tab.id === this.activeTabId) ?? this.tabs[0];
             if (activeTab) {
-                activeTab.path = normalized;
-                activeTab.title = pathTitle(normalized);
-                this.activeTabId = activeTab.id;
+                const current = normalizePath(activeTab.path || this.currentPath || "/");
+                if (current !== normalized) {
+                    activeTab.backStack = [...(activeTab.backStack ?? []), current].slice(-50);
+                    activeTab.forwardStack = [];
+                }
+                this.applyTabPath(activeTab, normalized);
+                activeTab.viewMode = this.viewMode;
+                activeTab.iconSize = this.iconSize;
+                activeTab.sortKey = this.sortKey;
+                activeTab.sortOrder = this.sortOrder;
+            } else {
+                this.currentPath = normalized;
             }
             this.persistTabs();
+        },
+
+        canGoBack() {
+            return Boolean(this.activeTab()?.backStack?.length);
+        },
+
+        canGoForward() {
+            return Boolean(this.activeTab()?.forwardStack?.length);
+        },
+
+        goBack() {
+            const activeTab = this.activeTab();
+            if (!activeTab?.backStack?.length) return null;
+            const current = normalizePath(activeTab.path || this.currentPath || "/");
+            const target = activeTab.backStack[activeTab.backStack.length - 1];
+            activeTab.backStack = activeTab.backStack.slice(0, -1);
+            activeTab.forwardStack = [current, ...(activeTab.forwardStack ?? [])].slice(0, 50);
+            this.applyTabPath(activeTab, target);
+            this.showEditor = false;
+            this.currentFile = null;
+            this.persistTabs();
+            return target;
+        },
+
+        goForward() {
+            const activeTab = this.activeTab();
+            if (!activeTab?.forwardStack?.length) return null;
+            const current = normalizePath(activeTab.path || this.currentPath || "/");
+            const target = activeTab.forwardStack[0];
+            activeTab.forwardStack = activeTab.forwardStack.slice(1);
+            activeTab.backStack = [...(activeTab.backStack ?? []), current].slice(-50);
+            this.applyTabPath(activeTab, target);
+            this.showEditor = false;
+            this.currentFile = null;
+            this.persistTabs();
+            return target;
         },
 
         setViewMode(mode: ExplorerViewMode) {
             this.viewMode = mode;
             writeStorageItem(storageKeys.viewMode, mode);
+            this.persistTabs();
         },
 
         setIconSize(size: ExplorerIconSize) {
             this.iconSize = size;
             writeStorageItem(storageKeys.iconSize, size);
+            this.persistTabs();
+        },
+
+        setSort(key: DirSortKey, order?: DirSortOrder) {
+            const sameKey = this.sortKey === key;
+            this.sortKey = key;
+            this.sortOrder = order ?? (sameKey && this.sortOrder === "asc" ? "desc" : "asc");
+            writeStorageItem(storageKeys.sortKey, this.sortKey);
+            writeStorageItem(storageKeys.sortOrder, this.sortOrder);
+            this.persistTabs();
         },
 
         ensureActiveTab() {
@@ -179,7 +305,12 @@ export const useFileStore = defineStore('file', {
             } else if (!this.activeTabId || !this.tabs.some(tab => tab.id === this.activeTabId)) {
                 this.activeTabId = this.tabs[0].id;
             }
-            this.currentPath = this.tabs.find(tab => tab.id === this.activeTabId)?.path ?? this.currentPath;
+            const activeTab = this.activeTab();
+            this.currentPath = activeTab?.path ?? this.currentPath;
+            this.viewMode = activeTab?.viewMode ?? this.viewMode;
+            this.iconSize = activeTab?.iconSize ?? this.iconSize;
+            this.sortKey = activeTab?.sortKey ?? this.sortKey;
+            this.sortOrder = activeTab?.sortOrder ?? this.sortOrder;
             this.persistTabs();
         },
 
@@ -188,6 +319,10 @@ export const useFileStore = defineStore('file', {
             this.tabs.push(tab);
             this.activeTabId = tab.id;
             this.currentPath = tab.path;
+            this.viewMode = tab.viewMode ?? this.viewMode;
+            this.iconSize = tab.iconSize ?? this.iconSize;
+            this.sortKey = tab.sortKey ?? this.sortKey;
+            this.sortOrder = tab.sortOrder ?? this.sortOrder;
             this.showEditor = false;
             this.currentFile = null;
             this.persistTabs();
@@ -202,6 +337,10 @@ export const useFileStore = defineStore('file', {
             if (!tab) return;
             this.activeTabId = tab.id;
             this.currentPath = tab.path;
+            this.viewMode = tab.viewMode ?? this.viewMode;
+            this.iconSize = tab.iconSize ?? this.iconSize;
+            this.sortKey = tab.sortKey ?? this.sortKey;
+            this.sortOrder = tab.sortOrder ?? this.sortOrder;
             this.showEditor = false;
             this.currentFile = null;
             this.persistTabs();
@@ -217,10 +356,18 @@ export const useFileStore = defineStore('file', {
                 const next = this.tabs[Math.max(0, index - 1)];
                 this.activeTabId = next.id;
                 this.currentPath = next.path;
+                this.viewMode = next.viewMode ?? this.viewMode;
+                this.iconSize = next.iconSize ?? this.iconSize;
+                this.sortKey = next.sortKey ?? this.sortKey;
+                this.sortOrder = next.sortOrder ?? this.sortOrder;
                 this.showEditor = false;
                 this.currentFile = null;
             }
             this.persistTabs();
+        },
+
+        saveFolderData(data: FolderData) {
+            this.folderData.set(data.path, data);
         },
 
         // 保存转换文件夹数据到文件树
@@ -243,7 +390,7 @@ export const useFileStore = defineStore('file', {
                 });
             })
 
-            this.folderData.set(data.path, data)
+            this.saveFolderData(data)
             return treeData;
         }
 

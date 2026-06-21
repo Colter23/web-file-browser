@@ -13,14 +13,15 @@ export interface FolderData {
     hasMore?: boolean;
 }
 
-export type DirSortKey = "name" | "modified" | "size" | "type";
+export type DirSortKey = "name" | "modified" | "size";
 export type DirSortOrder = "asc" | "desc";
 export type DirEntryFilter = "all" | "folder" | "file";
+export type DirDetail = "basic" | "full";
 
 export interface FolderQueryParams {
     offset?: number;
     limit?: number;
-    detail?: boolean;
+    detail?: DirDetail;
     sort?: DirSortKey;
     order?: DirSortOrder;
     type?: DirEntryFilter;
@@ -35,6 +36,12 @@ export interface ExplorerTab {
     id: string;
     path: string;
     title: string;
+    backStack?: string[];
+    forwardStack?: string[];
+    viewMode?: ExplorerViewMode;
+    iconSize?: ExplorerIconSize;
+    sortKey?: DirSortKey;
+    sortOrder?: DirSortOrder;
 }
 
 export interface FolderInfo {

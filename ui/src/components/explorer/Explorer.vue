@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from "vue";
 import type {ComponentPublicInstance} from "vue";
-import {ExplorerViewMode, FileInfo, FolderData} from "../../class.ts";
+import type {DirSortKey, ExplorerViewMode, FileInfo, FolderData, FolderQueryParams} from "../../class.ts";
 import {useFileStore} from "../../store";
 import {downloadUrl, getFolderData} from "../../network/file-api.ts";
 import Icon from "../Icon.vue";
@@ -28,20 +28,42 @@ type SelectionBox = {
   height: number;
 }
 
+type RenamePayload = {
+  entry: ExplorerEntry;
+  name: string;
+}
+
+type DropEntriesPayload = {
+  entries: ExplorerEntry[];
+  target: ExplorerEntry;
+  action: "copy" | "move";
+}
+
 const emit = defineEmits<{
-  (e: "rename", entry: ExplorerEntry): void;
+  (e: "rename", payload: RenamePayload): void;
   (e: "delete", entry: ExplorerEntry): void;
   (e: "download", entry: ExplorerEntry): void;
   (e: "archive", entry: ExplorerEntry): void;
   (e: "extract", entry: ExplorerEntry): void;
   (e: "preview", entry: ExplorerEntry): void;
+  (e: "copy", entry: ExplorerEntry): void;
+  (e: "cut", entry: ExplorerEntry): void;
+  (e: "paste"): void;
+  (e: "create-file"): void;
+  (e: "create-folder"): void;
+  (e: "drop-entries", payload: DropEntriesPayload): void;
   (e: "open-new-tab", entry: ExplorerEntry): void;
+  (e: "selection-change", entries: ExplorerEntry[]): void;
 }>()
 
 const props = withDefaults(defineProps<{
   filterText?: string;
+  dimmedPaths?: string[];
+  canPaste?: boolean;
 }>(), {
-  filterText: ""
+  filterText: "",
+  dimmedPaths: () => [],
+  canPaste: false
 })
 
 const fileStore = useFileStore();
@@ -50,10 +72,21 @@ const selectedPaths = ref<string[]>([]);
 const focusedPath = ref("");
 const anchorPath = ref("");
 const loading = ref(false);
+const loadingMore = ref(false);
 const message = ref("");
+const loadedSignature = ref("");
 const viewportRef = ref<HTMLElement | null>(null);
 const itemRefs = new Map<string, HTMLElement>();
-const contextMenu = reactive({visible: false, x: 0, y: 0, targetPath: ""});
+const renameInputRefs = new Map<string, HTMLInputElement>();
+const visibleThumbnailPaths = ref<Set<string>>(new Set());
+const failedThumbnailPaths = ref<Set<string>>(new Set());
+const pageSize = 200;
+const contextMenu = reactive({visible: false, x: 0, y: 0, targetPath: "", background: false});
+const renamingPath = ref("");
+const renameDraft = ref("");
+const renameSubmitting = ref(false);
+const draggingEntries = ref<ExplorerEntry[]>([]);
+const dragState = reactive({active: false, overPath: "", copy: false});
 const selectionBox = reactive<SelectionBox>({
   active: false,
   originX: 0,
@@ -63,6 +96,7 @@ const selectionBox = reactive<SelectionBox>({
   width: 0,
   height: 0
 });
+let thumbnailObserver: IntersectionObserver | null = null;
 
 const normalizeFolderData = (data: FolderData): FolderData => ({
   path: data.path || "/",
@@ -104,8 +138,14 @@ const selectedEntries = computed(() => {
   return entries.value.filter(entry => selected.has(entry.path));
 });
 
+watch(selectedEntries, selected => {
+  emit("selection-change", selected);
+}, {immediate: true});
+
 const viewMode = computed(() => fileStore.viewMode);
 const isIconLikeMode = computed(() => fileStore.viewMode === "icons" || fileStore.viewMode === "tiles");
+const sortKey = computed(() => fileStore.sortKey);
+const sortOrder = computed(() => fileStore.sortOrder);
 const selectedCountText = computed(() => {
   const count = selectedPaths.value.length;
   if (!count) return "未选择项目";
@@ -113,10 +153,9 @@ const selectedCountText = computed(() => {
 });
 
 const totalCountText = computed(() => {
-  const folderCount = folderData.value.folderTotal ?? folderData.value.folder?.length ?? 0;
-  const fileCount = folderData.value.fileTotal ?? folderData.value.file?.length ?? 0;
-  const base = `${folderCount} 个文件夹，${fileCount} 个文件`;
-  return props.filterText.trim() ? `${base}，筛选 ${entries.value.length} 项` : base;
+  const loadedCount = allEntries.value.length;
+  const hasMore = folderData.value.hasMore ? "，还有更多" : "";
+  return props.filterText.trim() ? `已加载 ${loadedCount} 项，筛选 ${entries.value.length} 项${hasMore}` : `已加载 ${loadedCount} 项${hasMore}`;
 });
 
 const itemSizeClass = computed(() => ({
@@ -131,11 +170,110 @@ const iconSizeText = computed(() => ({
   large: "大图标"
 }[fileStore.iconSize]));
 
+const sortText = computed(() => {
+  const keyText = {
+    name: "名称",
+    modified: "修改日期",
+    size: "大小"
+  }[fileStore.sortKey];
+  const orderText = fileStore.sortOrder === "asc" ? "升序" : "降序";
+  return `${keyText} ${orderText}`;
+});
+
+const isImageFile = (entry: ExplorerEntry) => {
+  if (entry.type !== "file") return false;
+  const extension = entry.extension?.toLowerCase() ?? "";
+  return ["apng", "avif", "bmp", "gif", "ico", "jpeg", "jpg", "png", "svg", "webp"].includes(extension);
+}
+
+const shouldLoadThumbnail = (entry: ExplorerEntry) => {
+  return isIconLikeMode.value && isImageFile(entry) && visibleThumbnailPaths.value.has(entry.path) && !failedThumbnailPaths.value.has(entry.path);
+}
+
+const thumbnailUrl = (entry: ExplorerEntry) => downloadUrl(entry.path);
+
+const handleThumbnailError = (entry: ExplorerEntry) => {
+  addFailedThumbnailPath(entry.path);
+  unobserveThumbnail(entry.path);
+}
+
+const addVisibleThumbnailPath = (path: string) => {
+  if (visibleThumbnailPaths.value.has(path)) return;
+  visibleThumbnailPaths.value = new Set([...visibleThumbnailPaths.value, path]);
+}
+
+const addFailedThumbnailPath = (path: string) => {
+  if (failedThumbnailPaths.value.has(path)) return;
+  failedThumbnailPaths.value = new Set([...failedThumbnailPaths.value, path]);
+}
+
+const clearThumbnailState = () => {
+  visibleThumbnailPaths.value = new Set();
+  failedThumbnailPaths.value = new Set();
+  thumbnailObserver?.disconnect();
+  thumbnailObserver = null;
+}
+
+const createThumbnailObserver = () => {
+  if (thumbnailObserver || typeof IntersectionObserver === "undefined") return thumbnailObserver;
+  thumbnailObserver = new IntersectionObserver(records => {
+    records.forEach(record => {
+      if (!record.isIntersecting) return;
+      const path = (record.target as HTMLElement).dataset.thumbnailPath;
+      if (!path) return;
+      addVisibleThumbnailPath(path);
+      thumbnailObserver?.unobserve(record.target);
+    });
+  }, {
+    root: viewportRef.value,
+    rootMargin: "240px",
+    threshold: 0.01
+  });
+  return thumbnailObserver;
+}
+
+const unobserveThumbnail = (path: string) => {
+  const element = itemRefs.get(path);
+  if (!element) return;
+  thumbnailObserver?.unobserve(element);
+  delete element.dataset.thumbnailPath;
+}
+
+const observeThumbnail = (entry: ExplorerEntry, element: HTMLElement) => {
+  if (!isIconLikeMode.value || !isImageFile(entry) || visibleThumbnailPaths.value.has(entry.path) || failedThumbnailPaths.value.has(entry.path)) return;
+  if (typeof IntersectionObserver === "undefined") {
+    addVisibleThumbnailPath(entry.path);
+    return;
+  }
+  element.dataset.thumbnailPath = entry.path;
+  createThumbnailObserver()?.observe(element);
+}
+
+const observePendingThumbnails = () => {
+  if (!isIconLikeMode.value) return;
+  entries.value.forEach(entry => {
+    const element = itemRefs.get(entry.path);
+    if (element) observeThumbnail(entry, element);
+  });
+}
+
 const setItemRef = (path: string, element: Element | ComponentPublicInstance | null) => {
+  const current = itemRefs.get(path);
+  if (current && current !== element) unobserveThumbnail(path);
   if (element instanceof HTMLElement) {
     itemRefs.set(path, element);
+    const entry = entryByPath(path);
+    if (entry) observeThumbnail(entry, element);
   } else {
     itemRefs.delete(path);
+  }
+}
+
+const setRenameInputRef = (path: string, element: Element | ComponentPublicInstance | null) => {
+  if (element instanceof HTMLInputElement) {
+    renameInputRefs.set(path, element);
+  } else {
+    renameInputRefs.delete(path);
   }
 }
 
@@ -204,7 +342,60 @@ const ensureEntrySelected = (entry: ExplorerEntry) => {
   }
 }
 
+const selectRenameText = (input: HTMLInputElement, entry: ExplorerEntry) => {
+  if (entry.type === "folder") {
+    input.select();
+    return;
+  }
+  const suffix = entry.extension ? `.${entry.extension}` : "";
+  const end = suffix && entry.name.toLowerCase().endsWith(suffix.toLowerCase())
+      ? Math.max(0, entry.name.length - suffix.length)
+      : entry.name.length;
+  input.setSelectionRange(0, end);
+}
+
+const startRename = (entry: ExplorerEntry | null) => {
+  if (!entry || renameSubmitting.value) return;
+  ensureEntrySelected(entry);
+  contextMenu.visible = false;
+  renamingPath.value = entry.path;
+  renameDraft.value = entry.name;
+  nextTick(() => {
+    const input = renameInputRefs.get(entry.path);
+    input?.focus();
+    if (input) selectRenameText(input, entry);
+  });
+}
+
+const cancelRename = () => {
+  if (renameSubmitting.value) return;
+  renamingPath.value = "";
+  renameDraft.value = "";
+  nextTick(() => viewportRef.value?.focus());
+}
+
+const commitRename = async () => {
+  if (!renamingPath.value || renameSubmitting.value) return;
+  const entry = entryByPath(renamingPath.value);
+  const nextName = renameDraft.value.trim();
+  if (!entry || !nextName || nextName === entry.name) {
+    cancelRename();
+    return;
+  }
+  renameSubmitting.value = true;
+  try {
+    emit("rename", {entry, name: nextName});
+    renamingPath.value = "";
+    renameDraft.value = "";
+  } finally {
+    renameSubmitting.value = false;
+  }
+}
+
+const isRenaming = (entry: ExplorerEntry) => renamingPath.value === entry.path;
+
 const openEntry = async (entry: ExplorerEntry) => {
+  if (isRenaming(entry)) return;
   if (entry.type === "folder") {
     await loadFolder(entry.path);
     return;
@@ -217,21 +408,43 @@ const openEntry = async (entry: ExplorerEntry) => {
   }
 }
 
+const folderRequestSignature = (path: string = fileStore.currentPath || "/") => {
+  return `${path}|${fileStore.sortKey}|${fileStore.sortOrder}`;
+}
+
+const folderQuery = (offset = 0): FolderQueryParams => {
+  const needsFullDetail = fileStore.sortKey !== "name";
+  return {
+    offset,
+    limit: pageSize,
+    detail: needsFullDetail ? "full" as const : "basic" as const,
+    sort: fileStore.sortKey,
+    order: fileStore.sortOrder
+  };
+}
+
+const mergeFolderData = (current: FolderData, next: FolderData): FolderData => ({
+  ...next,
+  folder: [...(current.folder ?? []), ...(next.folder ?? [])],
+  file: [...(current.file ?? []), ...(next.file ?? [])]
+})
+
 const loadFolder = async (path: string = fileStore.currentPath || "/") => {
   loading.value = true;
   message.value = "";
+  renamingPath.value = "";
+  renameDraft.value = "";
+  clearThumbnailState();
   try {
-    const data = normalizeFolderData(await getFolderData(path, {
-      detail: true,
-      sort: "name",
-      order: "asc",
-      includeTotal: true
-    }));
-    fileStore.saveAndConvertFolderData(data);
+    const data = normalizeFolderData(await getFolderData(path, folderQuery()));
+    fileStore.saveFolderData(data);
     folderData.value = data;
+    loadedSignature.value = folderRequestSignature(data.path || path);
     clearSelection();
     fileStore.setCurrentPath(data.path);
     fileStore.showEditor = false;
+    await nextTick();
+    observePendingThumbnails();
   } catch (error) {
     message.value = error instanceof Error ? error.message : "加载目录失败";
   } finally {
@@ -239,15 +452,58 @@ const loadFolder = async (path: string = fileStore.currentPath || "/") => {
   }
 }
 
-watch(() => fileStore.currentPath, async (path: string) => {
-  if (!path || fileStore.showEditor || path === folderData.value.path) return;
-  const cached = fileStore.folderData.get(path);
-  if (cached) {
-    folderData.value = normalizeFolderData(cached);
-    clearSelection();
-  } else {
-    await loadFolder(path);
+const loadMore = async () => {
+  if (loading.value || loadingMore.value || !folderData.value.hasMore) return;
+  loadingMore.value = true;
+  message.value = "";
+  try {
+    const current = folderData.value;
+    const offset = (current.offset ?? 0) + (current.limit ?? allEntries.value.length);
+    const data = normalizeFolderData(await getFolderData(current.path || fileStore.currentPath || "/", folderQuery(offset)));
+    const merged = normalizeFolderData(mergeFolderData(current, data));
+    fileStore.saveFolderData(merged);
+    folderData.value = merged;
+    loadedSignature.value = folderRequestSignature(merged.path || current.path);
+    await nextTick();
+    observePendingThumbnails();
+  } catch (error) {
+    message.value = error instanceof Error ? error.message : "加载更多失败";
+  } finally {
+    loadingMore.value = false;
   }
+}
+
+const changeSort = async (key: DirSortKey) => {
+  if (loading.value) return;
+  fileStore.setSort(key);
+  loadedSignature.value = "";
+  await loadFolder(fileStore.currentPath || "/");
+}
+
+const sortButtonClass = (key: DirSortKey) => ({
+  active: sortKey.value === key,
+  desc: sortKey.value === key && sortOrder.value === "desc"
+});
+
+const sortIndicator = (key: DirSortKey) => {
+  if (sortKey.value !== key) return "";
+  return sortOrder.value === "asc" ? "↑" : "↓";
+}
+
+watch(() => [fileStore.activeTabId, fileStore.currentPath] as const, async ([, path]) => {
+  if (!path || fileStore.showEditor) return;
+  if (loadedSignature.value === folderRequestSignature(path)) return;
+  await loadFolder(path);
+});
+
+watch(isIconLikeMode, async iconLike => {
+  if (!iconLike) {
+    thumbnailObserver?.disconnect();
+    thumbnailObserver = null;
+    return;
+  }
+  await nextTick();
+  observePendingThumbnails();
 });
 
 onMounted(async () => {
@@ -264,7 +520,9 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeyDown);
   window.removeEventListener("mousemove", handleSelectionMove);
   window.removeEventListener("mouseup", finishMarqueeSelection);
+  thumbnailObserver?.disconnect();
   itemRefs.clear();
+  renameInputRefs.clear();
 });
 
 const closeContextMenu = () => {
@@ -276,10 +534,21 @@ const openContextMenu = (event: MouseEvent, entry: ExplorerEntry) => {
   contextMenu.x = event.clientX;
   contextMenu.y = event.clientY;
   contextMenu.targetPath = entry.path;
+  contextMenu.background = false;
   contextMenu.visible = true;
 }
 
-const contextEntry = () => entryByPath(contextMenu.targetPath) ?? firstSelectedEntry();
+const openBackgroundContextMenu = (event: MouseEvent) => {
+  if (event.target instanceof HTMLElement && event.target.closest(".entry-item")) return;
+  viewportRef.value?.focus();
+  contextMenu.x = event.clientX;
+  contextMenu.y = event.clientY;
+  contextMenu.targetPath = "";
+  contextMenu.background = true;
+  contextMenu.visible = true;
+}
+
+const contextEntry = () => contextMenu.background ? null : entryByPath(contextMenu.targetPath) ?? firstSelectedEntry();
 
 const selectedOrContextEntries = () => {
   const target = contextEntry();
@@ -304,12 +573,6 @@ const canExtract = (entry: ExplorerEntry | null) => {
   return name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz");
 }
 
-const isImageFile = (entry: ExplorerEntry) => {
-  if (entry.type !== "file") return false;
-  const extension = entry.extension?.toLowerCase() ?? "";
-  return ["apng", "avif", "bmp", "gif", "ico", "jpeg", "jpg", "png", "svg", "webp"].includes(extension);
-}
-
 const isTextLike = (entry: ExplorerEntry) => {
   if (entry.type !== "file") return false;
   const extension = entry.extension?.toLowerCase() ?? "";
@@ -325,6 +588,80 @@ const fileIcon = (entry: ExplorerEntry) => {
   if (isImageFile(entry)) return "icon-file-image-fill";
   if (isTextLike(entry)) return "icon-file-common-filling";
   return "icon-file-fill";
+}
+
+const isDimmed = (entry: ExplorerEntry) => props.dimmedPaths.includes(entry.path);
+
+const isDragged = (entry: ExplorerEntry) => draggingEntries.value.some(item => item.path === entry.path);
+
+const isDropTarget = (entry: ExplorerEntry) => dragState.active && dragState.overPath === entry.path;
+
+const canDropOnEntry = (entry: ExplorerEntry) => {
+  if (entry.type !== "folder") return false;
+  if (!draggingEntries.value.length) return false;
+  return !draggingEntries.value.some(item => item.path === entry.path || entry.path.startsWith(`${item.path}/`));
+}
+
+const dragHintText = computed(() => {
+  if (!dragState.active || !draggingEntries.value.length) return "";
+  const actionText = dragState.copy ? "复制" : "移动";
+  return `${actionText} ${draggingEntries.value.length} 项`;
+});
+
+const selectedEntriesForDrag = (entry: ExplorerEntry) => {
+  if (selectedPaths.value.includes(entry.path)) return selectedEntries.value;
+  return [entry];
+}
+
+const beginEntryDrag = (event: DragEvent, entry: ExplorerEntry) => {
+  if (isRenaming(entry)) return;
+  const entriesToDrag = selectedEntriesForDrag(entry);
+  if (!entriesToDrag.length) return;
+  if (!isSelected(entry.path)) setSelection([entry.path], entry.path);
+  draggingEntries.value = entriesToDrag;
+  dragState.active = true;
+  dragState.overPath = "";
+  dragState.copy = Boolean(event.ctrlKey || event.metaKey);
+  contextMenu.visible = false;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "copyMove";
+    event.dataTransfer.dropEffect = dragState.copy ? "copy" : "move";
+    event.dataTransfer.setData("text/plain", entriesToDrag.map(item => item.path).join("\n"));
+  }
+}
+
+const resetEntryDrag = () => {
+  draggingEntries.value = [];
+  dragState.active = false;
+  dragState.overPath = "";
+  dragState.copy = false;
+}
+
+const dragOverEntry = (event: DragEvent, entry: ExplorerEntry) => {
+  if (!dragState.active || !canDropOnEntry(entry)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  dragState.overPath = entry.path;
+  dragState.copy = Boolean(event.ctrlKey || event.metaKey);
+  if (event.dataTransfer) event.dataTransfer.dropEffect = dragState.copy ? "copy" : "move";
+}
+
+const dragLeaveEntry = (event: DragEvent, entry: ExplorerEntry) => {
+  if (!dragState.active || dragState.overPath !== entry.path) return;
+  const related = event.relatedTarget;
+  const element = itemRefs.get(entry.path);
+  if (related instanceof Node && element?.contains(related)) return;
+  dragState.overPath = "";
+}
+
+const dropOnEntry = (event: DragEvent, entry: ExplorerEntry) => {
+  if (!dragState.active || !canDropOnEntry(entry)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const entriesToDrop = draggingEntries.value;
+  const action = event.ctrlKey || event.metaKey ? "copy" : "move";
+  resetEntryDrag();
+  emit("drop-entries", {entries: entriesToDrop, target: entry, action});
 }
 
 const formatDate = (srcDate: string) => {
@@ -359,9 +696,39 @@ const entryTypeText = (entry: ExplorerEntry) => {
 
 const handleKeyDown = async (event: KeyboardEvent) => {
   if (!viewportRef.value?.contains(document.activeElement)) return;
+  if (renamingPath.value) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelRename();
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      await commitRename();
+      return;
+    }
+    return;
+  }
   if (event.key === "Escape") {
     clearSelection();
     contextMenu.visible = false;
+    return;
+  }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
+    event.preventDefault();
+    const entry = firstSelectedEntry();
+    if (entry) emit("copy", entry);
+    return;
+  }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "x") {
+    event.preventDefault();
+    const entry = firstSelectedEntry();
+    if (entry) emit("cut", entry);
+    return;
+  }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") {
+    event.preventDefault();
+    if (props.canPaste) emit("paste");
     return;
   }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
@@ -386,7 +753,7 @@ const handleKeyDown = async (event: KeyboardEvent) => {
   }
   if (event.key === "F2") {
     const entry = firstSelectedEntry();
-    if (entry) emit("rename", entry);
+    if (entry) startRename(entry);
     return;
   }
   if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -430,6 +797,7 @@ const canBeginMarquee = (target: EventTarget | null) => {
 }
 
 const beginMarqueeSelection = (event: MouseEvent) => {
+  if (renamingPath.value) return;
   if (event.button !== 0 || !canBeginMarquee(event.target)) return;
   const viewport = viewportRef.value;
   if (!viewport) return;
@@ -540,6 +908,38 @@ const downloadContextEntry = () => {
   if (entry) emit("download", entry);
 }
 
+const copyContextEntries = () => {
+  const entry = primaryContextEntry.value;
+  closeContextMenu();
+  if (entry) emit("copy", entry);
+}
+
+const cutContextEntries = () => {
+  const entry = primaryContextEntry.value;
+  closeContextMenu();
+  if (entry) emit("cut", entry);
+}
+
+const pasteIntoCurrentFolder = () => {
+  closeContextMenu();
+  emit("paste");
+}
+
+const createFileFromContext = () => {
+  closeContextMenu();
+  emit("create-file");
+}
+
+const createFolderFromContext = () => {
+  closeContextMenu();
+  emit("create-folder");
+}
+
+const selectAllFromContext = () => {
+  closeContextMenu();
+  setSelection(entries.value.map(entry => entry.path), focusedPath.value || entries.value[0]?.path || "");
+}
+
 const archiveContextEntries = () => {
   const entry = primaryContextEntry.value;
   closeContextMenu();
@@ -554,8 +954,7 @@ const extractContextEntry = () => {
 
 const renameContextEntry = () => {
   const entry = primaryContextEntry.value;
-  closeContextMenu();
-  if (entry) emit("rename", entry);
+  if (entry) startRename(entry);
 }
 
 const deleteContextEntries = () => {
@@ -574,7 +973,8 @@ const handleAuxClick = (event: MouseEvent, entry: ExplorerEntry) => {
 defineExpose({
   refresh: loadFolder,
   getSelectedEntry: primarySelected,
-  getSelectedEntries: () => selectedEntries.value
+  getSelectedEntries: () => selectedEntries.value,
+  startRename: () => startRename(firstSelectedEntry())
 })
 </script>
 
@@ -584,6 +984,7 @@ defineExpose({
       <div class="explorer-summary">
         <span>{{ totalCountText }}</span>
         <span>{{ selectedCountText }}</span>
+        <span>排序：{{ sortText }}</span>
       </div>
       <div class="view-switch" aria-label="查看模式">
         <button :class="{active: viewMode === 'details'}" title="详细信息" @click="setViewMode('details')">
@@ -611,12 +1012,21 @@ defineExpose({
         tabindex="0"
         @click="activateViewport"
         @mousedown="beginMarqueeSelection"
-        @contextmenu.prevent>
+        @contextmenu.prevent="openBackgroundContextMenu">
       <div v-if="viewMode === 'details'" class="details-header">
-        <span class="name-cell">名称</span>
-        <span>修改日期</span>
-        <span>类型</span>
-        <span class="size-cell">大小</span>
+        <button class="sort-button name-cell" :class="sortButtonClass('name')" :disabled="loading" @click.stop="changeSort('name')">
+          <span>名称</span>
+          <span class="sort-indicator">{{ sortIndicator('name') }}</span>
+        </button>
+        <button class="sort-button" :class="sortButtonClass('modified')" :disabled="loading" @click.stop="changeSort('modified')">
+          <span>修改日期</span>
+          <span class="sort-indicator">{{ sortIndicator('modified') }}</span>
+        </button>
+        <span class="header-cell">类型</span>
+        <button class="sort-button size-cell" :class="sortButtonClass('size')" :disabled="loading" @click.stop="changeSort('size')">
+          <span>大小</span>
+          <span class="sort-indicator">{{ sortIndicator('size') }}</span>
+        </button>
       </div>
 
       <div v-if="loading" class="explorer-empty">正在加载...</div>
@@ -629,18 +1039,42 @@ defineExpose({
             :key="entry.path"
             :ref="element => setItemRef(entry.path, element)"
             class="entry-item"
-            :class="{selected: isSelected(entry.path), focused: focusedPath === entry.path, image: isImageFile(entry)}"
+            :class="{selected: isSelected(entry.path), focused: focusedPath === entry.path, image: isImageFile(entry), dimmed: isDimmed(entry), dragging: isDragged(entry), dropTarget: isDropTarget(entry)}"
             :title="entry.name"
+            draggable="true"
             @click.stop="selectEntry(entry, $event)"
             @auxclick.stop="handleAuxClick($event, entry)"
             @dblclick.stop="openEntry(entry)"
+            @dragstart.stop="beginEntryDrag($event, entry)"
+            @dragend="resetEntryDrag"
+            @dragover="dragOverEntry($event, entry)"
+            @dragleave="dragLeaveEntry($event, entry)"
+            @drop="dropOnEntry($event, entry)"
             @contextmenu.prevent.stop="openContextMenu($event, entry)">
           <div class="entry-visual">
-            <img v-if="isImageFile(entry)" :src="downloadUrl(entry.path)" :alt="entry.name" loading="lazy" decoding="async">
+            <img
+                v-if="shouldLoadThumbnail(entry)"
+                :src="thumbnailUrl(entry)"
+                :alt="entry.name"
+                loading="lazy"
+                decoding="async"
+                @error="handleThumbnailError(entry)">
             <icon v-else :icon="fileIcon(entry)" />
           </div>
           <div class="entry-main">
-            <span class="entry-name">{{ entry.name }}</span>
+            <input
+                v-if="isRenaming(entry)"
+                :ref="element => setRenameInputRef(entry.path, element)"
+                v-model="renameDraft"
+                class="entry-rename-input"
+                :disabled="renameSubmitting"
+                @click.stop
+                @mousedown.stop
+                @dblclick.stop
+                @keydown.enter.prevent="commitRename"
+                @keydown.esc.prevent="cancelRename"
+                @blur="commitRename">
+            <span v-else class="entry-name">{{ entry.name }}</span>
             <span v-if="viewMode !== 'details'" class="entry-meta">{{ entryTypeText(entry) }}</span>
           </div>
           <span v-if="viewMode === 'details'" class="entry-date">{{ formatDate(entry.modified) }}</span>
@@ -648,6 +1082,12 @@ defineExpose({
           <span v-if="viewMode === 'details'" class="entry-size">{{ formatSize(entry.size) }}</span>
           <span v-if="viewMode === 'tiles'" class="entry-tile-meta">{{ formatDate(entry.modified) }} · {{ formatSize(entry.size) }}</span>
         </article>
+
+        <div v-if="folderData.hasMore && !props.filterText.trim()" class="load-more-row">
+          <button class="load-more-button" :disabled="loadingMore" @click.stop="loadMore">
+            {{ loadingMore ? "正在加载..." : "加载更多" }}
+          </button>
+        </div>
       </div>
 
       <div
@@ -655,12 +1095,28 @@ defineExpose({
           class="selection-box"
           :style="{left: `${selectionBox.x}px`, top: `${selectionBox.y}px`, width: `${selectionBox.width}px`, height: `${selectionBox.height}px`}">
       </div>
+
+      <div v-if="dragHintText" class="drag-hint" :class="{copy: dragState.copy}">
+        {{ dragHintText }}
+      </div>
     </div>
 
-    <div v-if="contextMenu.visible" class="context-menu" :style="{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}">
+    <div v-if="contextMenu.visible && contextMenu.background" class="context-menu" :style="{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}">
+      <button @click="createFileFromContext">新建文件</button>
+      <button @click="createFolderFromContext">新建文件夹</button>
+      <div class="context-separator"></div>
+      <button :disabled="!props.canPaste" @click="pasteIntoCurrentFolder">粘贴</button>
+      <button :disabled="!entries.length" @click="selectAllFromContext">全选</button>
+    </div>
+
+    <div v-else-if="contextMenu.visible" class="context-menu" :style="{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}">
       <button @click="openEntryFromContext">打开</button>
       <button :disabled="!primaryContextEntry || primaryContextEntry.type !== 'folder'" @click="openContextEntryInNewTab">在新标签页中打开</button>
       <button :disabled="!primaryContextEntry || primaryContextEntry.type !== 'file'" @click="previewContextEntry">预览</button>
+      <div class="context-separator"></div>
+      <button :disabled="!contextSelectionCount" @click="cutContextEntries">{{ contextLabel("剪切", "剪切选中项") }}</button>
+      <button :disabled="!contextSelectionCount" @click="copyContextEntries">{{ contextLabel("复制", "复制选中项") }}</button>
+      <button :disabled="!props.canPaste" @click="pasteIntoCurrentFolder">粘贴</button>
       <div class="context-separator"></div>
       <button :disabled="!primaryContextEntry || primaryContextEntry.type !== 'file'" @click="downloadContextEntry">下载</button>
       <button :disabled="!contextSelectionCount" @click="archiveContextEntries">{{ contextLabel("压缩", "压缩选中项") }}</button>
@@ -715,8 +1171,28 @@ defineExpose({
   @apply sticky top-0 z-10 grid h-9 grid-cols-[minmax(14rem,1fr)_11rem_9rem_7rem] items-center border-b border-slate-200 bg-white px-4 text-sm text-slate-600;
 }
 
-.details-header span {
+.details-header > .header-cell {
   @apply truncate px-2;
+}
+
+.sort-button {
+  @apply flex h-full min-w-0 items-center justify-between gap-1 truncate px-2 text-left text-sm text-slate-600 hover:bg-blue-50 disabled:pointer-events-none;
+}
+
+.sort-button.active {
+  @apply bg-blue-50 text-blue-700;
+}
+
+.sort-button span:first-child {
+  @apply min-w-0 truncate;
+}
+
+.sort-button.size-cell {
+  @apply text-right;
+}
+
+.sort-indicator {
+  @apply inline-flex w-3 shrink-0 justify-center text-[11px] text-blue-600;
 }
 
 .entry-surface {
@@ -764,6 +1240,18 @@ defineExpose({
   @apply ring-1 ring-inset ring-blue-600;
 }
 
+.entry-item.dimmed {
+  @apply opacity-45;
+}
+
+.entry-item.dragging {
+  @apply opacity-50;
+}
+
+.entry-item.dropTarget {
+  @apply border-blue-500 bg-blue-50 ring-2 ring-inset ring-blue-400;
+}
+
 .details .entry-item {
   @apply grid h-8 grid-cols-[minmax(14rem,1fr)_11rem_9rem_7rem] items-center px-3;
 }
@@ -798,7 +1286,7 @@ defineExpose({
 }
 
 .icons .entry-visual {
-  @apply h-16 w-20 rounded border border-transparent text-[3rem];
+  @apply h-16 w-20 rounded border border-transparent bg-white text-[3rem];
 }
 
 .icons.small .entry-visual {
@@ -811,6 +1299,11 @@ defineExpose({
 
 .tiles .entry-visual {
   @apply row-span-2 h-14 w-14 rounded border border-slate-200 bg-slate-50 text-[2rem];
+}
+
+.icons .entry-item.image .entry-visual,
+.tiles .entry-item.image .entry-visual {
+  @apply border-slate-200 bg-slate-50 shadow-sm;
 }
 
 .entry-visual img {
@@ -842,6 +1335,20 @@ defineExpose({
   @apply min-w-0 truncate;
 }
 
+.entry-rename-input {
+  @apply h-6 min-w-0 rounded border border-blue-500 bg-white px-1 text-sm text-slate-900 outline-none ring-2 ring-blue-200;
+}
+
+.details .entry-rename-input,
+.list .entry-rename-input,
+.tiles .entry-rename-input {
+  @apply w-full;
+}
+
+.icons .entry-rename-input {
+  @apply w-full text-center;
+}
+
 .icons .entry-name {
   @apply line-clamp-2 whitespace-normal break-all;
 }
@@ -862,6 +1369,20 @@ defineExpose({
 
 .entry-size {
   @apply text-right tabular-nums;
+}
+
+.load-more-row {
+  @apply flex justify-center px-3 py-4;
+}
+
+.list .load-more-row,
+.icons .load-more-row,
+.tiles .load-more-row {
+  grid-column: 1 / -1;
+}
+
+.load-more-button {
+  @apply h-8 rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-600 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400;
 }
 
 .entry-item.selected .entry-meta,
@@ -886,6 +1407,14 @@ defineExpose({
 
 .selection-box {
   @apply pointer-events-none absolute z-20 border border-blue-500 bg-blue-500/15;
+}
+
+.drag-hint {
+  @apply pointer-events-none sticky bottom-3 z-30 mx-auto mt-auto flex w-fit items-center rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 shadow-lg;
+}
+
+.drag-hint.copy {
+  @apply border-emerald-200 text-emerald-700;
 }
 
 .context-menu {

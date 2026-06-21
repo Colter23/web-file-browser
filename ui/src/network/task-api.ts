@@ -1,5 +1,39 @@
 import network from "../network";
-import {ArchiveFormat, TaskResponse, TaskStatus} from "../class";
+import type {ArchiveFormat, RuntimeSettings, TaskResponse, TaskStatus} from "../class";
+
+type ConflictPolicy = RuntimeSettings["conflictPolicy"];
+
+const conflictPayload = (conflictPolicy?: ConflictPolicy) => ({
+    conflictPolicy: conflictPolicy || undefined
+})
+
+export const createCopyTask = async (
+    sources: string[],
+    targetPath: string,
+    conflictPolicy?: ConflictPolicy
+): Promise<TaskResponse> => {
+    return (await network.post("/api/tasks/copy", {
+        sources,
+        targetPath,
+        ...conflictPayload(conflictPolicy)
+    })).data
+}
+
+export const createMoveTask = async (
+    sources: string[],
+    targetPath: string,
+    conflictPolicy?: ConflictPolicy
+): Promise<TaskResponse> => {
+    return (await network.post("/api/tasks/move", {
+        sources,
+        targetPath,
+        ...conflictPayload(conflictPolicy)
+    })).data
+}
+
+export const createDeleteTask = async (paths: string[]): Promise<TaskResponse> => {
+    return (await network.post("/api/tasks/delete", {paths})).data
+}
 
 export const createArchiveTask = async (
     sources: string[],
