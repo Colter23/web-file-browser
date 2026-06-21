@@ -112,6 +112,9 @@ let marqueePointerY = 0;
 let marqueeScrollFrame = 0;
 const marqueeScrollEdge = 48;
 const marqueeMaxScrollSpeed = 24;
+const typeaheadQuery = ref("");
+const typeaheadResetMs = 900;
+let typeaheadResetTimer = 0;
 
 const normalizeFolderData = (data: FolderData): FolderData => ({
   path: data.path || "/",
@@ -322,6 +325,22 @@ const resetSelectionBox = () => {
   selectionBox.basePaths = [];
 }
 
+const resetTypeahead = () => {
+  if (typeaheadResetTimer) {
+    window.clearTimeout(typeaheadResetTimer);
+    typeaheadResetTimer = 0;
+  }
+  typeaheadQuery.value = "";
+}
+
+const scheduleTypeaheadReset = () => {
+  if (typeaheadResetTimer) window.clearTimeout(typeaheadResetTimer);
+  typeaheadResetTimer = window.setTimeout(() => {
+    typeaheadQuery.value = "";
+    typeaheadResetTimer = 0;
+  }, typeaheadResetMs);
+}
+
 const entryByPath = (path: string) => entries.value.find(entry => entry.path === path);
 
 const firstSelectedEntry = () => {
@@ -469,6 +488,7 @@ const loadFolder = async (path: string = fileStore.currentPath || "/") => {
   message.value = "";
   renamingPath.value = "";
   renameDraft.value = "";
+  resetTypeahead();
   resetSelectionBox();
   clearThumbnailState();
   try {
@@ -540,6 +560,7 @@ watch(() => [fileStore.activeTabId, fileStore.currentPath] as const, async ([, p
 });
 
 watch(isIconLikeMode, async iconLike => {
+  resetTypeahead();
   if (!iconLike) {
     thumbnailObserver?.disconnect();
     thumbnailObserver = null;
@@ -548,6 +569,8 @@ watch(isIconLikeMode, async iconLike => {
   await nextTick();
   observePendingThumbnails();
 });
+
+watch(() => props.filterText, resetTypeahead);
 
 onMounted(async () => {
   fileStore.ensureActiveTab();
@@ -564,6 +587,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("mousemove", handleSelectionMove);
   window.removeEventListener("mouseup", finishMarqueeSelection);
   stopMarqueeAutoScroll();
+  resetTypeahead();
   thumbnailObserver?.disconnect();
   itemRefs.clear();
   renameInputRefs.clear();
@@ -801,6 +825,7 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     if (entry) startRename(entry);
     return;
   }
+  if (handleTypeahead(event)) return;
   if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
   event.preventDefault();
   moveFocus(event.key, event.shiftKey);
@@ -833,6 +858,49 @@ const moveFocus = (key: string, extend: boolean) => {
     setSelection([entry.path], entry.path);
   }
   nextTick(() => itemRefs.get(entry.path)?.scrollIntoView({block: "nearest", inline: "nearest"}));
+}
+
+const focusEntryByTypeahead = (entry: ExplorerEntry) => {
+  setSelection([entry.path], entry.path);
+  nextTick(() => itemRefs.get(entry.path)?.scrollIntoView({block: "nearest", inline: "nearest"}));
+}
+
+const findTypeaheadEntry = (query: string, startIndex: number) => {
+  if (!query || !entries.value.length) return null;
+  const normalizedQuery = query.toLocaleLowerCase("zh-CN");
+  const total = entries.value.length;
+  for (let offset = 0; offset < total; offset += 1) {
+    const index = (startIndex + offset + total) % total;
+    const entry = entries.value[index];
+    if (entry.name.toLocaleLowerCase("zh-CN").startsWith(normalizedQuery)) return entry;
+  }
+  return null;
+}
+
+const handleTypeahead = (event: KeyboardEvent) => {
+  if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1 || event.key === " ") return false;
+  event.preventDefault();
+  contextMenu.visible = false;
+  const key = event.key.toLocaleLowerCase("zh-CN");
+  const previous = typeaheadQuery.value;
+  const repeatingSingleKey = Boolean(previous) && Array.from(previous).every(char => char === key);
+  const query = repeatingSingleKey ? key : `${previous}${key}`;
+  const currentIndex = focusedPath.value ? indexOfPath(focusedPath.value) : -1;
+  const startIndex = previous && !repeatingSingleKey ? Math.max(0, currentIndex) : currentIndex + 1;
+  let matched = findTypeaheadEntry(query, startIndex);
+  let matchedQuery = query;
+  if (!matched && query !== key) {
+    matched = findTypeaheadEntry(key, currentIndex + 1);
+    matchedQuery = key;
+  }
+  if (matched) {
+    focusEntryByTypeahead(matched);
+    typeaheadQuery.value = matchedQuery;
+  } else {
+    typeaheadQuery.value = key;
+  }
+  scheduleTypeaheadReset();
+  return true;
 }
 
 const canBeginMarquee = (target: EventTarget | null) => {
