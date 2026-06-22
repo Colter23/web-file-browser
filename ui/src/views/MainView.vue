@@ -21,7 +21,6 @@ import {
 } from "../network/api";
 import Icon from "../components/Icon.vue";
 import Explorer from "../components/explorer/Explorer.vue";
-import Breadcrumb from "../components/Breadcrumb.vue";
 import ImageViewer from "../components/viewer/ImageViewer.vue";
 import PreviewPane from "../components/viewer/PreviewPane.vue";
 import TaskPanel from "../components/tasks/TaskPanel.vue";
@@ -29,6 +28,8 @@ import TabStrip from "../components/tabs/TabStrip.vue";
 import OperationPanel from "../components/operations/OperationPanel.vue";
 import DeleteConfirmPanel from "../components/operations/DeleteConfirmPanel.vue";
 import PropertiesPanel from "../components/operations/PropertiesPanel.vue";
+import ContentToolbar from "../components/shell/ContentToolbar.vue";
+import CommandBar from "../components/shell/CommandBar.vue";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
 
@@ -61,7 +62,7 @@ type ExplorerExpose = {
   setScrollTop: (scrollTop: number) => Promise<void>;
 }
 
-type BreadcrumbExpose = {
+type ContentToolbarExpose = {
   focusInput: () => void;
 }
 
@@ -206,7 +207,7 @@ const router = useRouter();
 const fileStore = useFileStore();
 const treeData = ref<FileTreeData[]>([]);
 const explorerRef = ref<ExplorerExpose | null>(null);
-const breadcrumbRef = ref<BreadcrumbExpose | null>(null);
+const contentToolbarRef = ref<ContentToolbarExpose | null>(null);
 const deleteConfirmRef = ref<FocusablePanelExpose | null>(null);
 const propertiesPanelRef = ref<FocusablePanelExpose | null>(null);
 const uploadInput = ref<HTMLInputElement | null>(null);
@@ -1331,7 +1332,7 @@ const focusSearch = () => {
 
 const focusBreadcrumb = () => {
   if (fileStore.showEditor) return;
-  breadcrumbRef.value?.focusInput();
+  contentToolbarRef.value?.focusInput();
 }
 
 const previewSelectedQuietly = async () => {
@@ -1874,84 +1875,52 @@ const signOut = async () => {
       </aside>
 
       <section class="content-pane">
-        <div class="path-row">
-          <button class="nav-button" :disabled="!canNavigateBack" :title="navigateBackTitle" @click="navigateBack">
-            <icon icon="icon-back_android" size="large" />
-          </button>
-          <button class="nav-button" :disabled="!canNavigateForward" :title="navigateForwardTitle" @click="navigateForward">
-            <icon icon="icon-back_android" size="large" class="rotate-180" />
-          </button>
-          <button class="nav-button" :disabled="!canNavigateUp" :title="navigateUpTitle" @click="navigateUp">
-            <icon icon="icon-back_android" size="large" class="rotate-90" />
-          </button>
-          <button class="nav-button" title="刷新 (F5 / Ctrl+R)" @click="refreshCurrent(true)">
-            <icon icon="icon-refresh" size="large" />
-          </button>
-          <breadcrumb ref="breadcrumbRef" @navigate="handleBreadcrumbNavigate"></breadcrumb>
-          <button class="view-button" :title="viewModeButtonTitle" @click="cycleViewMode">
-            <icon :icon="currentViewModeMeta.icon" />
-            <span>{{ currentViewModeMeta.label }}</span>
-          </button>
-          <button class="view-button" :class="{active: previewPanelVisible}" :disabled="!canTogglePreviewPane" title="预览窗格 (Alt+P)" @click="togglePreviewFromShortcut">
-            <icon icon="icon-file-image-fill" />
-            <span>{{ previewPanelVisible ? "关闭预览" : "预览窗格" }}</span>
-          </button>
-        </div>
+        <content-toolbar
+            ref="contentToolbarRef"
+            :can-navigate-back="canNavigateBack"
+            :can-navigate-forward="canNavigateForward"
+            :can-navigate-up="canNavigateUp"
+            :navigate-back-title="navigateBackTitle"
+            :navigate-forward-title="navigateForwardTitle"
+            :navigate-up-title="navigateUpTitle"
+            :view-mode-icon="currentViewModeMeta.icon"
+            :view-mode-label="currentViewModeMeta.label"
+            :view-mode-button-title="viewModeButtonTitle"
+            :preview-panel-visible="previewPanelVisible"
+            :can-toggle-preview-pane="canTogglePreviewPane"
+            @navigate-back="navigateBack"
+            @navigate-forward="navigateForward"
+            @navigate-up="navigateUp"
+            @refresh="refreshCurrent(true)"
+            @breadcrumb-navigate="handleBreadcrumbNavigate"
+            @cycle-view-mode="cycleViewMode"
+            @toggle-preview="togglePreviewFromShortcut" />
 
-        <div class="command-bar">
-          <button class="command-button" @click="openCreatePanel('file')">
-            <icon icon="icon-file-add-fill" />
-            <span>新建文件</span>
-          </button>
-          <button class="command-button" title="新建文件夹 (Ctrl+Shift+N)" @click="openCreatePanel('folder')">
-            <icon icon="icon-folder-add-fill" />
-            <span>新建文件夹</span>
-          </button>
-          <span class="command-separator"></span>
-          <button class="command-button" :disabled="!hasSelection" title="剪切 (Ctrl+X)" @click="cutSelected()">
-            <icon icon="icon-scissors" />
-            <span>剪切</span>
-          </button>
-          <button class="command-button" :disabled="!hasSelection" title="复制 (Ctrl+C)" @click="copySelected()">
-            <icon icon="icon-copy" />
-            <span>复制</span>
-          </button>
-          <button class="command-button" :disabled="!canPasteSelection" title="粘贴 (Ctrl+V)" @click="pasteSelected()">
-            <icon icon="icon-paste" />
-            <span>粘贴</span>
-          </button>
-          <span class="command-separator"></span>
-          <button class="command-button" :disabled="!canDownloadSelection" @click="downloadSelected()">
-            <icon icon="icon-download" />
-            <span>下载</span>
-          </button>
-          <button class="command-button" :disabled="!canPreviewSelection" title="预览 (Space / Ctrl+Enter)" @click="previewSelected()">
-            <icon icon="icon-file-image-fill" />
-            <span>预览</span>
-          </button>
-          <button class="command-button" :disabled="!canArchiveSelection" @click="archiveSelected()">
-            <icon icon="icon-file-zip-fill" />
-            <span>压缩</span>
-          </button>
-          <button class="command-button" :disabled="!canExtractSelection" @click="extractSelected()">
-            <icon icon="icon-file-zip" />
-            <span>解压</span>
-          </button>
-          <button class="command-button" :disabled="!canRenameSelection" @click="startRenameSelected">
-            <icon icon="icon-rename" />
-            <span>重命名</span>
-          </button>
-          <button class="command-button danger" :disabled="!canDeleteSelection" @click="deleteSelected()">
-            <icon icon="icon-delete-fill" />
-            <span>删除</span>
-          </button>
-          <span class="command-status" :title="`${selectionStatusText} · Ctrl+A 全选`">{{ selectionStatusText }}</span>
-          <button :class="['command-button', {active: taskPanelVisible}]" @click="toggleTaskPanel">
-            <icon icon="icon-file-common-filling" />
-            <span>{{ taskButtonText }}</span>
-          </button>
-          <input ref="uploadInput" class="hidden" type="file" multiple @change="uploadChanged">
-        </div>
+        <command-bar
+            :has-selection="hasSelection"
+            :can-paste-selection="canPasteSelection"
+            :can-download-selection="canDownloadSelection"
+            :can-preview-selection="canPreviewSelection"
+            :can-archive-selection="canArchiveSelection"
+            :can-extract-selection="canExtractSelection"
+            :can-rename-selection="canRenameSelection"
+            :can-delete-selection="canDeleteSelection"
+            :selection-status-text="selectionStatusText"
+            :task-panel-visible="taskPanelVisible"
+            :task-button-text="taskButtonText"
+            @create-file="openCreatePanel('file')"
+            @create-folder="openCreatePanel('folder')"
+            @cut="cutSelected()"
+            @copy="copySelected()"
+            @paste="pasteSelected()"
+            @download="downloadSelected()"
+            @preview="previewSelected()"
+            @archive="archiveSelected()"
+            @extract="extractSelected()"
+            @rename="startRenameSelected"
+            @delete="deleteSelected()"
+            @toggle-tasks="toggleTaskPanel" />
+        <input ref="uploadInput" class="hidden" type="file" multiple @change="uploadChanged">
 
         <task-panel
             v-if="taskPanelVisible"
@@ -2133,11 +2102,7 @@ const signOut = async () => {
 }
 
 .primary-tool,
-.icon-tool,
-.nav-button,
-.view-button,
-.command-button,
-.task-icon-button {
+.icon-tool {
   @apply inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-blue-50;
 }
 
@@ -2151,63 +2116,6 @@ const signOut = async () => {
 
 .content-pane {
   @apply relative flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white/80 shadow-sm backdrop-blur;
-}
-
-.path-row {
-  @apply flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white/70 px-3;
-}
-
-.nav-button {
-  @apply h-10 w-10 shrink-0;
-}
-
-.nav-button:disabled {
-  @apply cursor-not-allowed text-slate-300 hover:bg-white;
-}
-
-.view-button {
-  @apply h-10 shrink-0 gap-2 px-3 text-sm;
-}
-
-.view-button.active {
-  @apply border-blue-200 bg-blue-50 text-blue-700;
-}
-
-.view-button:disabled {
-  @apply cursor-not-allowed text-slate-300 hover:bg-white;
-}
-
-.command-bar {
-  @apply flex h-11 shrink-0 items-center gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/70 px-3;
-}
-
-.command-button {
-  @apply h-8 shrink-0 gap-1.5 border-transparent bg-transparent px-2.5 text-sm shadow-none;
-}
-
-.command-button:hover,
-.command-button.active {
-  @apply border-slate-200 bg-white;
-}
-
-.command-button:disabled {
-  @apply cursor-not-allowed text-slate-300 hover:border-transparent hover:bg-transparent;
-}
-
-.command-button.danger {
-  @apply text-red-600 hover:bg-red-50;
-}
-
-.command-button.danger:disabled {
-  @apply text-red-200 hover:bg-transparent;
-}
-
-.command-separator {
-  @apply mx-1 h-5 w-px shrink-0 bg-slate-200;
-}
-
-.command-status {
-  @apply ml-auto min-w-32 truncate pl-3 text-right text-xs text-slate-500;
 }
 
 .browser-area {
