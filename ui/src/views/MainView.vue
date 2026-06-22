@@ -28,6 +28,7 @@ import {usePreviewPaneResize} from "../composables/usePreviewPaneResize.ts";
 import {useShellNotice} from "../composables/useShellNotice.ts";
 import {useFileOperations} from "../composables/useFileOperations.ts";
 import {useExplorerTabs} from "../composables/useExplorerTabs.ts";
+import {useExplorerPreview} from "../composables/useExplorerPreview.ts";
 import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
 import {isExtractableArchiveEntry} from "../utils/file-entry.ts";
@@ -56,11 +57,6 @@ type ContentToolbarExpose = {
 
 type FocusablePanelExpose = {
   focus: () => void;
-}
-
-type ImageViewerPayload = {
-  entry: ExplorerEntry;
-  entries: ExplorerEntry[];
 }
 
 type NavigateToPathOptions = {
@@ -150,17 +146,9 @@ const uploadInput = ref<HTMLInputElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 const searchText = ref("");
 const isFiltering = computed(() => Boolean(searchText.value.trim()));
-const previewPanelVisible = ref(false);
-const previewEntry = ref<ExplorerEntry | null>(null);
-const previewReloadKey = ref(0);
-const imageViewerVisible = ref(false);
-const imageViewerEntry = ref<ExplorerEntry | null>(null);
-const imageViewerEntries = ref<ExplorerEntry[]>([]);
-const currentSelection = ref<ExplorerEntry[]>([]);
 let suppressSelectionPersistence = false;
 let suppressScrollPersistence = false;
 let tabContextRestoreToken = 0;
-let previewUpdateToken = 0;
 let scrollPersistTimer: number | undefined;
 let historyMouseButton = -1;
 
@@ -178,29 +166,44 @@ const navigateUpTarget = computed(() => canNavigateUp.value ? parentPath(current
 const navigateBackTitle = computed(() => navigateBackTarget.value ? `后退到 ${navigateBackTarget.value} (Alt+← / 鼠标后退键)` : "后退 (Alt+← / 鼠标后退键)");
 const navigateForwardTitle = computed(() => navigateForwardTarget.value ? `前进到 ${navigateForwardTarget.value} (Alt+→ / 鼠标前进键)` : "前进 (Alt+→ / 鼠标前进键)");
 const navigateUpTitle = computed(() => navigateUpTarget.value ? `返回上级 ${navigateUpTarget.value} (Alt+↑)` : "返回上级 (Alt+↑)");
-const selectedList = computed(() => currentSelection.value);
-const selectedCount = computed(() => selectedList.value.length);
-const hasSelection = computed(() => selectedCount.value > 0);
-const singleSelection = computed(() => selectedCount.value === 1 ? selectedList.value[0] : null);
-const selectionStatusText = computed(() => {
-  const selectionText = hasSelection.value ? `已选择 ${selectedCount.value} 项` : "未选择项目";
-  return `${selectionText} · ${clipboardText.value}`;
+const currentViewModeMeta = computed(() => viewModeMeta[fileStore.viewMode]);
+const currentViewModeLabel = computed(() => fileStore.viewMode === "icons" ? iconSizeLabel[fileStore.iconSize] : currentViewModeMeta.value.label);
+const viewModeButtonTitle = computed(() => `当前：${currentViewModeLabel.value}，点击选择查看模式。Ctrl+Shift+1-7 可直接切换查看模式`);
+
+const selectedEntry = () => explorerRef.value?.getSelectedEntry() ?? null;
+
+const {
+  previewPanelVisible,
+  previewEntry,
+  previewReloadKey,
+  imageViewerVisible,
+  imageViewerEntry,
+  imageViewerEntries,
+  currentSelection,
+  selectedCount,
+  hasSelection,
+  singleSelection,
+  previewEmptyTitle,
+  previewEmptySubtitle,
+  previewEmptyIcon,
+  clearPreviewContent,
+  closePreviewPanel,
+  closeImageViewer,
+  setImageViewerEntry,
+  openImageViewer,
+  openPreviewEntryImageViewer,
+  previewSelected,
+  previewSelectedQuietly,
+  showEmptyPreviewPane,
+  handleSelectionChange
+} = useExplorerPreview({
+  getSelectedEntry: selectedEntry,
+  getImageEntries: () => explorerRef.value?.getImageEntries() ?? [],
+  shouldPersistSelection: () => !fileStore.showEditor && !suppressSelectionPersistence,
+  persistSelectedPaths: paths => fileStore.setActiveTabSelectedPaths(paths),
+  showNotice: showShellNotice
 });
-const previewEmptyTitle = computed(() => {
-  if (!currentSelection.value.length) return "选择一个文件以预览";
-  if (currentSelection.value.length > 1) return `已选择 ${currentSelection.value.length} 项`;
-  const entry = currentSelection.value[0];
-  return entry?.type === "folder" ? entry.name : "正在准备预览";
-});
-const previewEmptySubtitle = computed(() => {
-  if (!currentSelection.value.length) return "";
-  if (currentSelection.value.length > 1) return "选择单个文件后显示预览";
-  return currentSelection.value[0]?.type === "folder" ? "文件夹不能直接预览" : "";
-});
-const previewEmptyIcon = computed(() => {
-  if (currentSelection.value.length === 1 && currentSelection.value[0]?.type === "folder") return "icon-folder-fill";
-  return currentSelection.value.length > 1 ? "icon-view-list" : "icon-file-fill";
-});
+
 const canDownloadSelection = computed(() => singleSelection.value?.type === "file");
 const canPreviewSelection = computed(() => singleSelection.value?.type === "file");
 const canTogglePreviewPane = computed(() => !fileStore.showEditor);
@@ -209,36 +212,13 @@ const canArchiveSelection = computed(() => hasSelection.value);
 const canDeleteSelection = computed(() => hasSelection.value);
 const canExtractSelection = computed(() => isExtractableArchiveEntry(singleSelection.value));
 const canPasteSelection = computed(() => hasClipboard.value);
-const currentViewModeMeta = computed(() => viewModeMeta[fileStore.viewMode]);
-const currentViewModeLabel = computed(() => fileStore.viewMode === "icons" ? iconSizeLabel[fileStore.iconSize] : currentViewModeMeta.value.label);
-const viewModeButtonTitle = computed(() => `当前：${currentViewModeLabel.value}，点击选择查看模式。Ctrl+Shift+1-7 可直接切换查看模式`);
-
-const resetImageViewerState = () => {
-  imageViewerVisible.value = false;
-  imageViewerEntry.value = null;
-  imageViewerEntries.value = [];
-}
-
-const closeImageViewer = () => {
-  const nextPreviewEntry = previewPanelVisible.value && imageViewerEntry.value?.path !== previewEntry.value?.path
-      ? imageViewerEntry.value
-      : null;
-  resetImageViewerState();
-  if (nextPreviewEntry) void setPreviewEntry(nextPreviewEntry, true);
-}
-
-const setImageViewerEntry = (entry: ExplorerEntry) => {
-  imageViewerEntry.value = entry;
-}
-
-const clearPreviewContent = () => {
-  previewUpdateToken += 1;
-  previewEntry.value = null;
-}
+const selectionStatusText = computed(() => {
+  const selectionText = hasSelection.value ? `已选择 ${selectedCount.value} 项` : "未选择项目";
+  return `${selectionText} · ${clipboardText.value}`;
+});
 
 const closePanels = () => {
-  previewPanelVisible.value = false;
-  clearPreviewContent();
+  closePreviewPanel();
   operationPanel.value.visible = false;
   resetDeleteConfirm();
   closePropertiesPanel();
@@ -449,13 +429,9 @@ const refreshCurrent = async (keepSelection = false) => {
 }
 
 const closeOperationShellPanels = () => {
-  clearPreviewContent();
-  previewPanelVisible.value = false;
+  closePreviewPanel();
   resetTaskCancelConfirm();
-  closeImageViewer();
 }
-
-const selectedEntry = () => explorerRef.value?.getSelectedEntry() ?? null;
 
 const {
   fileClipboardAction,
@@ -505,18 +481,6 @@ const {
   focusDeleteConfirm: () => deleteConfirmRef.value?.focus(),
   focusPropertiesPanel: () => propertiesPanelRef.value?.focus()
 });
-
-const handleSelectionChange = (entries: ExplorerEntry[]) => {
-  currentSelection.value = entries;
-  if (!fileStore.showEditor && !suppressSelectionPersistence) fileStore.setActiveTabSelectedPaths(entries.map(entry => entry.path));
-  if (!previewPanelVisible.value || fileStore.showEditor) return;
-  const entry = entries.length === 1 ? entries[0] : null;
-  if (entry?.type === "file") {
-    void setPreviewEntry(entry);
-  } else {
-    clearPreviewContent();
-  }
-}
 
 const {
   active: uploadDropActive,
@@ -608,13 +572,6 @@ const focusBreadcrumb = () => {
   contentToolbarRef.value?.focusInput();
 }
 
-const previewSelectedQuietly = async () => {
-  const entry = singleSelection.value;
-  if (!entry || entry.type !== "file") return false;
-  await previewSelected(entry);
-  return true;
-}
-
 const togglePreviewFromShortcut = async () => {
   if (previewPanelVisible.value) {
     closePreview();
@@ -623,8 +580,7 @@ const togglePreviewFromShortcut = async () => {
   const previewed = await previewSelectedQuietly();
   if (previewed) return true;
   if (fileStore.showEditor) return false;
-  clearPreviewContent();
-  previewPanelVisible.value = true;
+  showEmptyPreviewPane();
   return true;
 }
 
@@ -833,51 +789,11 @@ const navigateUp = async () => {
   await navigateToPath(parentPath(currentFolder()));
 }
 
-const openImageViewer = async ({entry, entries}: ImageViewerPayload) => {
-  if (!await fileStore.requestEditorLeave()) return;
-  fileStore.closeEditor();
-  imageViewerEntries.value = entries.length ? entries : [entry];
-  imageViewerVisible.value = true;
-  setImageViewerEntry(entry);
-}
-
-const openPreviewImageViewer = async () => {
-  const entry = previewEntry.value;
-  if (!entry) return;
-  const entries = explorerRef.value?.getImageEntries() ?? [];
-  await openImageViewer({entry, entries: entries.some(item => item.path === entry.path) ? entries : [entry]});
-}
-
-const openPreviewEntryImageViewer = async (entry: ExplorerEntry) => {
-  previewEntry.value = entry;
-  await openPreviewImageViewer();
-}
-
-const previewSelected = async (entry = selectedEntry()) => {
-  if (!entry || entry.type !== "file") {
-    showShellNotice("请选择文件", "warning");
-    return;
-  }
-  await setPreviewEntry(entry, true);
-}
-
-const setPreviewEntry = async (entry: ExplorerEntry, force = false) => {
-  if (!force && previewEntry.value?.path === entry.path && previewPanelVisible.value) return;
-  const token = ++previewUpdateToken;
-  if (!await fileStore.requestEditorLeave()) return;
-  if (token !== previewUpdateToken) return;
-  fileStore.closeEditor();
-  previewEntry.value = entry;
-  previewReloadKey.value += 1;
-  previewPanelVisible.value = true;
-}
-
 const closePreview = () => {
   closePanels();
 }
 
-const openPreviewInEditor = async () => {
-  const entry = previewEntry.value;
+const openPreviewInEditor = async (entry = previewEntry.value) => {
   if (!entry || entry.type !== "file") return;
   if (!await fileStore.requestEditorLeave()) return;
   closePanels();
@@ -891,8 +807,7 @@ const openPreviewInEditor = async () => {
 }
 
 const editPreviewEntry = (entry: ExplorerEntry) => {
-  previewEntry.value = entry;
-  void openPreviewInEditor();
+  void openPreviewInEditor(entry);
 }
 
 const openSettings = async () => {
