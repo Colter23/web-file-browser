@@ -53,6 +53,7 @@ export const useExplorerMarqueeSelection = ({
   let scrollFrame = 0;
   const scrollEdge = 48;
   const maxScrollSpeed = 24;
+  const interactiveSelector = "button, a, input, textarea, select, [contenteditable='true']";
 
   const stopAutoScroll = () => {
     if (!scrollFrame) return;
@@ -70,12 +71,12 @@ export const useExplorerMarqueeSelection = ({
   const canBeginMarquee = (target: EventTarget | null) => {
     if (target === viewportRef.value) return true;
     if (!(target instanceof HTMLElement)) return false;
+    if (target.closest(interactiveSelector)) return false;
     return Boolean(target.closest(".entry-surface")) && !Boolean(target.closest(".entry-item"));
   }
 
   const beginMarqueeSelection = (event: MouseEvent) => {
     if (isRenaming()) return;
-    if (event.button === 0) focusViewport();
     if (event.button !== 0 || !canBeginMarquee(event.target)) return;
     const viewport = viewportRef.value;
     if (!viewport) return;
