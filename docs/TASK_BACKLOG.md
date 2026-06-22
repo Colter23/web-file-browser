@@ -51,7 +51,8 @@
    - Docker Compose 示例已新增。
    - UID/GID、权限、只读挂载、数据卷、环境变量、备份和迁移文档已新增。
    - Docker 冒烟脚本 `scripts/docker-smoke.sh` 已新增。
-   - 仍需在真实 Linux Docker 环境执行脚本并修正发现的问题。
+   - `scripts/docker-smoke.sh` 已在真实 Linux Docker 环境通过，并据此修正前端构建、健康检查依赖、UID/GID 和跨挂载回收站恢复问题。
+   - 性能冒烟脚本 `scripts/docker-perf-smoke.sh` 已新增，用于验证 1 万项目录、大文件流式传输、Range、压缩解压和回收站恢复。
 
 5. 单管理员维护能力。
    - 登录后修改管理员密码 API 已完成基础实现。
@@ -139,10 +140,10 @@
 
 ## 推荐下一批任务
 
-1. 在真实 Linux Docker 环境执行 `scripts/docker-smoke.sh`，验证镜像构建、挂载、上传、编辑、压缩、解压、删除和恢复。
-2. 继续为压缩、解压、复制、移动等后台任务补充更细的取消检查点和更接近真实数据的验证。
+1. 在真实 Linux Docker 环境执行 `scripts/docker-perf-smoke.sh`，用默认参数验证 1 万项目录、64 MiB 上传下载、Range、压缩解压和回收站恢复。
+2. 根据性能冒烟结果决定是否继续优化目录分页、传输限流、后台任务进度或压缩解压吞吐。
 3. 继续收敛运维接口、错误码测试和部署文档。
-4. 根据 Docker 冒烟结果修正部署默认值和权限说明。
+4. 整理一份后端 API 契约文档，方便前端协作者按稳定接口对接。
 
 ## 最近推进
 
@@ -163,7 +164,9 @@
 - 单管理员密码修改已完成基础实现：修改成功后旧会话失效，当前请求获得新会话；服务端会话已与 Cookie 对齐为 7 天有效，并会懒清理过期项。
 - 默认 CORS 已收紧：默认同源，跨域必须显式配置可信来源，且不支持 `*`。
 - Docker 部署材料已新增：Dockerfile、`.dockerignore`、Compose 示例、`env.example` 和 Linux Docker 部署文档。
-- Docker 冒烟脚本已新增：`scripts/docker-smoke.sh` 使用 `.smoke/docker` 临时目录，覆盖前端静态托管、登录、挂载、编辑保存、下载、上传、zip/tar.gz 压缩和解压、删除/恢复和指标接口；当前仍需在真实 Linux Docker 环境执行。
+- Docker 功能冒烟已在真实 Linux Docker 环境通过：`scripts/docker-smoke.sh` 使用 `.smoke/docker` 临时目录，覆盖前端静态托管、登录、挂载、编辑保存、下载、上传、zip/tar.gz 压缩和解压、删除/恢复和指标接口。
+- Docker 性能冒烟脚本已新增：`scripts/docker-perf-smoke.sh` 默认验证 1 万项目录分页、按需总数、64 MiB 上传下载、Range、大文件编辑保护、16 MiB tar.gz 压缩解压、回收站恢复和指标接口。
+- Linux Docker 冒烟踩坑已固化到部署文档：Yarn 4 构建需提前复制 `.yarnrc.yml`，运行镜像不再安装 `curl`，UID/GID 直接用数字用户，跨挂载回收站恢复使用复制后清理兜底。
 - 压缩/解压后台任务已完成基础实现：`tar.gz`、`tgz`、`zip` 按块读写，输出先写临时路径，完成后移动到最终路径，解压会拒绝越界路径和不支持条目。
 - 压缩/解压大文件 API 冒烟已补充：zip 和 tar.gz 都使用超过单块缓冲区的文件验证任务字节进度和解压后内容一致。
 - 主界面已补充压缩/解压最小入口：工具栏和右键菜单可创建后台任务，任务完成后刷新目录查看结果。

@@ -82,6 +82,7 @@ docker compose up -d --build
 
 首次启动前请修改 `.env` 中的 `WEB_FILE_BROWSER_ADMIN_PASSWORD`。默认数据卷是 `./data:/app/data`，业务文件示例目录是 `./files:/mnt/files`。
 在 Linux Docker 环境中可以运行 `scripts/docker-smoke.sh` 做自动冒烟验证。脚本会使用 `.smoke/docker` 临时目录，覆盖前端静态托管、登录、挂载、编辑保存、下载、上传、zip/tar.gz 压缩和解压、删除/恢复和指标接口；默认端口为 `18080`，运行结束后会清理容器和临时数据。
+需要验证更接近真实规模的目录和传输场景时，可以运行 `scripts/docker-perf-smoke.sh`。脚本默认创建 1 万个目录项、上传下载 64 MiB 文件，并验证 Range、在线编辑保护、tar.gz 压缩解压、回收站恢复和指标接口；默认端口为 `18081`。
 
 ## 后端结构
 
@@ -184,4 +185,5 @@ Linux Docker 环境可额外执行：
 
 ```bash
 bash scripts/docker-smoke.sh
+bash scripts/docker-perf-smoke.sh
 ```

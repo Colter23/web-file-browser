@@ -89,6 +89,49 @@ bash scripts/docker-smoke.sh
 
 运行脚本需要宿主机安装 Docker Compose v2、`curl`、`grep`、`jq` 和 `cmp`。
 
+## 性能冒烟验证
+
+普通冒烟通过后，可以继续运行偏性能和规模的 Docker 冒烟：
+
+```bash
+bash scripts/docker-perf-smoke.sh
+```
+
+脚本使用 `.smoke/perf` 下的临时 `data` 和 `files` 目录，默认端口是 `18081`，默认项目名是 `web-file-browser-perf-smoke`。它会构建并启动真实 Compose 项目，然后验证：
+
+- 1 万个文件的大目录分页。
+- 默认目录分页不返回总数，`includeTotal=true` 才返回总数。
+- 64 MiB 文件上传、下载和内容一致性。
+- 单段 `Range` 下载。
+- 大文件在线编辑保护。
+- 16 MiB 文件的 `tar.gz` 压缩和解压。
+- 删除到自管回收站并恢复。
+- `/api/metrics` 指标接口。
+
+可选环境变量：
+
+- `WEB_FILE_BROWSER_PERF_PORT`：性能冒烟服务端口，默认 `18081`。
+- `WEB_FILE_BROWSER_PERF_PASSWORD`：性能冒烟管理员密码，默认 `web-file-browser-perf-password`。
+- `WEB_FILE_BROWSER_PERF_PROJECT`：Docker Compose 项目名，默认 `web-file-browser-perf-smoke`。
+- `WEB_FILE_BROWSER_PERF_ROOT`：临时目录，默认 `.smoke/perf`，必须位于仓库 `.smoke/` 下。
+- `WEB_FILE_BROWSER_PERF_DIR_ENTRIES`：大目录文件数，默认 `10000`。
+- `WEB_FILE_BROWSER_PERF_DIR_PAGE_LIMIT`：目录分页校验页大小，默认 `200`。
+- `WEB_FILE_BROWSER_PERF_FILE_MB`：上传下载大文件大小，默认 `64`。
+- `WEB_FILE_BROWSER_PERF_ARCHIVE_MB`：压缩解压源文件大小，默认 `16`。
+- `WEB_FILE_BROWSER_PERF_TASK_WAIT_SECONDS`：后台任务等待上限，默认 `900`。
+- `WEB_FILE_BROWSER_PERF_KEEP=1`：失败或完成后保留容器和 `.smoke/perf` 临时目录，便于排查。
+
+运行脚本需要宿主机安装 Docker Compose v2、`curl`、`jq`、`cmp` 和 `dd`。脚本会创建较多临时文件并读写随机数据，建议在 Linux Docker 宿主机本地磁盘上运行，不要在 Windows Docker Desktop 的 Windows 路径挂载上判断最终性能。
+
+## 已验证的 Linux Docker 问题
+
+真实 Linux Docker 冒烟已经通过，并修复过以下部署问题：
+
+- 前端构建阶段必须在 `yarn install` 前复制 `ui/.yarnrc.yml`，否则 Yarn 4 构建时找不到 `node_modules` 安装状态。
+- 运行镜像不再安装 `curl`，健康检查改为应用二进制 `web-file-browser --healthcheck`，减少镜像构建耗时和运行依赖。
+- 运行镜像直接使用数字 UID/GID，不在构建阶段创建固定用户或用户组，避免宿主机传入 `0:0` 时因为 GID 已存在导致构建失败。
+- 回收站恢复已兼容跨挂载点移动；当 `rename` 因跨设备失败时，会回退为复制后清理，适配 `/app/data/trash` 和 `/mnt/files` 分属不同 Docker bind mount 的场景。
+
 ## 卷和目录
 
 Compose 示例默认挂载：
