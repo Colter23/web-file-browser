@@ -2,39 +2,23 @@ import {computed, nextTick, ref} from "vue";
 import type {ArchiveFormat} from "../class.ts";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import type {ShellNoticeKind} from "../components/shell/types.ts";
-import type {FileClipboardAction, OperationPanelState, DeleteConfirmState, PropertiesPanelState} from "../components/operations/types.ts";
+import type {OperationPanelState, DeleteConfirmState, PropertiesPanelState} from "../components/operations/types.ts";
+import {useFileClipboardOperations} from "./useFileClipboardOperations.ts";
 import {
   createArchiveTask,
-  createCopyTask,
   createDeleteTask,
   createEntry,
   createExtractTask,
-  createMoveTask,
   downloadFile,
   moveEntry,
   uploadFiles
 } from "../network/api.ts";
 import {archiveFormatExtension, archiveStem, isExtractableArchiveEntry} from "../utils/file-entry.ts";
-import {isSameOrDescendantPath, joinPath, parentPath} from "../utils/file-path.ts";
-
-type CopyPathPayload = {
-  paths: string[];
-}
+import {joinPath, parentPath} from "../utils/file-path.ts";
 
 type RenamePayload = {
   entry: ExplorerEntry;
   name: string;
-}
-
-type DropEntriesPayload = {
-  entries: ExplorerEntry[];
-  target: ExplorerEntry;
-  action: "copy" | "move";
-}
-
-type DropToCurrentFolderPayload = {
-  entries: ExplorerEntry[];
-  action: "copy" | "move";
 }
 
 type FileOperationsOptions = {
@@ -95,20 +79,10 @@ export const useFileOperations = ({
   focusDeleteConfirm,
   focusPropertiesPanel
 }: FileOperationsOptions) => {
-  const fileClipboardAction = ref<FileClipboardAction | null>(null);
-  const fileClipboardEntries = ref<ExplorerEntry[]>([]);
   const creatingShortcutFolder = ref(false);
   const operationPanel = ref<OperationPanelState>(emptyOperationPanel());
   const deleteConfirm = ref<DeleteConfirmState>(emptyDeleteConfirm());
   const propertiesPanel = ref<PropertiesPanelState>(emptyPropertiesPanel());
-
-  const clipboardPaths = computed(() => fileClipboardEntries.value.map(entry => entry.path));
-  const hasClipboard = computed(() => Boolean(fileClipboardAction.value && fileClipboardEntries.value.length));
-  const clipboardText = computed(() => {
-    if (!hasClipboard.value) return "剪贴板为空";
-    const actionText = fileClipboardAction.value === "cut" ? "剪切" : "复制";
-    return `${actionText} ${fileClipboardEntries.value.length} 项`;
-  });
 
   const operationPanelNameLabel = computed(() => {
     switch (operationPanel.value.kind) {
@@ -132,6 +106,29 @@ export const useFileOperations = ({
     if (selected.length) return selected;
     return fallback ? [fallback] : [];
   }
+
+  const {
+    fileClipboardAction,
+    clipboardPaths,
+    hasClipboard,
+    clipboardText,
+    removeEntriesFromCutClipboard,
+    copySelected,
+    cutSelected,
+    copyEntryPaths,
+    pasteSelected,
+    dropEntriesToFolder,
+    dropEntriesToCurrentFolder
+  } = useFileClipboardOperations({
+    currentFolder,
+    refreshCurrent,
+    selectedEntry,
+    selectedEntries,
+    showNotice,
+    showError,
+    taskStarted,
+    setTaskMessage
+  });
 
   const singleSelectedEntry = (entry = selectedEntry()) => {
     const selected = selectedEntries(entry);
@@ -284,11 +281,7 @@ export const useFileOperations = ({
     try {
       const task = await createDeleteTask(entries.map(item => item.path));
       await taskStarted(task.id, "删除任务");
-      if (fileClipboardAction.value === "cut") {
-        const deleted = new Set(entries.map(item => item.path));
-        fileClipboardEntries.value = fileClipboardEntries.value.filter(item => !deleted.has(item.path));
-        if (!fileClipboardEntries.value.length) fileClipboardAction.value = null;
-      }
+      removeEntriesFromCutClipboard(entries.map(item => item.path));
       resetDeleteConfirm();
       await refreshCurrent();
     } catch (error) {
@@ -314,113 +307,6 @@ export const useFileOperations = ({
     } catch (error) {
       showError(error, "下载失败", "下载失败");
     }
-  }
-
-  const setFileClipboard = (action: FileClipboardAction, entry = selectedEntry()) => {
-    const entries = selectedEntries(entry);
-    if (!entries.length) {
-      showNotice("请选择文件或文件夹", "warning");
-      return;
-    }
-    fileClipboardAction.value = action;
-    fileClipboardEntries.value = entries;
-    const message = `${action === "cut" ? "已剪切" : "已复制"} ${entries.length} 项`;
-    setTaskMessage(message);
-    showNotice(message, "success", "剪贴板已更新");
-  }
-
-  const copySelected = (entry?: ExplorerEntry) => {
-    setFileClipboard("copy", entry ?? selectedEntry());
-  }
-
-  const cutSelected = (entry?: ExplorerEntry) => {
-    setFileClipboard("cut", entry ?? selectedEntry());
-  }
-
-  const copyEntryPaths = async ({paths}: CopyPathPayload) => {
-    const normalizedPaths = paths.map(path => path.trim()).filter(Boolean);
-    if (!normalizedPaths.length) return;
-    try {
-      await navigator.clipboard.writeText(normalizedPaths.join("\n"));
-      const message = normalizedPaths.length === 1 ? "已复制路径" : `已复制 ${normalizedPaths.length} 个路径`;
-      showNotice(message, "success", "路径已复制");
-    } catch {
-      showNotice("浏览器未允许写入剪贴板，请手动复制路径。", "error", "复制路径失败");
-    }
-  }
-
-  const pasteSelected = async () => {
-    if (!hasClipboard.value || !fileClipboardAction.value) {
-      showNotice("剪贴板为空", "warning");
-      return;
-    }
-    const targetPath = currentFolder();
-    const entries = fileClipboardEntries.value;
-    const nestedFolder = entries.find(entry => entry.type === "folder" && isSameOrDescendantPath(targetPath, entry.path));
-    if (nestedFolder) {
-      showNotice(`不能将 ${nestedFolder.name} 粘贴到它自身或子文件夹中`, "warning");
-      return;
-    }
-    const sameFolder = entries.some(entry => parentPath(entry.path) === targetPath);
-    if (fileClipboardAction.value === "cut" && sameFolder) {
-      showNotice("剪切项已经在当前文件夹中", "warning");
-      return;
-    }
-    try {
-      const sources = entries.map(item => item.path);
-      const task = fileClipboardAction.value === "cut"
-          ? await createMoveTask(sources, targetPath)
-          : await createCopyTask(sources, targetPath);
-      await taskStarted(task.id, fileClipboardAction.value === "cut" ? "移动任务" : "复制任务");
-      if (fileClipboardAction.value === "cut") {
-        fileClipboardAction.value = null;
-        fileClipboardEntries.value = [];
-      }
-      await refreshCurrent();
-    } catch (error) {
-      showError(error, "创建粘贴任务失败", "粘贴失败");
-    }
-  }
-
-  const removeMovedEntriesFromCutClipboard = (sources: string[]) => {
-    if (fileClipboardAction.value !== "cut") return;
-    const moved = new Set(sources);
-    fileClipboardEntries.value = fileClipboardEntries.value.filter(item => !moved.has(item.path));
-    if (!fileClipboardEntries.value.length) fileClipboardAction.value = null;
-  }
-
-  const runDroppedEntriesTask = async (entries: ExplorerEntry[], targetPath: string, action: "copy" | "move") => {
-    if (!entries.length) return;
-    const nestedFolder = entries.find(entry => entry.type === "folder" && isSameOrDescendantPath(targetPath, entry.path));
-    if (nestedFolder) {
-      showNotice(`不能将 ${nestedFolder.name} 放入它自身或子文件夹中`, "warning");
-      return;
-    }
-    const sameFolder = entries.some(entry => parentPath(entry.path) === targetPath);
-    if (action === "move" && sameFolder) {
-      setTaskMessage("拖拽目标已经是当前位置");
-      return;
-    }
-    try {
-      const sources = entries.map(item => item.path);
-      const task = action === "copy"
-          ? await createCopyTask(sources, targetPath)
-          : await createMoveTask(sources, targetPath);
-      await taskStarted(task.id, action === "copy" ? "复制任务" : "移动任务");
-      if (action === "move") removeMovedEntriesFromCutClipboard(sources);
-      await refreshCurrent();
-    } catch (error) {
-      showError(error, "创建拖拽任务失败", "拖拽失败");
-    }
-  }
-
-  const dropEntriesToFolder = async ({entries, target, action}: DropEntriesPayload) => {
-    if (target.type !== "folder") return;
-    await runDroppedEntriesTask(entries, target.path, action);
-  }
-
-  const dropEntriesToCurrentFolder = async ({entries, action}: DropToCurrentFolderPayload) => {
-    await runDroppedEntriesTask(entries, currentFolder(), action);
   }
 
   const archiveSelected = (entry = selectedEntry()) => {
