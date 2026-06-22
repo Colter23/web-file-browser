@@ -98,6 +98,8 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
         ref="menuRef"
         class="context-menu"
         :style="{left: `${menuPosition.x}px`, top: `${menuPosition.y}px`}"
+        @click.stop
+        @contextmenu.prevent.stop
         @keydown="handleMenuKeyDown">
       <template v-if="background">
         <button @click="emit('create-file')">新建文件</button>

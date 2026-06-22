@@ -155,6 +155,7 @@ export const useExplorerShortcuts = ({
 
   const handleWindowKeyDown = (event: KeyboardEvent) => {
     if (imageViewerVisible.value) return;
+    if (event.defaultPrevented) return;
     const key = event.key.toLowerCase();
     const commandKey = event.ctrlKey || event.metaKey;
 
@@ -231,7 +232,12 @@ export const useExplorerShortcuts = ({
       void togglePreviewFromShortcut();
       return;
     }
-    if ((event.key === " " || event.code === "Space") && !event.altKey && !event.ctrlKey && !event.metaKey && !shouldIgnoreActionShortcut(event.target)) {
+    if ((event.key === " " || event.code === "Space")
+        && !event.altKey
+        && !event.ctrlKey
+        && !event.metaKey
+        && !isExplorerShortcutTarget(event.target)
+        && !shouldIgnoreActionShortcut(event.target)) {
       if (hasPreviewableSelection()) {
         event.preventDefault();
         void previewSelectedQuietly();
