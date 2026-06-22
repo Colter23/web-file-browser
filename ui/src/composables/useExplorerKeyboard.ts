@@ -21,7 +21,7 @@ type ExplorerKeyboardOptions = {
   toggleFocusedSelection: () => void;
   selectRange: (targetPath: string, additive: boolean) => void;
   previewEntry: (entry: ExplorerEntry) => void;
-  copySelectedPaths: () => void;
+  copySelectedPaths: (fallbackEntry?: ExplorerEntry | null) => void;
   copyEntry: (entry: ExplorerEntry) => void;
   cutEntry: (entry: ExplorerEntry) => void;
   paste: () => void;
@@ -71,6 +71,8 @@ export const useExplorerKeyboard = ({
   handleTypeahead,
   moveFocus
 }: ExplorerKeyboardOptions) => {
+  const selectedOrFocusedEntry = () => firstSelectedEntry() ?? focusedOrSelectedEntry();
+
   const handleRenameKey = async (event: KeyboardEvent) => {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -149,16 +151,16 @@ export const useExplorerKeyboard = ({
       event.preventDefault();
       if (event.shiftKey) {
         closeContextMenu();
-        copySelectedPaths();
+        copySelectedPaths(focusedOrSelectedEntry());
         return true;
       }
-      const entry = firstSelectedEntry();
+      const entry = selectedOrFocusedEntry();
       if (entry) copyEntry(entry);
       return true;
     }
     if (key === "x") {
       event.preventDefault();
-      const entry = firstSelectedEntry();
+      const entry = selectedOrFocusedEntry();
       if (entry) cutEntry(entry);
       return true;
     }
@@ -208,7 +210,7 @@ export const useExplorerKeyboard = ({
     if (event.key === "Delete") {
       event.preventDefault();
       closeContextMenu();
-      const entry = firstSelectedEntry();
+      const entry = selectedOrFocusedEntry();
       if (entry) deleteEntry(entry);
       return true;
     }

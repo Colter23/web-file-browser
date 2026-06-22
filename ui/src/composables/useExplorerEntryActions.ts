@@ -85,8 +85,10 @@ export const useExplorerEntryActions = ({
     openNewTab(entry);
   }
 
-  const copySelectedPaths = () => {
-    const paths = selectedEntries.value.length ? selectedEntries.value.map(entry => entry.path) : [currentPath()];
+  const copySelectedPaths = (fallbackEntry?: ExplorerEntry | null) => {
+    const paths = selectedEntries.value.length
+        ? selectedEntries.value.map(entry => entry.path)
+        : fallbackEntry ? [fallbackEntry.path] : [currentPath()];
     copyPath({paths});
   }
 
