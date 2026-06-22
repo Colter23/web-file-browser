@@ -1,9 +1,9 @@
-import {computed, nextTick, ref} from "vue";
+import {ref} from "vue";
 import type {ArchiveFormat} from "../class.ts";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import type {ShellNoticeKind} from "../components/shell/types.ts";
-import type {OperationPanelState, DeleteConfirmState, PropertiesPanelState} from "../components/operations/types.ts";
 import {useFileClipboardOperations} from "./useFileClipboardOperations.ts";
+import {useFileOperationPanels} from "./useFileOperationPanels.ts";
 import {
   createArchiveTask,
   createDeleteTask,
@@ -38,31 +38,6 @@ type FileOperationsOptions = {
   focusPropertiesPanel: () => void;
 }
 
-const emptyOperationPanel = (): OperationPanelState => ({
-  visible: false,
-  kind: null,
-  title: "",
-  message: "",
-  primaryText: "确定",
-  name: "",
-  format: "zip",
-  entries: [],
-  sourceEntry: null,
-  submitting: false
-});
-
-const emptyDeleteConfirm = (): DeleteConfirmState => ({
-  visible: false,
-  entries: [],
-  submitting: false,
-  error: ""
-});
-
-const emptyPropertiesPanel = (): PropertiesPanelState => ({
-  visible: false,
-  entries: []
-});
-
 export const useFileOperations = ({
   currentFolder,
   refreshCurrent,
@@ -80,23 +55,24 @@ export const useFileOperations = ({
   focusPropertiesPanel
 }: FileOperationsOptions) => {
   const creatingShortcutFolder = ref(false);
-  const operationPanel = ref<OperationPanelState>(emptyOperationPanel());
-  const deleteConfirm = ref<DeleteConfirmState>(emptyDeleteConfirm());
-  const propertiesPanel = ref<PropertiesPanelState>(emptyPropertiesPanel());
-
-  const operationPanelNameLabel = computed(() => {
-    switch (operationPanel.value.kind) {
-      case "createFile":
-        return "文件名";
-      case "createFolder":
-        return "文件夹名";
-      case "archive":
-        return "压缩包名称";
-      case "extract":
-        return "解压到文件夹";
-      default:
-        return "名称";
-    }
+  const {
+    operationPanel,
+    deleteConfirm,
+    propertiesPanel,
+    operationPanelNameLabel,
+    resetOperationPanel,
+    resetDeleteConfirm,
+    closePropertiesPanel,
+    closePanels,
+    openOperationPanel,
+    closeOperationPanel,
+    openDeleteConfirm,
+    closeDeleteConfirm,
+    openPropertiesPanel
+  } = useFileOperationPanels({
+    closeShellPanels,
+    focusDeleteConfirm,
+    focusPropertiesPanel
   });
 
   const selectedEntry = () => getSelectedEntry();
@@ -140,25 +116,6 @@ export const useFileOperations = ({
     return isExtractableArchiveEntry(entry);
   }
 
-  const resetOperationPanel = () => {
-    operationPanel.value = emptyOperationPanel();
-  }
-
-  const resetDeleteConfirm = () => {
-    deleteConfirm.value = emptyDeleteConfirm();
-  }
-
-  const closePropertiesPanel = () => {
-    propertiesPanel.value = emptyPropertiesPanel();
-  }
-
-  const closePanels = () => {
-    closeShellPanels();
-    resetOperationPanel();
-    resetDeleteConfirm();
-    closePropertiesPanel();
-  }
-
   const runOperation = async (operation: () => Promise<void>) => {
     try {
       await operation();
@@ -168,39 +125,12 @@ export const useFileOperations = ({
     }
   }
 
-  const closeDeleteConfirm = () => {
-    if (deleteConfirm.value.submitting) return;
-    resetDeleteConfirm();
-  }
-
   const showProperties = async (entries = selectedEntries()) => {
     if (!entries.length) {
       showNotice("请选择文件或文件夹", "warning");
       return;
     }
-    closeShellPanels();
-    resetOperationPanel();
-    resetDeleteConfirm();
-    propertiesPanel.value = {
-      visible: true,
-      entries
-    };
-    await nextTick();
-    focusPropertiesPanel();
-  }
-
-  const openOperationPanel = (next: Omit<OperationPanelState, "visible" | "submitting">) => {
-    closePanels();
-    operationPanel.value = {
-      ...next,
-      visible: true,
-      submitting: false
-    };
-  }
-
-  const closeOperationPanel = () => {
-    if (operationPanel.value.submitting) return;
-    resetOperationPanel();
+    await openPropertiesPanel(entries);
   }
 
   const openCreatePanel = (type: "file" | "folder") => {
@@ -262,15 +192,7 @@ export const useFileOperations = ({
       showNotice("请选择文件或文件夹", "warning");
       return;
     }
-    closePanels();
-    deleteConfirm.value = {
-      visible: true,
-      entries,
-      submitting: false,
-      error: ""
-    };
-    await nextTick();
-    focusDeleteConfirm();
+    await openDeleteConfirm(entries);
   }
 
   const submitDeleteConfirm = async () => {
