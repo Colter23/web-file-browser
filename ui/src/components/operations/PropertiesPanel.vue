@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import {computed, ref} from "vue";
-import Icon from "../Icon.vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import {entryMetaRows, fileEntryIcon, formatEntrySize} from "../../utils/file-entry.ts";
+import OperationPanelShell from "./OperationPanelShell.vue";
+
+type OperationPanelShellExpose = {
+  focus: () => void;
+}
 
 const props = defineProps<{
   visible: boolean;
@@ -14,7 +18,7 @@ const emit = defineEmits<{
   (e: "close"): void;
 }>();
 
-const panelRef = ref<HTMLElement | null>(null);
+const panelRef = ref<OperationPanelShellExpose | null>(null);
 
 const singleEntry = computed(() => props.entries.length === 1 ? props.entries[0] : null);
 const folderCount = computed(() => props.entries.filter(entry => entry.type === "folder").length);
@@ -63,66 +67,30 @@ defineExpose({
 </script>
 
 <template>
-  <section
+  <operation-panel-shell
       v-if="visible"
       ref="panelRef"
-      class="properties-panel"
-      tabindex="-1"
-      @keydown.esc.prevent.stop="emit('close')">
-    <div class="properties-header">
-      <div class="properties-icon">
-        <icon :icon="panelIcon" />
-      </div>
-      <div class="properties-title">
-        <strong>{{ title }}</strong>
-        <span>{{ subtitle }}</span>
-      </div>
-      <button type="button" class="operation-panel-close" title="关闭" @click="emit('close')">
-        <icon icon="icon-close" />
-      </button>
-    </div>
+      width="properties"
+      variant="neutral"
+      :icon="panelIcon"
+      :title="title"
+      :subtitle="subtitle"
+      :tabindex="-1"
+      @close="emit('close')">
     <div class="properties-list">
       <div v-for="item in rows" :key="item.label" :title="item.value">
         <span>{{ item.label }}</span>
         <strong>{{ item.value }}</strong>
       </div>
     </div>
-    <div class="properties-actions">
+    <template #actions>
       <button type="button" class="operation-primary" @click="emit('close')">确定</button>
-    </div>
-  </section>
+    </template>
+  </operation-panel-shell>
 </template>
 
 <style scoped lang="postcss">
 @reference "tailwindcss";
-
-.properties-panel {
-  @apply absolute left-1/2 top-6 z-30 flex w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-2xl outline-none;
-}
-
-.properties-header {
-  @apply flex items-start gap-3;
-}
-
-.properties-icon {
-  @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xl text-slate-600;
-}
-
-.properties-title {
-  @apply flex min-w-0 grow flex-col gap-0.5;
-}
-
-.properties-title strong {
-  @apply truncate text-base font-semibold text-slate-900;
-}
-
-.properties-title span {
-  @apply text-xs leading-5 text-slate-500;
-}
-
-.operation-panel-close {
-  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100;
-}
 
 .properties-list {
   @apply flex max-h-72 flex-col overflow-auto rounded-md border border-slate-100 bg-slate-50;
@@ -138,10 +106,6 @@ defineExpose({
 
 .properties-list strong {
   @apply min-w-0 truncate font-medium text-slate-800;
-}
-
-.properties-actions {
-  @apply flex justify-end gap-2 pt-1;
 }
 
 .operation-primary {
