@@ -1,17 +1,14 @@
 <script setup lang="ts">
-import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
+import {computed, nextTick, onBeforeUnmount, onMounted, ref} from "vue";
 import Icon from "../Icon.vue";
 import CodeEditor from "./CodeEditor.vue";
 import editorConfig from "../../assets/editor-config.json";
 import {useFileStore} from "../../store";
-import type {FileInfo} from "../../class.ts";
-import {getFile, saveFile} from "../../network/file-api.ts";
-import {isApiError} from "../../network";
+import {useEditorFileSession} from "../../composables/useEditorFileSession.ts";
 import {useEditorPreferences} from "../../composables/useEditorPreferences.ts";
 import {useEditorSearch} from "../../composables/useEditorSearch.ts";
 import {useEditorStatusText} from "../../composables/useEditorStatusText.ts";
-import {checkFileLanguageMode} from "../../utils/common.ts";
-import type {CodeEditorExpose, EditorCursorStatus, EditorMenuName, PendingEditorAction} from "./types.ts";
+import type {CodeEditorExpose, EditorMenuName} from "./types.ts";
 import EditorGotoBar from "./EditorGotoBar.vue";
 import EditorInfoBar from "./EditorInfoBar.vue";
 import EditorMenuLayer from "./EditorMenuLayer.vue";
@@ -19,33 +16,52 @@ import EditorSearchBar from "./EditorSearchBar.vue";
 import EditorStatusBar from "./EditorStatusBar.vue";
 
 const fileStore = useFileStore();
-const defaultCursorStatus = (): EditorCursorStatus => ({line: 1, column: 1, selectedRows: 0, selectedCharacters: 0});
-const fileInfo = ref<FileInfo | null>(null);
 const editorRef = ref<CodeEditorExpose | null>(null);
 const activeMenu = ref<EditorMenuName>("");
-const currentMode = ref("text");
-const content = ref("");
-const contentEtag = ref("");
-const isChange = ref(false);
-const loading = ref(false);
-const saving = ref(false);
-const statusText = ref("");
-const errorText = ref("");
-const saveConflict = ref(false);
-const pendingAction = ref<PendingEditorAction>("");
-const pendingBusy = ref(false);
-const cursorStatus = ref<EditorCursorStatus>(defaultCursorStatus());
 const {
   currentTheme,
   fontSize,
   tabSize,
   wrap
 } = useEditorPreferences();
-let loadVersion = 0;
+
+let resetSearchStateHandler = () => {};
+const resetSearchStateProxy = () => resetSearchStateHandler();
+const focusEditor = () => editorRef.value?.focus?.();
+
+const {
+  fileInfo,
+  currentMode,
+  content,
+  isChange,
+  loading,
+  saving,
+  statusText,
+  errorText,
+  saveConflict,
+  pendingAction,
+  pendingBusy,
+  cursorStatus,
+  canSave,
+  editorReadOnly,
+  loadCurrentFile,
+  onContentChange,
+  onCursorChange,
+  save,
+  reload,
+  close,
+  cancelPendingAction,
+  discardPendingAction,
+  savePendingAction,
+  handleBeforeUnload,
+  dispose: disposeEditorSession
+} = useEditorFileSession({
+  closeMenus: () => closeMenus(),
+  resetSearchState: resetSearchStateProxy,
+  focusEditor
+});
 
 const themeClass = computed(() => `ace-${currentTheme.value.replace(/_/g, "-")}`);
-const canSave = computed(() => Boolean(fileInfo.value && isChange.value && contentEtag.value && !saveConflict.value && !loading.value && !saving.value));
-const editorReadOnly = computed(() => loading.value || saving.value || Boolean(pendingAction.value));
 
 const closeMenus = () => {
   activeMenu.value = "";
@@ -92,6 +108,8 @@ const {
   isEditorActive: () => fileStore.showEditor,
   closeMenus
 });
+
+resetSearchStateHandler = resetSearchState;
 
 const {
   fileTitle,
@@ -157,167 +175,6 @@ const clearGotoStatus = () => {
   gotoStatus.value = "";
 }
 
-const loadCurrentFile = async () => {
-  if (!fileStore.showEditor || fileStore.currentFile == null) return;
-  const version = ++loadVersion;
-  const target = fileStore.currentFile;
-  fileInfo.value = target;
-  currentMode.value = checkFileLanguageMode(target.extension);
-  statusText.value = "";
-  errorText.value = "";
-  saveConflict.value = false;
-  cursorStatus.value = defaultCursorStatus();
-  loading.value = true;
-  try {
-    const file = await getFile(target.path);
-    if (version !== loadVersion) return;
-    content.value = file.content;
-    contentEtag.value = file.etag;
-    isChange.value = false;
-    statusText.value = "已打开";
-    await nextTick();
-    editorRef.value?.focus?.();
-  } catch (error) {
-    if (version !== loadVersion) return;
-    errorText.value = error instanceof Error ? error.message : "打开文件失败";
-    content.value = "";
-    contentEtag.value = "";
-    isChange.value = false;
-  } finally {
-    if (version === loadVersion) loading.value = false;
-  }
-}
-
-const resetEditorState = () => {
-  closeMenus();
-  resetSearchState();
-  pendingAction.value = "";
-  pendingBusy.value = false;
-  fileStore.closeEditor();
-  fileInfo.value = null;
-  isChange.value = false;
-  content.value = "";
-  contentEtag.value = "";
-  statusText.value = "";
-  errorText.value = "";
-  saveConflict.value = false;
-  cursorStatus.value = defaultCursorStatus();
-}
-
-watch(() => [fileStore.showEditor, fileStore.currentFile?.path], loadCurrentFile);
-
-watch(isChange, value => {
-  fileStore.setEditorDirty(value);
-});
-
-watch(() => fileStore.editorLeaveRequestId, requestId => {
-  if (!requestId || !fileStore.showEditor) return;
-  if (!isChange.value) {
-    fileStore.resolveEditorLeave(true);
-    return;
-  }
-  pendingAction.value = "external";
-  closeMenus();
-});
-
-const onContentChange = (value: string) => {
-  if (loading.value) return;
-  pendingAction.value = "";
-  content.value = value;
-  isChange.value = true;
-  statusText.value = "";
-  errorText.value = "";
-  if (saveConflict.value) saveConflict.value = false;
-}
-
-const onCursorChange = (status: EditorCursorStatus) => {
-  cursorStatus.value = status;
-}
-
-const save = async () => {
-  if (!fileInfo.value || saving.value || loading.value || saveConflict.value) return;
-  saving.value = true;
-  errorText.value = "";
-  saveConflict.value = false;
-  try {
-    if (!contentEtag.value) {
-      throw new Error("文件版本信息缺失，请重新打开文件后再保存");
-    }
-    const saved = await saveFile(fileInfo.value.path, content.value, contentEtag.value);
-    contentEtag.value = saved.etag;
-    isChange.value = false;
-    statusText.value = "已保存";
-  } catch (error) {
-    if (isApiError(error) && (error.status === 412 || error.status === 428 || error.code === "PRECONDITION_FAILED" || error.code === "PRECONDITION_REQUIRED")) {
-      saveConflict.value = true;
-      errorText.value = error.status === 428
-          ? "缺少文件版本信息，请重新载入后再保存"
-          : "文件已被外部修改，请重新载入最新版本后再保存";
-    } else {
-      errorText.value = error instanceof Error ? error.message : "保存失败";
-    }
-  } finally {
-    saving.value = false;
-  }
-}
-
-const reload = async () => {
-  if (isChange.value) {
-    pendingAction.value = "reload";
-    closeMenus();
-    return;
-  }
-  await loadCurrentFile();
-}
-
-const close = () => {
-  if (isChange.value) {
-    pendingAction.value = "close";
-    closeMenus();
-    return;
-  }
-  resetEditorState();
-}
-
-const cancelPendingAction = () => {
-  if (pendingBusy.value) return;
-  if (pendingAction.value === "external") fileStore.resolveEditorLeave(false);
-  pendingAction.value = "";
-  nextTick(() => editorRef.value?.focus?.());
-}
-
-const finishPendingAction = async () => {
-  const action = pendingAction.value;
-  pendingAction.value = "";
-  if (action === "reload") {
-    await loadCurrentFile();
-    return;
-  }
-  if (action === "external") {
-    fileStore.resolveEditorLeave(true);
-    return;
-  }
-  if (action === "close") resetEditorState();
-}
-
-const discardPendingAction = async () => {
-  if (pendingBusy.value) return;
-  pendingBusy.value = true;
-  isChange.value = false;
-  await finishPendingAction();
-  pendingBusy.value = false;
-}
-
-const savePendingAction = async () => {
-  if (pendingBusy.value || !canSave.value) return;
-  pendingBusy.value = true;
-  await save();
-  pendingBusy.value = false;
-  if (!isChange.value && !saveConflict.value && !errorText.value) {
-    await finishPendingAction();
-  }
-}
-
 const handleKeyDown = (event: KeyboardEvent) => {
   if (!fileStore.showEditor) return;
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
@@ -361,12 +218,6 @@ const handleKeyDown = (event: KeyboardEvent) => {
   }
 }
 
-const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-  if (!fileStore.showEditor || !isChange.value) return;
-  event.preventDefault();
-  event.returnValue = "";
-}
-
 onMounted(() => {
   window.addEventListener("keydown", handleKeyDown);
   window.addEventListener("beforeunload", handleBeforeUnload);
@@ -376,7 +227,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeyDown);
   window.removeEventListener("beforeunload", handleBeforeUnload);
-  fileStore.resolveEditorLeave(false);
+  disposeEditorSession();
 });
 </script>
 
