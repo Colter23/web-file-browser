@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from "vue";
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ComponentPublicInstance} from "vue";
 import type {DirSortKey, DirSortOrder, FolderData, FolderQueryParams} from "../../class.ts";
 import {useFileStore} from "../../store";
 import {getFolderData} from "../../network/file-api.ts";
 import {useDetailsColumns} from "../../composables/useDetailsColumns.ts";
+import {useExplorerContextMenu} from "../../composables/useExplorerContextMenu.ts";
 import {useExplorerEntryDrag} from "../../composables/useExplorerEntryDrag.ts";
 import {useExplorerKeyboard} from "../../composables/useExplorerKeyboard.ts";
 import {useExplorerMarqueeSelection} from "../../composables/useExplorerMarqueeSelection.ts";
@@ -96,10 +97,8 @@ const loadedSignature = ref("");
 const viewportRef = ref<HTMLElement | null>(null);
 const itemRefs = new Map<string, HTMLElement>();
 const pageSize = 200;
-const contextMenu = reactive({visible: false, x: 0, y: 0, targetPath: "", background: false});
-const closeContextMenu = () => {
-  contextMenu.visible = false;
-}
+let closeContextMenuHandler = () => {};
+const closeContextMenu = () => closeContextMenuHandler();
 const autoLoadMoreDistance = 360;
 
 const {
@@ -546,85 +545,6 @@ watch(isIconLikeMode, async iconLike => {
 
 watch(() => props.filterText, resetTypeahead);
 
-onMounted(async () => {
-  fileStore.ensureActiveTab();
-  await loadFolder(fileStore.currentPath || "/");
-  window.addEventListener("click", closeContextMenu);
-  window.addEventListener("keydown", handleKeyDown);
-  window.addEventListener("mousemove", handleSelectionMove);
-  window.addEventListener("mouseup", finishMarqueeSelection);
-  window.addEventListener("pointermove", handleDetailsColumnResizeMove);
-  window.addEventListener("pointerup", finishDetailsColumnResize);
-  window.addEventListener("pointercancel", finishDetailsColumnResize);
-});
-
-onBeforeUnmount(() => {
-  window.removeEventListener("click", closeContextMenu);
-  window.removeEventListener("keydown", handleKeyDown);
-  window.removeEventListener("mousemove", handleSelectionMove);
-  window.removeEventListener("mouseup", finishMarqueeSelection);
-  window.removeEventListener("pointermove", handleDetailsColumnResizeMove);
-  window.removeEventListener("pointerup", finishDetailsColumnResize);
-  window.removeEventListener("pointercancel", finishDetailsColumnResize);
-  stopMarqueeAutoScroll();
-  resetTypeahead();
-  disconnectThumbnailObserver();
-  itemRefs.clear();
-  clearRenameInputRefs();
-});
-
-const showContextMenu = (x: number, y: number, targetPath = "", background = false) => {
-  contextMenu.x = x;
-  contextMenu.y = y;
-  contextMenu.targetPath = targetPath;
-  contextMenu.background = background;
-  contextMenu.visible = true;
-}
-
-const closeContextMenuAndFocus = () => {
-  closeContextMenu();
-  focusViewport();
-}
-
-const openContextMenu = (event: MouseEvent, entry: ExplorerEntry) => {
-  focusViewport();
-  ensureEntrySelected(entry);
-  showContextMenu(event.clientX, event.clientY, entry.path);
-}
-
-const openBackgroundContextMenu = (event: MouseEvent) => {
-  if (event.target instanceof HTMLElement && event.target.closest(".entry-item")) return;
-  focusViewport();
-  showContextMenu(event.clientX, event.clientY, "", true);
-}
-
-const openKeyboardContextMenu = () => {
-  const entry = entryByPath(focusedPath.value) ?? firstSelectedEntry();
-  if (entry) {
-    ensureEntrySelected(entry);
-    const rect = itemRefs.get(entry.path)?.getBoundingClientRect();
-    const x = rect ? rect.left + Math.min(36, rect.width - 8) : window.innerWidth / 2;
-    const y = rect ? rect.top + Math.min(28, rect.height) : window.innerHeight / 2;
-    showContextMenu(x, y, entry.path);
-    return;
-  }
-  const viewportRect = viewportRef.value?.getBoundingClientRect();
-  showContextMenu(viewportRect ? viewportRect.left + 16 : window.innerWidth / 2, viewportRect ? viewportRect.top + 16 : window.innerHeight / 2, "", true);
-}
-
-const contextEntry = () => contextMenu.background ? null : entryByPath(contextMenu.targetPath) ?? firstSelectedEntry();
-
-const selectedOrContextEntries = () => {
-  const target = contextEntry();
-  if (!target) return [];
-  if (selectedPaths.value.includes(target.path)) return selectedEntries.value;
-  return [target];
-}
-
-const contextEntries = computed(() => selectedOrContextEntries());
-
-const contextSelectionCount = computed(() => contextEntries.value.length);
-
 const canEditEntry = (entry: ExplorerEntry | null) => {
   return isEditableEntry(entry, fileStore.extensions);
 }
@@ -646,39 +566,6 @@ const fileIcon = (entry: ExplorerEntry) => {
 }
 
 const isDimmed = (entry: ExplorerEntry) => props.dimmedPaths.includes(entry.path);
-
-const {handleKeyDown} = useExplorerKeyboard({
-  isViewportActive: () => Boolean(viewportRef.value?.contains(document.activeElement)),
-  isRenaming: () => Boolean(renamingPath.value),
-  isContextMenuVisible: () => contextMenu.visible,
-  isSelectionBoxActive: () => selectionBox.active,
-  canPaste: () => props.canPaste,
-  selectedEntries: () => selectedEntries.value,
-  focusedOrSelectedEntry,
-  firstSelectedEntry,
-  cancelRename,
-  commitRename,
-  closeContextMenu,
-  resetSelectionBox,
-  clearSelection,
-  openKeyboardContextMenu,
-  showProperties: entries => emit("properties", entries),
-  toggleFocusedSelection,
-  selectRange,
-  previewEntry: entry => emit("preview", entry),
-  copySelectedPaths,
-  copyEntry: entry => emit("copy", entry),
-  cutEntry: entry => emit("cut", entry),
-  paste: () => emit("paste"),
-  selectAllEntries,
-  invertCurrentSelection,
-  openEntry,
-  openEntryInNewTab: entry => emit("open-new-tab", entry),
-  deleteEntry: entry => emit("delete", entry),
-  startRename,
-  handleTypeahead,
-  moveFocus
-});
 
 const currentColumns = () => {
   if (!viewportRef.value) return 1;
@@ -727,21 +614,7 @@ const {
   viewportHeight: () => viewportRef.value?.clientHeight ?? 0
 });
 
-const primaryContextEntry = computed(() => contextEntry());
-
-const contextCanViewImage = computed(() => Boolean(primaryContextEntry.value && isImageFile(primaryContextEntry.value)));
-
-const contextCanEdit = computed(() => canEditEntry(primaryContextEntry.value));
-
-const contextCanExtract = computed(() => canExtract(primaryContextEntry.value));
-
 const primarySelected = () => firstSelectedEntry();
-
-const openEntryFromContext = async () => {
-  const entry = primaryContextEntry.value;
-  closeContextMenu();
-  if (entry) await openEntry(entry);
-}
 
 const openEntryInNewTab = (entry: ExplorerEntry) => {
   if (entry.type !== "folder") return;
@@ -749,111 +622,110 @@ const openEntryInNewTab = (entry: ExplorerEntry) => {
   emit("open-new-tab", entry);
 }
 
-const openContextEntryInNewTab = () => {
-  const entry = primaryContextEntry.value;
-  if (entry) openEntryInNewTab(entry);
-}
 
-const previewContextEntry = () => {
-  const entry = primaryContextEntry.value;
-  closeContextMenu();
-  if (entry) emit("preview", entry);
-}
+const {
+  contextMenu,
+  closeContextMenu: closeExplorerContextMenu,
+  closeContextMenuAndFocus,
+  openContextMenu,
+  openBackgroundContextMenu,
+  openKeyboardContextMenu,
+  contextSelectionCount,
+  primaryContextEntry,
+  contextCanViewImage,
+  contextCanEdit,
+  contextCanExtract,
+  openEntryFromContext,
+  openContextEntryInNewTab,
+  previewContextEntry,
+  viewImageContextEntry,
+  editContextEntry,
+  downloadContextEntry,
+  copyPathContextEntries,
+  copyContextEntries,
+  cutContextEntries,
+  pasteIntoCurrentFolder,
+  createFileFromContext,
+  createFolderFromContext,
+  selectAllFromContext,
+  clearSelectionFromContext,
+  invertSelectionFromContext,
+  archiveContextEntries,
+  extractContextEntry,
+  renameContextEntry,
+  deleteContextEntries,
+  showContextProperties
+} = useExplorerContextMenu({
+  imageEntries,
+  selectedPaths,
+  selectedEntries,
+  focusedPath,
+  viewportRef,
+  itemRefs,
+  currentPath: () => fileStore.currentPath || "/",
+  entryByPath,
+  firstSelectedEntry,
+  ensureEntrySelected,
+  focusViewport,
+  openEntry,
+  openNewTab: openEntryInNewTab,
+  editEntry,
+  isImageFile,
+  canEditEntry,
+  canExtract,
+  startRename,
+  selectAllEntries,
+  clearCurrentSelection,
+  invertCurrentSelection,
+  previewEntry: entry => emit("preview", entry),
+  openImageViewer: payload => emit("open-image-viewer", payload),
+  downloadEntry: entry => emit("download", entry),
+  copyPath: payload => emit("copy-path", payload),
+  copyEntry: entry => emit("copy", entry),
+  cutEntry: entry => emit("cut", entry),
+  paste: () => emit("paste"),
+  createFile: () => emit("create-file"),
+  createFolder: () => emit("create-folder"),
+  archiveEntry: entry => emit("archive", entry),
+  extractEntry: entry => emit("extract", entry),
+  deleteEntry: entry => emit("delete", entry),
+  showProperties: entries => emit("properties", entries)
+});
 
-const viewImageContextEntry = () => {
-  const entry = primaryContextEntry.value;
-  closeContextMenu();
-  if (entry && isImageFile(entry)) emit("open-image-viewer", {entry, entries: imageEntries.value});
-}
+closeContextMenuHandler = closeExplorerContextMenu;
 
-const editContextEntry = async () => {
-  const entry = primaryContextEntry.value;
-  closeContextMenu();
-  if (entry) await editEntry(entry);
-}
-
-const downloadContextEntry = () => {
-  const entry = primaryContextEntry.value;
-  closeContextMenu();
-  if (entry) emit("download", entry);
-}
-
-const copyPathContextEntries = () => {
-  const paths = contextMenu.background ? [fileStore.currentPath || "/"] : contextEntries.value.map(entry => entry.path);
-  closeContextMenu();
-  if (paths.length) emit("copy-path", {paths});
-}
-
-const copyContextEntries = () => {
-  const entry = primaryContextEntry.value;
-  closeContextMenu();
-  if (entry) emit("copy", entry);
-}
-
-const cutContextEntries = () => {
-  const entry = primaryContextEntry.value;
-  closeContextMenu();
-  if (entry) emit("cut", entry);
-}
-
-const pasteIntoCurrentFolder = () => {
-  closeContextMenu();
-  emit("paste");
-}
-
-const createFileFromContext = () => {
-  closeContextMenu();
-  emit("create-file");
-}
-
-const createFolderFromContext = () => {
-  closeContextMenu();
-  emit("create-folder");
-}
-
-const selectAllFromContext = () => {
-  closeContextMenu();
-  selectAllEntries();
-}
-
-const clearSelectionFromContext = () => {
-  closeContextMenu();
-  clearCurrentSelection();
-}
-
-const invertSelectionFromContext = () => {
-  closeContextMenu();
-  invertCurrentSelection();
-}
-
-const archiveContextEntries = () => {
-  const entry = primaryContextEntry.value;
-  closeContextMenu();
-  if (entry) emit("archive", entry);
-}
-
-const extractContextEntry = () => {
-  const entry = primaryContextEntry.value;
-  closeContextMenu();
-  if (entry) emit("extract", entry);
-}
-
-const renameContextEntry = () => {
-  const entry = primaryContextEntry.value;
-  if (entry) startRename(entry);
-}
-
-const deleteContextEntries = () => {
-  const entry = primaryContextEntry.value;
-  closeContextMenu();
-  if (entry) emit("delete", entry);
-}
-
-const showContextProperties = () => {
-  const entries = contextEntries.value;
-  closeContextMenu();
-  if (entries.length) emit("properties", entries);
-}
+const {handleKeyDown} = useExplorerKeyboard({
+  isViewportActive: () => Boolean(viewportRef.value?.contains(document.activeElement)),
+  isRenaming: () => Boolean(renamingPath.value),
+  isContextMenuVisible: () => contextMenu.visible,
+  isSelectionBoxActive: () => selectionBox.active,
+  canPaste: () => props.canPaste,
+  selectedEntries: () => selectedEntries.value,
+  focusedOrSelectedEntry,
+  firstSelectedEntry,
+  cancelRename,
+  commitRename,
+  closeContextMenu,
+  resetSelectionBox,
+  clearSelection,
+  openKeyboardContextMenu,
+  showProperties: entries => emit("properties", entries),
+  toggleFocusedSelection,
+  selectRange,
+  previewEntry: entry => emit("preview", entry),
+  copySelectedPaths,
+  copyEntry: entry => emit("copy", entry),
+  cutEntry: entry => emit("cut", entry),
+  paste: () => emit("paste"),
+  selectAllEntries,
+  invertCurrentSelection,
+  openEntry,
+  openEntryInNewTab: entry => emit("open-new-tab", entry),
+  deleteEntry: entry => emit("delete", entry),
+  startRename,
+  handleTypeahead,
+  moveFocus
+});
 
 const handleAuxClick = (event: MouseEvent, entry: ExplorerEntry) => {
   if (event.button !== 1 || entry.type !== "folder") return;
@@ -861,6 +733,33 @@ const handleAuxClick = (event: MouseEvent, entry: ExplorerEntry) => {
   ensureEntrySelected(entry);
   openEntryInNewTab(entry);
 }
+
+onMounted(async () => {
+  fileStore.ensureActiveTab();
+  await loadFolder(fileStore.currentPath || "/");
+  window.addEventListener("click", closeContextMenu);
+  window.addEventListener("keydown", handleKeyDown);
+  window.addEventListener("mousemove", handleSelectionMove);
+  window.addEventListener("mouseup", finishMarqueeSelection);
+  window.addEventListener("pointermove", handleDetailsColumnResizeMove);
+  window.addEventListener("pointerup", finishDetailsColumnResize);
+  window.addEventListener("pointercancel", finishDetailsColumnResize);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("click", closeContextMenu);
+  window.removeEventListener("keydown", handleKeyDown);
+  window.removeEventListener("mousemove", handleSelectionMove);
+  window.removeEventListener("mouseup", finishMarqueeSelection);
+  window.removeEventListener("pointermove", handleDetailsColumnResizeMove);
+  window.removeEventListener("pointerup", finishDetailsColumnResize);
+  window.removeEventListener("pointercancel", finishDetailsColumnResize);
+  stopMarqueeAutoScroll();
+  resetTypeahead();
+  disconnectThumbnailObserver();
+  itemRefs.clear();
+  clearRenameInputRefs();
+});
 
 defineExpose({
   refresh: loadFolder,
