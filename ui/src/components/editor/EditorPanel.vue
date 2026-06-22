@@ -23,6 +23,8 @@ type EditorCursorStatus = {
 type CodeEditorExpose = ComponentPublicInstance & {
   focus?: () => void;
   getSelectedText?: () => string;
+  getLineCount?: () => number;
+  gotoLine?: (line: number, column?: number) => boolean;
   find?: (options: EditorSearchOptions) => boolean;
   replaceCurrent?: (replacement: string) => boolean;
   replaceAll?: (replacement: string) => boolean;
@@ -114,8 +116,12 @@ const searchStatus = ref("");
 const searchCaseSensitive = ref(false);
 const searchWholeWord = ref(false);
 const searchRegex = ref(false);
+const gotoVisible = ref(false);
+const gotoLineText = ref("");
+const gotoStatus = ref("");
 const searchInputRef = ref<HTMLInputElement | null>(null);
 const replaceInputRef = ref<HTMLInputElement | null>(null);
+const gotoInputRef = ref<HTMLInputElement | null>(null);
 let loadVersion = 0;
 
 const themeClass = computed(() => `ace-${currentTheme.value.replace(/_/g, "-")}`);
@@ -132,6 +138,9 @@ const regexErrorText = computed(() => {
 });
 const canFind = computed(() => Boolean(searchText.value) && !regexErrorText.value);
 const canReplace = computed(() => canFind.value && !editorReadOnly.value);
+const editorLineCount = computed(() => editorRef.value?.getLineCount?.() ?? cursorStatus.value.line);
+const gotoLineNumber = computed(() => Number(gotoLineText.value));
+const canGotoLine = computed(() => Number.isInteger(gotoLineNumber.value) && gotoLineNumber.value >= 1 && gotoLineNumber.value <= Math.max(1, editorLineCount.value));
 
 const fileTitle = computed(() => fileInfo.value?.name ?? "未打开文件");
 
@@ -183,6 +192,7 @@ const selectionStatusText = computed(() => {
 });
 
 const searchStatusText = computed(() => regexErrorText.value || searchStatus.value);
+const gotoPlaceholder = computed(() => `1-${Math.max(1, editorLineCount.value)}`);
 
 const dirtyText = computed(() => {
   if (saving.value) return "保存中";
@@ -226,6 +236,12 @@ const closeSearch = () => {
   searchVisible.value = false;
   replaceVisible.value = false;
   searchStatus.value = "";
+  nextTick(() => editorRef.value?.focus?.());
+}
+
+const closeGoto = () => {
+  gotoVisible.value = false;
+  gotoStatus.value = "";
   nextTick(() => editorRef.value?.focus?.());
 }
 
@@ -275,6 +291,8 @@ const runSearch = (backwards = false, keepSearchFocus = false) => {
 const openSearch = async (replace = false) => {
   if (!fileStore.showEditor) return;
   closeMenus();
+  gotoVisible.value = false;
+  gotoStatus.value = "";
   searchVisible.value = true;
   replaceVisible.value = replace;
   const selected = editorRef.value?.getSelectedText?.().trim() ?? "";
@@ -325,6 +343,31 @@ const focusReplaceInput = () => {
     replaceInputRef.value?.focus();
     replaceInputRef.value?.select();
   });
+}
+
+const openGotoLine = async () => {
+  if (!fileStore.showEditor) return;
+  closeMenus();
+  searchVisible.value = false;
+  replaceVisible.value = false;
+  searchStatus.value = "";
+  gotoVisible.value = true;
+  gotoLineText.value = String(cursorStatus.value.line);
+  gotoStatus.value = "";
+  await nextTick();
+  gotoInputRef.value?.focus();
+  gotoInputRef.value?.select();
+}
+
+const submitGotoLine = () => {
+  if (!canGotoLine.value) {
+    gotoStatus.value = "行号无效";
+    gotoInputRef.value?.focus();
+    return;
+  }
+  const moved = editorRef.value?.gotoLine?.(gotoLineNumber.value) ?? false;
+  gotoStatus.value = moved ? "" : "无法跳转";
+  if (moved) closeGoto();
 }
 
 watch(currentTheme, theme => {
@@ -389,6 +432,8 @@ const resetEditorState = () => {
   searchVisible.value = false;
   replaceVisible.value = false;
   searchStatus.value = "";
+  gotoVisible.value = false;
+  gotoStatus.value = "";
   pendingAction.value = "";
   pendingBusy.value = false;
   fileStore.closeEditor();
@@ -528,6 +573,11 @@ const handleKeyDown = (event: KeyboardEvent) => {
     void openReplace();
     return;
   }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "g") {
+    event.preventDefault();
+    void openGotoLine();
+    return;
+  }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
     event.preventDefault();
     void save();
@@ -544,6 +594,10 @@ const handleKeyDown = (event: KeyboardEvent) => {
     }
     if (searchVisible.value) {
       closeSearch();
+      return;
+    }
+    if (gotoVisible.value) {
+      closeGoto();
       return;
     }
     close();
@@ -709,6 +763,29 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </div>
+      <div v-if="gotoVisible" class="goto-bar" @click.stop>
+        <div class="goto-fields">
+          <span>行</span>
+          <input
+              ref="gotoInputRef"
+              v-model.trim="gotoLineText"
+              class="goto-input"
+              type="number"
+              min="1"
+              :max="Math.max(1, editorLineCount)"
+              :placeholder="gotoPlaceholder"
+              @keydown.enter.prevent="submitGotoLine"
+              @input="gotoStatus = ''">
+          <span class="goto-range">/ {{ Math.max(1, editorLineCount) }}</span>
+        </div>
+        <div class="goto-actions">
+          <span v-if="gotoStatus" class="goto-status">{{ gotoStatus }}</span>
+          <button class="text-tool" title="跳转到行" :disabled="!canGotoLine" @click="submitGotoLine">跳转</button>
+          <button title="关闭跳转" @click="closeGoto">
+            <icon icon="icon-close" />
+          </button>
+        </div>
+      </div>
       <div class="editor-frame">
         <code-editor
             ref="editorRef"
@@ -722,6 +799,7 @@ onBeforeUnmount(() => {
             @change="onContentChange"
             @cursor-change="onCursorChange"
             @find="openSearch(false)"
+            @goto-line="openGotoLine"
             @replace="openReplace"
             @save="save">
         </code-editor>
@@ -912,40 +990,56 @@ onBeforeUnmount(() => {
   @apply relative flex min-h-0 grow flex-col gap-2 bg-[#f7fbff] p-2;
 }
 
-.search-bar {
+.search-bar,
+.goto-bar {
   @apply relative z-20 flex shrink-0 items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm;
 }
 
-.search-fields {
+.search-fields,
+.goto-fields {
   @apply flex min-w-0 grow items-center gap-2;
 }
 
-.search-input {
+.search-input,
+.goto-input {
   @apply h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100;
+}
+
+.goto-input {
+  @apply max-w-28 text-right tabular-nums;
 }
 
 .replace-input {
   @apply border-slate-300;
 }
 
-.search-actions {
+.search-actions,
+.goto-actions {
   @apply flex shrink-0 items-center gap-1 text-slate-600;
 }
 
-.search-actions button {
+.search-actions button,
+.goto-actions button {
   @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white;
 }
 
-.search-actions button.active {
+.search-actions button.active,
+.goto-actions button.active {
   @apply border-blue-300 bg-blue-50 text-blue-700;
 }
 
-.search-actions .text-tool {
+.search-actions .text-tool,
+.goto-actions .text-tool {
   @apply min-w-9;
 }
 
-.search-status {
+.search-status,
+.goto-status {
   @apply max-w-28 truncate px-1 text-amber-600;
+}
+
+.goto-range {
+  @apply shrink-0 text-slate-400;
 }
 
 .editor-frame {

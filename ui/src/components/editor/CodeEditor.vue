@@ -69,6 +69,7 @@ const emit = defineEmits<{
   (e: "save"): void;
   (e: "find"): void;
   (e: "replace"): void;
+  (e: "goto-line"): void;
   (e: "cursor-change", status: CodeEditorCursorStatus): void;
 }>()
 
@@ -122,6 +123,18 @@ const replaceEverywhere = (replacement: string) => {
     return false;
   }
 }
+
+const gotoLine = (line: number, column = 0) => {
+  if (!editor || !Number.isFinite(line)) return false;
+  const targetLine = Math.max(1, Math.min(Math.round(line), editor.session.getLength()));
+  const targetColumn = Math.max(0, Math.round(column));
+  editor.gotoLine(targetLine, targetColumn, true);
+  editor.focus();
+  emitCursorStatus();
+  return true;
+}
+
+const lineCount = () => editor?.session.getLength() ?? 0;
 
 const emitCursorStatus = () => {
   if (!editor) return;
@@ -207,6 +220,11 @@ const initializeEditor = async () => {
     bindKey: {win: "Ctrl-H", mac: "Command-Option-F"},
     exec: () => emit("replace")
   });
+  editor.commands.addCommand({
+    name: "openGotoLineBar",
+    bindKey: {win: "Ctrl-G", mac: "Command-L"},
+    exec: () => emit("goto-line")
+  });
   editor.selection.on("changeCursor", emitCursorStatus);
   editor.selection.on("changeSelection", emitCursorStatus);
   emitCursorStatus();
@@ -228,6 +246,8 @@ onBeforeUnmount(() => {
 defineExpose({
   focus: () => editor?.focus(),
   getSelectedText: () => editor?.getSelectedText() ?? "",
+  getLineCount: lineCount,
+  gotoLine,
   find: findNeedle,
   replaceCurrent,
   replaceAll: replaceEverywhere
