@@ -2,22 +2,7 @@
 import {computed} from "vue";
 import type {ArchiveFormat} from "../../class";
 import Icon from "../Icon.vue";
-import type {ExplorerEntry} from "../explorer/types.ts";
-
-type OperationPanelKind = "createFile" | "createFolder" | "archive" | "extract";
-
-type OperationPanelState = {
-  visible: boolean;
-  kind: OperationPanelKind | null;
-  title: string;
-  message: string;
-  primaryText: string;
-  name: string;
-  format: ArchiveFormat;
-  entries: ExplorerEntry[];
-  sourceEntry: ExplorerEntry | null;
-  submitting: boolean;
-}
+import type {OperationPanelState} from "./types.ts";
 
 const props = defineProps<{
   state: OperationPanelState;

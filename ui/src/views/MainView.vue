@@ -2,7 +2,8 @@
 import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import FileTree from "../components/FileTree.vue";
-import {ArchiveFormat, ExplorerIconSize, ExplorerViewMode, FileTreeData} from "../class";
+import type {ArchiveFormat} from "../class";
+import {ExplorerIconSize, ExplorerViewMode, FileTreeData} from "../class";
 import {useFileStore} from "../store";
 import {
   cancelTask,
@@ -28,6 +29,7 @@ import TabStrip from "../components/tabs/TabStrip.vue";
 import OperationPanel from "../components/operations/OperationPanel.vue";
 import DeleteConfirmPanel from "../components/operations/DeleteConfirmPanel.vue";
 import PropertiesPanel from "../components/operations/PropertiesPanel.vue";
+import type {DeleteConfirmState, FileClipboardAction, OperationPanelState, PropertiesPanelState} from "../components/operations/types.ts";
 import ContentToolbar from "../components/shell/ContentToolbar.vue";
 import CommandBar from "../components/shell/CommandBar.vue";
 import ShellNotice from "../components/shell/ShellNotice.vue";
@@ -67,35 +69,6 @@ type ContentToolbarExpose = {
 
 type FocusablePanelExpose = {
   focus: () => void;
-}
-
-type FileClipboardAction = "copy" | "cut";
-
-type OperationPanelKind = "createFile" | "createFolder" | "archive" | "extract";
-
-type OperationPanelState = {
-  visible: boolean;
-  kind: OperationPanelKind | null;
-  title: string;
-  message: string;
-  primaryText: string;
-  name: string;
-  format: ArchiveFormat;
-  entries: ExplorerEntry[];
-  sourceEntry: ExplorerEntry | null;
-  submitting: boolean;
-}
-
-type DeleteConfirmState = {
-  visible: boolean;
-  entries: ExplorerEntry[];
-  submitting: boolean;
-  error: string;
-}
-
-type PropertiesPanelState = {
-  visible: boolean;
-  entries: ExplorerEntry[];
 }
 
 type TabContextMenuState = {

@@ -1,14 +1,7 @@
 <script setup lang="ts">
 import {computed, ref} from "vue";
 import Icon from "../Icon.vue";
-import type {ExplorerEntry} from "../explorer/types.ts";
-
-type DeleteConfirmState = {
-  visible: boolean;
-  entries: ExplorerEntry[];
-  submitting: boolean;
-  error: string;
-}
+import type {DeleteConfirmState} from "./types.ts";
 
 const props = defineProps<{
   state: DeleteConfirmState;
