@@ -24,10 +24,8 @@ FROM debian:bookworm-slim AS runtime
 ARG WFB_UID=1000
 ARG WFB_GID=1000
 
-RUN groupadd --gid "${WFB_GID}" web-file-browser \
-    && useradd --uid "${WFB_UID}" --gid "${WFB_GID}" --create-home --no-log-init web-file-browser \
-    && mkdir -p /app/data /app/ui/dist /mnt/files \
-    && chown -R web-file-browser:web-file-browser /app /mnt/files
+RUN mkdir -p /app/data /app/ui/dist /mnt/files \
+    && chown -R "${WFB_UID}:${WFB_GID}" /app /mnt/files
 
 WORKDIR /app
 
@@ -44,6 +42,6 @@ ENV WEB_FILE_BROWSER_BIND=0.0.0.0 \
 
 EXPOSE 8080
 
-USER web-file-browser
+USER ${WFB_UID}:${WFB_GID}
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD ["web-file-browser", "--healthcheck"]
 ENTRYPOINT ["web-file-browser"]
