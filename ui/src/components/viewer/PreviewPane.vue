@@ -32,6 +32,9 @@ const props = defineProps<{
   entry: PreviewEntry | null;
   editableExtensions: string[];
   reloadKey: number;
+  emptyTitle?: string;
+  emptySubtitle?: string;
+  emptyIcon?: string;
 }>();
 
 const emit = defineEmits<{
@@ -83,6 +86,9 @@ const previewTypeText = computed(() => ({
 
 const previewTitleText = computed(() => props.entry?.name ?? "预览窗格");
 const previewSubtitleText = computed(() => props.entry ? previewTypeText.value : "选择一个文件");
+const emptyTitleText = computed(() => props.emptyTitle || "选择一个文件以预览");
+const emptySubtitleText = computed(() => props.emptySubtitle || "");
+const emptyIconName = computed(() => props.emptyIcon || "icon-file-fill");
 
 const previewTextStats = computed(() => {
   if (previewKind.value !== "text") return "";
@@ -299,8 +305,9 @@ onBeforeUnmount(() => {
   </div>
   <div class="preview-body" :class="previewKind">
     <div v-if="!entry" class="preview-placeholder muted">
-      <icon icon="icon-file-fill" size="3rem" />
-      <span>选择一个文件以预览</span>
+      <icon :icon="emptyIconName" size="3rem" />
+      <span>{{ emptyTitleText }}</span>
+      <small v-if="emptySubtitleText">{{ emptySubtitleText }}</small>
     </div>
     <div v-else-if="previewLoading" class="preview-placeholder">正在加载预览...</div>
     <div v-else-if="previewError" class="preview-placeholder error">{{ previewError }}</div>
@@ -446,6 +453,10 @@ onBeforeUnmount(() => {
 
 .preview-placeholder.muted {
   @apply text-slate-400;
+}
+
+.preview-placeholder small {
+  @apply max-w-56 px-4 text-xs leading-5 text-slate-400;
 }
 
 .preview-placeholder button {

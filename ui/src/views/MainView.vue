@@ -296,6 +296,7 @@ const tabContextMenuHeight = 220;
 let suppressSelectionPersistence = false;
 let suppressScrollPersistence = false;
 let tabContextRestoreToken = 0;
+let previewUpdateToken = 0;
 let scrollPersistTimer: number | undefined;
 let historyMouseButton = -1;
 
@@ -331,6 +332,21 @@ const clipboardText = computed(() => {
 const selectionStatusText = computed(() => {
   const selectionText = hasSelection.value ? `已选择 ${selectedCount.value} 项` : "未选择项目";
   return `${selectionText} · ${clipboardText.value}`;
+});
+const previewEmptyTitle = computed(() => {
+  if (!currentSelection.value.length) return "选择一个文件以预览";
+  if (currentSelection.value.length > 1) return `已选择 ${currentSelection.value.length} 项`;
+  const entry = currentSelection.value[0];
+  return entry?.type === "folder" ? entry.name : "正在准备预览";
+});
+const previewEmptySubtitle = computed(() => {
+  if (!currentSelection.value.length) return "";
+  if (currentSelection.value.length > 1) return "选择单个文件后显示预览";
+  return currentSelection.value[0]?.type === "folder" ? "文件夹不能直接预览" : "";
+});
+const previewEmptyIcon = computed(() => {
+  if (currentSelection.value.length === 1 && currentSelection.value[0]?.type === "folder") return "icon-folder-fill";
+  return currentSelection.value.length > 1 ? "icon-view-list" : "icon-file-fill";
 });
 const canDownloadSelection = computed(() => singleSelection.value?.type === "file");
 const canPreviewSelection = computed(() => singleSelection.value?.type === "file");
@@ -491,6 +507,7 @@ const showErrorNotice = (error: unknown, fallback: string, title = "操作失败
 }
 
 const clearPreviewContent = () => {
+  previewUpdateToken += 1;
   previewEntry.value = null;
 }
 
@@ -1786,7 +1803,9 @@ const previewSelected = async (entry = selectedEntry()) => {
 
 const setPreviewEntry = async (entry: ExplorerEntry, force = false) => {
   if (!force && previewEntry.value?.path === entry.path && previewPanelVisible.value) return;
+  const token = ++previewUpdateToken;
   if (!await fileStore.requestEditorLeave()) return;
+  if (token !== previewUpdateToken) return;
   fileStore.closeEditor();
   previewEntry.value = entry;
   previewReloadKey.value += 1;
@@ -2050,6 +2069,9 @@ const signOut = async () => {
                 :entry="previewEntry"
                 :editable-extensions="fileStore.extensions"
                 :reload-key="previewReloadKey"
+                :empty-title="previewEmptyTitle"
+                :empty-subtitle="previewEmptySubtitle"
+                :empty-icon="previewEmptyIcon"
                 @close="closePreview"
                 @edit="editPreviewEntry"
                 @download="downloadSelected"
