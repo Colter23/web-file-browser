@@ -4,6 +4,9 @@ import type {ComponentPublicInstance} from "vue";
 import type {DirSortKey, DirSortOrder, ExplorerIconSize, ExplorerViewMode, FileInfo, FolderData, FolderQueryParams} from "../../class.ts";
 import {useFileStore} from "../../store";
 import {downloadUrl, getFolderData} from "../../network/file-api.ts";
+import DetailsHeader from "./DetailsHeader.vue";
+import ExplorerCommandRow from "./ExplorerCommandRow.vue";
+import ExplorerStatusBar from "./ExplorerStatusBar.vue";
 import Icon from "../Icon.vue";
 
 type ExplorerEntryType = "folder" | "file";
@@ -816,16 +819,6 @@ const changeSortOrder = async (order: DirSortOrder) => {
   fileStore.setSort(fileStore.sortKey, order);
   loadedSignature.value = "";
   if (await loadFolder(fileStore.currentPath || "/")) await restoreSelectionSnapshot(snapshot);
-}
-
-const sortButtonClass = (key: DirSortKey) => ({
-  active: sortKey.value === key,
-  desc: sortKey.value === key && sortOrder.value === "desc"
-});
-
-const sortIndicator = (key: DirSortKey) => {
-  if (sortKey.value !== key) return "";
-  return sortOrder.value === "asc" ? "↑" : "↓";
 }
 
 watch(() => [fileStore.activeTabId, fileStore.currentPath] as const, async ([, path]) => {
@@ -1810,47 +1803,21 @@ defineExpose({
 
 <template>
   <section class="explorer-shell">
-    <div class="explorer-command-row">
-      <div class="explorer-summary">
-        <span>{{ totalCountText }}</span>
-        <span>{{ selectedCountText }}</span>
-        <span>排序：{{ sortText }}</span>
-      </div>
-      <div class="explorer-controls">
-        <div class="sort-switch" aria-label="排序方式">
-          <button
-              v-for="option in sortOptions"
-              :key="option.key"
-              :class="{active: sortKey === option.key}"
-              :disabled="loading"
-              :title="`按${option.label}排序`"
-              @click="changeSort(option.key)">
-            <span>{{ option.label }}</span>
-            <span class="sort-chip-indicator">{{ sortIndicator(option.key) }}</span>
-          </button>
-          <button class="order-toggle" :disabled="loading" :title="`切换为${nextSortOrder === 'asc' ? '升序' : '降序'}`" @click="changeSortOrder(nextSortOrder)">
-            {{ sortOrder === "asc" ? "升序" : "降序" }}
-          </button>
-        </div>
-        <div class="view-switch" aria-label="查看模式">
-          <button :class="{active: viewMode === 'details'}" title="详细信息 (Ctrl+Shift+6)" @click="setViewMode('details')">
-            <icon icon="icon-view-list" />
-          </button>
-          <button :class="{active: viewMode === 'list'}" title="列表 (Ctrl+Shift+5)" @click="setViewMode('list')">
-            <icon icon="icon-listview" />
-          </button>
-          <button :class="{active: viewMode === 'icons'}" title="图标 (Ctrl+Shift+1-4)" @click="setViewMode('icons')">
-            <icon icon="icon-viewgrid" />
-          </button>
-          <button :class="{active: viewMode === 'tiles'}" title="平铺 (Ctrl+Shift+7)" @click="setViewMode('tiles')">
-            <icon icon="icon-file-common-filling" />
-          </button>
-          <button title="图标大小 (Ctrl+鼠标滚轮)" @click="cycleIconSize">
-            <span class="size-mark">{{ iconSizeText }}</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <explorer-command-row
+        :total-count-text="totalCountText"
+        :selected-count-text="selectedCountText"
+        :sort-text="sortText"
+        :sort-options="sortOptions"
+        :sort-key="sortKey"
+        :sort-order="sortOrder"
+        :next-sort-order="nextSortOrder"
+        :view-mode="viewMode"
+        :icon-size-text="iconSizeText"
+        :loading="loading"
+        @change-sort="changeSort"
+        @change-sort-order="changeSortOrder"
+        @set-view-mode="setViewMode"
+        @cycle-icon-size="cycleIconSize" />
 
     <div
         ref="viewportRef"
@@ -1871,27 +1838,14 @@ defineExpose({
         @dragleave="dragLeaveCurrentFolder"
         @drop="dropOnCurrentFolder"
         @contextmenu.prevent="openBackgroundContextMenu">
-      <div v-if="viewMode === 'details'" class="details-header" :style="detailsGridStyle">
-        <button class="sort-button name-cell" :class="sortButtonClass('name')" :disabled="loading" @click.stop="changeSort('name')">
-          <span>名称</span>
-          <span class="sort-indicator">{{ sortIndicator('name') }}</span>
-          <span class="column-resizer" title="拖拽调整名称列宽" @click.stop @pointerdown="startDetailsColumnResize($event, 'name')"></span>
-        </button>
-        <button class="sort-button" :class="sortButtonClass('modified')" :disabled="loading" @click.stop="changeSort('modified')">
-          <span>修改日期</span>
-          <span class="sort-indicator">{{ sortIndicator('modified') }}</span>
-          <span class="column-resizer" title="拖拽调整修改日期列宽" @click.stop @pointerdown="startDetailsColumnResize($event, 'modified')"></span>
-        </button>
-        <span class="header-cell">
-          类型
-          <span class="column-resizer" title="拖拽调整类型列宽" @click.stop @pointerdown="startDetailsColumnResize($event, 'type')"></span>
-        </span>
-        <button class="sort-button size-cell" :class="sortButtonClass('size')" :disabled="loading" @click.stop="changeSort('size')">
-          <span>大小</span>
-          <span class="sort-indicator">{{ sortIndicator('size') }}</span>
-          <span class="column-resizer" title="拖拽调整大小列宽" @click.stop @pointerdown="startDetailsColumnResize($event, 'size')"></span>
-        </button>
-      </div>
+      <details-header
+          v-if="viewMode === 'details'"
+          :grid-style="detailsGridStyle"
+          :loading="loading"
+          :sort-key="sortKey"
+          :sort-order="sortOrder"
+          @change-sort="changeSort"
+          @resize-column="startDetailsColumnResize" />
 
       <div v-if="loading" class="explorer-empty">正在加载...</div>
       <div v-else-if="message" class="explorer-empty error">{{ message }}</div>
@@ -1976,10 +1930,7 @@ defineExpose({
       </div>
     </div>
 
-    <div class="explorer-status-row">
-      <span :title="folderStatusText">{{ folderStatusText }}</span>
-      <span class="selection" :title="selectedStatusText">{{ selectedStatusText }}</span>
-    </div>
+    <explorer-status-bar :folder-status-text="folderStatusText" :selected-status-text="selectedStatusText" />
 
     <div
         v-if="contextMenu.visible && contextMenu.background"
@@ -2034,45 +1985,6 @@ defineExpose({
   @apply relative flex h-full min-h-0 flex-col overflow-hidden bg-white;
 }
 
-.explorer-command-row {
-  @apply flex min-h-9 shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-3 py-1 text-xs text-slate-500;
-}
-
-.explorer-summary {
-  @apply flex min-w-0 items-center gap-3 truncate;
-}
-
-.explorer-controls {
-  @apply flex shrink-0 items-center gap-2;
-}
-
-.sort-switch,
-.view-switch {
-  @apply inline-flex shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-50;
-}
-
-.sort-switch button,
-.view-switch button {
-  @apply inline-flex h-7 min-w-8 items-center justify-center gap-1 border-r border-slate-200 px-2 text-slate-600 last:border-r-0 hover:bg-white disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-slate-50;
-}
-
-.sort-switch button.active,
-.view-switch button.active {
-  @apply bg-blue-600 text-white hover:bg-blue-600;
-}
-
-.sort-switch .order-toggle {
-  @apply min-w-12 font-medium;
-}
-
-.sort-chip-indicator {
-  @apply inline-flex w-2 justify-center text-[10px];
-}
-
-.size-mark {
-  @apply text-[11px] leading-none;
-}
-
 .explorer-viewport {
   @apply relative grow overflow-auto outline-none select-none bg-white;
 }
@@ -2087,62 +1999,6 @@ defineExpose({
 
 .explorer-viewport.details {
   @apply min-w-0;
-}
-
-.explorer-status-row {
-  @apply flex h-8 shrink-0 items-center justify-between gap-4 border-t border-slate-200 bg-slate-50 px-3 text-xs text-slate-500;
-}
-
-.explorer-status-row span {
-  @apply min-w-0 truncate;
-}
-
-.explorer-status-row .selection {
-  @apply shrink-0 text-right text-slate-600;
-  max-width: min(32rem, 58%);
-}
-
-.details-header {
-  @apply sticky top-0 z-10 grid h-9 items-center border-b border-slate-200 bg-white px-4 text-sm text-slate-600;
-  grid-template-columns: minmax(var(--details-name-width), 1fr) var(--details-modified-width) var(--details-type-width) var(--details-size-width);
-  min-width: calc(var(--details-name-width) + var(--details-modified-width) + var(--details-type-width) + var(--details-size-width) + 2rem);
-}
-
-.details-header > .header-cell {
-  @apply relative flex h-full items-center truncate px-2;
-}
-
-.sort-button {
-  @apply relative flex h-full min-w-0 items-center justify-between gap-1 truncate px-2 text-left text-sm text-slate-600 hover:bg-blue-50 disabled:pointer-events-none;
-}
-
-.sort-button.active {
-  @apply bg-blue-50 text-blue-700;
-}
-
-.sort-button span:first-child {
-  @apply min-w-0 truncate;
-}
-
-.sort-button.size-cell {
-  @apply text-right;
-}
-
-.sort-indicator {
-  @apply inline-flex w-3 shrink-0 justify-center text-[11px] text-blue-600;
-}
-
-.column-resizer {
-  @apply absolute -right-1 top-0 z-20 h-full w-2 cursor-col-resize touch-none;
-}
-
-.column-resizer::after {
-  content: "";
-  @apply absolute left-1 top-1/2 h-5 -translate-y-1/2 border-l border-slate-200;
-}
-
-.column-resizer:hover::after {
-  @apply border-blue-500;
 }
 
 .entry-surface {
