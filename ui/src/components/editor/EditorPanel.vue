@@ -12,6 +12,8 @@ import {useEditorSearch} from "../../composables/useEditorSearch.ts";
 import {checkFileLanguageMode} from "../../utils/common.ts";
 import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
 import type {CodeEditorExpose, EditorCursorStatus} from "./types.ts";
+import EditorInfoBar from "./EditorInfoBar.vue";
+import EditorStatusBar from "./EditorStatusBar.vue";
 
 type MenuName = "language" | "theme" | "settings" | "";
 type PendingEditorAction = "close" | "reload" | "external" | "";
@@ -106,6 +108,12 @@ const editorMetaText = computed(() => {
   const parts = [selectedModeName.value, formatEntrySize(fileInfo.value?.size, "0 B"), wrap.value ? "自动换行" : "不换行"];
   return parts.join(" · ");
 });
+
+const modifiedText = computed(() => formatEntryDate(fileInfo.value?.modified));
+
+const fileSizeText = computed(() => formatEntrySize(fileInfo.value?.size, "0 B"));
+
+const wrapText = computed(() => wrap.value ? "自动换行" : "不换行");
 
 const cursorStatusText = computed(() => `第 ${cursorStatus.value.line} 行，第 ${cursorStatus.value.column} 列`);
 
@@ -429,16 +437,13 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
-    <div class="editor-infobar" @click.stop>
-      <div class="editor-info-left">
-        <span :class="['status-pill', {dirty: isChange, saving, conflict: saveConflict}]">{{ dirtyText }}</span>
-        <span>{{ editorMetaText }}</span>
-      </div>
-      <div class="editor-info-right">
-        <span>修改时间：{{ formatEntryDate(fileInfo?.modified) }}</span>
-        <span>UTF-8</span>
-      </div>
-    </div>
+    <editor-info-bar
+        :dirty-text="dirtyText"
+        :meta-text="editorMetaText"
+        :modified-text="modifiedText"
+        :dirty="isChange"
+        :saving="saving"
+        :conflict="saveConflict" />
 
     <div class="menu-layer" @click.stop>
       <div v-if="activeMenu === 'language'" class="editor-menu language-menu">
@@ -592,20 +597,16 @@ onBeforeUnmount(() => {
       </div>
     </main>
 
-    <footer class="editor-statusbar">
-      <div class="status-left">
-        <span v-if="editorMessageText" :class="['editor-message', {conflict: saveConflict}]">{{ editorMessageText }}</span>
-        <span v-else>{{ filePathText }}</span>
-      </div>
-      <div class="status-right">
-        <button v-if="saveConflict" class="status-action" @click="reload">重新载入</button>
-        <span>{{ cursorStatusText }}</span>
-        <span v-if="selectionStatusText">{{ selectionStatusText }}</span>
-        <span>{{ selectedModeName }}</span>
-        <span>{{ formatEntrySize(fileInfo?.size, "0 B") }}</span>
-        <span>{{ wrap ? "自动换行" : "不换行" }}</span>
-      </div>
-    </footer>
+    <editor-status-bar
+        :message-text="editorMessageText"
+        :file-path-text="filePathText"
+        :conflict="saveConflict"
+        :cursor-text="cursorStatusText"
+        :selection-text="selectionStatusText"
+        :mode-text="selectedModeName"
+        :size-text="fileSizeText"
+        :wrap-text="wrapText"
+        @reload="reload" />
   </div>
 </template>
 
@@ -616,18 +617,12 @@ onBeforeUnmount(() => {
   @apply relative flex h-full min-h-0 flex-col overflow-hidden bg-[#f7fbff] text-slate-900;
 }
 
-.editor-titlebar,
-.editor-infobar,
-.editor-statusbar {
+.editor-titlebar {
   @apply relative z-20 flex shrink-0 items-center justify-between border-slate-200 bg-white/90 backdrop-blur;
 }
 
 .editor-titlebar {
   @apply h-12 gap-3 border-b px-3;
-}
-
-.editor-infobar {
-  @apply h-9 gap-3 border-b bg-slate-50/80 px-3 text-xs text-slate-500;
 }
 
 .editor-file-head {
@@ -691,16 +686,6 @@ onBeforeUnmount(() => {
 
 .close-button {
   @apply hover:border-red-200 hover:bg-red-50;
-}
-
-.editor-info-left,
-.editor-info-right {
-  @apply flex min-w-0 items-center gap-3;
-}
-
-.editor-info-left span,
-.editor-info-right span {
-  @apply truncate;
 }
 
 .menu-layer {
@@ -869,42 +854,4 @@ onBeforeUnmount(() => {
   @apply border-red-200 bg-white text-red-600 hover:bg-red-50;
 }
 
-.editor-statusbar {
-  @apply h-7 gap-3 border-t px-3 text-xs text-slate-500;
-}
-
-.status-left,
-.status-right {
-  @apply flex min-w-0 items-center gap-3;
-}
-
-.status-left span,
-.status-right span {
-  @apply truncate;
-}
-
-.status-pill {
-  @apply shrink-0 rounded bg-slate-100 px-2 py-0.5 text-slate-600;
-}
-
-.status-pill.dirty {
-  @apply bg-amber-100 text-amber-700;
-}
-
-.status-pill.saving {
-  @apply bg-blue-100 text-blue-700;
-}
-
-.status-pill.conflict,
-.editor-message.conflict {
-  @apply bg-red-50 text-red-600;
-}
-
-.editor-message {
-  @apply truncate rounded px-2 py-0.5 text-red-600;
-}
-
-.status-action {
-  @apply h-5 shrink-0 rounded border border-red-200 bg-white px-2 text-xs text-red-600 hover:bg-red-50;
-}
 </style>
