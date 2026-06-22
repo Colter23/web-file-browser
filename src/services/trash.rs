@@ -309,7 +309,7 @@ fn restore_sync(
                 join_virtual_path(&parent.parent_virtual_path, &target.name)
             )));
         }
-        fs::rename(&record.trash_path, &target.path)?;
+        move_payload_with_copy_fallback(Path::new(&record.trash_path), &target.path, &record.kind)?;
     }
     let restored_virtual_path = join_virtual_path(&parent.parent_virtual_path, &target.name);
     let restored_real_path = target.path.to_string_lossy().to_string();
@@ -488,17 +488,48 @@ fn copy_then_remove(
     Ok(())
 }
 
+fn move_payload_with_copy_fallback(
+    source: &Path,
+    target: &Path,
+    kind: &TrashEntryKind,
+) -> Result<(), AppError> {
+    if target.exists() {
+        return Err(AppError::conflict(format!(
+            "恢复目标已存在: {}",
+            target.display()
+        )));
+    }
+    match fs::rename(source, target) {
+        Ok(()) => Ok(()),
+        Err(rename_error) => copy_then_remove(source, target, kind).map_err(|copy_error| {
+            AppError::internal(format!("恢复回收站条目失败: {rename_error}; {copy_error}"))
+        }),
+    }
+}
+
 fn copy_dir_recursively(source: &Path, target: &Path) -> Result<(), std::io::Error> {
     fs::create_dir_all(target)?;
     for entry in fs::read_dir(source)? {
         let entry = entry?;
         let entry_source = entry.path();
         let entry_target = target.join(entry.file_name());
-        let metadata = entry.metadata()?;
+        let metadata = entry_source.symlink_metadata()?;
+        let file_type = metadata.file_type();
+        if file_type.is_symlink() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("不支持移动符号链接到回收站: {}", entry_source.display()),
+            ));
+        }
         if metadata.is_dir() {
             copy_dir_recursively(&entry_source, &entry_target)?;
-        } else {
+        } else if metadata.is_file() {
             fs::copy(entry_source, entry_target)?;
+        } else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("不支持移动特殊文件到回收站: {}", entry_source.display()),
+            ));
         }
     }
     Ok(())
@@ -507,7 +538,8 @@ fn copy_dir_recursively(source: &Path, target: &Path) -> Result<(), std::io::Err
 #[cfg(test)]
 mod tests {
     use super::{
-        TrashEntryKind, TrashRecord, TrashService, move_to_trash_sync, select_retention_purge_ids,
+        TrashEntryKind, TrashRecord, TrashService, copy_then_remove,
+        move_payload_with_copy_fallback, move_to_trash_sync, select_retention_purge_ids,
     };
     use crate::{
         error::AppError,
@@ -546,6 +578,58 @@ mod tests {
         assert!(Path::new(&record.trash_path).exists());
         assert!(trash_dir.join(&record.id).join("metadata.json").exists());
         assert_eq!(record.size_bytes, Some(5));
+
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[test]
+    fn copy_fallback_moves_file_and_folder_payload() {
+        let temp = temp_dir("web-file-browser-trash-copy-fallback-test");
+        let source_dir = temp.join("source");
+        let target_dir = temp.join("target");
+        fs::create_dir_all(&source_dir).unwrap();
+        fs::create_dir_all(&target_dir).unwrap();
+
+        let source_file = source_dir.join("hello.txt");
+        let target_file = target_dir.join("hello.txt");
+        fs::write(&source_file, "hello").unwrap();
+
+        copy_then_remove(&source_file, &target_file, &TrashEntryKind::File).unwrap();
+
+        assert!(!source_file.exists());
+        assert_eq!(fs::read_to_string(&target_file).unwrap(), "hello");
+
+        let folder_source = source_dir.join("folder");
+        let nested_source = folder_source.join("nested");
+        let folder_target = target_dir.join("folder");
+        fs::create_dir_all(&nested_source).unwrap();
+        fs::write(nested_source.join("item.txt"), "nested").unwrap();
+
+        copy_then_remove(&folder_source, &folder_target, &TrashEntryKind::Folder).unwrap();
+
+        assert!(!folder_source.exists());
+        assert_eq!(
+            fs::read_to_string(folder_target.join("nested/item.txt")).unwrap(),
+            "nested"
+        );
+
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[test]
+    fn restore_payload_rejects_existing_target_before_copy_fallback() {
+        let temp = temp_dir("web-file-browser-trash-restore-existing-target-test");
+        fs::create_dir_all(&temp).unwrap();
+        let source = temp.join("source.txt");
+        let target = temp.join("target.txt");
+        fs::write(&source, "source").unwrap();
+        fs::write(&target, "target").unwrap();
+
+        let result = move_payload_with_copy_fallback(&source, &target, &TrashEntryKind::File);
+
+        assert!(result.is_err());
+        assert_eq!(fs::read_to_string(&source).unwrap(), "source");
+        assert_eq!(fs::read_to_string(&target).unwrap(), "target");
 
         fs::remove_dir_all(temp).unwrap();
     }

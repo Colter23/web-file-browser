@@ -52,7 +52,9 @@ pub fn replace_file_sync(source: &Path, target: &Path) -> Result<(), AppError> {
     match fs::rename(source, target) {
         Ok(()) => Ok(()),
         Err(error) if target.exists() => replace_existing_file_sync(source, target, error),
-        Err(error) => Err(error.into()),
+        Err(rename_error) => move_file_with_copy_fallback(source, target).map_err(|copy_error| {
+            AppError::internal(format!("移动文件失败: {rename_error}; {copy_error}"))
+        }),
     }
 }
 
@@ -70,22 +72,34 @@ fn replace_existing_file_sync(
         AppError::internal(format!("准备替换文件失败: {first_error}; {backup_error}"))
     })?;
 
-    match fs::rename(source, target) {
+    match move_file_with_copy_fallback(source, target) {
         Ok(()) => {
             let _ = fs::remove_file(&backup);
             Ok(())
         }
-        Err(rename_error) => {
+        Err(move_error) => {
+            let _ = fs::remove_file(target);
             let restore_result = fs::rename(&backup, target);
             match restore_result {
                 Ok(()) => Err(AppError::internal(format!(
-                    "替换文件失败，已恢复旧文件: {first_error}; {rename_error}"
+                    "替换文件失败，已恢复旧文件: {first_error}; {move_error}"
                 ))),
                 Err(restore_error) => Err(AppError::internal(format!(
-                    "替换文件失败，且恢复旧文件失败: {first_error}; {rename_error}; {restore_error}"
+                    "替换文件失败，且恢复旧文件失败: {first_error}; {move_error}; {restore_error}"
                 ))),
             }
         }
+    }
+}
+
+fn move_file_with_copy_fallback(source: &Path, target: &Path) -> Result<(), std::io::Error> {
+    match fs::rename(source, target) {
+        Ok(()) => Ok(()),
+        Err(rename_error) => fs::copy(source, target)
+            .and_then(|_| fs::remove_file(source))
+            .map_err(|copy_error| {
+                std::io::Error::new(copy_error.kind(), format!("{rename_error}; {copy_error}"))
+            }),
     }
 }
 
