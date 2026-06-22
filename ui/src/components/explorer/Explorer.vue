@@ -7,6 +7,7 @@ import {getFolderData} from "../../network/file-api.ts";
 import {useDetailsColumns} from "../../composables/useDetailsColumns.ts";
 import {useExplorerEntryDrag} from "../../composables/useExplorerEntryDrag.ts";
 import {useExplorerMarqueeSelection} from "../../composables/useExplorerMarqueeSelection.ts";
+import {useExplorerRename} from "../../composables/useExplorerRename.ts";
 import {useExplorerSelection} from "../../composables/useExplorerSelection.ts";
 import {useExplorerThumbnails} from "../../composables/useExplorerThumbnails.ts";
 import {useExplorerTypeahead} from "../../composables/useExplorerTypeahead.ts";
@@ -93,15 +94,11 @@ const message = ref("");
 const loadedSignature = ref("");
 const viewportRef = ref<HTMLElement | null>(null);
 const itemRefs = new Map<string, HTMLElement>();
-const renameInputRefs = new Map<string, HTMLInputElement>();
 const pageSize = 200;
 const contextMenu = reactive({visible: false, x: 0, y: 0, targetPath: "", background: false});
 const closeContextMenu = () => {
   contextMenu.visible = false;
 }
-const renamingPath = ref("");
-const renameDraft = ref("");
-const renameSubmitting = ref(false);
 const autoLoadMoreDistance = 360;
 
 const {
@@ -316,14 +313,6 @@ const setItemRef = (path: string, element: Element | ComponentPublicInstance | n
   }
 }
 
-const setRenameInputRef = (path: string, element: Element | ComponentPublicInstance | null) => {
-  if (element instanceof HTMLInputElement) {
-    renameInputRefs.set(path, element);
-  } else {
-    renameInputRefs.delete(path);
-  }
-}
-
 const focusViewport = () => {
   viewportRef.value?.focus({preventScroll: true});
 }
@@ -368,57 +357,24 @@ const {
 
 const entryDomId = (path: string) => `explorer-entry-${encodeURIComponent(path).replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 
-const selectRenameText = (input: HTMLInputElement, entry: ExplorerEntry) => {
-  if (entry.type === "folder") {
-    input.select();
-    return;
-  }
-  const suffix = entry.extension ? `.${entry.extension}` : "";
-  const end = suffix && entry.name.toLowerCase().endsWith(suffix.toLowerCase())
-      ? Math.max(0, entry.name.length - suffix.length)
-      : entry.name.length;
-  input.setSelectionRange(0, end);
-}
-
-const startRename = (entry: ExplorerEntry | null) => {
-  if (!entry || renameSubmitting.value) return;
-  ensureEntrySelected(entry);
-  contextMenu.visible = false;
-  renamingPath.value = entry.path;
-  renameDraft.value = entry.name;
-  nextTick(() => {
-    const input = renameInputRefs.get(entry.path);
-    input?.focus();
-    if (input) selectRenameText(input, entry);
-  });
-}
-
-const cancelRename = () => {
-  if (renameSubmitting.value) return;
-  renamingPath.value = "";
-  renameDraft.value = "";
-  nextTick(() => viewportRef.value?.focus());
-}
-
-const commitRename = async () => {
-  if (!renamingPath.value || renameSubmitting.value) return;
-  const entry = entryByPath(renamingPath.value);
-  const nextName = renameDraft.value.trim();
-  if (!entry || !nextName || nextName === entry.name) {
-    cancelRename();
-    return;
-  }
-  renameSubmitting.value = true;
-  try {
-    emit("rename", {entry, name: nextName});
-    renamingPath.value = "";
-    renameDraft.value = "";
-  } finally {
-    renameSubmitting.value = false;
-  }
-}
-
-const isRenaming = (entry: ExplorerEntry) => renamingPath.value === entry.path;
+const {
+  renamingPath,
+  renameDraft,
+  renameSubmitting,
+  setRenameInputRef,
+  startRename,
+  cancelRename,
+  commitRename,
+  isRenaming,
+  resetRename,
+  clearRenameInputRefs
+} = useExplorerRename({
+  entryByPath,
+  ensureEntrySelected,
+  closeContextMenu,
+  focusViewport,
+  submitRename: payload => emit("rename", payload)
+});
 
 const {
   dragState,
@@ -495,8 +451,7 @@ const loadFolder = async (path: string = fileStore.currentPath || "/") => {
   loading.value = true;
   message.value = "";
   let loaded = false;
-  renamingPath.value = "";
-  renameDraft.value = "";
+  resetRename();
   resetTypeahead();
   resetSelectionBox();
   clearThumbnailState();
@@ -614,7 +569,7 @@ onBeforeUnmount(() => {
   resetTypeahead();
   disconnectThumbnailObserver();
   itemRefs.clear();
-  renameInputRefs.clear();
+  clearRenameInputRefs();
 });
 
 const showContextMenu = (x: number, y: number, targetPath = "", background = false) => {
