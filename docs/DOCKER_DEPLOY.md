@@ -87,7 +87,7 @@ bash scripts/docker-smoke.sh
 - `WEB_FILE_BROWSER_SMOKE_PROJECT`：Docker Compose 项目名，默认 `web-file-browser-smoke`。
 - `WEB_FILE_BROWSER_SMOKE_KEEP=1`：失败或完成后保留容器和 `.smoke/docker` 临时目录，便于排查。
 
-运行脚本需要宿主机安装 Docker Compose v2、`curl`、`grep`、`python3` 和 `cmp`。
+运行脚本需要宿主机安装 Docker Compose v2、`curl`、`grep`、`jq` 和 `cmp`。
 
 ## 卷和目录
 

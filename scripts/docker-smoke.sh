@@ -15,15 +15,7 @@ require_command() {
 }
 
 json_query() {
-  python3 -c '
-import json
-import sys
-
-value = json.load(sys.stdin)
-for part in sys.argv[1].split("."):
-    value = value[int(part)] if part.isdigit() else value[part]
-print(value)
-' "$1"
+  jq -er "$1"
 }
 
 wait_ready() {
@@ -45,7 +37,7 @@ wait_task() {
 
   for _ in $(seq 1 120); do
     body=$(curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/tasks/${task_id}")
-    state=$(printf '%s' "${body}" | json_query state)
+    state=$(printf '%s' "${body}" | json_query '.state')
     case "${state}" in
       completed)
         return 0
@@ -67,7 +59,7 @@ REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd -P)
 require_command docker
 require_command curl
 require_command grep
-require_command python3
+require_command jq
 require_command cmp
 docker compose version >/dev/null 2>&1 || fail "需要 Docker Compose v2"
 
@@ -150,7 +142,7 @@ curl -fsS "${BASE_URL}/" -o "${FRONTEND_FILE}"
 grep -q 'id="app"' "${FRONTEND_FILE}" || fail "首页没有返回前端入口 HTML"
 
 log "登录并创建 /mnt/files 挂载"
-LOGIN_PAYLOAD=$(ADMIN_PASSWORD="${ADMIN_PASSWORD}" python3 -c 'import json, os; print(json.dumps({"password": os.environ["ADMIN_PASSWORD"]}))')
+LOGIN_PAYLOAD=$(jq -n --arg password "${ADMIN_PASSWORD}" '{password: $password}')
 curl -fsS \
   -c "${COOKIE_JAR}" \
   -H "Content-Type: application/json" \
@@ -208,7 +200,7 @@ ARCHIVE_RESPONSE=$(curl -fsS \
   -H "Content-Type: application/json" \
   -d '{"sources":["/files/hello.txt","/files/upload.txt"],"targetPath":"/files","outputName":"bundle.zip","format":"zip","conflictPolicy":"reject"}' \
   "${BASE_URL}/api/tasks/archive")
-ARCHIVE_TASK_ID=$(printf '%s' "${ARCHIVE_RESPONSE}" | json_query id)
+ARCHIVE_TASK_ID=$(printf '%s' "${ARCHIVE_RESPONSE}" | json_query '.id')
 wait_task "${ARCHIVE_TASK_ID}"
 curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/file/files/bundle.zip" >/dev/null
 
@@ -217,7 +209,7 @@ EXTRACT_RESPONSE=$(curl -fsS \
   -H "Content-Type: application/json" \
   -d '{"sourcePath":"/files/bundle.zip","targetPath":"/files","folderName":"unzipped","conflictPolicy":"reject"}' \
   "${BASE_URL}/api/tasks/extract")
-EXTRACT_TASK_ID=$(printf '%s' "${EXTRACT_RESPONSE}" | json_query id)
+EXTRACT_TASK_ID=$(printf '%s' "${EXTRACT_RESPONSE}" | json_query '.id')
 wait_task "${EXTRACT_TASK_ID}"
 curl -fsS \
   -b "${COOKIE_JAR}" \
@@ -231,7 +223,7 @@ TAR_ARCHIVE_RESPONSE=$(curl -fsS \
   -H "Content-Type: application/json" \
   -d '{"sources":["/files/upload.txt"],"targetPath":"/files","outputName":"upload.tar.gz","format":"tarGz","conflictPolicy":"reject"}' \
   "${BASE_URL}/api/tasks/archive")
-TAR_ARCHIVE_TASK_ID=$(printf '%s' "${TAR_ARCHIVE_RESPONSE}" | json_query id)
+TAR_ARCHIVE_TASK_ID=$(printf '%s' "${TAR_ARCHIVE_RESPONSE}" | json_query '.id')
 wait_task "${TAR_ARCHIVE_TASK_ID}"
 curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/file/files/upload.tar.gz" >/dev/null
 
@@ -240,7 +232,7 @@ TAR_EXTRACT_RESPONSE=$(curl -fsS \
   -H "Content-Type: application/json" \
   -d '{"sourcePath":"/files/upload.tar.gz","targetPath":"/files","folderName":"untarred","conflictPolicy":"reject"}' \
   "${BASE_URL}/api/tasks/extract")
-TAR_EXTRACT_TASK_ID=$(printf '%s' "${TAR_EXTRACT_RESPONSE}" | json_query id)
+TAR_EXTRACT_TASK_ID=$(printf '%s' "${TAR_EXTRACT_RESPONSE}" | json_query '.id')
 wait_task "${TAR_EXTRACT_TASK_ID}"
 curl -fsS \
   -b "${COOKIE_JAR}" \
@@ -254,7 +246,7 @@ curl -fsS \
   -b "${COOKIE_JAR}" \
   "${BASE_URL}/api/file/files/hello.txt" >/dev/null
 TRASH_RESPONSE=$(curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/trash")
-TRASH_ID=$(printf '%s' "${TRASH_RESPONSE}" | json_query 0.id)
+TRASH_ID=$(printf '%s' "${TRASH_RESPONSE}" | json_query '.[0].id')
 curl -fsS \
   -X POST \
   -b "${COOKIE_JAR}" \
