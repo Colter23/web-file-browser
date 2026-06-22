@@ -6,8 +6,10 @@ import {useFileStore} from "../../store";
 import {getFolderData} from "../../network/file-api.ts";
 import {useDetailsColumns} from "../../composables/useDetailsColumns.ts";
 import {useExplorerEntryDrag} from "../../composables/useExplorerEntryDrag.ts";
+import {useExplorerMarqueeSelection} from "../../composables/useExplorerMarqueeSelection.ts";
 import {useExplorerSelection} from "../../composables/useExplorerSelection.ts";
 import {useExplorerThumbnails} from "../../composables/useExplorerThumbnails.ts";
+import {useExplorerTypeahead} from "../../composables/useExplorerTypeahead.ts";
 import {
   entryTypeText,
   fileEntryIcon,
@@ -23,18 +25,6 @@ import ExplorerCommandRow from "./ExplorerCommandRow.vue";
 import ExplorerStatusBar from "./ExplorerStatusBar.vue";
 import ExplorerEntryItem from "./ExplorerEntryItem.vue";
 import type {ExplorerEntry} from "./types.ts";
-
-type SelectionBox = {
-  active: boolean;
-  additive: boolean;
-  basePaths: string[];
-  originX: number;
-  originY: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 type RenamePayload = {
   entry: ExplorerEntry;
@@ -116,27 +106,8 @@ const closeContextMenu = () => {
 const renamingPath = ref("");
 const renameDraft = ref("");
 const renameSubmitting = ref(false);
-const selectionBox = reactive<SelectionBox>({
-  active: false,
-  additive: false,
-  basePaths: [],
-  originX: 0,
-  originY: 0,
-  x: 0,
-  y: 0,
-  width: 0,
-  height: 0
-});
-let marqueePointerX = 0;
-let marqueePointerY = 0;
-let marqueeScrollFrame = 0;
-const marqueeScrollEdge = 48;
-const marqueeMaxScrollSpeed = 24;
 const viewWheelStepThreshold = 80;
 const autoLoadMoreDistance = 360;
-const typeaheadQuery = ref("");
-const typeaheadResetMs = 900;
-let typeaheadResetTimer = 0;
 let viewWheelDelta = 0;
 
 const {
@@ -380,34 +351,35 @@ const setScrollTop = async (scrollTop: number) => {
   viewportRef.value.scrollTop = Math.max(0, scrollTop);
 }
 
-const stopMarqueeAutoScroll = () => {
-  if (!marqueeScrollFrame) return;
-  window.cancelAnimationFrame(marqueeScrollFrame);
-  marqueeScrollFrame = 0;
-}
+const {
+  reset: resetTypeahead,
+  handleTypeahead
+} = useExplorerTypeahead({
+  entries,
+  focusedPath,
+  indexOfPath,
+  focusEntry: focusEntryByTypeahead,
+  closeContextMenu
+});
 
-const resetSelectionBox = () => {
-  stopMarqueeAutoScroll();
-  selectionBox.active = false;
-  selectionBox.additive = false;
-  selectionBox.basePaths = [];
-}
-
-const resetTypeahead = () => {
-  if (typeaheadResetTimer) {
-    window.clearTimeout(typeaheadResetTimer);
-    typeaheadResetTimer = 0;
-  }
-  typeaheadQuery.value = "";
-}
-
-const scheduleTypeaheadReset = () => {
-  if (typeaheadResetTimer) window.clearTimeout(typeaheadResetTimer);
-  typeaheadResetTimer = window.setTimeout(() => {
-    typeaheadQuery.value = "";
-    typeaheadResetTimer = 0;
-  }, typeaheadResetMs);
-}
+const {
+  selectionBox,
+  resetSelectionBox,
+  beginMarqueeSelection,
+  handleSelectionMove,
+  finishMarqueeSelection,
+  stopAutoScroll: stopMarqueeAutoScroll
+} = useExplorerMarqueeSelection({
+  entries,
+  selectedPaths,
+  focusedPath,
+  anchorPath,
+  itemRefs,
+  viewportRef,
+  isRenaming: () => Boolean(renamingPath.value),
+  focusViewport,
+  clearSelection
+});
 
 const entryDomId = (path: string) => `explorer-entry-${encodeURIComponent(path).replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 
@@ -894,163 +866,6 @@ const selectPathForRename = async (path: string) => {
   await selectPath(path);
   startRename(entry);
   return true;
-}
-
-const findTypeaheadEntry = (query: string, startIndex: number) => {
-  if (!query || !entries.value.length) return null;
-  const normalizedQuery = query.toLocaleLowerCase("zh-CN");
-  const total = entries.value.length;
-  for (let offset = 0; offset < total; offset += 1) {
-    const index = (startIndex + offset + total) % total;
-    const entry = entries.value[index];
-    if (entry.name.toLocaleLowerCase("zh-CN").startsWith(normalizedQuery)) return entry;
-  }
-  return null;
-}
-
-const handleTypeahead = (event: KeyboardEvent) => {
-  if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1 || event.key === " ") return false;
-  event.preventDefault();
-  contextMenu.visible = false;
-  const key = event.key.toLocaleLowerCase("zh-CN");
-  const previous = typeaheadQuery.value;
-  const repeatingSingleKey = Boolean(previous) && Array.from(previous).every(char => char === key);
-  const query = repeatingSingleKey ? key : `${previous}${key}`;
-  const currentIndex = focusedPath.value ? indexOfPath(focusedPath.value) : -1;
-  const startIndex = previous && !repeatingSingleKey ? Math.max(0, currentIndex) : currentIndex + 1;
-  let matched = findTypeaheadEntry(query, startIndex);
-  let matchedQuery = query;
-  if (!matched && query !== key) {
-    matched = findTypeaheadEntry(key, currentIndex + 1);
-    matchedQuery = key;
-  }
-  if (matched) {
-    focusEntryByTypeahead(matched);
-    typeaheadQuery.value = matchedQuery;
-  } else {
-    typeaheadQuery.value = key;
-  }
-  scheduleTypeaheadReset();
-  return true;
-}
-
-const canBeginMarquee = (target: EventTarget | null) => {
-  if (target === viewportRef.value) return true;
-  if (!(target instanceof HTMLElement)) return false;
-  return Boolean(target.closest(".entry-surface")) && !Boolean(target.closest(".entry-item"));
-}
-
-const beginMarqueeSelection = (event: MouseEvent) => {
-  if (renamingPath.value) return;
-  if (event.button === 0) focusViewport();
-  if (event.button !== 0 || !canBeginMarquee(event.target)) return;
-  const viewport = viewportRef.value;
-  if (!viewport) return;
-  const rect = viewport.getBoundingClientRect();
-  marqueePointerX = event.clientX;
-  marqueePointerY = event.clientY;
-  focusViewport();
-  if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
-    clearSelection();
-  }
-  selectionBox.active = true;
-  selectionBox.additive = Boolean(event.ctrlKey || event.metaKey);
-  selectionBox.basePaths = selectionBox.additive ? [...selectedPaths.value] : [];
-  selectionBox.originX = event.clientX - rect.left + viewport.scrollLeft;
-  selectionBox.originY = event.clientY - rect.top + viewport.scrollTop;
-  selectionBox.x = selectionBox.originX;
-  selectionBox.y = selectionBox.originY;
-  selectionBox.width = 0;
-  selectionBox.height = 0;
-}
-
-const updateSelectionBoxFromPointer = (clientX: number, clientY: number) => {
-  if (!viewportRef.value) return;
-  const viewport = viewportRef.value;
-  const rect = viewport.getBoundingClientRect();
-  const currentX = clientX - rect.left + viewport.scrollLeft;
-  const currentY = clientY - rect.top + viewport.scrollTop;
-  selectionBox.x = Math.min(selectionBox.originX, currentX);
-  selectionBox.y = Math.min(selectionBox.originY, currentY);
-  selectionBox.width = Math.abs(currentX - selectionBox.originX);
-  selectionBox.height = Math.abs(currentY - selectionBox.originY);
-  updateMarqueeSelection();
-}
-
-const marqueeScrollSpeed = (pointer: number, start: number, end: number) => {
-  if (pointer < start + marqueeScrollEdge) {
-    const ratio = Math.min(1, (start + marqueeScrollEdge - pointer) / marqueeScrollEdge);
-    return -Math.ceil(ratio * marqueeMaxScrollSpeed);
-  }
-  if (pointer > end - marqueeScrollEdge) {
-    const ratio = Math.min(1, (pointer - (end - marqueeScrollEdge)) / marqueeScrollEdge);
-    return Math.ceil(ratio * marqueeMaxScrollSpeed);
-  }
-  return 0;
-}
-
-const runMarqueeAutoScroll = () => {
-  marqueeScrollFrame = 0;
-  const viewport = viewportRef.value;
-  if (!selectionBox.active || !viewport) return;
-  const rect = viewport.getBoundingClientRect();
-  const dx = marqueeScrollSpeed(marqueePointerX, rect.left, rect.right);
-  const dy = marqueeScrollSpeed(marqueePointerY, rect.top, rect.bottom);
-  if (!dx && !dy) return;
-  const beforeLeft = viewport.scrollLeft;
-  const beforeTop = viewport.scrollTop;
-  viewport.scrollBy({left: dx, top: dy});
-  if (viewport.scrollLeft === beforeLeft && viewport.scrollTop === beforeTop) return;
-  updateSelectionBoxFromPointer(marqueePointerX, marqueePointerY);
-  marqueeScrollFrame = window.requestAnimationFrame(runMarqueeAutoScroll);
-}
-
-const scheduleMarqueeAutoScroll = () => {
-  if (marqueeScrollFrame) return;
-  marqueeScrollFrame = window.requestAnimationFrame(runMarqueeAutoScroll);
-}
-
-const handleSelectionMove = (event: MouseEvent) => {
-  if (!selectionBox.active) return;
-  marqueePointerX = event.clientX;
-  marqueePointerY = event.clientY;
-  updateSelectionBoxFromPointer(event.clientX, event.clientY);
-  scheduleMarqueeAutoScroll();
-}
-
-const updateMarqueeSelection = () => {
-  if (!viewportRef.value) return;
-  const viewport = viewportRef.value;
-  const viewportRect = viewport.getBoundingClientRect();
-  const box = {
-    left: selectionBox.x,
-    top: selectionBox.y,
-    right: selectionBox.x + selectionBox.width,
-    bottom: selectionBox.y + selectionBox.height
-  };
-  const marqueePaths = entries.value.filter(entry => {
-    const element = itemRefs.get(entry.path);
-    if (!element) return false;
-    const rect = element.getBoundingClientRect();
-    const item = {
-      left: rect.left - viewportRect.left + viewport.scrollLeft,
-      top: rect.top - viewportRect.top + viewport.scrollTop,
-      right: rect.right - viewportRect.left + viewport.scrollLeft,
-      bottom: rect.bottom - viewportRect.top + viewport.scrollTop
-    };
-    return item.left <= box.right && item.right >= box.left && item.top <= box.bottom && item.bottom >= box.top;
-  }).map(entry => entry.path);
-  const selected = selectionBox.additive
-      ? Array.from(new Set([...selectionBox.basePaths, ...marqueePaths]))
-      : marqueePaths;
-  selectedPaths.value = selected;
-  focusedPath.value = marqueePaths[marqueePaths.length - 1] ?? selected[selected.length - 1] ?? "";
-}
-
-const finishMarqueeSelection = () => {
-  if (!selectionBox.active) return;
-  resetSelectionBox();
-  if (focusedPath.value) anchorPath.value = focusedPath.value;
 }
 
 const activateViewport = () => {
