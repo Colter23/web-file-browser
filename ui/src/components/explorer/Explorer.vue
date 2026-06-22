@@ -1,25 +1,15 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from "vue";
 import type {ComponentPublicInstance} from "vue";
-import type {DirSortKey, DirSortOrder, ExplorerIconSize, ExplorerViewMode, FileInfo, FolderData, FolderQueryParams} from "../../class.ts";
+import type {DirSortKey, DirSortOrder, ExplorerIconSize, ExplorerViewMode, FolderData, FolderQueryParams} from "../../class.ts";
 import {useFileStore} from "../../store";
 import {downloadUrl, getFolderData} from "../../network/file-api.ts";
 import DetailsHeader from "./DetailsHeader.vue";
+import ExplorerContextMenu from "./ExplorerContextMenu.vue";
 import ExplorerCommandRow from "./ExplorerCommandRow.vue";
 import ExplorerStatusBar from "./ExplorerStatusBar.vue";
+import type {ExplorerEntry} from "./types.ts";
 import Icon from "../Icon.vue";
-
-type ExplorerEntryType = "folder" | "file";
-
-type ExplorerEntry = {
-  type: ExplorerEntryType;
-  name: string;
-  path: string;
-  modified: string;
-  size?: number;
-  extension?: string;
-  file?: FileInfo;
-}
 
 type SelectionBox = {
   active: boolean;
@@ -115,7 +105,6 @@ const loadingMore = ref(false);
 const message = ref("");
 const loadedSignature = ref("");
 const viewportRef = ref<HTMLElement | null>(null);
-const contextMenuRef = ref<HTMLElement | null>(null);
 const itemRefs = new Map<string, HTMLElement>();
 const renameInputRefs = new Map<string, HTMLInputElement>();
 const visibleThumbnailPaths = ref<Set<string>>(new Set());
@@ -144,12 +133,6 @@ let marqueePointerY = 0;
 let marqueeScrollFrame = 0;
 const marqueeScrollEdge = 48;
 const marqueeMaxScrollSpeed = 24;
-const contextMenuViewportPadding = 8;
-const contextMenuEstimatedWidth = 176;
-const contextMenuEstimatedHeights = {
-  entry: 464,
-  background: 288
-};
 const viewWheelStepThreshold = 80;
 const autoLoadMoreDistance = 360;
 const typeaheadQuery = ref("");
@@ -585,6 +568,7 @@ const selectRange = (targetPath: string, additive: boolean) => {
 }
 
 const selectEntry = (entry: ExplorerEntry, event?: MouseEvent) => {
+  closeContextMenu();
   focusViewport();
   const ctrl = Boolean(event?.ctrlKey || event?.metaKey);
   const shift = Boolean(event?.shiftKey);
@@ -871,85 +855,17 @@ const closeContextMenu = () => {
   contextMenu.visible = false;
 }
 
-const contextMenuButtons = () => {
-  const menu = contextMenuRef.value;
-  if (!menu) return [];
-  return Array.from(menu.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
-}
-
-const focusContextMenuButton = (index: number) => {
-  const buttons = contextMenuButtons();
-  if (!buttons.length) return;
-  const nextIndex = (index + buttons.length) % buttons.length;
-  buttons[nextIndex]?.focus({preventScroll: true});
-}
-
-const focusFirstContextMenuButton = async () => {
-  await nextTick();
-  focusContextMenuButton(0);
-}
-
-const moveContextMenuFocus = (direction: -1 | 1) => {
-  const buttons = contextMenuButtons();
-  if (!buttons.length) return;
-  const currentIndex = buttons.findIndex(button => button === document.activeElement);
-  focusContextMenuButton(currentIndex < 0 ? 0 : currentIndex + direction);
-}
-
-const handleContextMenuKeyDown = (event: KeyboardEvent) => {
-  if (!contextMenu.visible) return;
-  if (event.key === "Escape") {
-    event.preventDefault();
-    closeContextMenu();
-    focusViewport();
-    return;
-  }
-  if (event.key === "ArrowDown") {
-    event.preventDefault();
-    moveContextMenuFocus(1);
-    return;
-  }
-  if (event.key === "ArrowUp") {
-    event.preventDefault();
-    moveContextMenuFocus(-1);
-    return;
-  }
-  if (event.key === "Home") {
-    event.preventDefault();
-    focusContextMenuButton(0);
-    return;
-  }
-  if (event.key === "End") {
-    event.preventDefault();
-    focusContextMenuButton(contextMenuButtons().length - 1);
-    return;
-  }
-  if (event.key === "Tab") {
-    event.preventDefault();
-    moveContextMenuFocus(event.shiftKey ? -1 : 1);
-  }
-}
-
-const clampContextMenuPosition = (x: number, y: number, background: boolean) => {
-  const maxX = Math.max(contextMenuViewportPadding, window.innerWidth - contextMenuEstimatedWidth - contextMenuViewportPadding);
-  const maxY = Math.max(
-      contextMenuViewportPadding,
-      window.innerHeight - (background ? contextMenuEstimatedHeights.background : contextMenuEstimatedHeights.entry) - contextMenuViewportPadding
-  );
-  return {
-    x: Math.min(Math.max(contextMenuViewportPadding, x), maxX),
-    y: Math.min(Math.max(contextMenuViewportPadding, y), maxY)
-  };
-}
-
 const showContextMenu = (x: number, y: number, targetPath = "", background = false) => {
-  const position = clampContextMenuPosition(x, y, background);
-  contextMenu.x = position.x;
-  contextMenu.y = position.y;
+  contextMenu.x = x;
+  contextMenu.y = y;
   contextMenu.targetPath = targetPath;
   contextMenu.background = background;
   contextMenu.visible = true;
-  void focusFirstContextMenuButton();
+}
+
+const closeContextMenuAndFocus = () => {
+  closeContextMenu();
+  focusViewport();
 }
 
 const openContextMenu = (event: MouseEvent, entry: ExplorerEntry) => {
@@ -990,12 +906,6 @@ const selectedOrContextEntries = () => {
 const contextEntries = computed(() => selectedOrContextEntries());
 
 const contextSelectionCount = computed(() => contextEntries.value.length);
-
-const isContextMultiSelect = computed(() => contextSelectionCount.value > 1);
-
-const contextLabel = (single: string, multiple: string) => {
-  return isContextMultiSelect.value ? `${multiple}（${contextSelectionCount.value} 项）` : single;
-}
 
 const canExtract = (entry: ExplorerEntry | null) => {
   if (!entry || entry.type !== "file") return false;
@@ -1656,6 +1566,12 @@ const finishDetailsColumnResize = () => {
 
 const primaryContextEntry = computed(() => contextEntry());
 
+const contextCanViewImage = computed(() => Boolean(primaryContextEntry.value && isImageFile(primaryContextEntry.value)));
+
+const contextCanEdit = computed(() => canEditEntry(primaryContextEntry.value));
+
+const contextCanExtract = computed(() => canExtract(primaryContextEntry.value));
+
 const primarySelected = () => firstSelectedEntry();
 
 const openEntryFromContext = async () => {
@@ -1932,49 +1848,40 @@ defineExpose({
 
     <explorer-status-bar :folder-status-text="folderStatusText" :selected-status-text="selectedStatusText" />
 
-    <div
-        v-if="contextMenu.visible && contextMenu.background"
-        ref="contextMenuRef"
-        class="context-menu"
-        :style="{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}"
-        @keydown="handleContextMenuKeyDown">
-      <button @click="createFileFromContext">新建文件</button>
-      <button @click="createFolderFromContext">新建文件夹</button>
-      <div class="context-separator"></div>
-      <button :disabled="!props.canPaste" @click="pasteIntoCurrentFolder">粘贴</button>
-      <button @click="copyPathContextEntries">复制当前路径</button>
-      <div class="context-separator"></div>
-      <button :disabled="!entries.length" @click="selectAllFromContext">全选</button>
-      <button :disabled="!entries.length" @click="invertSelectionFromContext">反向选择</button>
-      <button :disabled="!selectedPaths.length" @click="clearSelectionFromContext">取消选择</button>
-    </div>
-
-    <div
-        v-else-if="contextMenu.visible"
-        ref="contextMenuRef"
-        class="context-menu"
-        :style="{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}"
-        @keydown="handleContextMenuKeyDown">
-      <button @click="openEntryFromContext">打开</button>
-      <button :disabled="!primaryContextEntry || primaryContextEntry.type !== 'folder'" @click="openContextEntryInNewTab">在新标签页中打开</button>
-      <button :disabled="!primaryContextEntry || !isImageFile(primaryContextEntry)" @click="viewImageContextEntry">查看图片</button>
-      <button :disabled="!canEditEntry(primaryContextEntry)" @click="editContextEntry">编辑</button>
-      <button :disabled="!primaryContextEntry || primaryContextEntry.type !== 'file'" @click="previewContextEntry">预览</button>
-      <div class="context-separator"></div>
-      <button :disabled="!contextSelectionCount" @click="cutContextEntries">{{ contextLabel("剪切", "剪切选中项") }}</button>
-      <button :disabled="!contextSelectionCount" @click="copyContextEntries">{{ contextLabel("复制", "复制选中项") }}</button>
-      <button :disabled="!contextSelectionCount" @click="copyPathContextEntries">{{ contextLabel("复制路径", "复制选中项路径") }}</button>
-      <button :disabled="!props.canPaste" @click="pasteIntoCurrentFolder">粘贴</button>
-      <div class="context-separator"></div>
-      <button :disabled="!primaryContextEntry || primaryContextEntry.type !== 'file'" @click="downloadContextEntry">下载</button>
-      <button :disabled="!contextSelectionCount" @click="archiveContextEntries">{{ contextLabel("压缩", "压缩选中项") }}</button>
-      <button :disabled="!canExtract(primaryContextEntry)" @click="extractContextEntry">解压</button>
-      <div class="context-separator"></div>
-      <button :disabled="!primaryContextEntry || isContextMultiSelect" @click="renameContextEntry">重命名</button>
-      <button class="danger" :disabled="!primaryContextEntry" @click="deleteContextEntries">{{ contextLabel("删除", "删除选中项") }}</button>
-      <div class="context-separator"></div>
-      <button :disabled="!contextSelectionCount" @click="showContextProperties">属性</button>
-    </div>
+    <explorer-context-menu
+        v-if="contextMenu.visible"
+        :background="contextMenu.background"
+        :x="contextMenu.x"
+        :y="contextMenu.y"
+        :can-paste="props.canPaste"
+        :has-entries="Boolean(entries.length)"
+        :has-selection="Boolean(selectedPaths.length)"
+        :primary-entry="primaryContextEntry"
+        :selection-count="contextSelectionCount"
+        :can-view-image="contextCanViewImage"
+        :can-edit="contextCanEdit"
+        :can-extract="contextCanExtract"
+        @escape="closeContextMenuAndFocus"
+        @open="openEntryFromContext"
+        @open-new-tab="openContextEntryInNewTab"
+        @view-image="viewImageContextEntry"
+        @edit="editContextEntry"
+        @preview="previewContextEntry"
+        @cut="cutContextEntries"
+        @copy="copyContextEntries"
+        @copy-path="copyPathContextEntries"
+        @paste="pasteIntoCurrentFolder"
+        @download="downloadContextEntry"
+        @archive="archiveContextEntries"
+        @extract="extractContextEntry"
+        @rename="renameContextEntry"
+        @delete="deleteContextEntries"
+        @properties="showContextProperties"
+        @create-file="createFileFromContext"
+        @create-folder="createFolderFromContext"
+        @select-all="selectAllFromContext"
+        @invert-selection="invertSelectionFromContext"
+        @clear-selection="clearSelectionFromContext" />
   </section>
 </template>
 
@@ -2243,25 +2150,5 @@ defineExpose({
 
 .drag-hint.copy {
   @apply border-emerald-200 text-emerald-700;
-}
-
-.context-menu {
-  @apply fixed z-50 w-44 rounded-md border border-slate-200 bg-white py-1 text-sm shadow-xl;
-}
-
-.context-menu button {
-  @apply block h-8 w-full px-3 text-left text-slate-700 hover:bg-blue-50 disabled:text-slate-300 disabled:hover:bg-white;
-}
-
-.context-menu button:focus-visible {
-  @apply bg-blue-50 text-blue-700 outline-none ring-1 ring-inset ring-blue-300;
-}
-
-.context-separator {
-  @apply my-1 border-t border-slate-100;
-}
-
-.context-menu .danger {
-  @apply text-red-600 hover:bg-red-50;
 }
 </style>
