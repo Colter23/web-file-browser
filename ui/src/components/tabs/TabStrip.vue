@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import {nextTick, ref, watch} from "vue";
+import {nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ExplorerTab} from "../../class";
 import type {TabContextMenuState, TabDropPlacement} from "./types.ts";
 import Icon from "../Icon.vue";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
+import {useViewportMenuPosition} from "../../composables/useViewportMenuPosition.ts";
 
 const props = defineProps<{
   tabs: ExplorerTab[];
@@ -21,6 +22,7 @@ const props = defineProps<{
 
 const tabButtonRefs = new Map<string, HTMLElement>();
 const contextMenuRef = ref<HTMLElement | null>(null);
+const {menuPosition: contextMenuPosition, placeMenu: placeContextMenu} = useViewportMenuPosition({menuRef: contextMenuRef});
 
 const setTabButtonRef = (tabId: string, element: unknown) => {
   if (element instanceof HTMLElement) {
@@ -52,13 +54,30 @@ const {
   onEscape: () => emit("close-context-menu")
 });
 
+const refreshContextMenu = async () => {
+  await placeContextMenu({x: props.contextMenu.x, y: props.contextMenu.y});
+  await focusFirstMenuButton();
+}
+
 watch(() => [props.activeTabId, props.tabs.length] as const, () => {
   void revealActiveTab();
 }, {immediate: true});
 
-watch(() => [props.contextMenu.visible, props.contextMenu.tabId] as const, ([visible]) => {
-  if (visible) void focusFirstMenuButton();
+watch(() => [props.contextMenu.visible, props.contextMenu.tabId, props.contextMenu.x, props.contextMenu.y] as const, ([visible]) => {
+  if (visible) void refreshContextMenu();
 }, {flush: "post"});
+
+const handleWindowResize = () => {
+  if (props.contextMenu.visible) void refreshContextMenu();
+}
+
+onMounted(() => {
+  window.addEventListener("resize", handleWindowResize);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", handleWindowResize);
+});
 
 const emit = defineEmits<{
   (e: "new-tab"): void;
@@ -120,7 +139,7 @@ const emit = defineEmits<{
       v-if="contextMenu.visible"
       ref="contextMenuRef"
       class="tab-context-menu"
-      :style="{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}"
+      :style="{left: `${contextMenuPosition.x}px`, top: `${contextMenuPosition.y}px`}"
       role="menu"
       aria-label="标签页菜单"
       @click.stop

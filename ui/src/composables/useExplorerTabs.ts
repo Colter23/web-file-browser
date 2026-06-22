@@ -29,8 +29,6 @@ export const useExplorerTabs = ({
   const draggingTabId = ref("");
   const tabDropTargetId = ref("");
   const tabDropPlacement = ref<TabDropPlacement | "">("");
-  const tabContextMenuWidth = 184;
-  const tabContextMenuHeight = 252;
 
   const tabContextTarget = computed(() => fileStore.tabs.find(tab => tab.id === tabContextMenu.value.tabId) ?? null);
   const tabContextIndex = computed(() => fileStore.tabs.findIndex(tab => tab.id === tabContextMenu.value.tabId));
@@ -46,9 +44,7 @@ export const useExplorerTabs = ({
   const openTabContextMenu = (event: MouseEvent, tabId: string) => {
     event.preventDefault();
     event.stopPropagation();
-    const x = Math.min(Math.max(8, event.clientX), Math.max(8, window.innerWidth - tabContextMenuWidth - 8));
-    const y = Math.min(Math.max(8, event.clientY), Math.max(8, window.innerHeight - tabContextMenuHeight - 8));
-    tabContextMenu.value = {visible: true, x, y, tabId};
+    tabContextMenu.value = {visible: true, x: event.clientX, y: event.clientY, tabId};
   }
 
   const openTab = async () => {

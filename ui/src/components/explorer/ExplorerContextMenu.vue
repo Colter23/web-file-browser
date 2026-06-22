@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
+import {computed, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ExplorerEntry} from "./types.ts";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
+import {useViewportMenuPosition} from "../../composables/useViewportMenuPosition.ts";
 
 const props = defineProps<{
   background: boolean;
@@ -42,8 +43,7 @@ const emit = defineEmits<{
 }>();
 
 const menuRef = ref<HTMLElement | null>(null);
-const menuPosition = ref({x: props.x, y: props.y});
-const viewportPadding = 8;
+const {menuPosition, placeMenu} = useViewportMenuPosition({menuRef});
 
 const isMultiSelect = computed(() => props.selectionCount > 1);
 
@@ -59,32 +59,18 @@ const {
   onEscape: () => emit("escape")
 });
 
-const placeMenu = async () => {
-  menuPosition.value = {x: props.x, y: props.y};
-  await nextTick();
-  const menu = menuRef.value;
-  if (!menu) return;
-  const rect = menu.getBoundingClientRect();
-  const maxX = Math.max(viewportPadding, window.innerWidth - rect.width - viewportPadding);
-  const maxY = Math.max(viewportPadding, window.innerHeight - rect.height - viewportPadding);
-  menuPosition.value = {
-    x: Math.min(Math.max(viewportPadding, props.x), maxX),
-    y: Math.min(Math.max(viewportPadding, props.y), maxY)
-  };
-}
-
 const refreshMenu = async () => {
-  await placeMenu();
+  await placeMenu({x: props.x, y: props.y});
   await focusFirstMenuButton();
 }
 
 onMounted(() => {
   void refreshMenu();
-  window.addEventListener("resize", placeMenu);
+  window.addEventListener("resize", refreshMenu);
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener("resize", placeMenu);
+  window.removeEventListener("resize", refreshMenu);
 });
 
 watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props.selectionCount] as const, () => {
