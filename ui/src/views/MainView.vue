@@ -34,6 +34,7 @@ import {useExplorerSearchBox} from "../composables/useExplorerSearchBox.ts";
 import {useExplorerViewMode} from "../composables/useExplorerViewMode.ts";
 import {shouldIgnoreNavigationShortcut, useExplorerShortcuts} from "../composables/useExplorerShortcuts.ts";
 import {useFileTreeLoader} from "../composables/useFileTreeLoader.ts";
+import {useMainViewShellActions} from "../composables/useMainViewShellActions.ts";
 import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
 import {isExtractableArchiveEntry} from "../utils/file-entry.ts";
@@ -192,14 +193,14 @@ const selectionStatusText = computed(() => {
   return `${selectionText} · ${clipboardText.value}`;
 });
 
-const closePanels = () => {
-  closePreviewPanel();
-  operationPanel.value.visible = false;
-  resetDeleteConfirm();
-  closePropertiesPanel();
-  resetTaskCancelConfirm();
-  closeImageViewer();
-}
+let closePanelsHandler = () => {};
+let closeOperationShellPanelsHandler = () => {};
+let closePreviewHandler = () => {};
+let refreshCurrentHandler = async (_keepSelection = false) => {};
+const closePanels = () => closePanelsHandler();
+const closeOperationShellPanels = () => closeOperationShellPanelsHandler();
+const closePreview = () => closePreviewHandler();
+const refreshCurrent = (keepSelection = false) => refreshCurrentHandler(keepSelection);
 
 const {
   currentFolder,
@@ -304,37 +305,6 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", handleWindowResize);
 })
 
-watch(() => fileStore.showEditor, (showEditor) => {
-  if (showEditor) closePanels();
-});
-
-const refreshCurrent = async (keepSelection = false) => {
-  const keepPreview = keepSelection && previewPanelVisible.value && !fileStore.showEditor;
-  const selectedPaths = keepSelection ? currentSelection.value.map(entry => entry.path) : [];
-  if (keepPreview) {
-    clearPreviewContent();
-    resetOperationPanel();
-    resetDeleteConfirm();
-    resetTaskCancelConfirm();
-    closeImageViewer();
-  } else {
-    closePanels();
-  }
-  if (currentFolder() === "/") {
-    await loadRoot();
-  }
-  await explorerRef.value?.refresh(currentFolder());
-  if (selectedPaths.length) {
-    const restored = await explorerRef.value?.selectPaths(selectedPaths);
-    if (!restored) fileStore.setActiveTabSelectedPaths([]);
-  }
-}
-
-const closeOperationShellPanels = () => {
-  closePreviewPanel();
-  resetTaskCancelConfirm();
-}
-
 const {
   fileClipboardAction,
   operationPanel,
@@ -382,6 +352,34 @@ const {
   setTaskMessage: message => taskMessage.value = message,
   focusDeleteConfirm: () => deleteConfirmRef.value?.focus(),
   focusPropertiesPanel: () => propertiesPanelRef.value?.focus()
+});
+
+const shellActions = useMainViewShellActions({
+  previewPanelVisible,
+  currentSelection,
+  editorVisible: () => fileStore.showEditor,
+  currentFolder,
+  loadRoot,
+  refreshExplorer: path => explorerRef.value?.refresh(path) ?? Promise.resolve(false),
+  selectPaths: paths => explorerRef.value?.selectPaths(paths) ?? Promise.resolve(false),
+  clearPersistedSelection: () => fileStore.setActiveTabSelectedPaths([]),
+  closePreviewPanel,
+  clearPreviewContent,
+  closeImageViewer,
+  hideOperationPanel: () => operationPanel.value.visible = false,
+  resetOperationPanel,
+  resetDeleteConfirm,
+  closePropertiesPanel,
+  resetTaskCancelConfirm
+});
+
+closePanelsHandler = shellActions.closePanels;
+closeOperationShellPanelsHandler = shellActions.closeOperationShellPanels;
+closePreviewHandler = shellActions.closePreview;
+refreshCurrentHandler = shellActions.refreshCurrent;
+
+watch(() => fileStore.showEditor, (showEditor) => {
+  if (showEditor) closePanels();
 });
 
 const {
@@ -441,10 +439,6 @@ const {
   navigateForward,
   navigateUp
 });
-
-const closePreview = () => {
-  closePanels();
-}
 
 const openPreviewInEditor = async (entry = previewEntry.value) => {
   if (!entry || entry.type !== "file") return;
