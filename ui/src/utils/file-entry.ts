@@ -10,14 +10,20 @@ export type FileEntryLike = {
   extension?: string;
 }
 
+export type EntryPreviewKind = "image" | "text" | "audio" | "video" | "unknown";
+
 export const imageFileExtensions = ["apng", "avif", "bmp", "gif", "ico", "jpeg", "jpg", "png", "svg", "webp"];
 export const textLikeFileExtensions = ["txt", "log", "md", "json", "yaml", "yml", "toml", "xml", "csv"];
+export const audioFileExtensions = ["mp3", "wav", "ogg", "flac", "m4a", "aac"];
+export const videoFileExtensions = ["mp4", "webm", "mov", "mkv", "avi"];
 export const archiveFileExtensions = ["zip", "rar", "7z", "tar", "gz", "tgz"];
 
 const normalizedExtensionSet = (extensions: readonly string[]) => new Set(extensions.map(extension => extension.toLowerCase()));
 
 const imageExtensionSet = normalizedExtensionSet(imageFileExtensions);
 const textLikeExtensionSet = normalizedExtensionSet(textLikeFileExtensions);
+const audioExtensionSet = normalizedExtensionSet(audioFileExtensions);
+const videoExtensionSet = normalizedExtensionSet(videoFileExtensions);
 const archiveExtensionSet = normalizedExtensionSet(archiveFileExtensions);
 
 const hasExtension = (extensions: readonly string[], extension: string) => extensions.some(item => item.toLowerCase() === extension);
@@ -34,6 +40,33 @@ export const isTextLikeEntry = (entry: FileEntryLike | null | undefined, editabl
   const extension = normalizeEntryExtension(entry);
   return textLikeExtensionSet.has(extension) || hasExtension(editableExtensions, extension);
 }
+
+export const isAudioEntry = (entry: FileEntryLike | null | undefined) => {
+  if (!entry || entry.type !== "file") return false;
+  return audioExtensionSet.has(normalizeEntryExtension(entry));
+}
+
+export const isVideoEntry = (entry: FileEntryLike | null | undefined) => {
+  if (!entry || entry.type !== "file") return false;
+  return videoExtensionSet.has(normalizeEntryExtension(entry));
+}
+
+export const entryPreviewKind = (entry: FileEntryLike | null | undefined, editableExtensions: readonly string[] = []): EntryPreviewKind => {
+  if (!entry || entry.type !== "file") return "unknown";
+  if (isImageEntry(entry)) return "image";
+  if (isAudioEntry(entry)) return "audio";
+  if (isVideoEntry(entry)) return "video";
+  if (isTextLikeEntry(entry, editableExtensions)) return "text";
+  return "unknown";
+}
+
+export const entryPreviewTypeText = (kind: EntryPreviewKind) => ({
+  image: "图片",
+  text: "文本",
+  audio: "音频",
+  video: "视频",
+  unknown: "文件"
+}[kind]);
 
 export const isEditableEntry = (entry: FileEntryLike | null | undefined, editableExtensions: readonly string[]) => {
   if (!entry || entry.type !== "file") return false;

@@ -56,37 +56,6 @@ type CopyPathPayload = {
   paths: string[];
 }
 
-const detailsColumnLabels: Record<DetailsColumnKey, string> = {
-  name: "名称",
-  modified: "修改日期",
-  type: "类型",
-  size: "大小"
-};
-
-const detailsColumnTextExtraWidth: Record<DetailsColumnKey, number> = {
-  name: 58,
-  modified: 28,
-  type: 28,
-  size: 28
-};
-
-const detailsColumnHeaderExtraWidth: Record<DetailsColumnKey, number> = {
-  name: 44,
-  modified: 44,
-  type: 32,
-  size: 44
-};
-
-let textMeasureContext: CanvasRenderingContext2D | null = null;
-
-const measureTextWidth = (text: string, font: string) => {
-  if (typeof document === "undefined") return text.length * 8;
-  textMeasureContext ??= document.createElement("canvas").getContext("2d");
-  if (!textMeasureContext) return text.length * 8;
-  textMeasureContext.font = font;
-  return textMeasureContext.measureText(text).width;
-}
-
 const emit = defineEmits<{
   (e: "rename", payload: RenamePayload): void;
   (e: "delete", entry: ExplorerEntry): void;
@@ -144,7 +113,7 @@ const {
   startResize: startDetailsColumnResize,
   handleResizeMove: handleDetailsColumnResizeMove,
   finishResize: finishDetailsColumnResize,
-  fitColumn: fitDetailsColumnWidth
+  fitColumnToContent: fitDetailsColumnToContent
 } = useDetailsColumns();
 
 const {
@@ -417,14 +386,6 @@ const fileIcon = (entry: ExplorerEntry) => {
 
 const isDimmed = (entry: ExplorerEntry) => props.dimmedPaths.includes(entry.path);
 
-const detailsFont = (selector: string) => {
-  if (typeof window === "undefined") return "14px system-ui";
-  const element = viewportRef.value?.querySelector<HTMLElement>(selector) ?? viewportRef.value;
-  if (!element) return "14px system-ui";
-  const style = window.getComputedStyle(element);
-  return `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-}
-
 const detailsColumnValue = (entry: ExplorerEntry, key: DetailsColumnKey) => {
   if (key === "name") return entry.name;
   if (key === "modified") return formatDate(entry.modified);
@@ -434,15 +395,11 @@ const detailsColumnValue = (entry: ExplorerEntry, key: DetailsColumnKey) => {
 
 const fitDetailsColumn = (key: DetailsColumnKey) => {
   if (viewMode.value !== "details") return;
-  const rowFont = detailsFont(".entry-item");
-  const headerFont = detailsFont(".details-header");
-  const headerWidth = measureTextWidth(detailsColumnLabels[key], headerFont) + detailsColumnHeaderExtraWidth[key];
-  const contentWidth = entries.value.reduce((maxWidth, entry) => {
-    const textWidth = measureTextWidth(detailsColumnValue(entry, key), rowFont) + detailsColumnTextExtraWidth[key];
-    return Math.max(maxWidth, textWidth);
-  }, 0);
-
-  fitDetailsColumnWidth(key, Math.max(headerWidth, contentWidth));
+  fitDetailsColumnToContent(key, {
+    entries: entries.value,
+    viewport: viewportRef.value,
+    value: detailsColumnValue
+  });
   focusViewport();
 }
 

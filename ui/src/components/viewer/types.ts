@@ -1,4 +1,6 @@
-export type PreviewKind = "image" | "text" | "audio" | "video" | "unknown";
+import type {EntryPreviewKind} from "../../utils/file-entry.ts";
+
+export type PreviewKind = EntryPreviewKind;
 
 export type PreviewMetaItem = {
   label: string;

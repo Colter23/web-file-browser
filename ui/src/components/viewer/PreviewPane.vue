@@ -4,15 +4,12 @@ import type {ExplorerEntry} from "../explorer/types.ts";
 import {downloadUrl} from "../../network/api.ts";
 import Icon from "../Icon.vue";
 import type {ShellNoticePayload} from "../shell/types.ts";
-import {formatEntryDate, formatEntrySize, isImageEntry, isTextLikeEntry} from "../../utils/file-entry.ts";
+import {entryPreviewKind, entryPreviewTypeText, formatEntryDate, formatEntrySize, isEditableEntry} from "../../utils/file-entry.ts";
 import PreviewHeader from "./PreviewHeader.vue";
 import PreviewImageView from "./PreviewImageView.vue";
 import PreviewMetaList from "./PreviewMetaList.vue";
 import PreviewTextView from "./PreviewTextView.vue";
 import type {PreviewKind, PreviewMetaItem} from "./types.ts";
-
-const audioPreviewExtensions = ["mp3", "wav", "ogg", "flac", "m4a", "aac"];
-const videoPreviewExtensions = ["mp4", "webm", "mov", "mkv", "avi"];
 
 const props = defineProps<{
   entry: ExplorerEntry | null;
@@ -31,26 +28,8 @@ const emit = defineEmits<{
   (e: "notice", payload: ShellNoticePayload): void;
 }>();
 
-const normalizedExtension = computed(() => props.entry?.extension?.toLowerCase() ?? "");
-
-const previewKind = computed<PreviewKind>(() => {
-  const entry = props.entry;
-  if (!entry || entry.type !== "file") return "unknown";
-  const extension = normalizedExtension.value;
-  if (isImageEntry(entry)) return "image";
-  if (audioPreviewExtensions.includes(extension)) return "audio";
-  if (videoPreviewExtensions.includes(extension)) return "video";
-  if (isTextLikeEntry(entry, props.editableExtensions)) return "text";
-  return "unknown";
-});
-
-const previewTypeText = computed(() => ({
-  image: "图片",
-  text: "文本",
-  audio: "音频",
-  video: "视频",
-  unknown: "文件"
-}[previewKind.value]));
+const previewKind = computed<PreviewKind>(() => entryPreviewKind(props.entry, props.editableExtensions));
+const previewTypeText = computed(() => entryPreviewTypeText(previewKind.value));
 
 const previewTitleText = computed(() => props.entry?.name ?? "预览窗格");
 const previewSubtitleText = computed(() => props.entry ? previewTypeText.value : "选择一个文件");
@@ -59,9 +38,7 @@ const emptySubtitleText = computed(() => props.emptySubtitle || "");
 const emptyIconName = computed(() => props.emptyIcon || "icon-file-fill");
 
 const canEditPreview = computed(() => {
-  const entry = props.entry;
-  if (!entry || entry.type !== "file") return false;
-  return props.editableExtensions.includes(normalizedExtension.value);
+  return isEditableEntry(props.entry, props.editableExtensions);
 });
 
 const previewMeta = computed<PreviewMetaItem[]>(() => {

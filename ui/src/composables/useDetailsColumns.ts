@@ -1,6 +1,12 @@
 import {computed, reactive, ref} from "vue";
 import type {DetailsColumnKey} from "../components/explorer/types.ts";
 
+type DetailsColumnFitOptions<Entry> = {
+  entries: Entry[];
+  viewport: HTMLElement | null;
+  value: (entry: Entry, key: DetailsColumnKey) => string;
+}
+
 type DetailsColumnWidths = Record<DetailsColumnKey, number>;
 
 const storageKey = "explorer.detailsColumnWidths";
@@ -22,6 +28,29 @@ const maxWidths: DetailsColumnWidths = {
   type: 280,
   size: 220
 };
+
+const labels: Record<DetailsColumnKey, string> = {
+  name: "名称",
+  modified: "修改日期",
+  type: "类型",
+  size: "大小"
+};
+
+const textExtraWidths: Record<DetailsColumnKey, number> = {
+  name: 58,
+  modified: 28,
+  type: 28,
+  size: 28
+};
+
+const headerExtraWidths: Record<DetailsColumnKey, number> = {
+  name: 44,
+  modified: 44,
+  type: 32,
+  size: 44
+};
+
+let textMeasureContext: CanvasRenderingContext2D | null = null;
 
 const clampWidth = (key: DetailsColumnKey, width: number) => {
   const safeWidth = Number.isFinite(width) ? width : defaultWidths[key];
@@ -51,6 +80,22 @@ const writeWidths = (widths: DetailsColumnWidths) => {
   } catch {
     // 本地存储不可用时，只保留本次会话的列宽。
   }
+}
+
+const measureTextWidth = (text: string, font: string) => {
+  if (typeof document === "undefined") return text.length * 8;
+  textMeasureContext ??= document.createElement("canvas").getContext("2d");
+  if (!textMeasureContext) return text.length * 8;
+  textMeasureContext.font = font;
+  return textMeasureContext.measureText(text).width;
+}
+
+const readFont = (viewport: HTMLElement | null, selector: string) => {
+  if (typeof window === "undefined") return "14px system-ui";
+  const element = viewport?.querySelector<HTMLElement>(selector) ?? viewport;
+  if (!element) return "14px system-ui";
+  const style = window.getComputedStyle(element);
+  return `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
 }
 
 export const useDetailsColumns = () => {
@@ -101,11 +146,24 @@ export const useDetailsColumns = () => {
     writeWidths(widths.value);
   }
 
+  const fitColumnToContent = <Entry>(key: DetailsColumnKey, options: DetailsColumnFitOptions<Entry>) => {
+    const rowFont = readFont(options.viewport, ".entry-item");
+    const headerFont = readFont(options.viewport, ".details-header");
+    const headerWidth = measureTextWidth(labels[key], headerFont) + headerExtraWidths[key];
+    const contentWidth = options.entries.reduce((maxWidth, entry) => {
+      const textWidth = measureTextWidth(options.value(entry, key), rowFont) + textExtraWidths[key];
+      return Math.max(maxWidth, textWidth);
+    }, 0);
+
+    fitColumn(key, Math.max(headerWidth, contentWidth));
+  }
+
   return {
     gridStyle,
     startResize,
     handleResizeMove,
     finishResize,
-    fitColumn
+    fitColumn,
+    fitColumnToContent
   };
 }
