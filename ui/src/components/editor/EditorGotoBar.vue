@@ -27,7 +27,7 @@ const updateLineText = (event: Event) => {
 </script>
 
 <template>
-  <div v-if="visible" class="goto-bar" @click.stop>
+  <div v-if="visible" class="goto-bar" @click.stop @keydown.esc.prevent.stop="emit('close')">
     <div class="goto-fields">
       <span>行</span>
       <input
@@ -38,7 +38,7 @@ const updateLineText = (event: Event) => {
           min="1"
           :max="Math.max(1, lineCount)"
           :placeholder="placeholder"
-          @keydown.enter.prevent="emit('submit')"
+          @keydown.enter.prevent.stop="emit('submit')"
           @input="updateLineText">
       <span class="goto-range">/ {{ Math.max(1, lineCount) }}</span>
     </div>

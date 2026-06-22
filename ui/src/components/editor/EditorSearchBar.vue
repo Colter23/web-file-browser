@@ -43,7 +43,7 @@ const updateReplaceText = (event: Event) => {
 </script>
 
 <template>
-  <div v-if="visible" class="search-bar" @click.stop>
+  <div v-if="visible" class="search-bar" @click.stop @keydown.esc.prevent.stop="emit('close')">
     <div class="search-fields">
       <input
           :ref="setSearchInputRef"
@@ -51,7 +51,7 @@ const updateReplaceText = (event: Event) => {
           class="search-input"
           type="text"
           placeholder="查找"
-          @keydown.enter.prevent="emit('search-input', $event)"
+          @keydown.enter.prevent.stop="emit('search-input', $event)"
           @input="updateSearchText">
       <input
           v-if="replaceVisible"
@@ -60,7 +60,7 @@ const updateReplaceText = (event: Event) => {
           class="search-input replace-input"
           type="text"
           placeholder="替换为"
-          @keydown.enter.prevent="emit('replace-current')"
+          @keydown.enter.prevent.stop="emit('replace-current')"
           @input="updateReplaceText">
     </div>
     <div class="search-actions">

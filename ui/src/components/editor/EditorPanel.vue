@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, nextTick, onBeforeUnmount, onMounted, ref} from "vue";
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import Icon from "../Icon.vue";
 import CodeEditor from "./CodeEditor.vue";
 import editorConfig from "../../assets/editor-config.json";
@@ -17,6 +17,7 @@ import EditorStatusBar from "./EditorStatusBar.vue";
 
 const fileStore = useFileStore();
 const editorRef = ref<CodeEditorExpose | null>(null);
+const confirmRef = ref<HTMLElement | null>(null);
 const activeMenu = ref<EditorMenuName>("");
 const {
   currentTheme,
@@ -218,6 +219,12 @@ const handleKeyDown = (event: KeyboardEvent) => {
   }
 }
 
+watch(pendingAction, async action => {
+  if (!action) return;
+  await nextTick();
+  confirmRef.value?.focus();
+});
+
 onMounted(() => {
   window.addEventListener("keydown", handleKeyDown);
   window.addEventListener("beforeunload", handleBeforeUnload);
@@ -349,7 +356,7 @@ onBeforeUnmount(() => {
         <button @click="reload">重试</button>
       </div>
       <div v-if="pendingAction" class="editor-confirm-mask" @click.stop>
-        <section class="editor-confirm">
+        <section ref="confirmRef" class="editor-confirm" tabindex="-1" @keydown.esc.prevent.stop="cancelPendingAction">
           <div class="confirm-icon">
             <icon icon="icon-edit-filling" color="#2563eb" />
           </div>
@@ -482,7 +489,11 @@ onBeforeUnmount(() => {
 }
 
 .editor-confirm {
-  @apply grid w-full max-w-lg grid-cols-[2rem_1fr] gap-3 rounded-md border border-slate-200 bg-white p-4 text-slate-700 shadow-2xl;
+  @apply grid w-full max-w-lg grid-cols-[2rem_1fr] gap-3 rounded-md border border-slate-200 bg-white p-4 text-slate-700 shadow-2xl outline-none;
+}
+
+.editor-confirm:focus-visible {
+  @apply ring-2 ring-inset ring-blue-300;
 }
 
 .confirm-icon {
