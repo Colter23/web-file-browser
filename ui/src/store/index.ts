@@ -1,5 +1,6 @@
 import {defineStore} from "pinia";
 import type {
+    ClosedExplorerTab,
     DirSortKey,
     DirSortOrder,
     ExplorerIconSize,
@@ -38,6 +39,8 @@ declare type FileState = {
     // 目录标签页
     tabs: ExplorerTab[];
     activeTabId: string;
+    // 最近关闭的目录标签页
+    closedTabs: ClosedExplorerTab[];
 }
 
 const normalizePath = (path: string): string => {
@@ -214,6 +217,19 @@ const cloneTab = (tab: ExplorerTab): ExplorerTab => {
     };
 }
 
+const cloneClosedTab = (tab: ExplorerTab): ClosedExplorerTab => ({
+    ...cloneTab(tab),
+    closedAt: Date.now()
+});
+
+const reviveClosedTab = (tab: ClosedExplorerTab): ExplorerTab => {
+    const revived = cloneTab(tab);
+    revived.title = pathTitle(revived.path);
+    return revived;
+}
+
+const closedTabStackLimit = 12;
+
 let pendingEditorLeaveResolver: ((confirmed: boolean) => void) | null = null;
 
 export const useFileStore = defineStore('file', {
@@ -234,7 +250,8 @@ export const useFileStore = defineStore('file', {
             sortKey: activeTab?.sortKey ?? readSortKey(),
             sortOrder: activeTab?.sortOrder ?? readSortOrder(),
             tabs,
-            activeTabId
+            activeTabId,
+            closedTabs: []
         }
     },
     actions: {
@@ -320,6 +337,14 @@ export const useFileStore = defineStore('file', {
             this.syncActiveTabPrefs();
             writeStorageItem(storageKeys.tabs, JSON.stringify(this.tabs));
             writeStorageItem(storageKeys.activeTabId, this.activeTabId);
+        },
+
+        rememberClosedTabs(tabs: ExplorerTab[]) {
+            if (!tabs.length) return;
+            this.closedTabs = [
+                ...tabs.map(cloneClosedTab).reverse(),
+                ...this.closedTabs
+            ].slice(0, closedTabStackLimit);
         },
 
         // 设置当前路径
@@ -480,7 +505,8 @@ export const useFileStore = defineStore('file', {
             const index = this.tabs.findIndex(tab => tab.id === tabId);
             if (index < 0) return;
             const wasActive = this.activeTabId === tabId;
-            this.tabs.splice(index, 1);
+            const [closedTab] = this.tabs.splice(index, 1);
+            this.rememberClosedTabs([closedTab]);
             if (wasActive) {
                 const next = this.tabs[Math.max(0, index - 1)];
                 this.activeTabId = next.id;
@@ -498,6 +524,7 @@ export const useFileStore = defineStore('file', {
             const tab = this.tabs.find(item => item.id === tabId);
             if (!tab || this.tabs.length <= 1) return;
             const wasActive = this.activeTabId === tab.id;
+            this.rememberClosedTabs(this.tabs.filter(item => item.id !== tab.id));
             this.tabs = [tab];
             this.activeTabId = tab.id;
             this.currentPath = tab.path;
@@ -512,6 +539,7 @@ export const useFileStore = defineStore('file', {
         closeTabsToRight(tabId: string) {
             const index = this.tabs.findIndex(tab => tab.id === tabId);
             if (index < 0 || index === this.tabs.length - 1) return;
+            this.rememberClosedTabs(this.tabs.slice(index + 1));
             this.tabs = this.tabs.slice(0, index + 1);
             if (!this.tabs.some(tab => tab.id === this.activeTabId)) {
                 const tab = this.tabs[index];
@@ -524,6 +552,22 @@ export const useFileStore = defineStore('file', {
                 this.closeEditor();
             }
             this.persistTabs();
+        },
+
+        reopenClosedTab() {
+            const closed = this.closedTabs.shift();
+            if (!closed) return null;
+            const tab = reviveClosedTab(closed);
+            this.tabs.push(tab);
+            this.activeTabId = tab.id;
+            this.currentPath = tab.path;
+            this.viewMode = tab.viewMode ?? this.viewMode;
+            this.iconSize = tab.iconSize ?? this.iconSize;
+            this.sortKey = tab.sortKey ?? this.sortKey;
+            this.sortOrder = tab.sortOrder ?? this.sortOrder;
+            this.closeEditor();
+            this.persistTabs();
+            return tab;
         },
 
         saveFolderData(data: FolderData) {

@@ -23,6 +23,7 @@ const props = defineProps<{
   canCloseTab: boolean;
   canCloseOtherTabs: boolean;
   canCloseRightTabs: boolean;
+  canReopenClosedTab: boolean;
 }>();
 
 const tabButtonRefs = new Map<string, HTMLElement>();
@@ -66,6 +67,7 @@ const emit = defineEmits<{
   (e: "tab-drag-end"): void;
   (e: "duplicate-tab"): void;
   (e: "close-context-tab"): void;
+  (e: "reopen-closed-tab"): void;
   (e: "close-other-tabs"): void;
   (e: "close-right-tabs"): void;
 }>();
@@ -114,6 +116,7 @@ const emit = defineEmits<{
       @click.stop
       @contextmenu.prevent>
     <button @click="emit('new-tab')">新建标签页</button>
+    <button :disabled="!canReopenClosedTab" @click="emit('reopen-closed-tab')">重新打开关闭的标签页</button>
     <button :disabled="!contextTarget" @click="emit('duplicate-tab')">复制标签页</button>
     <div class="tab-context-separator"></div>
     <button :disabled="!canCloseTab" @click="emit('close-context-tab')">关闭标签页</button>

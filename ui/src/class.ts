@@ -47,6 +47,10 @@ export interface ExplorerTab {
     sortOrder?: DirSortOrder;
 }
 
+export interface ClosedExplorerTab extends ExplorerTab {
+    closedAt: number;
+}
+
 export interface FolderInfo {
     path: string;
     name: string;

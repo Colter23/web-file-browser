@@ -292,7 +292,7 @@ let shellNoticeTimer: number | undefined;
 let previewPaneResizeStartX = 0;
 let previewPaneResizeStartWidth = 0;
 const tabContextMenuWidth = 184;
-const tabContextMenuHeight = 220;
+const tabContextMenuHeight = 252;
 let suppressSelectionPersistence = false;
 let suppressScrollPersistence = false;
 let tabContextRestoreToken = 0;
@@ -306,6 +306,7 @@ const tabContextIndex = computed(() => fileStore.tabs.findIndex(tab => tab.id ==
 const canCloseTabContext = computed(() => fileStore.tabs.length > 1);
 const canCloseOtherTabsContext = computed(() => fileStore.tabs.length > 1 && Boolean(tabContextTarget.value));
 const canCloseRightTabsContext = computed(() => tabContextIndex.value >= 0 && tabContextIndex.value < fileStore.tabs.length - 1);
+const canReopenClosedTab = computed(() => fileStore.closedTabs.length > 0);
 const canNavigateBack = computed(() => Boolean(activeTab.value?.backStack?.length));
 const canNavigateForward = computed(() => Boolean(activeTab.value?.forwardStack?.length));
 const canNavigateUp = computed(() => currentFolder() !== "/");
@@ -1498,7 +1499,7 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
     }
     if (key === "t") {
       event.preventDefault();
-      void openTab();
+      void (event.shiftKey ? reopenClosedTab() : openTab());
       return;
     }
     if (key === "w") {
@@ -1672,6 +1673,19 @@ const closeTabFromMenu = async () => {
   const tabId = tabContextMenu.value.tabId;
   closeTabContextMenu();
   await closeTabById(tabId);
+}
+
+const reopenClosedTab = async () => {
+  if (!canReopenClosedTab.value) return false;
+  if (!await fileStore.requestEditorLeave()) return false;
+  persistCurrentExplorerScrollTop();
+  closeTabContextMenu();
+  const tab = fileStore.reopenClosedTab();
+  if (!tab) return false;
+  closePanels();
+  await syncActiveTabContext();
+  showShellNotice(`已重新打开：${tab.title}`, "info", "标签页", 1600);
+  return true;
 }
 
 const closeOtherTabsFromMenu = async () => {
@@ -1861,6 +1875,7 @@ const signOut = async () => {
           :can-close-tab="canCloseTabContext"
           :can-close-other-tabs="canCloseOtherTabsContext"
           :can-close-right-tabs="canCloseRightTabsContext"
+          :can-reopen-closed-tab="canReopenClosedTab"
           @new-tab="openTab"
           @activate-tab="switchTab"
           @close-tab="closeTab"
@@ -1873,6 +1888,7 @@ const signOut = async () => {
           @tab-drag-end="finishTabDrag"
           @duplicate-tab="duplicateTabFromMenu"
           @close-context-tab="closeTabFromMenu"
+          @reopen-closed-tab="reopenClosedTab"
           @close-other-tabs="closeOtherTabsFromMenu"
           @close-right-tabs="closeRightTabsFromMenu" />
       <div class="top-actions">
