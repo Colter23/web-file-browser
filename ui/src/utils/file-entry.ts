@@ -1,4 +1,5 @@
 import type {ArchiveFormat, FileInfo} from "../class.ts";
+import {parentPath} from "./file-path.ts";
 
 export type FileEntryKind = "folder" | "file";
 
@@ -13,6 +14,20 @@ export type FileEntryLike = {
 }
 
 export type EntryPreviewKind = "image" | "text" | "audio" | "video" | "unknown";
+
+export type FileEntryMetaRow = {
+  label: string;
+  value: string;
+}
+
+export type FileEntryMetaOptions = {
+  typeText?: string;
+  sizeText?: string;
+  includeLocation?: boolean;
+  includePath?: boolean;
+  pathBeforeStats?: boolean;
+  modifiedLabel?: string;
+}
 
 export const imageFileExtensions = ["apng", "avif", "bmp", "gif", "ico", "jpeg", "jpg", "png", "svg", "webp"];
 export const textLikeFileExtensions = ["txt", "log", "md", "json", "yaml", "yml", "toml", "xml", "csv"];
@@ -136,6 +151,20 @@ export const formatEntrySize = (size?: number, missingText = "-") => {
     index += 1;
   }
   return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+export const entryMetaRows = (entry: FileEntryLike, options: FileEntryMetaOptions = {}): FileEntryMetaRow[] => {
+  const rows: FileEntryMetaRow[] = [
+    {label: "类型", value: options.typeText ?? entryTypeText(entry)}
+  ];
+  if (entry.path && options.includeLocation) rows.push({label: "位置", value: parentPath(entry.path)});
+  if (entry.path && options.includePath && options.pathBeforeStats) rows.push({label: "路径", value: entry.path});
+  rows.push(
+    {label: "大小", value: options.sizeText ?? (entry.type === "file" ? formatEntrySize(entry.size) : "-")},
+    {label: options.modifiedLabel ?? "修改", value: formatEntryDate(entry.modified)}
+  );
+  if (entry.path && options.includePath && !options.pathBeforeStats) rows.push({label: "路径", value: entry.path});
+  return rows;
 }
 
 export const entryTypeText = (entry: FileEntryLike) => {

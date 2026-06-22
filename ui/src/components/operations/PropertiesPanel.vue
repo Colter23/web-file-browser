@@ -2,8 +2,7 @@
 import {computed, ref} from "vue";
 import Icon from "../Icon.vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
-import {entryTypeText, fileEntryIcon, formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
-import {parentPath} from "../../utils/file-path.ts";
+import {entryMetaRows, fileEntryIcon, formatEntrySize} from "../../utils/file-entry.ts";
 
 const props = defineProps<{
   visible: boolean;
@@ -40,11 +39,13 @@ const rows = computed(() => {
   if (entry) {
     return [
       {label: "名称", value: entry.name},
-      {label: "类型", value: entryTypeText(entry)},
-      {label: "位置", value: parentPath(entry.path)},
-      {label: "路径", value: entry.path},
-      {label: "大小", value: sizeText.value},
-      {label: "修改时间", value: formatEntryDate(entry.modified)}
+      ...entryMetaRows(entry, {
+        sizeText: sizeText.value,
+        includeLocation: true,
+        includePath: true,
+        pathBeforeStats: true,
+        modifiedLabel: "修改时间"
+      })
     ];
   }
   return [

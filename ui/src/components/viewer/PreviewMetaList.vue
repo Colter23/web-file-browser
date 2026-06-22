@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type {PreviewMetaItem} from "./types.ts";
+import type {FileEntryMetaRow} from "../../utils/file-entry.ts";
 
 defineProps<{
-  items: PreviewMetaItem[];
+  items: FileEntryMetaRow[];
 }>();
 </script>
 

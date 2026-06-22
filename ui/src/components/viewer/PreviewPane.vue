@@ -4,12 +4,12 @@ import type {ExplorerEntry} from "../explorer/types.ts";
 import {downloadUrl} from "../../network/api.ts";
 import Icon from "../Icon.vue";
 import type {ShellNoticePayload} from "../shell/types.ts";
-import {entryPreviewKind, entryPreviewTypeText, formatEntryDate, formatEntrySize, isEditableEntry} from "../../utils/file-entry.ts";
+import {entryMetaRows, entryPreviewKind, entryPreviewTypeText, isEditableEntry} from "../../utils/file-entry.ts";
 import PreviewHeader from "./PreviewHeader.vue";
 import PreviewImageView from "./PreviewImageView.vue";
 import PreviewMetaList from "./PreviewMetaList.vue";
 import PreviewTextView from "./PreviewTextView.vue";
-import type {PreviewKind, PreviewMetaItem} from "./types.ts";
+import type {PreviewKind} from "./types.ts";
 
 const props = defineProps<{
   entry: ExplorerEntry | null;
@@ -41,15 +41,10 @@ const canEditPreview = computed(() => {
   return isEditableEntry(props.entry, props.editableExtensions);
 });
 
-const previewMeta = computed<PreviewMetaItem[]>(() => {
+const previewMeta = computed(() => {
   const entry = props.entry;
   if (!entry) return [];
-  return [
-    {label: "类型", value: previewTypeText.value},
-    {label: "大小", value: formatEntrySize(entry.size)},
-    {label: "修改", value: formatEntryDate(entry.modified)},
-    {label: "路径", value: entry.path}
-  ];
+  return entryMetaRows(entry, {typeText: previewTypeText.value, includePath: true});
 });
 
 const editPreview = () => {
