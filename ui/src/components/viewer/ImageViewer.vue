@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
+import type {ComponentPublicInstance} from "vue";
 import type {FileInfo} from "../../class.ts";
 import {downloadUrl} from "../../network/api.ts";
 import Icon from "../Icon.vue";
@@ -36,6 +37,9 @@ const emit = defineEmits<{
 }>();
 
 const filmstripStorageKey = "explorer.imageViewer.showFilmstrip";
+const minZoom = 25;
+const maxZoom = 500;
+const zoomStep = 25;
 
 const readBooleanStorage = (key: string, fallback: boolean) => {
   if (typeof localStorage === "undefined") return fallback;
@@ -63,6 +67,7 @@ const error = ref("");
 const pageFullscreen = ref(false);
 const browserFullscreen = ref(false);
 const showFilmstrip = ref(readBooleanStorage(filmstripStorageKey, true));
+const thumbRefs = new Map<string, HTMLElement>();
 const fit = ref(true);
 const zoom = ref(100);
 const offsetX = ref(0);
@@ -86,6 +91,8 @@ const imageStyle = computed(() => ({
 const zoomText = computed(() => fit.value ? "适应" : `${zoom.value}%`);
 const canPan = computed(() => props.visible && !fit.value);
 const actualSizeActive = computed(() => !fit.value && zoom.value === 100);
+const canZoomOut = computed(() => zoom.value > minZoom || fit.value);
+const canZoomIn = computed(() => zoom.value < maxZoom || fit.value);
 
 const currentIndex = computed(() => {
   const entry = props.entry;
@@ -164,6 +171,20 @@ const resetZoom = () => {
   resetPan();
 }
 
+const setThumbRef = (path: string, element: Element | ComponentPublicInstance | null) => {
+  if (element instanceof HTMLElement) {
+    thumbRefs.set(path, element);
+  } else {
+    thumbRefs.delete(path);
+  }
+}
+
+const revealActiveThumb = async () => {
+  if (!canShowFilmstrip.value || !props.entry) return;
+  await nextTick();
+  thumbRefs.get(props.entry.path)?.scrollIntoView({block: "nearest", inline: "center"});
+}
+
 const resetRuntimeState = () => {
   if (document.fullscreenElement === viewerRef.value) void document.exitFullscreen().catch(() => undefined);
   loading.value = false;
@@ -179,6 +200,7 @@ const prepareEntry = async () => {
   resetZoom();
   await nextTick();
   viewerRef.value?.focus();
+  await revealActiveThumb();
 }
 
 const close = () => emit("close");
@@ -186,6 +208,11 @@ const close = () => emit("close");
 const showAdjacent = (direction: -1 | 1) => {
   const next = props.entries[currentIndex.value + direction];
   if (next) emit("select", next);
+}
+
+const showEdgeImage = (edge: "first" | "last") => {
+  if (!props.entries.length) return;
+  showImageAt(edge === "first" ? 0 : props.entries.length - 1);
 }
 
 const showImageAt = (index: number) => {
@@ -226,7 +253,7 @@ const toggleFilmstrip = () => {
 
 const zoomImage = (delta: number) => {
   fit.value = false;
-  zoom.value = Math.min(500, Math.max(25, zoom.value + delta));
+  zoom.value = Math.min(maxZoom, Math.max(minZoom, zoom.value + delta));
 }
 
 const setActualSize = () => {
@@ -245,7 +272,7 @@ const toggleZoomMode = () => {
 
 const handleWheel = (event: WheelEvent) => {
   event.preventDefault();
-  zoomImage(event.deltaY < 0 ? 25 : -25);
+  zoomImage(event.deltaY < 0 ? zoomStep : -zoomStep);
 }
 
 const handleLoad = () => {
@@ -316,14 +343,24 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
     showAdjacent(1);
     return;
   }
+  if (event.key === "Home") {
+    takeOver();
+    showEdgeImage("first");
+    return;
+  }
+  if (event.key === "End") {
+    takeOver();
+    showEdgeImage("last");
+    return;
+  }
   if (key === "+" || key === "=" || event.code === "NumpadAdd") {
     takeOver();
-    zoomImage(25);
+    zoomImage(zoomStep);
     return;
   }
   if (key === "-" || event.code === "NumpadSubtract") {
     takeOver();
-    zoomImage(-25);
+    zoomImage(-zoomStep);
     return;
   }
   if (key === "0") {
@@ -361,6 +398,10 @@ watch(() => props.entry?.path, () => {
   void prepareEntry();
 });
 
+watch(showFilmstrip, () => {
+  void revealActiveThumb();
+});
+
 onMounted(() => {
   window.addEventListener("keydown", handleWindowKeyDown, true);
   document.addEventListener("fullscreenchange", handleFullscreenChange);
@@ -396,9 +437,9 @@ onBeforeUnmount(() => {
           </button>
           <button class="text-action" :class="{active: fit}" title="适应窗口 (0)" @click="resetZoom">适应</button>
           <button class="text-action" :class="{active: actualSizeActive}" title="原始大小" @click="setActualSize">1:1</button>
-          <button title="缩小 (-)" @click="zoomImage(-25)">-</button>
+          <button title="缩小 (-)" :disabled="!canZoomOut" @click="zoomImage(-zoomStep)">-</button>
           <span>{{ zoomText }}</span>
-          <button title="放大 (+)" @click="zoomImage(25)">+</button>
+          <button title="放大 (+)" :disabled="!canZoomIn" @click="zoomImage(zoomStep)">+</button>
           <button :title="pageFullscreenTitle" :class="{active: pageFullscreen}" @click="togglePageFullscreen">
             <icon icon="icon-renamebox" color="currentColor" />
           </button>
@@ -441,6 +482,7 @@ onBeforeUnmount(() => {
         <button
             v-for="item in filmstripEntries"
             :key="item.entry.path"
+            :ref="element => setThumbRef(item.entry.path, element)"
             class="image-viewer-thumb"
             :class="{active: item.entry.path === currentEntry.path}"
             :title="`${item.index + 1} / ${imageCount} · ${item.entry.name}`"
