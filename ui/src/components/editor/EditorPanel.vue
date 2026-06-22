@@ -22,6 +22,18 @@ type EditorCursorStatus = {
 
 type CodeEditorExpose = ComponentPublicInstance & {
   focus?: () => void;
+  getSelectedText?: () => string;
+  find?: (options: EditorSearchOptions) => boolean;
+  replaceCurrent?: (replacement: string) => boolean;
+  replaceAll?: (replacement: string) => boolean;
+}
+
+type EditorSearchOptions = {
+  needle: string;
+  backwards?: boolean;
+  caseSensitive?: boolean;
+  wholeWord?: boolean;
+  regex?: boolean;
 }
 
 const storageKeys = {
@@ -94,11 +106,32 @@ const cursorStatus = ref<EditorCursorStatus>(defaultCursorStatus());
 const fontSize = ref(readNumberPreference(storageKeys.fontSize, 16, 12, 28));
 const tabSize = ref(readNumberPreference(storageKeys.tabSize, 2, 2, 8));
 const wrap = ref(readBooleanPreference(storageKeys.wrap, true));
+const searchVisible = ref(false);
+const replaceVisible = ref(false);
+const searchText = ref("");
+const replaceText = ref("");
+const searchStatus = ref("");
+const searchCaseSensitive = ref(false);
+const searchWholeWord = ref(false);
+const searchRegex = ref(false);
+const searchInputRef = ref<HTMLInputElement | null>(null);
+const replaceInputRef = ref<HTMLInputElement | null>(null);
 let loadVersion = 0;
 
 const themeClass = computed(() => `ace-${currentTheme.value.replace(/_/g, "-")}`);
 const canSave = computed(() => Boolean(fileInfo.value && isChange.value && contentEtag.value && !saveConflict.value && !loading.value && !saving.value));
 const editorReadOnly = computed(() => loading.value || saving.value || Boolean(pendingAction.value));
+const regexErrorText = computed(() => {
+  if (!searchRegex.value || !searchText.value) return "";
+  try {
+    new RegExp(searchText.value);
+    return "";
+  } catch {
+    return "正则表达式无效";
+  }
+});
+const canFind = computed(() => Boolean(searchText.value) && !regexErrorText.value);
+const canReplace = computed(() => canFind.value && !editorReadOnly.value);
 
 const fileTitle = computed(() => fileInfo.value?.name ?? "未打开文件");
 
@@ -149,6 +182,8 @@ const selectionStatusText = computed(() => {
   return `已选中 ${rows}${cursorStatus.value.selectedCharacters} 字符`;
 });
 
+const searchStatusText = computed(() => regexErrorText.value || searchStatus.value);
+
 const dirtyText = computed(() => {
   if (saving.value) return "保存中";
   if (loading.value) return "加载中";
@@ -187,6 +222,13 @@ const closeMenus = () => {
   activeMenu.value = "";
 }
 
+const closeSearch = () => {
+  searchVisible.value = false;
+  replaceVisible.value = false;
+  searchStatus.value = "";
+  nextTick(() => editorRef.value?.focus?.());
+}
+
 const toggleMenu = (menu: MenuName) => {
   activeMenu.value = activeMenu.value === menu ? "" : menu;
 }
@@ -201,6 +243,88 @@ const changeTheme = (theme: string) => {
   currentTheme.value = theme;
   closeMenus();
   nextTick(() => editorRef.value?.focus?.());
+}
+
+const searchOptions = (backwards = false): EditorSearchOptions => ({
+  needle: searchText.value,
+  backwards,
+  caseSensitive: searchCaseSensitive.value,
+  wholeWord: searchWholeWord.value,
+  regex: searchRegex.value
+});
+
+const runSearch = (backwards = false, keepSearchFocus = false) => {
+  if (!searchText.value) {
+    searchStatus.value = "";
+    searchInputRef.value?.focus();
+    return false;
+  }
+  if (regexErrorText.value) {
+    searchStatus.value = regexErrorText.value;
+    searchInputRef.value?.focus();
+    return false;
+  }
+  const found = editorRef.value?.find?.(searchOptions(backwards)) ?? false;
+  searchStatus.value = found ? "" : "未找到";
+  if (keepSearchFocus) {
+    nextTick(() => searchInputRef.value?.focus());
+  }
+  return found;
+}
+
+const openSearch = async (replace = false) => {
+  if (!fileStore.showEditor) return;
+  closeMenus();
+  searchVisible.value = true;
+  replaceVisible.value = replace;
+  const selected = editorRef.value?.getSelectedText?.().trim() ?? "";
+  if (selected && !selected.includes("\n")) searchText.value = selected.slice(0, 200);
+  searchStatus.value = "";
+  await nextTick();
+  searchInputRef.value?.focus();
+  searchInputRef.value?.select();
+  if (searchText.value) runSearch(false, true);
+}
+
+const openReplace = async () => {
+  await openSearch(true);
+}
+
+const toggleSearchOption = (option: "case" | "word" | "regex") => {
+  if (option === "case") searchCaseSensitive.value = !searchCaseSensitive.value;
+  if (option === "word") searchWholeWord.value = !searchWholeWord.value;
+  if (option === "regex") searchRegex.value = !searchRegex.value;
+  searchStatus.value = "";
+  if (searchText.value) nextTick(() => runSearch(false, true));
+}
+
+const findFromInput = (event: KeyboardEvent) => {
+  runSearch(event.shiftKey, true);
+}
+
+const replaceCurrentMatch = async () => {
+  if (!canReplace.value) return;
+  let replaced = editorRef.value?.replaceCurrent?.(replaceText.value) ?? false;
+  if (!replaced && runSearch(false)) {
+    replaced = editorRef.value?.replaceCurrent?.(replaceText.value) ?? false;
+  }
+  searchStatus.value = replaced ? "已替换" : regexErrorText.value || "未找到";
+  if (replaced) await nextTick(() => runSearch(false));
+}
+
+const replaceAllMatches = () => {
+  if (!canReplace.value) return;
+  if (!runSearch(false)) return;
+  const replaced = editorRef.value?.replaceAll?.(replaceText.value) ?? false;
+  searchStatus.value = replaced ? "已全部替换" : "未找到";
+}
+
+const focusReplaceInput = () => {
+  if (!replaceVisible.value) return;
+  nextTick(() => {
+    replaceInputRef.value?.focus();
+    replaceInputRef.value?.select();
+  });
 }
 
 watch(currentTheme, theme => {
@@ -262,6 +386,9 @@ const loadCurrentFile = async () => {
 
 const resetEditorState = () => {
   closeMenus();
+  searchVisible.value = false;
+  replaceVisible.value = false;
+  searchStatus.value = "";
   pendingAction.value = "";
   pendingBusy.value = false;
   fileStore.closeEditor();
@@ -391,6 +518,16 @@ const savePendingAction = async () => {
 
 const handleKeyDown = (event: KeyboardEvent) => {
   if (!fileStore.showEditor) return;
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+    event.preventDefault();
+    void openSearch(false);
+    return;
+  }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "h") {
+    event.preventDefault();
+    void openReplace();
+    return;
+  }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
     event.preventDefault();
     void save();
@@ -403,6 +540,10 @@ const handleKeyDown = (event: KeyboardEvent) => {
     }
     if (pendingAction.value) {
       cancelPendingAction();
+      return;
+    }
+    if (searchVisible.value) {
+      closeSearch();
       return;
     }
     close();
@@ -528,6 +669,46 @@ onBeforeUnmount(() => {
     </div>
 
     <main class="editor-main">
+      <div v-if="searchVisible" class="search-bar" @click.stop>
+        <div class="search-fields">
+          <input
+              ref="searchInputRef"
+              v-model="searchText"
+              class="search-input"
+              type="text"
+              placeholder="查找"
+              @keydown.enter.prevent="findFromInput"
+              @input="searchStatus = ''">
+          <input
+              v-if="replaceVisible"
+              ref="replaceInputRef"
+              v-model="replaceText"
+              class="search-input replace-input"
+              type="text"
+              placeholder="替换为"
+              @keydown.enter.prevent="replaceCurrentMatch">
+        </div>
+        <div class="search-actions">
+          <span v-if="searchStatusText" class="search-status">{{ searchStatusText }}</span>
+          <button title="上一个 (Shift+Enter)" :disabled="!canFind" @click="runSearch(true)">
+            <icon icon="icon-back_android" class="rotate-90" />
+          </button>
+          <button title="下一个 (Enter)" :disabled="!canFind" @click="runSearch(false)">
+            <icon icon="icon-back_android" class="-rotate-90" />
+          </button>
+          <button v-if="!replaceVisible" title="显示替换 (Ctrl+H)" @click="replaceVisible = true; focusReplaceInput()">
+            <icon icon="icon-renamebox" />
+          </button>
+          <button v-if="replaceVisible" class="text-tool" title="替换当前" :disabled="!canReplace" @click="replaceCurrentMatch">替换</button>
+          <button v-if="replaceVisible" class="text-tool" title="全部替换" :disabled="!canReplace" @click="replaceAllMatches">全部</button>
+          <button class="text-tool" :class="{active: searchCaseSensitive}" title="区分大小写" @click="toggleSearchOption('case')">Aa</button>
+          <button class="text-tool" :class="{active: searchWholeWord}" title="全词匹配" @click="toggleSearchOption('word')">W</button>
+          <button class="text-tool" :class="{active: searchRegex}" title="正则表达式" @click="toggleSearchOption('regex')">.*</button>
+          <button title="关闭查找" @click="closeSearch">
+            <icon icon="icon-close" />
+          </button>
+        </div>
+      </div>
       <div class="editor-frame">
         <code-editor
             ref="editorRef"
@@ -540,6 +721,8 @@ onBeforeUnmount(() => {
             :read-only="editorReadOnly"
             @change="onContentChange"
             @cursor-change="onCursorChange"
+            @find="openSearch(false)"
+            @replace="openReplace"
             @save="save">
         </code-editor>
       </div>
@@ -726,11 +909,47 @@ onBeforeUnmount(() => {
 }
 
 .editor-main {
-  @apply relative min-h-0 grow bg-[#f7fbff] p-2;
+  @apply relative flex min-h-0 grow flex-col gap-2 bg-[#f7fbff] p-2;
+}
+
+.search-bar {
+  @apply relative z-20 flex shrink-0 items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm;
+}
+
+.search-fields {
+  @apply flex min-w-0 grow items-center gap-2;
+}
+
+.search-input {
+  @apply h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100;
+}
+
+.replace-input {
+  @apply border-slate-300;
+}
+
+.search-actions {
+  @apply flex shrink-0 items-center gap-1 text-slate-600;
+}
+
+.search-actions button {
+  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white;
+}
+
+.search-actions button.active {
+  @apply border-blue-300 bg-blue-50 text-blue-700;
+}
+
+.search-actions .text-tool {
+  @apply min-w-9;
+}
+
+.search-status {
+  @apply max-w-28 truncate px-1 text-amber-600;
 }
 
 .editor-frame {
-  @apply h-full min-h-0 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm;
+  @apply min-h-0 grow overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm;
 }
 
 .editor-overlay {

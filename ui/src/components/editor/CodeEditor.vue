@@ -46,6 +46,14 @@ type CodeEditorCursorStatus = {
   selectedCharacters: number;
 }
 
+type SearchOptions = {
+  needle: string;
+  backwards?: boolean;
+  caseSensitive?: boolean;
+  wholeWord?: boolean;
+  regex?: boolean;
+}
+
 const props = withDefaults(defineProps<CodeEditorProps>(), {
   mode: "text",
   theme: "dracula",
@@ -59,6 +67,8 @@ const props = withDefaults(defineProps<CodeEditorProps>(), {
 const emit = defineEmits<{
   (e: "change", content: string): void;
   (e: "save"): void;
+  (e: "find"): void;
+  (e: "replace"): void;
   (e: "cursor-change", status: CodeEditorCursorStatus): void;
 }>()
 
@@ -66,6 +76,52 @@ const editorRef = ref<HTMLElement | null>(null);
 let editor: ReturnType<typeof ace.edit> | null = null;
 let syncing = false;
 let disposed = false;
+
+const findNeedle = (options: SearchOptions) => {
+  if (!editor || !options.needle) return false;
+  try {
+    const range = editor.find(options.needle, {
+      backwards: Boolean(options.backwards),
+      wrap: true,
+      caseSensitive: Boolean(options.caseSensitive),
+      wholeWord: Boolean(options.wholeWord),
+      regExp: Boolean(options.regex),
+      preventScroll: false
+    });
+    editor.focus();
+    return Boolean(range);
+  } catch {
+    return false;
+  }
+}
+
+const replaceCurrent = (replacement: string) => {
+  if (!editor) return false;
+  try {
+    const before = editor.getValue();
+    editor.replace(replacement);
+    const changed = editor.getValue() !== before;
+    if (changed) emitCursorStatus();
+    editor.focus();
+    return changed;
+  } catch {
+    return false;
+  }
+}
+
+const replaceEverywhere = (replacement: string) => {
+  if (!editor) return false;
+  try {
+    const before = editor.getValue();
+    editor.replaceAll(replacement);
+    const changed = editor.getValue() !== before;
+    if (changed) emitCursorStatus();
+    editor.focus();
+    return changed;
+  } catch {
+    return false;
+  }
+}
 
 const emitCursorStatus = () => {
   if (!editor) return;
@@ -141,6 +197,16 @@ const initializeEditor = async () => {
     bindKey: {win: "Ctrl-S", mac: "Command-S"},
     exec: () => emit("save")
   });
+  editor.commands.addCommand({
+    name: "openFindBar",
+    bindKey: {win: "Ctrl-F", mac: "Command-F"},
+    exec: () => emit("find")
+  });
+  editor.commands.addCommand({
+    name: "openReplaceBar",
+    bindKey: {win: "Ctrl-H", mac: "Command-Option-F"},
+    exec: () => emit("replace")
+  });
   editor.selection.on("changeCursor", emitCursorStatus);
   editor.selection.on("changeSelection", emitCursorStatus);
   emitCursorStatus();
@@ -160,7 +226,11 @@ onBeforeUnmount(() => {
 });
 
 defineExpose({
-  focus: () => editor?.focus()
+  focus: () => editor?.focus(),
+  getSelectedText: () => editor?.getSelectedText() ?? "",
+  find: findNeedle,
+  replaceCurrent,
+  replaceAll: replaceEverywhere
 })
 </script>
 
