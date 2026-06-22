@@ -1,3 +1,5 @@
+import type {ArchiveFormat} from "../class.ts";
+
 export type FileEntryKind = "folder" | "file";
 
 export type FileEntryLike = {
@@ -49,6 +51,16 @@ export const isExtractableArchiveEntry = (entry: FileEntryLike | null | undefine
   const name = entry.name.toLowerCase();
   return name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz");
 }
+
+export const archiveStem = (name: string) => {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".tar.gz")) return name.slice(0, -7);
+  if (lower.endsWith(".tgz")) return name.slice(0, -4);
+  if (lower.endsWith(".zip")) return name.slice(0, -4);
+  return name;
+}
+
+export const archiveFormatExtension = (format: ArchiveFormat) => format === "tarGz" ? ".tar.gz" : ".zip";
 
 export const fileEntryIcon = (entry: FileEntryLike, editableExtensions: readonly string[] = []) => {
   if (entry.type === "folder") return "icon-folder-fill";

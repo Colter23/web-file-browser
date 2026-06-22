@@ -3,6 +3,7 @@ import {computed, ref} from "vue";
 import Icon from "../Icon.vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import {entryTypeText, fileEntryIcon, formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
+import {parentPath} from "../../utils/file-path.ts";
 
 const props = defineProps<{
   visible: boolean;
@@ -15,20 +16,6 @@ const emit = defineEmits<{
 }>();
 
 const panelRef = ref<HTMLElement | null>(null);
-
-const normalizePathText = (path: string) => {
-  let temp = (path || "/").replace(/\\/g, "/");
-  while (temp.includes("//")) temp = temp.replace("//", "/");
-  if (!temp.startsWith("/")) temp = `/${temp}`;
-  if (temp.length > 1 && temp.endsWith("/")) temp = temp.slice(0, -1);
-  return temp;
-}
-
-const parentPath = (path: string) => {
-  const parts = normalizePathText(path).split("/").filter(Boolean);
-  if (parts.length <= 1) return "/";
-  return `/${parts.slice(0, -1).join("/")}`;
-}
 
 const singleEntry = computed(() => props.entries.length === 1 ? props.entries[0] : null);
 const folderCount = computed(() => props.entries.filter(entry => entry.type === "folder").length);

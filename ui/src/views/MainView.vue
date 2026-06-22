@@ -37,6 +37,8 @@ import {usePreviewPaneResize} from "../composables/usePreviewPaneResize.ts";
 import {useShellNotice} from "../composables/useShellNotice.ts";
 import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
+import {archiveFormatExtension, archiveStem, isExtractableArchiveEntry} from "../utils/file-entry.ts";
+import {isSameOrDescendantPath, joinPath, normalizePathText, parentPath} from "../utils/file-path.ts";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
 
@@ -672,44 +674,8 @@ const singleSelectedEntry = (entry = selectedEntry()) => {
   return selected[0] ?? null;
 }
 
-const normalizePathText = (path: string) => {
-  let normalized = path.trim() || "/";
-  normalized = normalized.replace(/\/+/g, "/");
-  if (!normalized.startsWith("/")) normalized = `/${normalized}`;
-  if (normalized.length > 1) normalized = normalized.replace(/\/+$/, "");
-  return normalized || "/";
-}
-
-const parentPath = (path: string) => {
-  const parts = normalizePathText(path).split("/").filter(Boolean);
-  parts.pop();
-  return parts.length ? `/${parts.join("/")}` : "/";
-}
-
-const joinPath = (base: string, name: string) => {
-  return base === "/" ? `/${name}` : `${base.replace(/\/$/, "")}/${name}`;
-}
-
-const isSameOrDescendantPath = (path: string, parent: string) => {
-  const normalizedPath = path.replace(/\/$/, "") || "/";
-  const normalizedParent = parent.replace(/\/$/, "") || "/";
-  return normalizedPath === normalizedParent || normalizedPath.startsWith(`${normalizedParent}/`);
-}
-
-const archiveStem = (name: string) => {
-  const lower = name.toLowerCase();
-  if (lower.endsWith(".tar.gz")) return name.slice(0, -7);
-  if (lower.endsWith(".tgz")) return name.slice(0, -4);
-  if (lower.endsWith(".zip")) return name.slice(0, -4);
-  return name;
-}
-
-const archiveExtension = (format: ArchiveFormat) => format === "tarGz" ? ".tar.gz" : ".zip";
-
 const isArchiveFile = (entry: ExplorerEntry | null): entry is ExplorerEntry & { type: "file" } => {
-  if (!entry || entry.type !== "file") return false;
-  const name = entry.name.toLowerCase();
-  return name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz");
+  return isExtractableArchiveEntry(entry);
 }
 
 const startRenameSelected = () => {
@@ -904,7 +870,7 @@ const archiveSelected = (entry = selectedEntry()) => {
     return;
   }
   const format: ArchiveFormat = "zip";
-  const defaultName = entries.length === 1 ? `${entries[0].name}${archiveExtension(format)}` : `选中项目${archiveExtension(format)}`;
+  const defaultName = entries.length === 1 ? `${entries[0].name}${archiveFormatExtension(format)}` : `选中项目${archiveFormatExtension(format)}`;
   openOperationPanel({
     kind: "archive",
     title: entries.length === 1 ? `压缩 ${entries[0].name}` : `压缩 ${entries.length} 项`,
