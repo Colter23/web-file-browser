@@ -11,6 +11,28 @@ import type {
     FolderData,
     FolderInfo
 } from "../class.ts";
+import {
+    cloneClosedTab,
+    cloneTab,
+    closedTabStackLimit,
+    createTab,
+    normalizeFilterText,
+    normalizePath,
+    normalizeScrollTop,
+    normalizeSelectedPaths,
+    pathTitle,
+    readActiveTabId,
+    readIconSize,
+    readSortKey,
+    readSortOrder,
+    readTabs,
+    readViewMode,
+    reviveClosedTab,
+    writeIconSize,
+    writeSortPrefs,
+    writeTabsStorage,
+    writeViewMode
+} from "./explorer-tabs.ts";
 
 
 declare type FileState = {
@@ -42,193 +64,6 @@ declare type FileState = {
     // 最近关闭的目录标签页
     closedTabs: ClosedExplorerTab[];
 }
-
-const normalizePath = (path: string): string => {
-    let tempPath = path || "/";
-    while (tempPath.indexOf("//") !== -1) {
-        tempPath = tempPath.replace("//", "/");
-    }
-    if (tempPath.startsWith("/")) tempPath = tempPath.substring(1, tempPath.length);
-    if (tempPath.endsWith("/")) tempPath = tempPath.substring(0, tempPath.length - 1);
-    return "/" + tempPath;
-}
-
-const pathTitle = (path: string): string => {
-    const normalized = normalizePath(path);
-    if (normalized === "/") return "主页";
-    const parts = normalized.split("/").filter(Boolean);
-    return parts[parts.length - 1] || normalized;
-}
-
-const normalizePathStack = (stack?: string[]): string[] => {
-    if (!Array.isArray(stack)) return [];
-    return stack.filter(path => typeof path === "string").map(normalizePath);
-}
-
-const normalizeSelectedPaths = (paths?: string[]): string[] => {
-    if (!Array.isArray(paths)) return [];
-    return Array.from(new Set(paths.filter(path => typeof path === "string").map(normalizePath)));
-}
-
-const normalizeFilterText = (text?: string): string => typeof text === "string" ? text.slice(0, 200) : "";
-
-const normalizeScrollTop = (scrollTop?: number): number => {
-    if (!Number.isFinite(scrollTop)) return 0;
-    return Math.max(0, Math.round(scrollTop ?? 0));
-}
-
-const createTabId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-const createTab = (path: string): ExplorerTab => {
-    const normalized = normalizePath(path);
-    return {
-        id: createTabId(),
-        path: normalized,
-        title: pathTitle(normalized),
-        filterText: "",
-        selectedPaths: [],
-        scrollTop: 0,
-        backStack: [],
-        forwardStack: [],
-        viewMode: readViewMode(),
-        iconSize: readIconSize(),
-        sortKey: "name",
-        sortOrder: "asc"
-    }
-}
-
-const storageKeys = {
-    viewMode: "explorer.viewMode",
-    iconSize: "explorer.iconSize",
-    sortKey: "explorer.sortKey",
-    sortOrder: "explorer.sortOrder",
-    tabs: "explorer.tabs",
-    activeTabId: "explorer.activeTabId"
-}
-
-const viewModes: ExplorerViewMode[] = ["details", "list", "icons", "tiles"];
-const iconSizes: ExplorerIconSize[] = ["small", "medium", "large"];
-const sortKeys: DirSortKey[] = ["name", "modified", "size"];
-const sortOrders: DirSortOrder[] = ["asc", "desc"];
-
-const readStorageItem = (key: string): string | null => {
-    if (typeof localStorage === "undefined") return null;
-    try {
-        return localStorage.getItem(key);
-    } catch {
-        return null;
-    }
-}
-
-const writeStorageItem = (key: string, value: string) => {
-    if (typeof localStorage === "undefined") return;
-    try {
-        localStorage.setItem(key, value);
-    } catch {
-        // 浏览器禁用本地存储时，不影响本次会话内使用。
-    }
-}
-
-const readViewMode = (): ExplorerViewMode => {
-    const value = readStorageItem(storageKeys.viewMode);
-    return viewModes.includes(value as ExplorerViewMode) ? value as ExplorerViewMode : "details";
-}
-
-const readIconSize = (): ExplorerIconSize => {
-    const value = readStorageItem(storageKeys.iconSize);
-    return iconSizes.includes(value as ExplorerIconSize) ? value as ExplorerIconSize : "medium";
-}
-
-const readSortKey = (): DirSortKey => {
-    const value = readStorageItem(storageKeys.sortKey);
-    return sortKeys.includes(value as DirSortKey) ? value as DirSortKey : "name";
-}
-
-const readSortOrder = (): DirSortOrder => {
-    const value = readStorageItem(storageKeys.sortOrder);
-    return sortOrders.includes(value as DirSortOrder) ? value as DirSortOrder : "asc";
-}
-
-const normalizeTab = (tab: Partial<ExplorerTab>): ExplorerTab | null => {
-    if (typeof tab.id !== "string" || typeof tab.path !== "string") return null;
-    const path = normalizePath(tab.path);
-    const viewMode = viewModes.includes(tab.viewMode as ExplorerViewMode) ? tab.viewMode as ExplorerViewMode : readViewMode();
-    const iconSize = iconSizes.includes(tab.iconSize as ExplorerIconSize) ? tab.iconSize as ExplorerIconSize : readIconSize();
-    const sortKey = sortKeys.includes(tab.sortKey as DirSortKey) ? tab.sortKey as DirSortKey : readSortKey();
-    const sortOrder = sortOrders.includes(tab.sortOrder as DirSortOrder) ? tab.sortOrder as DirSortOrder : readSortOrder();
-    return {
-        id: tab.id,
-        path,
-        title: pathTitle(path),
-        filterText: normalizeFilterText(tab.filterText),
-        selectedPaths: normalizeSelectedPaths(tab.selectedPaths),
-        scrollTop: normalizeScrollTop(tab.scrollTop),
-        backStack: normalizePathStack(tab.backStack),
-        forwardStack: normalizePathStack(tab.forwardStack),
-        viewMode,
-        iconSize,
-        sortKey,
-        sortOrder
-    };
-}
-
-const readTabs = (): ExplorerTab[] => {
-    const raw = readStorageItem(storageKeys.tabs);
-    if (!raw) return [createTab("/")];
-    try {
-        const parsed = JSON.parse(raw) as unknown;
-        if (!Array.isArray(parsed)) return [createTab("/")];
-        const seen = new Set<string>();
-        const tabs = parsed.flatMap((item): ExplorerTab[] => {
-            if (!item || typeof item !== "object") return [];
-            const tab = item as Partial<ExplorerTab>;
-            const normalized = normalizeTab(tab);
-            if (!normalized) return [];
-            if (seen.has(normalized.id)) return [];
-            seen.add(normalized.id);
-            return [normalized];
-        });
-        return tabs.length ? tabs : [createTab("/")];
-    } catch {
-        return [createTab("/")];
-    }
-}
-
-const readActiveTabId = (tabs: ExplorerTab[]) => {
-    const id = readStorageItem(storageKeys.activeTabId);
-    return id && tabs.some(tab => tab.id === id) ? id : tabs[0]?.id ?? "";
-}
-
-const cloneTab = (tab: ExplorerTab): ExplorerTab => {
-    const path = normalizePath(tab.path);
-    return {
-        id: createTabId(),
-        path,
-        title: pathTitle(path),
-        filterText: normalizeFilterText(tab.filterText),
-        selectedPaths: normalizeSelectedPaths(tab.selectedPaths),
-        scrollTop: normalizeScrollTop(tab.scrollTop),
-        backStack: [...(tab.backStack ?? [])],
-        forwardStack: [...(tab.forwardStack ?? [])],
-        viewMode: tab.viewMode,
-        iconSize: tab.iconSize,
-        sortKey: tab.sortKey,
-        sortOrder: tab.sortOrder
-    };
-}
-
-const cloneClosedTab = (tab: ExplorerTab): ClosedExplorerTab => ({
-    ...cloneTab(tab),
-    closedAt: Date.now()
-});
-
-const reviveClosedTab = (tab: ClosedExplorerTab): ExplorerTab => {
-    const revived = cloneTab(tab);
-    revived.title = pathTitle(revived.path);
-    return revived;
-}
-
-const closedTabStackLimit = 12;
 
 let pendingEditorLeaveResolver: ((confirmed: boolean) => void) | null = null;
 
@@ -312,6 +147,16 @@ export const useFileStore = defineStore('file', {
             tab.scrollTop = 0;
         },
 
+        activateTab(tab: ExplorerTab, closeEditor = true) {
+            this.activeTabId = tab.id;
+            this.currentPath = tab.path;
+            this.viewMode = tab.viewMode ?? this.viewMode;
+            this.iconSize = tab.iconSize ?? this.iconSize;
+            this.sortKey = tab.sortKey ?? this.sortKey;
+            this.sortOrder = tab.sortOrder ?? this.sortOrder;
+            if (closeEditor) this.closeEditor();
+        },
+
         setActiveTabFilterText(text: string) {
             const activeTab = this.activeTab();
             if (!activeTab) return;
@@ -335,8 +180,7 @@ export const useFileStore = defineStore('file', {
 
         persistTabs() {
             this.syncActiveTabPrefs();
-            writeStorageItem(storageKeys.tabs, JSON.stringify(this.tabs));
-            writeStorageItem(storageKeys.activeTabId, this.activeTabId);
+            writeTabsStorage(this.tabs, this.activeTabId);
         },
 
         rememberClosedTabs(tabs: ExplorerTab[]) {
@@ -359,10 +203,7 @@ export const useFileStore = defineStore('file', {
                     this.resetTabBrowserState(activeTab);
                 }
                 this.applyTabPath(activeTab, normalized);
-                activeTab.viewMode = this.viewMode;
-                activeTab.iconSize = this.iconSize;
-                activeTab.sortKey = this.sortKey;
-                activeTab.sortOrder = this.sortOrder;
+                this.syncActiveTabPrefs();
             } else {
                 this.currentPath = normalized;
             }
@@ -407,13 +248,13 @@ export const useFileStore = defineStore('file', {
 
         setViewMode(mode: ExplorerViewMode) {
             this.viewMode = mode;
-            writeStorageItem(storageKeys.viewMode, mode);
+            writeViewMode(mode);
             this.persistTabs();
         },
 
         setIconSize(size: ExplorerIconSize) {
             this.iconSize = size;
-            writeStorageItem(storageKeys.iconSize, size);
+            writeIconSize(size);
             this.persistTabs();
         },
 
@@ -421,8 +262,7 @@ export const useFileStore = defineStore('file', {
             const sameKey = this.sortKey === key;
             this.sortKey = key;
             this.sortOrder = order ?? (sameKey && this.sortOrder === "asc" ? "desc" : "asc");
-            writeStorageItem(storageKeys.sortKey, this.sortKey);
-            writeStorageItem(storageKeys.sortOrder, this.sortOrder);
+            writeSortPrefs(this.sortKey, this.sortOrder);
             this.persistTabs();
         },
 
@@ -435,24 +275,14 @@ export const useFileStore = defineStore('file', {
                 this.activeTabId = this.tabs[0].id;
             }
             const activeTab = this.activeTab();
-            this.currentPath = activeTab?.path ?? this.currentPath;
-            this.viewMode = activeTab?.viewMode ?? this.viewMode;
-            this.iconSize = activeTab?.iconSize ?? this.iconSize;
-            this.sortKey = activeTab?.sortKey ?? this.sortKey;
-            this.sortOrder = activeTab?.sortOrder ?? this.sortOrder;
+            if (activeTab) this.activateTab(activeTab, false);
             this.persistTabs();
         },
 
         openTab(path?: string) {
             const tab = createTab(path || this.currentPath || "/");
             this.tabs.push(tab);
-            this.activeTabId = tab.id;
-            this.currentPath = tab.path;
-            this.viewMode = tab.viewMode ?? this.viewMode;
-            this.iconSize = tab.iconSize ?? this.iconSize;
-            this.sortKey = tab.sortKey ?? this.sortKey;
-            this.sortOrder = tab.sortOrder ?? this.sortOrder;
-            this.closeEditor();
+            this.activateTab(tab);
             this.persistTabs();
         },
 
@@ -465,13 +295,7 @@ export const useFileStore = defineStore('file', {
             if (index < 0) return;
             const tab = cloneTab(this.tabs[index]);
             this.tabs.splice(index + 1, 0, tab);
-            this.activeTabId = tab.id;
-            this.currentPath = tab.path;
-            this.viewMode = tab.viewMode ?? this.viewMode;
-            this.iconSize = tab.iconSize ?? this.iconSize;
-            this.sortKey = tab.sortKey ?? this.sortKey;
-            this.sortOrder = tab.sortOrder ?? this.sortOrder;
-            this.closeEditor();
+            this.activateTab(tab);
             this.persistTabs();
         },
 
@@ -490,13 +314,7 @@ export const useFileStore = defineStore('file', {
         switchTab(tabId: string) {
             const tab = this.tabs.find(item => item.id === tabId);
             if (!tab) return;
-            this.activeTabId = tab.id;
-            this.currentPath = tab.path;
-            this.viewMode = tab.viewMode ?? this.viewMode;
-            this.iconSize = tab.iconSize ?? this.iconSize;
-            this.sortKey = tab.sortKey ?? this.sortKey;
-            this.sortOrder = tab.sortOrder ?? this.sortOrder;
-            this.closeEditor();
+            this.activateTab(tab);
             this.persistTabs();
         },
 
@@ -509,13 +327,7 @@ export const useFileStore = defineStore('file', {
             this.rememberClosedTabs([closedTab]);
             if (wasActive) {
                 const next = this.tabs[Math.max(0, index - 1)];
-                this.activeTabId = next.id;
-                this.currentPath = next.path;
-                this.viewMode = next.viewMode ?? this.viewMode;
-                this.iconSize = next.iconSize ?? this.iconSize;
-                this.sortKey = next.sortKey ?? this.sortKey;
-                this.sortOrder = next.sortOrder ?? this.sortOrder;
-                this.closeEditor();
+                this.activateTab(next);
             }
             this.persistTabs();
         },
@@ -526,13 +338,7 @@ export const useFileStore = defineStore('file', {
             const wasActive = this.activeTabId === tab.id;
             this.rememberClosedTabs(this.tabs.filter(item => item.id !== tab.id));
             this.tabs = [tab];
-            this.activeTabId = tab.id;
-            this.currentPath = tab.path;
-            this.viewMode = tab.viewMode ?? this.viewMode;
-            this.iconSize = tab.iconSize ?? this.iconSize;
-            this.sortKey = tab.sortKey ?? this.sortKey;
-            this.sortOrder = tab.sortOrder ?? this.sortOrder;
-            if (!wasActive) this.closeEditor();
+            this.activateTab(tab, !wasActive);
             this.persistTabs();
         },
 
@@ -543,13 +349,7 @@ export const useFileStore = defineStore('file', {
             this.tabs = this.tabs.slice(0, index + 1);
             if (!this.tabs.some(tab => tab.id === this.activeTabId)) {
                 const tab = this.tabs[index];
-                this.activeTabId = tab.id;
-                this.currentPath = tab.path;
-                this.viewMode = tab.viewMode ?? this.viewMode;
-                this.iconSize = tab.iconSize ?? this.iconSize;
-                this.sortKey = tab.sortKey ?? this.sortKey;
-                this.sortOrder = tab.sortOrder ?? this.sortOrder;
-                this.closeEditor();
+                this.activateTab(tab);
             }
             this.persistTabs();
         },
@@ -559,13 +359,7 @@ export const useFileStore = defineStore('file', {
             if (!closed) return null;
             const tab = reviveClosedTab(closed);
             this.tabs.push(tab);
-            this.activeTabId = tab.id;
-            this.currentPath = tab.path;
-            this.viewMode = tab.viewMode ?? this.viewMode;
-            this.iconSize = tab.iconSize ?? this.iconSize;
-            this.sortKey = tab.sortKey ?? this.sortKey;
-            this.sortOrder = tab.sortOrder ?? this.sortOrder;
-            this.closeEditor();
+            this.activateTab(tab);
             this.persistTabs();
             return tab;
         },
