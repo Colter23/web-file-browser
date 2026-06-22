@@ -498,7 +498,8 @@ const signOut = async () => {
           @close-context-tab="closeTabFromMenu"
           @reopen-closed-tab="reopenClosedTab"
           @close-other-tabs="closeOtherTabsFromMenu"
-          @close-right-tabs="closeRightTabsFromMenu" />
+          @close-right-tabs="closeRightTabsFromMenu"
+          @close-context-menu="closeTabContextMenu" />
       <div class="top-actions">
         <label class="search-box" :class="{active: isFiltering}">
           <input

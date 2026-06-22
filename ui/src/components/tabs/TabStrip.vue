@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {nextTick, watch} from "vue";
+import {nextTick, ref, watch} from "vue";
 import type {ExplorerTab} from "../../class";
 import type {TabContextMenuState, TabDropPlacement} from "./types.ts";
 import Icon from "../Icon.vue";
@@ -19,6 +19,7 @@ const props = defineProps<{
 }>();
 
 const tabButtonRefs = new Map<string, HTMLElement>();
+const contextMenuRef = ref<HTMLElement | null>(null);
 
 const setTabButtonRef = (tabId: string, element: unknown) => {
   if (element instanceof HTMLElement) {
@@ -42,9 +43,70 @@ const handleTabWheel = (event: WheelEvent) => {
   target.scrollLeft += delta;
 }
 
+const contextMenuButtons = () => {
+  const menu = contextMenuRef.value;
+  if (!menu) return [];
+  return Array.from(menu.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
+}
+
+const focusContextMenuButton = (index: number) => {
+  const buttons = contextMenuButtons();
+  if (!buttons.length) return;
+  const nextIndex = (index + buttons.length) % buttons.length;
+  buttons[nextIndex]?.focus({preventScroll: true});
+}
+
+const focusFirstContextMenuButton = async () => {
+  await nextTick();
+  focusContextMenuButton(0);
+}
+
+const moveContextMenuFocus = (direction: -1 | 1) => {
+  const buttons = contextMenuButtons();
+  if (!buttons.length) return;
+  const currentIndex = buttons.findIndex(button => button === document.activeElement);
+  focusContextMenuButton(currentIndex < 0 ? 0 : currentIndex + direction);
+}
+
+const handleContextMenuKeyDown = (event: KeyboardEvent) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    emit("close-context-menu");
+    return;
+  }
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    moveContextMenuFocus(1);
+    return;
+  }
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    moveContextMenuFocus(-1);
+    return;
+  }
+  if (event.key === "Home") {
+    event.preventDefault();
+    focusContextMenuButton(0);
+    return;
+  }
+  if (event.key === "End") {
+    event.preventDefault();
+    focusContextMenuButton(contextMenuButtons().length - 1);
+    return;
+  }
+  if (event.key === "Tab") {
+    event.preventDefault();
+    moveContextMenuFocus(event.shiftKey ? -1 : 1);
+  }
+}
+
 watch(() => [props.activeTabId, props.tabs.length] as const, () => {
   void revealActiveTab();
 }, {immediate: true});
+
+watch(() => [props.contextMenu.visible, props.contextMenu.tabId] as const, ([visible]) => {
+  if (visible) void focusFirstContextMenuButton();
+}, {flush: "post"});
 
 const emit = defineEmits<{
   (e: "new-tab"): void;
@@ -62,6 +124,7 @@ const emit = defineEmits<{
   (e: "reopen-closed-tab"): void;
   (e: "close-other-tabs"): void;
   (e: "close-right-tabs"): void;
+  (e: "close-context-menu"): void;
 }>();
 </script>
 
@@ -103,17 +166,21 @@ const emit = defineEmits<{
 
   <div
       v-if="contextMenu.visible"
+      ref="contextMenuRef"
       class="tab-context-menu"
       :style="{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}"
+      role="menu"
+      aria-label="标签页菜单"
       @click.stop
-      @contextmenu.prevent>
-    <button @click="emit('new-tab')">新建标签页</button>
-    <button :disabled="!canReopenClosedTab" @click="emit('reopen-closed-tab')">重新打开关闭的标签页</button>
-    <button :disabled="!contextTarget" @click="emit('duplicate-tab')">复制标签页</button>
+      @contextmenu.prevent
+      @keydown="handleContextMenuKeyDown">
+    <button role="menuitem" @click="emit('new-tab')">新建标签页</button>
+    <button role="menuitem" :disabled="!canReopenClosedTab" @click="emit('reopen-closed-tab')">重新打开关闭的标签页</button>
+    <button role="menuitem" :disabled="!contextTarget" @click="emit('duplicate-tab')">复制标签页</button>
     <div class="tab-context-separator"></div>
-    <button :disabled="!canCloseTab" @click="emit('close-context-tab')">关闭标签页</button>
-    <button :disabled="!canCloseOtherTabs" @click="emit('close-other-tabs')">关闭其他标签页</button>
-    <button :disabled="!canCloseRightTabs" @click="emit('close-right-tabs')">关闭右侧标签页</button>
+    <button role="menuitem" :disabled="!canCloseTab" @click="emit('close-context-tab')">关闭标签页</button>
+    <button role="menuitem" :disabled="!canCloseOtherTabs" @click="emit('close-other-tabs')">关闭其他标签页</button>
+    <button role="menuitem" :disabled="!canCloseRightTabs" @click="emit('close-right-tabs')">关闭右侧标签页</button>
   </div>
 </template>
 
@@ -201,6 +268,10 @@ const emit = defineEmits<{
 
 .tab-context-menu button {
   @apply block h-8 w-full px-3 text-left text-slate-700 hover:bg-blue-50 disabled:text-slate-300 disabled:hover:bg-white;
+}
+
+.tab-context-menu button:focus-visible {
+  @apply bg-blue-50 text-blue-700 outline-none ring-1 ring-inset ring-blue-300;
 }
 
 .tab-context-separator {
