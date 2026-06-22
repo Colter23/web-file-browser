@@ -150,7 +150,12 @@ type NavigateToPathOptions = {
   focusExplorer?: boolean;
 }
 
-const viewModeOrder: ExplorerViewMode[] = ["details", "list", "icons", "tiles"];
+type ViewModeSelection = {
+  mode: ExplorerViewMode;
+  iconSize?: ExplorerIconSize;
+  label: string;
+}
+
 const viewModeMeta: Record<ExplorerViewMode, {label: string; icon: string}> = {
   details: {label: "详细信息", icon: "icon-view-list"},
   list: {label: "列表", icon: "icon-listview"},
@@ -165,6 +170,11 @@ const viewShortcutMap: Record<string, {mode: ExplorerViewMode; iconSize: Explore
   Digit5: {mode: "list", iconSize: "small", label: "列表"},
   Digit6: {mode: "details", iconSize: "small", label: "详细信息"},
   Digit7: {mode: "tiles", iconSize: "medium", label: "平铺"}
+};
+const iconSizeLabel: Record<ExplorerIconSize, string> = {
+  small: "小图标",
+  medium: "中图标",
+  large: "大图标"
 };
 
 const viewShortcut = (code: string) => viewShortcutMap[code] ?? viewShortcutMap[code.replace("Numpad", "Digit")];
@@ -331,11 +341,8 @@ const canDeleteSelection = computed(() => hasSelection.value);
 const canExtractSelection = computed(() => isArchiveFile(singleSelection.value));
 const canPasteSelection = computed(() => hasClipboard.value);
 const currentViewModeMeta = computed(() => viewModeMeta[fileStore.viewMode]);
-const nextViewMode = computed(() => {
-  const index = viewModeOrder.indexOf(fileStore.viewMode);
-  return viewModeOrder[(index + 1) % viewModeOrder.length];
-});
-const viewModeButtonTitle = computed(() => `当前：${currentViewModeMeta.value.label}，切换到${viewModeMeta[nextViewMode.value].label}。Ctrl+Shift+1-7 可直接切换查看模式`);
+const currentViewModeLabel = computed(() => fileStore.viewMode === "icons" ? iconSizeLabel[fileStore.iconSize] : currentViewModeMeta.value.label);
+const viewModeButtonTitle = computed(() => `当前：${currentViewModeLabel.value}，点击选择查看模式。Ctrl+Shift+1-7 可直接切换查看模式`);
 const activeTaskCount = computed(() => tasks.value.filter(task => task.state === "running" || task.state === "queued").length);
 const hasActiveTasks = computed(() => activeTaskCount.value > 0);
 const taskButtonText = computed(() => hasActiveTasks.value ? `任务 ${activeTaskCount.value}` : "任务");
@@ -1355,17 +1362,16 @@ const togglePreviewFromShortcut = async () => {
   return true;
 }
 
-const applyViewShortcut = (shortcut: {mode: ExplorerViewMode; iconSize: ExplorerIconSize; label: string}) => {
-  fileStore.setViewMode(shortcut.mode);
-  fileStore.setIconSize(shortcut.iconSize);
+const selectViewMode = (selection: ViewModeSelection) => {
+  fileStore.setViewMode(selection.mode);
+  if (selection.iconSize) fileStore.setIconSize(selection.iconSize);
   closeTabContextMenu();
   void nextTick(() => explorerRef.value?.focus());
-  showShellNotice(`已切换为${shortcut.label}`, "info", "查看模式", 1400);
+  showShellNotice(`已切换为${selection.label}`, "info", "查看模式", 1400);
 }
 
-const cycleViewMode = () => {
-  fileStore.setViewMode(nextViewMode.value);
-  void nextTick(() => explorerRef.value?.focus());
+const applyViewShortcut = (shortcut: ViewModeSelection) => {
+  selectViewMode(shortcut);
 }
 
 const shouldIgnoreShellShortcut = (target: EventTarget | null) => {
@@ -1884,8 +1890,10 @@ const signOut = async () => {
             :navigate-forward-title="navigateForwardTitle"
             :navigate-up-title="navigateUpTitle"
             :view-mode-icon="currentViewModeMeta.icon"
-            :view-mode-label="currentViewModeMeta.label"
+            :view-mode-label="currentViewModeLabel"
             :view-mode-button-title="viewModeButtonTitle"
+            :view-mode="fileStore.viewMode"
+            :icon-size="fileStore.iconSize"
             :preview-panel-visible="previewPanelVisible"
             :can-toggle-preview-pane="canTogglePreviewPane"
             @navigate-back="navigateBack"
@@ -1893,7 +1901,7 @@ const signOut = async () => {
             @navigate-up="navigateUp"
             @refresh="refreshCurrent(true)"
             @breadcrumb-navigate="handleBreadcrumbNavigate"
-            @cycle-view-mode="cycleViewMode"
+            @select-view-mode="selectViewMode"
             @toggle-preview="togglePreviewFromShortcut" />
 
         <command-bar
