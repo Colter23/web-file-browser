@@ -1,16 +1,8 @@
 <script setup lang="ts">
 import {nextTick, watch} from "vue";
 import type {ExplorerTab} from "../../class";
+import type {TabContextMenuState, TabDropPlacement} from "./types.ts";
 import Icon from "../Icon.vue";
-
-type TabDropPlacement = "before" | "after";
-
-type TabContextMenuState = {
-  visible: boolean;
-  x: number;
-  y: number;
-  tabId: string;
-}
 
 const props = defineProps<{
   tabs: ExplorerTab[];
