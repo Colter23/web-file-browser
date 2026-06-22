@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ExplorerEntry} from "./types.ts";
+import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 
 const props = defineProps<{
   background: boolean;
@@ -50,23 +51,13 @@ const contextLabel = (single: string, multiple: string) => {
   return isMultiSelect.value ? `${multiple}（${props.selectionCount} 项）` : single;
 }
 
-const contextMenuButtons = () => {
-  const menu = menuRef.value;
-  if (!menu) return [];
-  return Array.from(menu.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
-}
-
-const focusContextMenuButton = (index: number) => {
-  const buttons = contextMenuButtons();
-  if (!buttons.length) return;
-  const nextIndex = (index + buttons.length) % buttons.length;
-  buttons[nextIndex]?.focus({preventScroll: true});
-}
-
-const focusFirstContextMenuButton = async () => {
-  await nextTick();
-  focusContextMenuButton(0);
-}
+const {
+  focusFirstMenuButton,
+  handleMenuKeyDown
+} = useMenuKeyboardNavigation({
+  menuRef,
+  onEscape: () => emit("escape")
+});
 
 const placeMenu = async () => {
   menuPosition.value = {x: props.x, y: props.y};
@@ -84,46 +75,7 @@ const placeMenu = async () => {
 
 const refreshMenu = async () => {
   await placeMenu();
-  await focusFirstContextMenuButton();
-}
-
-const moveContextMenuFocus = (direction: -1 | 1) => {
-  const buttons = contextMenuButtons();
-  if (!buttons.length) return;
-  const currentIndex = buttons.findIndex(button => button === document.activeElement);
-  focusContextMenuButton(currentIndex < 0 ? 0 : currentIndex + direction);
-}
-
-const handleKeyDown = (event: KeyboardEvent) => {
-  if (event.key === "Escape") {
-    event.preventDefault();
-    emit("escape");
-    return;
-  }
-  if (event.key === "ArrowDown") {
-    event.preventDefault();
-    moveContextMenuFocus(1);
-    return;
-  }
-  if (event.key === "ArrowUp") {
-    event.preventDefault();
-    moveContextMenuFocus(-1);
-    return;
-  }
-  if (event.key === "Home") {
-    event.preventDefault();
-    focusContextMenuButton(0);
-    return;
-  }
-  if (event.key === "End") {
-    event.preventDefault();
-    focusContextMenuButton(contextMenuButtons().length - 1);
-    return;
-  }
-  if (event.key === "Tab") {
-    event.preventDefault();
-    moveContextMenuFocus(event.shiftKey ? -1 : 1);
-  }
+  await focusFirstMenuButton();
 }
 
 onMounted(() => {
@@ -146,7 +98,7 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
         ref="menuRef"
         class="context-menu"
         :style="{left: `${menuPosition.x}px`, top: `${menuPosition.y}px`}"
-        @keydown="handleKeyDown">
+        @keydown="handleMenuKeyDown">
       <template v-if="background">
         <button @click="emit('create-file')">新建文件</button>
         <button @click="emit('create-folder')">新建文件夹</button>

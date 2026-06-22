@@ -3,6 +3,7 @@ import {nextTick, ref, watch} from "vue";
 import type {ExplorerTab} from "../../class";
 import type {TabContextMenuState, TabDropPlacement} from "./types.ts";
 import Icon from "../Icon.vue";
+import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 
 const props = defineProps<{
   tabs: ExplorerTab[];
@@ -43,69 +44,20 @@ const handleTabWheel = (event: WheelEvent) => {
   target.scrollLeft += delta;
 }
 
-const contextMenuButtons = () => {
-  const menu = contextMenuRef.value;
-  if (!menu) return [];
-  return Array.from(menu.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
-}
-
-const focusContextMenuButton = (index: number) => {
-  const buttons = contextMenuButtons();
-  if (!buttons.length) return;
-  const nextIndex = (index + buttons.length) % buttons.length;
-  buttons[nextIndex]?.focus({preventScroll: true});
-}
-
-const focusFirstContextMenuButton = async () => {
-  await nextTick();
-  focusContextMenuButton(0);
-}
-
-const moveContextMenuFocus = (direction: -1 | 1) => {
-  const buttons = contextMenuButtons();
-  if (!buttons.length) return;
-  const currentIndex = buttons.findIndex(button => button === document.activeElement);
-  focusContextMenuButton(currentIndex < 0 ? 0 : currentIndex + direction);
-}
-
-const handleContextMenuKeyDown = (event: KeyboardEvent) => {
-  if (event.key === "Escape") {
-    event.preventDefault();
-    emit("close-context-menu");
-    return;
-  }
-  if (event.key === "ArrowDown") {
-    event.preventDefault();
-    moveContextMenuFocus(1);
-    return;
-  }
-  if (event.key === "ArrowUp") {
-    event.preventDefault();
-    moveContextMenuFocus(-1);
-    return;
-  }
-  if (event.key === "Home") {
-    event.preventDefault();
-    focusContextMenuButton(0);
-    return;
-  }
-  if (event.key === "End") {
-    event.preventDefault();
-    focusContextMenuButton(contextMenuButtons().length - 1);
-    return;
-  }
-  if (event.key === "Tab") {
-    event.preventDefault();
-    moveContextMenuFocus(event.shiftKey ? -1 : 1);
-  }
-}
+const {
+  focusFirstMenuButton,
+  handleMenuKeyDown
+} = useMenuKeyboardNavigation({
+  menuRef: contextMenuRef,
+  onEscape: () => emit("close-context-menu")
+});
 
 watch(() => [props.activeTabId, props.tabs.length] as const, () => {
   void revealActiveTab();
 }, {immediate: true});
 
 watch(() => [props.contextMenu.visible, props.contextMenu.tabId] as const, ([visible]) => {
-  if (visible) void focusFirstContextMenuButton();
+  if (visible) void focusFirstMenuButton();
 }, {flush: "post"});
 
 const emit = defineEmits<{
@@ -173,7 +125,7 @@ const emit = defineEmits<{
       aria-label="标签页菜单"
       @click.stop
       @contextmenu.prevent
-      @keydown="handleContextMenuKeyDown">
+      @keydown="handleMenuKeyDown">
     <button role="menuitem" @click="emit('new-tab')">新建标签页</button>
     <button role="menuitem" :disabled="!canReopenClosedTab" @click="emit('reopen-closed-tab')">重新打开关闭的标签页</button>
     <button role="menuitem" :disabled="!contextTarget" @click="emit('duplicate-tab')">复制标签页</button>

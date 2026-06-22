@@ -4,6 +4,7 @@ import Breadcrumb from "../Breadcrumb.vue";
 import Icon from "../Icon.vue";
 import type {ExplorerIconSize, ExplorerViewMode} from "../../class";
 import type {ExplorerViewModeSelection} from "../../composables/useExplorerViewMode.ts";
+import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 
 type BreadcrumbExpose = {
   focusInput: () => void;
@@ -49,6 +50,7 @@ const emit = defineEmits<{
 
 const breadcrumbRef = ref<BreadcrumbExpose | null>(null);
 const viewMenuRef = ref<HTMLElement | null>(null);
+const viewMenuPanelRef = ref<HTMLElement | null>(null);
 const viewModeButtonRef = ref<HTMLButtonElement | null>(null);
 const viewModeMenuOpen = ref(false);
 
@@ -118,18 +120,16 @@ const focusViewModeButton = async () => {
   viewModeButtonRef.value?.focus({preventScroll: true});
 }
 
-const viewMenuButtons = () => {
-  const menu = viewMenuRef.value?.querySelector<HTMLElement>(".view-menu-panel");
-  if (!menu) return [];
-  return Array.from(menu.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
-}
-
-const focusViewMenuButton = (index: number) => {
-  const buttons = viewMenuButtons();
-  if (!buttons.length) return;
-  const nextIndex = (index + buttons.length) % buttons.length;
-  buttons[nextIndex]?.focus({preventScroll: true});
-}
+const {
+  focusMenuButton: focusViewMenuButton,
+  handleMenuKeyDown: handleViewModeMenuKeyDown
+} = useMenuKeyboardNavigation({
+  menuRef: viewMenuPanelRef,
+  onEscape: () => {
+    closeViewModeMenu();
+    void focusViewModeButton();
+  }
+});
 
 const focusActiveViewMenuButton = async () => {
   await nextTick();
@@ -163,51 +163,11 @@ const selectViewMode = (option: ViewModeOption) => {
   });
 }
 
-const moveViewModeFocus = (direction: -1 | 1) => {
-  const buttons = viewMenuButtons();
-  if (!buttons.length) return;
-  const currentIndex = buttons.findIndex(button => button === document.activeElement);
-  focusViewMenuButton(currentIndex < 0 ? 0 : currentIndex + direction);
-}
-
 const handleViewModeButtonKeyDown = (event: KeyboardEvent) => {
   if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
   event.preventDefault();
   if (!viewModeMenuOpen.value) openViewModeMenu();
   else focusActiveViewMenuButton();
-}
-
-const handleViewModeMenuKeyDown = (event: KeyboardEvent) => {
-  if (event.key === "Escape") {
-    event.preventDefault();
-    closeViewModeMenu();
-    void focusViewModeButton();
-    return;
-  }
-  if (event.key === "ArrowDown") {
-    event.preventDefault();
-    moveViewModeFocus(1);
-    return;
-  }
-  if (event.key === "ArrowUp") {
-    event.preventDefault();
-    moveViewModeFocus(-1);
-    return;
-  }
-  if (event.key === "Home") {
-    event.preventDefault();
-    focusViewMenuButton(0);
-    return;
-  }
-  if (event.key === "End") {
-    event.preventDefault();
-    focusViewMenuButton(viewMenuButtons().length - 1);
-    return;
-  }
-  if (event.key === "Tab") {
-    event.preventDefault();
-    moveViewModeFocus(event.shiftKey ? -1 : 1);
-  }
 }
 
 const handleDocumentPointerDown = (event: PointerEvent) => {
@@ -265,7 +225,7 @@ defineExpose({
         <span>{{ viewModeLabel }}</span>
         <icon icon="icon-unfold" class="view-caret" />
       </button>
-      <div v-if="viewModeMenuOpen" class="view-menu-panel" role="menu" aria-label="查看模式" @keydown="handleViewModeMenuKeyDown">
+      <div v-if="viewModeMenuOpen" ref="viewMenuPanelRef" class="view-menu-panel" role="menu" aria-label="查看模式" @keydown="handleViewModeMenuKeyDown">
         <button
             v-for="option in viewModeOptions"
             :key="option.key"
