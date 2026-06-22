@@ -26,6 +26,9 @@ import ImageViewer from "../components/viewer/ImageViewer.vue";
 import PreviewPane from "../components/viewer/PreviewPane.vue";
 import TaskPanel from "../components/tasks/TaskPanel.vue";
 import TabStrip from "../components/tabs/TabStrip.vue";
+import OperationPanel from "../components/operations/OperationPanel.vue";
+import DeleteConfirmPanel from "../components/operations/DeleteConfirmPanel.vue";
+import PropertiesPanel from "../components/operations/PropertiesPanel.vue";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
 
@@ -60,6 +63,10 @@ type ExplorerExpose = {
 
 type BreadcrumbExpose = {
   focusInput: () => void;
+}
+
+type FocusablePanelExpose = {
+  focus: () => void;
 }
 
 type FileClipboardAction = "copy" | "cut";
@@ -200,8 +207,8 @@ const fileStore = useFileStore();
 const treeData = ref<FileTreeData[]>([]);
 const explorerRef = ref<ExplorerExpose | null>(null);
 const breadcrumbRef = ref<BreadcrumbExpose | null>(null);
-const deleteConfirmRef = ref<HTMLElement | null>(null);
-const propertiesPanelRef = ref<HTMLElement | null>(null);
+const deleteConfirmRef = ref<FocusablePanelExpose | null>(null);
+const propertiesPanelRef = ref<FocusablePanelExpose | null>(null);
 const uploadInput = ref<HTMLInputElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 const uploadDropActive = ref(false);
@@ -322,50 +329,6 @@ const canArchiveSelection = computed(() => hasSelection.value);
 const canDeleteSelection = computed(() => hasSelection.value);
 const canExtractSelection = computed(() => isArchiveFile(singleSelection.value));
 const canPasteSelection = computed(() => hasClipboard.value);
-const propertiesEntries = computed(() => propertiesPanel.value.entries);
-const propertiesEntryCount = computed(() => propertiesEntries.value.length);
-const propertiesSingleEntry = computed(() => propertiesEntryCount.value === 1 ? propertiesEntries.value[0] : null);
-const propertiesFolderCount = computed(() => propertiesEntries.value.filter(entry => entry.type === "folder").length);
-const propertiesFileEntries = computed(() => propertiesEntries.value.filter(entry => entry.type === "file"));
-const propertiesKnownSize = computed(() => propertiesFileEntries.value.reduce((total, entry) => total + (entry.size ?? 0), 0));
-const propertiesMissingSizeCount = computed(() => propertiesFileEntries.value.filter(entry => entry.size === undefined).length);
-const propertiesTitle = computed(() => propertiesSingleEntry.value?.name ?? `${propertiesEntryCount.value} 个项目`);
-const propertiesSubtitle = computed(() => propertiesSingleEntry.value ? "项目属性" : "选中项目属性");
-const propertiesIcon = computed(() => {
-  const entry = propertiesSingleEntry.value;
-  if (!entry) return "icon-file-common-filling";
-  if (entry.type === "folder") return "icon-folder-fill";
-  return "icon-file-fill";
-});
-const entryTypeText = (entry: ExplorerEntry) => {
-  if (entry.type === "folder") return "文件夹";
-  return entry.extension ? `${entry.extension.toUpperCase()} 文件` : "文件";
-}
-const propertiesSizeText = computed(() => {
-  if (propertiesSingleEntry.value) return propertiesSingleEntry.value.type === "file" ? formatBytes(propertiesSingleEntry.value.size) : "-";
-  const suffix = propertiesMissingSizeCount.value ? `，${propertiesMissingSizeCount.value} 个文件未加载大小` : "";
-  return `${formatBytes(propertiesKnownSize.value)}${suffix}`;
-});
-const propertiesRows = computed(() => {
-  const entry = propertiesSingleEntry.value;
-  if (entry) {
-    return [
-      {label: "名称", value: entry.name},
-      {label: "类型", value: entryTypeText(entry)},
-      {label: "位置", value: parentPath(entry.path)},
-      {label: "路径", value: entry.path},
-      {label: "大小", value: propertiesSizeText.value},
-      {label: "修改时间", value: formatDate(entry.modified)}
-    ];
-  }
-  return [
-    {label: "项目", value: `${propertiesEntryCount.value} 项`},
-    {label: "文件夹", value: `${propertiesFolderCount.value} 项`},
-    {label: "文件", value: `${propertiesFileEntries.value.length} 项`},
-    {label: "已知文件大小", value: propertiesSizeText.value},
-    {label: "当前位置", value: currentFolder()}
-  ];
-});
 const currentViewModeMeta = computed(() => viewModeMeta[fileStore.viewMode]);
 const nextViewMode = computed(() => {
   const index = viewModeOrder.indexOf(fileStore.viewMode);
@@ -389,29 +352,6 @@ const operationPanelNameLabel = computed(() => {
       return "名称";
   }
 });
-const operationPanelIcon = computed(() => {
-  switch (operationPanel.value.kind) {
-    case "createFile":
-      return "icon-file-add-fill";
-    case "createFolder":
-      return "icon-folder-add-fill";
-    case "archive":
-    case "extract":
-      return "icon-file-zip-fill";
-    default:
-      return "icon-file-common-filling";
-  }
-});
-const deleteConfirmTitle = computed(() => {
-  const count = deleteConfirm.value.entries.length;
-  return count > 1 ? `删除 ${count} 项？` : `删除 ${deleteConfirm.value.entries[0]?.name ?? "所选项目"}？`;
-});
-const deleteConfirmMessage = computed(() => {
-  const count = deleteConfirm.value.entries.length;
-  return count > 1 ? "这些项目会被移动到回收站，之后可从回收站恢复。" : "该项目会被移动到回收站，之后可从回收站恢复。";
-});
-const deleteConfirmItems = computed(() => deleteConfirm.value.entries.slice(0, 5));
-const deleteConfirmExtraCount = computed(() => Math.max(0, deleteConfirm.value.entries.length - deleteConfirmItems.value.length));
 const browserAreaStyle = computed(() => ({
   "--preview-pane-width": `${previewPaneWidth.value}px`
 }));
@@ -705,31 +645,6 @@ const uploadDropSubtitle = computed(() => uploadDropUploading.value ? `目标：
 const canCancelTask = (task: TaskStatus) => task.state === "queued" || task.state === "running";
 
 const shortTaskId = (id: string) => id.slice(0, 8);
-
-const formatBytes = (bytes?: number) => {
-  if (!bytes) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = bytes;
-  let index = 0;
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024;
-    index += 1;
-  }
-  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
-}
-
-const formatDate = (srcDate?: string) => {
-  if (!srcDate) return "-";
-  const date = new Date(srcDate);
-  if (Number.isNaN(date.getTime())) return srcDate;
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(date);
-}
 
 const updateTaskRefreshTime = () => {
   taskLastUpdatedAt.value = new Intl.DateTimeFormat("zh-CN", {
@@ -2107,111 +2022,23 @@ const signOut = async () => {
                 <span>{{ uploadDropSubtitle }}</span>
               </div>
             </div>
-            <form v-if="operationPanel.visible" class="operation-panel" @submit.prevent="submitOperationPanel">
-              <div class="operation-panel-header">
-                <div class="operation-panel-icon">
-                  <icon :icon="operationPanelIcon" />
-                </div>
-                <div class="operation-panel-title">
-                  <strong>{{ operationPanel.title }}</strong>
-                  <span>{{ operationPanel.message }}</span>
-                </div>
-                <button type="button" class="operation-panel-close" title="关闭" @click="closeOperationPanel">
-                  <icon icon="icon-close" />
-                </button>
-              </div>
-              <label class="operation-field">
-                <span>{{ operationPanelNameLabel }}</span>
-                <input
-                    v-model="operationPanel.name"
-                    type="text"
-                    autocomplete="off"
-                    :disabled="operationPanel.submitting"
-                    @keydown.esc.prevent="closeOperationPanel">
-              </label>
-              <div v-if="operationPanel.kind === 'archive'" class="operation-field">
-                <span>压缩格式</span>
-                <div class="operation-segmented">
-                  <button type="button" :class="{active: operationPanel.format === 'zip'}" @click="operationPanel.format = 'zip'">ZIP</button>
-                  <button type="button" :class="{active: operationPanel.format === 'tarGz'}" @click="operationPanel.format = 'tarGz'">TAR.GZ</button>
-                </div>
-              </div>
-              <div v-if="operationPanel.kind === 'archive'" class="operation-hint">
-                {{ operationPanel.entries.length }} 项将加入压缩包
-              </div>
-              <div v-else-if="operationPanel.kind === 'extract' && operationPanel.sourceEntry" class="operation-hint">
-                源文件：{{ operationPanel.sourceEntry.name }}
-              </div>
-              <div class="operation-actions">
-                <button type="button" class="operation-secondary" :disabled="operationPanel.submitting" @click="closeOperationPanel">取消</button>
-                <button type="submit" class="operation-primary" :disabled="operationPanel.submitting || !operationPanel.name.trim()">
-                  {{ operationPanel.submitting ? "处理中..." : operationPanel.primaryText }}
-                </button>
-              </div>
-            </form>
-            <section
-                v-if="deleteConfirm.visible"
+            <operation-panel
+                :state="operationPanel"
+                @update:name="value => operationPanel.name = value"
+                @update:format="value => operationPanel.format = value"
+                @close="closeOperationPanel"
+                @submit="submitOperationPanel" />
+            <delete-confirm-panel
                 ref="deleteConfirmRef"
-                class="delete-confirm-panel"
-                tabindex="-1"
-                @keydown.esc.prevent="closeDeleteConfirm">
-              <div class="delete-confirm-header">
-                <div class="delete-confirm-icon">
-                  <icon icon="icon-delete-fill" />
-                </div>
-                <div class="delete-confirm-title">
-                  <strong>{{ deleteConfirmTitle }}</strong>
-                  <span>{{ deleteConfirmMessage }}</span>
-                </div>
-                <button type="button" class="operation-panel-close" title="关闭" @click="closeDeleteConfirm">
-                  <icon icon="icon-close" />
-                </button>
-              </div>
-              <div class="delete-confirm-list">
-                <div v-for="item in deleteConfirmItems" :key="item.path" :title="item.path">
-                  <icon :icon="item.type === 'folder' ? 'icon-folder-fill' : 'icon-file-fill'" />
-                  <span>{{ item.name }}</span>
-                </div>
-                <div v-if="deleteConfirmExtraCount" class="delete-confirm-more">
-                  另有 {{ deleteConfirmExtraCount }} 项
-                </div>
-              </div>
-              <p v-if="deleteConfirm.error" class="delete-confirm-error">{{ deleteConfirm.error }}</p>
-              <div class="delete-confirm-actions">
-                <button type="button" class="operation-secondary" :disabled="deleteConfirm.submitting" @click="closeDeleteConfirm">取消</button>
-                <button type="button" class="delete-confirm-primary" :disabled="deleteConfirm.submitting" @click="submitDeleteConfirm">
-                  {{ deleteConfirm.submitting ? "创建任务中..." : "移动到回收站" }}
-                </button>
-              </div>
-            </section>
-            <section
-                v-if="propertiesPanel.visible"
+                :state="deleteConfirm"
+                @close="closeDeleteConfirm"
+                @submit="submitDeleteConfirm" />
+            <properties-panel
                 ref="propertiesPanelRef"
-                class="properties-panel"
-                tabindex="-1"
-                @keydown.esc.prevent="closePropertiesPanel">
-              <div class="properties-header">
-                <div class="properties-icon">
-                  <icon :icon="propertiesIcon" />
-                </div>
-                <div class="properties-title">
-                  <strong>{{ propertiesTitle }}</strong>
-                  <span>{{ propertiesSubtitle }}</span>
-                </div>
-                <button type="button" class="operation-panel-close" title="关闭" @click="closePropertiesPanel">
-                  <icon icon="icon-close" />
-                </button>
-              </div>
-              <div class="properties-list">
-                <div v-for="item in propertiesRows" :key="item.label" :title="item.value">
-                  <span>{{ item.label }}</span>
-                  <strong>{{ item.value }}</strong>
-                </div>
-              </div>
-              <div class="properties-actions">
-                <button type="button" class="operation-primary" @click="closePropertiesPanel">确定</button>
-              </div>
-            </section>
+                :visible="propertiesPanel.visible"
+                :entries="propertiesPanel.entries"
+                :current-folder="currentFolder()"
+                @close="closePropertiesPanel" />
           </div>
           <aside v-if="previewPanelVisible" class="preview-pane">
             <div
@@ -2466,171 +2293,6 @@ const signOut = async () => {
 
 .shell-notice.error .shell-notice-mark {
   @apply bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.16)];
-}
-
-.operation-panel {
-  @apply absolute left-1/2 top-6 z-30 flex w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm shadow-2xl;
-}
-
-.delete-confirm-panel {
-  @apply absolute left-1/2 top-6 z-30 flex w-[min(30rem,calc(100%-2rem))] -translate-x-1/2 flex-col gap-3 rounded-lg border border-red-100 bg-white p-4 text-sm text-slate-700 shadow-2xl outline-none;
-}
-
-.properties-panel {
-  @apply absolute left-1/2 top-6 z-30 flex w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-2xl outline-none;
-}
-
-.operation-panel-header {
-  @apply flex items-start gap-3;
-}
-
-.delete-confirm-header {
-  @apply flex items-start gap-3;
-}
-
-.properties-header {
-  @apply flex items-start gap-3;
-}
-
-.operation-panel-icon {
-  @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-xl text-blue-600;
-}
-
-.delete-confirm-icon {
-  @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 text-xl text-red-600;
-}
-
-.properties-icon {
-  @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xl text-slate-600;
-}
-
-.operation-panel-title {
-  @apply flex min-w-0 grow flex-col gap-0.5;
-}
-
-.delete-confirm-title {
-  @apply flex min-w-0 grow flex-col gap-0.5;
-}
-
-.properties-title {
-  @apply flex min-w-0 grow flex-col gap-0.5;
-}
-
-.operation-panel-title strong {
-  @apply truncate text-base font-semibold text-slate-900;
-}
-
-.delete-confirm-title strong {
-  @apply truncate text-base font-semibold text-slate-900;
-}
-
-.properties-title strong {
-  @apply truncate text-base font-semibold text-slate-900;
-}
-
-.operation-panel-title span {
-  @apply truncate text-xs text-slate-500;
-}
-
-.delete-confirm-title span {
-  @apply text-xs leading-5 text-slate-500;
-}
-
-.properties-title span {
-  @apply text-xs leading-5 text-slate-500;
-}
-
-.operation-panel-close {
-  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100;
-}
-
-.operation-field {
-  @apply flex flex-col gap-1.5 text-xs font-medium text-slate-500;
-}
-
-.operation-field input {
-  @apply h-9 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400;
-}
-
-.operation-segmented {
-  @apply inline-flex w-fit overflow-hidden rounded-md border border-slate-200 bg-slate-50;
-}
-
-.operation-segmented button {
-  @apply h-8 border-r border-slate-200 px-3 text-xs font-semibold text-slate-600 last:border-r-0 hover:bg-white;
-}
-
-.operation-segmented button.active {
-  @apply bg-blue-600 text-white hover:bg-blue-600;
-}
-
-.operation-hint {
-  @apply rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700;
-}
-
-.operation-actions {
-  @apply flex justify-end gap-2 pt-1;
-}
-
-.delete-confirm-list {
-  @apply flex max-h-40 flex-col gap-1 overflow-auto rounded-md border border-slate-100 bg-slate-50 p-2;
-}
-
-.delete-confirm-list div {
-  @apply flex min-h-7 min-w-0 items-center gap-2 rounded px-2 text-xs text-slate-600;
-}
-
-.delete-confirm-list span {
-  @apply min-w-0 truncate;
-}
-
-.delete-confirm-more {
-  @apply text-slate-400;
-}
-
-.delete-confirm-error {
-  @apply rounded-md border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600;
-}
-
-.delete-confirm-actions {
-  @apply flex justify-end gap-2 pt-1;
-}
-
-.properties-list {
-  @apply flex max-h-72 flex-col overflow-auto rounded-md border border-slate-100 bg-slate-50;
-}
-
-.properties-list div {
-  @apply grid min-h-9 grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 px-3 py-2 text-xs last:border-b-0;
-}
-
-.properties-list span {
-  @apply text-slate-500;
-}
-
-.properties-list strong {
-  @apply min-w-0 truncate font-medium text-slate-800;
-}
-
-.properties-actions {
-  @apply flex justify-end gap-2 pt-1;
-}
-
-.operation-secondary,
-.operation-primary {
-  @apply h-9 rounded-md px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50;
-}
-
-.operation-secondary {
-  @apply border border-slate-200 bg-white text-slate-700 hover:bg-slate-50;
-}
-
-.operation-primary {
-  @apply bg-blue-600 text-white hover:bg-blue-700;
-}
-
-.delete-confirm-primary {
-  @apply h-9 rounded-md bg-red-600 px-4 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 .preview-pane {
