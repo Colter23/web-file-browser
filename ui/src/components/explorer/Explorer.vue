@@ -557,6 +557,15 @@ const isSelected = (path: string) => selectedPaths.value.includes(path);
 
 const indexOfPath = (path: string) => entries.value.findIndex(entry => entry.path === path);
 
+const entryDomId = (path: string) => `explorer-entry-${encodeURIComponent(path).replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+
+const ensureFocusAnchor = () => {
+  if (!entries.value.length || focusedPath.value && entryByPath(focusedPath.value)) return;
+  const anchor = selectedEntries.value[selectedEntries.value.length - 1] ?? entries.value[0];
+  focusedPath.value = anchor?.path ?? "";
+  if (!anchorPath.value) anchorPath.value = focusedPath.value;
+}
+
 const selectRange = (targetPath: string, additive: boolean) => {
   const targetIndex = indexOfPath(targetPath);
   if (targetIndex < 0) return;
@@ -1552,6 +1561,7 @@ const finishMarqueeSelection = () => {
 
 const activateViewport = () => {
   focusViewport();
+  ensureFocusAnchor();
 }
 
 const setViewMode = (mode: ExplorerViewMode) => {
@@ -1814,7 +1824,13 @@ defineExpose({
         ref="viewportRef"
         class="explorer-viewport"
         :class="[viewMode, itemSizeClass, {dropCurrent: dragState.overCurrentFolder}]"
+        role="listbox"
+        aria-label="文件列表"
+        aria-multiselectable="true"
+        :aria-busy="loading || loadingMore"
+        :aria-activedescendant="focusedPath ? entryDomId(focusedPath) : undefined"
         tabindex="0"
+        @focus="ensureFocusAnchor"
         @click="activateViewport"
         @mousedown="beginMarqueeSelection"
         @scroll="handleViewportScroll"
@@ -1857,11 +1873,15 @@ defineExpose({
         <article
             v-for="entry in entries"
             :key="entry.path"
+            :id="entryDomId(entry.path)"
             :ref="element => setItemRef(entry.path, element)"
             class="entry-item"
             :class="{selected: isSelected(entry.path), focused: focusedPath === entry.path, image: isImageFile(entry), dimmed: isDimmed(entry), dragging: isDragged(entry), dropTarget: isDropTarget(entry)}"
             :style="viewMode === 'details' ? detailsGridStyle : undefined"
             :title="entry.name"
+            role="option"
+            :aria-selected="isSelected(entry.path)"
+            :tabindex="focusedPath === entry.path ? 0 : -1"
             draggable="true"
             @click.stop="selectEntry(entry, $event)"
             @auxclick.stop="handleAuxClick($event, entry)"
