@@ -28,6 +28,7 @@ import {usePreviewPaneResize} from "../composables/usePreviewPaneResize.ts";
 import {useShellNotice} from "../composables/useShellNotice.ts";
 import {useFileOperations} from "../composables/useFileOperations.ts";
 import {useExplorerTabs} from "../composables/useExplorerTabs.ts";
+import {useExplorerTabContext} from "../composables/useExplorerTabContext.ts";
 import {useExplorerPreview} from "../composables/useExplorerPreview.ts";
 import {useExplorerNavigation} from "../composables/useExplorerNavigation.ts";
 import {useExplorerViewMode} from "../composables/useExplorerViewMode.ts";
@@ -114,14 +115,25 @@ const uploadInput = ref<HTMLInputElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 const searchText = ref("");
 const isFiltering = computed(() => Boolean(searchText.value.trim()));
-let suppressSelectionPersistence = false;
-let suppressScrollPersistence = false;
-let tabContextRestoreToken = 0;
-let scrollPersistTimer: number | undefined;
 
 const activeTab = computed(() => fileStore.tabs.find(tab => tab.id === fileStore.activeTabId) ?? fileStore.tabs[0]);
 
 const selectedEntry = () => explorerRef.value?.getSelectedEntry() ?? null;
+
+const {
+  shouldPersistSelection,
+  persistSelectedPaths,
+  persistActiveTabScrollTop,
+  persistCurrentExplorerScrollTop,
+  syncActiveTabContext,
+  stopScrollPersistence
+} = useExplorerTabContext({
+  activeTab,
+  searchText,
+  selectPaths: (paths, scrollToSelection) => explorerRef.value?.selectPaths(paths, scrollToSelection) ?? Promise.resolve(false),
+  getScrollTop: () => explorerRef.value?.getScrollTop() ?? 0,
+  setScrollTop: scrollTop => explorerRef.value?.setScrollTop(scrollTop) ?? Promise.resolve()
+});
 
 const {
   previewPanelVisible,
@@ -150,8 +162,8 @@ const {
 } = useExplorerPreview({
   getSelectedEntry: selectedEntry,
   getImageEntries: () => explorerRef.value?.getImageEntries() ?? [],
-  shouldPersistSelection: () => !fileStore.showEditor && !suppressSelectionPersistence,
-  persistSelectedPaths: paths => fileStore.setActiveTabSelectedPaths(paths),
+  shouldPersistSelection,
+  persistSelectedPaths,
   showNotice: showShellNotice
 });
 
@@ -187,64 +199,6 @@ const clearSearch = (focus: "explorer" | "search" | false = "explorer") => {
   searchText.value = "";
   if (focus === "search") searchInput.value?.focus();
   if (focus === "explorer") void focusExplorer();
-}
-
-const finishTabContextRestore = (token: number) => {
-  if (token !== tabContextRestoreToken) return;
-  suppressSelectionPersistence = false;
-}
-
-const restoreActiveTabSelection = async (paths: string[], token: number, attempt = 0) => {
-  if (!paths.length || token !== tabContextRestoreToken) {
-    finishTabContextRestore(token);
-    return;
-  }
-  const restored = await explorerRef.value?.selectPaths(paths, false);
-  if (restored || token !== tabContextRestoreToken || attempt >= 6) {
-    finishTabContextRestore(token);
-    return;
-  }
-  window.setTimeout(() => {
-    void restoreActiveTabSelection(paths, token, attempt + 1);
-  }, 80);
-}
-
-const finishTabScrollRestore = (token: number) => {
-  if (token !== tabContextRestoreToken) return;
-  suppressScrollPersistence = false;
-}
-
-const persistActiveTabScrollTop = (scrollTop: number, tabId = fileStore.activeTabId, path = fileStore.currentPath) => {
-  if (suppressScrollPersistence || fileStore.showEditor) return;
-  if (scrollPersistTimer) window.clearTimeout(scrollPersistTimer);
-  scrollPersistTimer = window.setTimeout(() => {
-    scrollPersistTimer = undefined;
-    if (suppressScrollPersistence || fileStore.showEditor || tabId !== fileStore.activeTabId || path !== fileStore.currentPath) return;
-    fileStore.setActiveTabScrollTop(scrollTop);
-  }, 120);
-}
-
-const persistCurrentExplorerScrollTop = () => {
-  if (suppressScrollPersistence || fileStore.showEditor) return;
-  if (scrollPersistTimer) {
-    window.clearTimeout(scrollPersistTimer);
-    scrollPersistTimer = undefined;
-  }
-  fileStore.setActiveTabScrollTop(explorerRef.value?.getScrollTop() ?? 0);
-}
-
-const syncActiveTabContext = async () => {
-  const tab = activeTab.value;
-  const selectedPaths = [...(tab?.selectedPaths ?? [])];
-  const scrollTop = tab?.scrollTop ?? 0;
-  const token = ++tabContextRestoreToken;
-  suppressSelectionPersistence = true;
-  suppressScrollPersistence = true;
-  searchText.value = tab?.filterText ?? "";
-  await nextTick();
-  await restoreActiveTabSelection(selectedPaths, token);
-  await explorerRef.value?.setScrollTop(scrollTop);
-  finishTabScrollRestore(token);
 }
 
 const {
@@ -360,7 +314,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  if (scrollPersistTimer) window.clearTimeout(scrollPersistTimer);
+  stopScrollPersistence();
   stopShellNoticeTimer();
   stopTaskPolling();
   window.removeEventListener("keydown", handleWindowKeyDown);
@@ -377,11 +331,6 @@ onBeforeUnmount(() => {
 
 watch(() => fileStore.showEditor, (showEditor) => {
   if (showEditor) closePanels();
-});
-
-watch(searchText, text => {
-  if (fileStore.showEditor) return;
-  fileStore.setActiveTabFilterText(text);
 });
 
 const refreshCurrent = async (keepSelection = false) => {
