@@ -1,0 +1,164 @@
+<script setup lang="ts">
+import type {ExplorerTab} from "../../class";
+import Icon from "../Icon.vue";
+
+type TabDropPlacement = "before" | "after";
+
+type TabContextMenuState = {
+  visible: boolean;
+  x: number;
+  y: number;
+  tabId: string;
+}
+
+defineProps<{
+  tabs: ExplorerTab[];
+  activeTabId: string;
+  draggingTabId: string;
+  dropTargetId: string;
+  dropPlacement: TabDropPlacement | "";
+  contextMenu: TabContextMenuState;
+  contextTarget: ExplorerTab | null;
+  canCloseTab: boolean;
+  canCloseOtherTabs: boolean;
+  canCloseRightTabs: boolean;
+}>();
+
+const emit = defineEmits<{
+  (e: "new-tab"): void;
+  (e: "activate-tab", tabId: string): void;
+  (e: "close-tab", event: MouseEvent, tabId: string): void;
+  (e: "tab-aux-click", event: MouseEvent, tabId: string): void;
+  (e: "tab-context-menu", event: MouseEvent, tabId: string): void;
+  (e: "tab-drag-start", event: DragEvent, tabId: string): void;
+  (e: "tab-drag-over", event: DragEvent, tabId: string): void;
+  (e: "tab-drag-leave", event: DragEvent, tabId: string): void;
+  (e: "tab-drop", event: DragEvent, tabId: string): void;
+  (e: "tab-drag-end"): void;
+  (e: "duplicate-tab"): void;
+  (e: "close-context-tab"): void;
+  (e: "close-other-tabs"): void;
+  (e: "close-right-tabs"): void;
+}>();
+</script>
+
+<template>
+  <nav class="tab-strip" aria-label="目录标签">
+    <button
+        v-for="tab in tabs"
+        :key="tab.id"
+        class="tab-button"
+        :class="{
+          active: tab.id === activeTabId,
+          dragging: draggingTabId === tab.id,
+          dropBefore: dropTargetId === tab.id && dropPlacement === 'before',
+          dropAfter: dropTargetId === tab.id && dropPlacement === 'after'
+        }"
+        :title="`${tab.path} · Ctrl+Tab 切换 · 中键关闭`"
+        draggable="true"
+        @click="emit('activate-tab', tab.id)"
+        @auxclick="emit('tab-aux-click', $event, tab.id)"
+        @contextmenu="emit('tab-context-menu', $event, tab.id)"
+        @dragstart="emit('tab-drag-start', $event, tab.id)"
+        @dragover="emit('tab-drag-over', $event, tab.id)"
+        @dragleave="emit('tab-drag-leave', $event, tab.id)"
+        @drop="emit('tab-drop', $event, tab.id)"
+        @dragend="emit('tab-drag-end')">
+      <icon icon="icon-folder-fill" />
+      <span>{{ tab.title }}</span>
+      <span class="tab-close" title="关闭标签页 (Ctrl+W)" @click="emit('close-tab', $event, tab.id)">
+        <icon icon="icon-close" size="small" />
+      </span>
+    </button>
+    <button class="tab-add" title="新建标签页 (Ctrl+T)" @click="emit('new-tab')">
+      <icon icon="icon-add" />
+    </button>
+  </nav>
+
+  <div
+      v-if="contextMenu.visible"
+      class="tab-context-menu"
+      :style="{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}"
+      @click.stop
+      @contextmenu.prevent>
+    <button @click="emit('new-tab')">新建标签页</button>
+    <button :disabled="!contextTarget" @click="emit('duplicate-tab')">复制标签页</button>
+    <div class="tab-context-separator"></div>
+    <button :disabled="!canCloseTab" @click="emit('close-context-tab')">关闭标签页</button>
+    <button :disabled="!canCloseOtherTabs" @click="emit('close-other-tabs')">关闭其他标签页</button>
+    <button :disabled="!canCloseRightTabs" @click="emit('close-right-tabs')">关闭右侧标签页</button>
+  </div>
+</template>
+
+<style scoped lang="postcss">
+@reference "tailwindcss";
+
+.tab-strip {
+  @apply flex min-w-0 grow items-center gap-2 overflow-hidden rounded-xl border border-white bg-white/70 p-1 shadow-sm backdrop-blur;
+}
+
+.tab-button {
+  @apply relative inline-flex h-9 min-w-32 max-w-52 shrink items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 shadow-sm hover:bg-slate-50;
+}
+
+.tab-button.active {
+  @apply border-blue-600 bg-blue-600 text-white;
+}
+
+.tab-button.dragging {
+  @apply opacity-55;
+}
+
+.tab-button.dropBefore,
+.tab-button.dropAfter {
+  @apply bg-blue-50 ring-2 ring-blue-200;
+}
+
+.tab-button.active.dropBefore,
+.tab-button.active.dropAfter {
+  @apply bg-blue-600 ring-blue-200;
+}
+
+.tab-button.dropBefore::before,
+.tab-button.dropAfter::after {
+  content: "";
+  @apply absolute bottom-1 top-1 w-0.5 rounded-full bg-blue-500;
+}
+
+.tab-button.dropBefore::before {
+  @apply left-1;
+}
+
+.tab-button.dropAfter::after {
+  @apply right-1;
+}
+
+.tab-button.active.dropBefore::before,
+.tab-button.active.dropAfter::after {
+  @apply bg-white;
+}
+
+.tab-button span:not(.tab-close) {
+  @apply min-w-0 truncate;
+}
+
+.tab-close {
+  @apply ml-auto inline-flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-black/10;
+}
+
+.tab-add {
+  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-slate-700 shadow-sm hover:bg-blue-50;
+}
+
+.tab-context-menu {
+  @apply fixed z-50 w-46 rounded-md border border-slate-200 bg-white py-1 text-sm shadow-xl;
+}
+
+.tab-context-menu button {
+  @apply block h-8 w-full px-3 text-left text-slate-700 hover:bg-blue-50 disabled:text-slate-300 disabled:hover:bg-white;
+}
+
+.tab-context-separator {
+  @apply my-1 border-t border-slate-100;
+}
+</style>

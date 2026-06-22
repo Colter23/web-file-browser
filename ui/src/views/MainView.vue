@@ -25,6 +25,7 @@ import Breadcrumb from "../components/Breadcrumb.vue";
 import ImageViewer from "../components/viewer/ImageViewer.vue";
 import PreviewPane from "../components/viewer/PreviewPane.vue";
 import TaskPanel from "../components/tasks/TaskPanel.vue";
+import TabStrip from "../components/tabs/TabStrip.vue";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
 
@@ -1893,45 +1894,31 @@ const signOut = async () => {
 <template>
   <div class="main-shell">
     <header class="top-strip">
-      <nav class="tab-strip" aria-label="目录标签">
-        <button
-            v-for="tab in fileStore.tabs"
-            :key="tab.id"
-            class="tab-button"
-            :class="{active: tab.id === activeTab?.id, dragging: draggingTabId === tab.id, dropBefore: tabDropTargetId === tab.id && tabDropPlacement === 'before', dropAfter: tabDropTargetId === tab.id && tabDropPlacement === 'after'}"
-            :title="`${tab.path} · Ctrl+Tab 切换 · 中键关闭`"
-            draggable="true"
-            @click="switchTab(tab.id)"
-            @auxclick="handleTabAuxClick($event, tab.id)"
-            @contextmenu="openTabContextMenu($event, tab.id)"
-            @dragstart="startTabDrag($event, tab.id)"
-            @dragover="dragOverTab($event, tab.id)"
-            @dragleave="leaveTabDropTarget($event, tab.id)"
-            @drop="dropTab($event, tab.id)"
-            @dragend="finishTabDrag">
-          <icon icon="icon-folder-fill" />
-          <span>{{ tab.title }}</span>
-          <span class="tab-close" title="关闭标签页 (Ctrl+W)" @click="closeTab($event, tab.id)">
-            <icon icon="icon-close" size="small" />
-          </span>
-        </button>
-        <button class="tab-add" title="新建标签页 (Ctrl+T)" @click="openTab">
-          <icon icon="icon-add" />
-        </button>
-      </nav>
-      <div
-          v-if="tabContextMenu.visible"
-          class="tab-context-menu"
-          :style="{left: `${tabContextMenu.x}px`, top: `${tabContextMenu.y}px`}"
-          @click.stop
-          @contextmenu.prevent>
-        <button @click="openTab">新建标签页</button>
-        <button :disabled="!tabContextTarget" @click="duplicateTabFromMenu">复制标签页</button>
-        <div class="tab-context-separator"></div>
-        <button :disabled="!canCloseTabContext" @click="closeTabFromMenu">关闭标签页</button>
-        <button :disabled="!canCloseOtherTabsContext" @click="closeOtherTabsFromMenu">关闭其他标签页</button>
-        <button :disabled="!canCloseRightTabsContext" @click="closeRightTabsFromMenu">关闭右侧标签页</button>
-      </div>
+      <tab-strip
+          :tabs="fileStore.tabs"
+          :active-tab-id="activeTab?.id ?? ''"
+          :dragging-tab-id="draggingTabId"
+          :drop-target-id="tabDropTargetId"
+          :drop-placement="tabDropPlacement"
+          :context-menu="tabContextMenu"
+          :context-target="tabContextTarget"
+          :can-close-tab="canCloseTabContext"
+          :can-close-other-tabs="canCloseOtherTabsContext"
+          :can-close-right-tabs="canCloseRightTabsContext"
+          @new-tab="openTab"
+          @activate-tab="switchTab"
+          @close-tab="closeTab"
+          @tab-aux-click="handleTabAuxClick"
+          @tab-context-menu="openTabContextMenu"
+          @tab-drag-start="startTabDrag"
+          @tab-drag-over="dragOverTab"
+          @tab-drag-leave="leaveTabDropTarget"
+          @tab-drop="dropTab"
+          @tab-drag-end="finishTabDrag"
+          @duplicate-tab="duplicateTabFromMenu"
+          @close-context-tab="closeTabFromMenu"
+          @close-other-tabs="closeOtherTabsFromMenu"
+          @close-right-tabs="closeRightTabsFromMenu" />
       <div class="top-actions">
         <label class="search-box" :class="{active: isFiltering}">
           <input
@@ -2276,78 +2263,6 @@ const signOut = async () => {
 
 .top-strip {
   @apply flex h-12 shrink-0 items-center gap-3;
-}
-
-.tab-strip {
-  @apply flex min-w-0 grow items-center gap-2 overflow-hidden rounded-xl border border-white bg-white/70 p-1 shadow-sm backdrop-blur;
-}
-
-.tab-button {
-  @apply relative inline-flex h-9 min-w-32 max-w-52 shrink items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 shadow-sm hover:bg-slate-50;
-}
-
-.tab-button.active {
-  @apply border-blue-600 bg-blue-600 text-white;
-}
-
-.tab-button.dragging {
-  @apply opacity-55;
-}
-
-.tab-button.dropBefore {
-  @apply bg-blue-50 ring-2 ring-blue-200;
-}
-
-.tab-button.dropAfter {
-  @apply bg-blue-50 ring-2 ring-blue-200;
-}
-
-.tab-button.active.dropBefore,
-.tab-button.active.dropAfter {
-  @apply bg-blue-600 ring-blue-200;
-}
-
-.tab-button.dropBefore::before,
-.tab-button.dropAfter::after {
-  content: "";
-  @apply absolute bottom-1 top-1 w-0.5 rounded-full bg-blue-500;
-}
-
-.tab-button.dropBefore::before {
-  @apply left-1;
-}
-
-.tab-button.dropAfter::after {
-  @apply right-1;
-}
-
-.tab-button.active.dropBefore::before,
-.tab-button.active.dropAfter::after {
-  @apply bg-white;
-}
-
-.tab-button span:not(.tab-close) {
-  @apply min-w-0 truncate;
-}
-
-.tab-close {
-  @apply ml-auto inline-flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-black/10;
-}
-
-.tab-add {
-  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-slate-700 shadow-sm hover:bg-blue-50;
-}
-
-.tab-context-menu {
-  @apply fixed z-50 w-46 rounded-md border border-slate-200 bg-white py-1 text-sm shadow-xl;
-}
-
-.tab-context-menu button {
-  @apply block h-8 w-full px-3 text-left text-slate-700 hover:bg-blue-50 disabled:text-slate-300 disabled:hover:bg-white;
-}
-
-.tab-context-separator {
-  @apply my-1 border-t border-slate-100;
 }
 
 .top-actions {
