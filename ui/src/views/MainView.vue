@@ -2,23 +2,13 @@
 import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import FileTree from "../components/FileTree.vue";
-import type {ArchiveFormat} from "../class";
 import {ExplorerIconSize, ExplorerViewMode, FileTreeData} from "../class";
 import {useFileStore} from "../store";
 import {
   cancelTask,
-  createArchiveTask,
-  createCopyTask,
-  createDeleteTask,
-  createEntry,
-  createExtractTask,
-  createMoveTask,
-  downloadFile,
   getFolderData,
   listTasks,
   logout,
-  moveEntry,
-  uploadFiles
 } from "../network/api";
 import Icon from "../components/Icon.vue";
 import Explorer from "../components/explorer/Explorer.vue";
@@ -29,7 +19,6 @@ import TabStrip from "../components/tabs/TabStrip.vue";
 import OperationPanel from "../components/operations/OperationPanel.vue";
 import DeleteConfirmPanel from "../components/operations/DeleteConfirmPanel.vue";
 import PropertiesPanel from "../components/operations/PropertiesPanel.vue";
-import type {DeleteConfirmState, FileClipboardAction, OperationPanelState, PropertiesPanelState} from "../components/operations/types.ts";
 import ContentToolbar from "../components/shell/ContentToolbar.vue";
 import CommandBar from "../components/shell/CommandBar.vue";
 import ShellNotice from "../components/shell/ShellNotice.vue";
@@ -37,16 +26,13 @@ import UploadDropOverlay from "../components/shell/UploadDropOverlay.vue";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import {usePreviewPaneResize} from "../composables/usePreviewPaneResize.ts";
 import {useShellNotice} from "../composables/useShellNotice.ts";
+import {useFileOperations} from "../composables/useFileOperations.ts";
 import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
-import {archiveFormatExtension, archiveStem, isExtractableArchiveEntry} from "../utils/file-entry.ts";
-import {isSameOrDescendantPath, joinPath, normalizePathText, parentPath} from "../utils/file-path.ts";
+import {isExtractableArchiveEntry} from "../utils/file-entry.ts";
+import {normalizePathText, parentPath} from "../utils/file-path.ts";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
-
-type CopyPathPayload = {
-  paths: string[];
-}
 
 type ExplorerExpose = {
   refresh: (path?: string) => Promise<boolean>;
@@ -79,22 +65,6 @@ type TabContextMenuState = {
 }
 
 type TabDropPlacement = "before" | "after";
-
-type RenamePayload = {
-  entry: ExplorerEntry;
-  name: string;
-}
-
-type DropEntriesPayload = {
-  entries: ExplorerEntry[];
-  target: ExplorerEntry;
-  action: "copy" | "move";
-}
-
-type DropToCurrentFolderPayload = {
-  entries: ExplorerEntry[];
-  action: "copy" | "move";
-}
 
 type ImageViewerPayload = {
   entry: ExplorerEntry;
@@ -195,31 +165,6 @@ const imageViewerVisible = ref(false);
 const imageViewerEntry = ref<ExplorerEntry | null>(null);
 const imageViewerEntries = ref<ExplorerEntry[]>([]);
 const currentSelection = ref<ExplorerEntry[]>([]);
-const fileClipboardAction = ref<FileClipboardAction | null>(null);
-const fileClipboardEntries = ref<ExplorerEntry[]>([]);
-const creatingShortcutFolder = ref(false);
-const operationPanel = ref<OperationPanelState>({
-  visible: false,
-  kind: null,
-  title: "",
-  message: "",
-  primaryText: "确定",
-  name: "",
-  format: "zip",
-  entries: [],
-  sourceEntry: null,
-  submitting: false
-});
-const deleteConfirm = ref<DeleteConfirmState>({
-  visible: false,
-  entries: [],
-  submitting: false,
-  error: ""
-});
-const propertiesPanel = ref<PropertiesPanelState>({
-  visible: false,
-  entries: []
-});
 const tabContextMenu = ref<TabContextMenuState>({
   visible: false,
   x: 0,
@@ -261,13 +206,6 @@ const selectedList = computed(() => currentSelection.value);
 const selectedCount = computed(() => selectedList.value.length);
 const hasSelection = computed(() => selectedCount.value > 0);
 const singleSelection = computed(() => selectedCount.value === 1 ? selectedList.value[0] : null);
-const clipboardPaths = computed(() => fileClipboardEntries.value.map(entry => entry.path));
-const hasClipboard = computed(() => Boolean(fileClipboardAction.value && fileClipboardEntries.value.length));
-const clipboardText = computed(() => {
-  if (!hasClipboard.value) return "剪贴板为空";
-  const actionText = fileClipboardAction.value === "cut" ? "剪切" : "复制";
-  return `${actionText} ${fileClipboardEntries.value.length} 项`;
-});
 const selectionStatusText = computed(() => {
   const selectionText = hasSelection.value ? `已选择 ${selectedCount.value} 项` : "未选择项目";
   return `${selectionText} · ${clipboardText.value}`;
@@ -293,25 +231,11 @@ const canTogglePreviewPane = computed(() => !fileStore.showEditor);
 const canRenameSelection = computed(() => Boolean(singleSelection.value));
 const canArchiveSelection = computed(() => hasSelection.value);
 const canDeleteSelection = computed(() => hasSelection.value);
-const canExtractSelection = computed(() => isArchiveFile(singleSelection.value));
+const canExtractSelection = computed(() => isExtractableArchiveEntry(singleSelection.value));
 const canPasteSelection = computed(() => hasClipboard.value);
 const currentViewModeMeta = computed(() => viewModeMeta[fileStore.viewMode]);
 const currentViewModeLabel = computed(() => fileStore.viewMode === "icons" ? iconSizeLabel[fileStore.iconSize] : currentViewModeMeta.value.label);
 const viewModeButtonTitle = computed(() => `当前：${currentViewModeLabel.value}，点击选择查看模式。Ctrl+Shift+1-7 可直接切换查看模式`);
-const operationPanelNameLabel = computed(() => {
-  switch (operationPanel.value.kind) {
-    case "createFile":
-      return "文件名";
-    case "createFolder":
-      return "文件夹名";
-    case "archive":
-      return "压缩包名称";
-    case "extract":
-      return "解压到文件夹";
-    default:
-      return "名称";
-  }
-});
 
 const resetImageViewerState = () => {
   imageViewerVisible.value = false;
@@ -334,13 +258,6 @@ const setImageViewerEntry = (entry: ExplorerEntry) => {
 const clearPreviewContent = () => {
   previewUpdateToken += 1;
   previewEntry.value = null;
-}
-
-const closePropertiesPanel = () => {
-  propertiesPanel.value = {
-    visible: false,
-    entries: []
-  };
 }
 
 const closePanels = () => {
@@ -519,115 +436,63 @@ const refreshCurrent = async (keepSelection = false) => {
   }
 }
 
-const runOperation = async (operation: () => Promise<void>) => {
-  try {
-    await operation();
-    await refreshCurrent();
-  } catch (error) {
-    showErrorNotice(error, "操作失败");
-  }
-}
-
-const resetOperationPanel = () => {
-  operationPanel.value = {
-    visible: false,
-    kind: null,
-    title: "",
-    message: "",
-    primaryText: "确定",
-    name: "",
-    format: "zip",
-    entries: [],
-    sourceEntry: null,
-    submitting: false
-  };
-}
-
-const resetDeleteConfirm = () => {
-  deleteConfirm.value = {
-    visible: false,
-    entries: [],
-    submitting: false,
-    error: ""
-  };
-}
-
-const closeDeleteConfirm = () => {
-  if (deleteConfirm.value.submitting) return;
-  resetDeleteConfirm();
-}
-
-const showProperties = async (entries = selectedEntries()) => {
-  if (!entries.length) {
-    showShellNotice("请选择文件或文件夹", "warning");
-    return;
-  }
+const closeOperationShellPanels = () => {
   clearPreviewContent();
   previewPanelVisible.value = false;
-  resetOperationPanel();
-  resetDeleteConfirm();
   resetTaskCancelConfirm();
   closeImageViewer();
-  propertiesPanel.value = {
-    visible: true,
-    entries
-  };
-  await nextTick();
-  propertiesPanelRef.value?.focus();
-}
-
-const openOperationPanel = (next: Omit<OperationPanelState, "visible" | "submitting">) => {
-  closePanels();
-  operationPanel.value = {
-    ...next,
-    visible: true,
-    submitting: false
-  };
-}
-
-const closeOperationPanel = () => {
-  if (operationPanel.value.submitting) return;
-  resetOperationPanel();
-}
-
-const openCreatePanel = (type: "file" | "folder") => {
-  openOperationPanel({
-    kind: type === "file" ? "createFile" : "createFolder",
-    title: type === "file" ? "新建文件" : "新建文件夹",
-    message: `位置：${currentFolder()}`,
-    primaryText: "创建",
-    name: type === "file" ? "新建文件.txt" : "新建文件夹",
-    format: "zip",
-    entries: [],
-    sourceEntry: null
-  });
-}
-
-const createFolderFromShortcut = async () => {
-  if (creatingShortcutFolder.value) return;
-  creatingShortcutFolder.value = true;
-  closePanels();
-  const folderName = "新建文件夹";
-  try {
-    const created = await createEntry(currentFolder(), "folder", folderName);
-    taskMessage.value = `已创建：${folderName}`;
-    await refreshCurrent();
-    const renamed = await explorerRef.value?.selectPathForRename(created.path);
-    if (!renamed) showShellNotice("新文件夹已创建，但当前页未找到它，请刷新或调整排序后重命名。", "warning");
-  } catch (error) {
-    showErrorNotice(error, "新建文件夹失败");
-  } finally {
-    creatingShortcutFolder.value = false;
-  }
 }
 
 const selectedEntry = () => explorerRef.value?.getSelectedEntry() ?? null;
 
-const selectedEntries = (fallback?: ExplorerEntry | null) => {
-  const selected = explorerRef.value?.getSelectedEntries() ?? [];
-  if (selected.length) return selected;
-  return fallback ? [fallback] : [];
-}
+const {
+  fileClipboardAction,
+  operationPanel,
+  deleteConfirm,
+  propertiesPanel,
+  clipboardPaths,
+  hasClipboard,
+  clipboardText,
+  resetOperationPanel,
+  resetDeleteConfirm,
+  closePropertiesPanel,
+  closeDeleteConfirm,
+  showProperties,
+  closeOperationPanel,
+  openCreatePanel,
+  createFolderFromShortcut,
+  startRenameSelected,
+  renameSelected,
+  deleteSelected,
+  submitDeleteConfirm,
+  downloadSelected,
+  copySelected,
+  cutSelected,
+  copyEntryPaths,
+  pasteSelected,
+  dropEntriesToFolder,
+  dropEntriesToCurrentFolder,
+  archiveSelected,
+  extractSelected,
+  submitOperationPanel,
+  uploadChanged,
+  uploadToCurrentFolder
+} = useFileOperations({
+  currentFolder,
+  refreshCurrent: () => refreshCurrent(),
+  closeShellPanels: closeOperationShellPanels,
+  getSelectedEntry: selectedEntry,
+  getSelectedEntries: () => explorerRef.value?.getSelectedEntries() ?? [],
+  startExplorerRename: () => explorerRef.value?.startRename(),
+  selectPath: async path => Boolean(await explorerRef.value?.selectPath(path)),
+  selectPathForRename: async path => Boolean(await explorerRef.value?.selectPathForRename(path)),
+  showNotice: showShellNotice,
+  showError: showErrorNotice,
+  taskStarted,
+  setTaskMessage: message => taskMessage.value = message,
+  focusDeleteConfirm: () => deleteConfirmRef.value?.focus(),
+  focusPropertiesPanel: () => propertiesPanelRef.value?.focus()
+});
 
 const handleSelectionChange = (entries: ExplorerEntry[]) => {
   currentSelection.value = entries;
@@ -639,289 +504,6 @@ const handleSelectionChange = (entries: ExplorerEntry[]) => {
   } else {
     clearPreviewContent();
   }
-}
-
-const singleSelectedEntry = (entry = selectedEntry()) => {
-  const selected = selectedEntries(entry);
-  if (selected.length > 1) return null;
-  return selected[0] ?? null;
-}
-
-const isArchiveFile = (entry: ExplorerEntry | null): entry is ExplorerEntry & { type: "file" } => {
-  return isExtractableArchiveEntry(entry);
-}
-
-const startRenameSelected = () => {
-  if (!singleSelection.value) {
-    showShellNotice("请选择一个文件或文件夹", "warning");
-    return;
-  }
-  explorerRef.value?.startRename();
-}
-
-const renameSelected = async ({entry, name}: RenamePayload) => {
-  const nextName = name.trim();
-  if (!nextName || nextName === entry.name) return;
-  try {
-    const renamed = await moveEntry(entry.path, joinPath(parentPath(entry.path), nextName));
-    taskMessage.value = `已重命名：${nextName}`;
-    await refreshCurrent();
-    const selected = await explorerRef.value?.selectPath(renamed.path);
-    if (!selected) showShellNotice("已重命名，但当前页未找到该项目，请刷新或调整排序后查看。", "warning");
-  } catch (error) {
-    showErrorNotice(error, "重命名失败", "重命名失败");
-  }
-}
-
-const deleteSelected = async (entry = selectedEntry()) => {
-  const entries = selectedEntries(entry);
-  if (!entries.length) {
-    showShellNotice("请选择文件或文件夹", "warning");
-    return;
-  }
-  closePanels();
-  deleteConfirm.value = {
-    visible: true,
-    entries,
-    submitting: false,
-    error: ""
-  };
-  await nextTick();
-  deleteConfirmRef.value?.focus();
-}
-
-const submitDeleteConfirm = async () => {
-  const entries = deleteConfirm.value.entries;
-  if (!entries.length || deleteConfirm.value.submitting) return;
-  deleteConfirm.value.submitting = true;
-  deleteConfirm.value.error = "";
-  try {
-    const task = await createDeleteTask(entries.map(item => item.path));
-    await taskStarted(task.id, "删除任务");
-    if (fileClipboardAction.value === "cut") {
-      const deleted = new Set(entries.map(item => item.path));
-      fileClipboardEntries.value = fileClipboardEntries.value.filter(item => !deleted.has(item.path));
-      if (!fileClipboardEntries.value.length) fileClipboardAction.value = null;
-    }
-    resetDeleteConfirm();
-    await refreshCurrent();
-  } catch (error) {
-    deleteConfirm.value.error = error instanceof Error ? error.message : "创建删除任务失败";
-  } finally {
-    if (deleteConfirm.value.visible) deleteConfirm.value.submitting = false;
-  }
-}
-
-const downloadSelected = async (entry = singleSelectedEntry()) => {
-  if (!entry || entry.type !== "file") {
-    showShellNotice("请选择一个文件", "warning");
-    return;
-  }
-  try {
-    const blob = await downloadFile(entry.path);
-    const url = window.URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = entry.name;
-    anchor.click();
-    window.URL.revokeObjectURL(url);
-  } catch (error) {
-    showErrorNotice(error, "下载失败", "下载失败");
-  }
-}
-
-const setFileClipboard = (action: FileClipboardAction, entry = selectedEntry()) => {
-  const entries = selectedEntries(entry);
-  if (!entries.length) {
-    showShellNotice("请选择文件或文件夹", "warning");
-    return;
-  }
-  fileClipboardAction.value = action;
-  fileClipboardEntries.value = entries;
-  taskMessage.value = `${action === "cut" ? "已剪切" : "已复制"} ${entries.length} 项`;
-  showShellNotice(taskMessage.value, "success", "剪贴板已更新");
-}
-
-const copySelected = (entry?: ExplorerEntry) => {
-  setFileClipboard("copy", entry ?? selectedEntry());
-}
-
-const cutSelected = (entry?: ExplorerEntry) => {
-  setFileClipboard("cut", entry ?? selectedEntry());
-}
-
-const copyEntryPaths = async ({paths}: CopyPathPayload) => {
-  const normalizedPaths = paths.map(path => path.trim()).filter(Boolean);
-  if (!normalizedPaths.length) return;
-  try {
-    await navigator.clipboard.writeText(normalizedPaths.join("\n"));
-    const message = normalizedPaths.length === 1 ? "已复制路径" : `已复制 ${normalizedPaths.length} 个路径`;
-    showShellNotice(message, "success", "路径已复制");
-  } catch {
-    showShellNotice("浏览器未允许写入剪贴板，请手动复制路径。", "error", "复制路径失败");
-  }
-}
-
-const pasteSelected = async () => {
-  if (!hasClipboard.value || !fileClipboardAction.value) {
-    showShellNotice("剪贴板为空", "warning");
-    return;
-  }
-  const targetPath = currentFolder();
-  const entries = fileClipboardEntries.value;
-  const nestedFolder = entries.find(entry => entry.type === "folder" && isSameOrDescendantPath(targetPath, entry.path));
-  if (nestedFolder) {
-    showShellNotice(`不能将 ${nestedFolder.name} 粘贴到它自身或子文件夹中`, "warning");
-    return;
-  }
-  const sameFolder = entries.some(entry => parentPath(entry.path) === targetPath);
-  if (fileClipboardAction.value === "cut" && sameFolder) {
-    showShellNotice("剪切项已经在当前文件夹中", "warning");
-    return;
-  }
-  try {
-    const sources = entries.map(item => item.path);
-    const task = fileClipboardAction.value === "cut"
-        ? await createMoveTask(sources, targetPath)
-        : await createCopyTask(sources, targetPath);
-    await taskStarted(task.id, fileClipboardAction.value === "cut" ? "移动任务" : "复制任务");
-    if (fileClipboardAction.value === "cut") {
-      fileClipboardAction.value = null;
-      fileClipboardEntries.value = [];
-    }
-    await refreshCurrent();
-  } catch (error) {
-    showErrorNotice(error, "创建粘贴任务失败", "粘贴失败");
-  }
-}
-
-const removeMovedEntriesFromCutClipboard = (sources: string[]) => {
-  if (fileClipboardAction.value !== "cut") return;
-  const moved = new Set(sources);
-  fileClipboardEntries.value = fileClipboardEntries.value.filter(item => !moved.has(item.path));
-  if (!fileClipboardEntries.value.length) fileClipboardAction.value = null;
-}
-
-const runDroppedEntriesTask = async (entries: ExplorerEntry[], targetPath: string, action: "copy" | "move") => {
-  if (!entries.length) return;
-  const nestedFolder = entries.find(entry => entry.type === "folder" && isSameOrDescendantPath(targetPath, entry.path));
-  if (nestedFolder) {
-    showShellNotice(`不能将 ${nestedFolder.name} 放入它自身或子文件夹中`, "warning");
-    return;
-  }
-  const sameFolder = entries.some(entry => parentPath(entry.path) === targetPath);
-  if (action === "move" && sameFolder) {
-    taskMessage.value = "拖拽目标已经是当前位置";
-    return;
-  }
-  try {
-    const sources = entries.map(item => item.path);
-    const task = action === "copy"
-        ? await createCopyTask(sources, targetPath)
-        : await createMoveTask(sources, targetPath);
-    await taskStarted(task.id, action === "copy" ? "复制任务" : "移动任务");
-    if (action === "move") removeMovedEntriesFromCutClipboard(sources);
-    await refreshCurrent();
-  } catch (error) {
-    showErrorNotice(error, "创建拖拽任务失败", "拖拽失败");
-  }
-}
-
-const dropEntriesToFolder = async ({entries, target, action}: DropEntriesPayload) => {
-  if (target.type !== "folder") return;
-  await runDroppedEntriesTask(entries, target.path, action);
-}
-
-const dropEntriesToCurrentFolder = async ({entries, action}: DropToCurrentFolderPayload) => {
-  await runDroppedEntriesTask(entries, currentFolder(), action);
-}
-
-const archiveSelected = (entry = selectedEntry()) => {
-  const entries = selectedEntries(entry);
-  if (!entries.length) {
-    showShellNotice("请选择文件或文件夹", "warning");
-    return;
-  }
-  const format: ArchiveFormat = "zip";
-  const defaultName = entries.length === 1 ? `${entries[0].name}${archiveFormatExtension(format)}` : `选中项目${archiveFormatExtension(format)}`;
-  openOperationPanel({
-    kind: "archive",
-    title: entries.length === 1 ? `压缩 ${entries[0].name}` : `压缩 ${entries.length} 项`,
-    message: `输出位置：${currentFolder()}`,
-    primaryText: "开始压缩",
-    name: defaultName,
-    format,
-    entries,
-    sourceEntry: null
-  });
-}
-
-const extractSelected = (entry = singleSelectedEntry()) => {
-  if (!isArchiveFile(entry)) {
-    showShellNotice("请选择一个 zip、tar.gz 或 tgz 压缩包", "warning");
-    return;
-  }
-  openOperationPanel({
-    kind: "extract",
-    title: `解压 ${entry.name}`,
-    message: `输出位置：${currentFolder()}`,
-    primaryText: "开始解压",
-    name: archiveStem(entry.name),
-    format: "zip",
-    entries: [],
-    sourceEntry: entry
-  });
-}
-
-const submitOperationPanel = async () => {
-  const panel = operationPanel.value;
-  if (!panel.kind || panel.submitting) return;
-  const name = panel.name.trim();
-  if (!name) {
-    showShellNotice(`${operationPanelNameLabel.value}不能为空`, "warning");
-    return;
-  }
-  panel.submitting = true;
-  try {
-    if (panel.kind === "createFile" || panel.kind === "createFolder") {
-      await createEntry(currentFolder(), panel.kind === "createFile" ? "file" : "folder", name);
-      taskMessage.value = `已创建：${name}`;
-      resetOperationPanel();
-      await refreshCurrent();
-      return;
-    }
-    if (panel.kind === "archive") {
-      const task = await createArchiveTask(panel.entries.map(item => item.path), currentFolder(), panel.format, name);
-      resetOperationPanel();
-      await taskStarted(task.id, "压缩任务");
-      return;
-    }
-    if (panel.kind === "extract" && panel.sourceEntry) {
-      const task = await createExtractTask(panel.sourceEntry.path, currentFolder(), name);
-      resetOperationPanel();
-      await taskStarted(task.id, "解压任务");
-    }
-  } catch (error) {
-    operationPanel.value.submitting = false;
-    showErrorNotice(error, "操作失败");
-  }
-}
-
-const uploadChanged = async (event: Event) => {
-  const input = event.target as HTMLInputElement;
-  if (!input.files?.length) return;
-  const files = Array.from(input.files);
-  await uploadToCurrentFolder(files);
-  input.value = "";
-}
-
-const uploadToCurrentFolder = async (files: FileList | File[]) => {
-  const fileList = Array.from(files);
-  if (!fileList.length) return;
-  await runOperation(async () => {
-    await uploadFiles(currentFolder(), fileList);
-    taskMessage.value = `已上传 ${fileList.length} 个文件`;
-  })
 }
 
 const {
