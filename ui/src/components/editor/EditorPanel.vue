@@ -11,18 +11,18 @@ import {useEditorPreferences} from "../../composables/useEditorPreferences.ts";
 import {useEditorSearch} from "../../composables/useEditorSearch.ts";
 import {checkFileLanguageMode} from "../../utils/common.ts";
 import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
-import type {CodeEditorExpose, EditorCursorStatus} from "./types.ts";
+import type {CodeEditorExpose, EditorCursorStatus, EditorMenuName} from "./types.ts";
 import EditorInfoBar from "./EditorInfoBar.vue";
+import EditorMenuLayer from "./EditorMenuLayer.vue";
 import EditorStatusBar from "./EditorStatusBar.vue";
 
-type MenuName = "language" | "theme" | "settings" | "";
 type PendingEditorAction = "close" | "reload" | "external" | "";
 
 const fileStore = useFileStore();
 const defaultCursorStatus = (): EditorCursorStatus => ({line: 1, column: 1, selectedRows: 0, selectedCharacters: 0});
 const fileInfo = ref<FileInfo | null>(null);
 const editorRef = ref<CodeEditorExpose | null>(null);
-const activeMenu = ref<MenuName>("");
+const activeMenu = ref<EditorMenuName>("");
 const currentMode = ref("text");
 const content = ref("");
 const contentEtag = ref("");
@@ -157,7 +157,7 @@ const confirmDiscardText = computed(() => {
   return "放弃并关闭";
 });
 
-const toggleMenu = (menu: MenuName) => {
+const toggleMenu = (menu: EditorMenuName) => {
   activeMenu.value = activeMenu.value === menu ? "" : menu;
 }
 
@@ -445,52 +445,17 @@ onBeforeUnmount(() => {
         :saving="saving"
         :conflict="saveConflict" />
 
-    <div class="menu-layer" @click.stop>
-      <div v-if="activeMenu === 'language'" class="editor-menu language-menu">
-        <button
-            v-for="mode in editorConfig.mode"
-            :key="mode.key"
-            :class="{active: currentMode === mode.key}"
-            @click="changeMode(mode.key)">
-          <icon icon="icon-file" :color="currentMode === mode.key ? '#ffffff' : '#475569'" />
-          <span>{{ mode.name }}</span>
-        </button>
-      </div>
-
-      <div v-if="activeMenu === 'theme'" class="editor-menu theme-menu">
-        <p>浅色主题</p>
-        <button
-            v-for="theme in editorConfig.theme.light"
-            :key="theme.key"
-            :class="{active: currentTheme === theme.key}"
-            @click="changeTheme(theme.key)">
-          <span>{{ theme.name }}</span>
-        </button>
-        <p>深色主题</p>
-        <button
-            v-for="theme in editorConfig.theme.dark"
-            :key="theme.key"
-            :class="{active: currentTheme === theme.key}"
-            @click="changeTheme(theme.key)">
-          <span>{{ theme.name }}</span>
-        </button>
-      </div>
-
-      <div v-if="activeMenu === 'settings'" class="editor-menu settings-menu">
-        <label>
-          <span>字号</span>
-          <input v-model.number="fontSize" type="number" min="12" max="28" step="1">
-        </label>
-        <label>
-          <span>Tab 宽度</span>
-          <input v-model.number="tabSize" type="number" min="2" max="8" step="1">
-        </label>
-        <label class="check-row">
-          <input v-model="wrap" type="checkbox">
-          <span>自动换行</span>
-        </label>
-      </div>
-    </div>
+    <editor-menu-layer
+        v-model:font-size="fontSize"
+        v-model:tab-size="tabSize"
+        v-model:wrap="wrap"
+        :active-menu="activeMenu"
+        :modes="editorConfig.mode"
+        :themes="editorConfig.theme"
+        :current-mode="currentMode"
+        :current-theme="currentTheme"
+        @change-mode="changeMode"
+        @change-theme="changeTheme" />
 
     <main class="editor-main">
       <div v-if="searchVisible" class="search-bar" @click.stop>
@@ -686,54 +651,6 @@ onBeforeUnmount(() => {
 
 .close-button {
   @apply hover:border-red-200 hover:bg-red-50;
-}
-
-.menu-layer {
-  @apply absolute right-3 top-[5.25rem] z-30;
-}
-
-.editor-menu {
-  @apply mt-2 flex max-h-80 min-w-44 flex-col gap-1 overflow-auto rounded-md border border-slate-200 bg-white p-1 text-sm shadow-2xl;
-}
-
-.language-menu {
-  @apply w-52;
-}
-
-.theme-menu {
-  @apply w-56;
-}
-
-.settings-menu {
-  @apply w-56 gap-3 p-3;
-}
-
-.editor-menu p {
-  @apply px-2 pt-1 text-xs font-medium text-slate-400;
-}
-
-.editor-menu button {
-  @apply flex h-8 items-center gap-2 rounded px-2 text-left text-slate-700 hover:bg-blue-50;
-}
-
-.editor-menu button.active {
-  @apply bg-blue-600 text-white hover:bg-blue-600;
-}
-
-.editor-menu label {
-  @apply flex items-center justify-between gap-3 text-sm text-slate-600;
-}
-
-.editor-menu input[type="number"] {
-  @apply h-8 w-20 rounded border border-slate-200 bg-white px-2 text-right text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100;
-}
-
-.check-row {
-  @apply justify-start;
-}
-
-.check-row input {
-  @apply h-4 w-4 accent-blue-600;
 }
 
 .editor-main {

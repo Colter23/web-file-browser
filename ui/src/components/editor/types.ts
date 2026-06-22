@@ -7,6 +7,23 @@ export type EditorCursorStatus = {
   selectedCharacters: number;
 }
 
+export type EditorMenuName = "language" | "theme" | "settings" | "";
+
+export type EditorModeOption = {
+  name: string;
+  key: string;
+}
+
+export type EditorThemeOption = {
+  name: string;
+  key: string;
+}
+
+export type EditorThemeGroups = {
+  light: EditorThemeOption[];
+  dark: EditorThemeOption[];
+}
+
 export type EditorSearchOptions = {
   needle: string;
   backwards?: boolean;
