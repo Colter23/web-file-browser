@@ -7,6 +7,15 @@ import {getFolderData} from "../../network/file-api.ts";
 import {useDetailsColumns} from "../../composables/useDetailsColumns.ts";
 import {useExplorerEntryDrag} from "../../composables/useExplorerEntryDrag.ts";
 import {useExplorerThumbnails} from "../../composables/useExplorerThumbnails.ts";
+import {
+  entryTypeText,
+  fileEntryIcon,
+  formatEntryDate as formatDate,
+  formatEntrySize as formatSize,
+  isEditableEntry,
+  isExtractableArchiveEntry as canExtract,
+  isImageEntry as isImageFile
+} from "../../utils/file-entry.ts";
 import DetailsHeader from "./DetailsHeader.vue";
 import ExplorerContextMenu from "./ExplorerContextMenu.vue";
 import ExplorerCommandRow from "./ExplorerCommandRow.vue";
@@ -291,12 +300,6 @@ const sortText = computed(() => {
 });
 
 const nextSortOrder = computed<DirSortOrder>(() => fileStore.sortOrder === "asc" ? "desc" : "asc");
-
-const isImageFile = (entry: ExplorerEntry) => {
-  if (entry.type !== "file") return false;
-  const extension = entry.extension?.toLowerCase() ?? "";
-  return ["apng", "avif", "bmp", "gif", "ico", "jpeg", "jpg", "png", "svg", "webp"].includes(extension);
-}
 
 const imageEntries = computed(() => entries.value.filter(isImageFile));
 const {
@@ -822,21 +825,8 @@ const contextEntries = computed(() => selectedOrContextEntries());
 
 const contextSelectionCount = computed(() => contextEntries.value.length);
 
-const canExtract = (entry: ExplorerEntry | null) => {
-  if (!entry || entry.type !== "file") return false;
-  const name = entry.name.toLowerCase();
-  return name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz");
-}
-
-const isTextLike = (entry: ExplorerEntry) => {
-  if (entry.type !== "file") return false;
-  const extension = entry.extension?.toLowerCase() ?? "";
-  return fileStore.extensions.includes(extension) || ["txt", "log", "md", "json", "yaml", "yml", "toml", "xml", "csv"].includes(extension);
-}
-
 const canEditEntry = (entry: ExplorerEntry | null) => {
-  if (!entry || entry.type !== "file") return false;
-  return fileStore.extensions.includes(entry.extension?.toLowerCase() ?? "");
+  return isEditableEntry(entry, fileStore.extensions);
 }
 
 const editEntry = async (entry: ExplorerEntry) => {
@@ -852,47 +842,10 @@ const editEntry = async (entry: ExplorerEntry) => {
 }
 
 const fileIcon = (entry: ExplorerEntry) => {
-  if (entry.type === "folder") return "icon-folder-fill";
-  const extension = entry.extension?.toLowerCase() ?? "";
-  if (["zip", "rar", "7z", "tar", "gz", "tgz"].includes(extension) || entry.name.toLowerCase().endsWith(".tar.gz")) {
-    return "icon-file-zip-fill";
-  }
-  if (isImageFile(entry)) return "icon-file-image-fill";
-  if (isTextLike(entry)) return "icon-file-common-filling";
-  return "icon-file-fill";
+  return fileEntryIcon(entry, fileStore.extensions);
 }
 
 const isDimmed = (entry: ExplorerEntry) => props.dimmedPaths.includes(entry.path);
-
-const formatDate = (srcDate: string) => {
-  if (!srcDate) return "-";
-  const date = new Date(srcDate);
-  if (Number.isNaN(date.getTime())) return srcDate;
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(date);
-}
-
-const formatSize = (size?: number) => {
-  if (!Number.isFinite(size)) return "-";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = size ?? 0;
-  let index = 0;
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024;
-    index += 1;
-  }
-  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
-}
-
-const entryTypeText = (entry: ExplorerEntry) => {
-  if (entry.type === "folder") return "文件夹";
-  return entry.extension ? `${entry.extension.toUpperCase()} 文件` : "文件";
-}
 
 const handleKeyDown = async (event: KeyboardEvent) => {
   if (!viewportRef.value?.contains(document.activeElement)) return;

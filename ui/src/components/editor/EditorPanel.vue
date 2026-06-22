@@ -9,6 +9,7 @@ import type {FileInfo} from "../../class.ts";
 import {getFile, saveFile} from "../../network/file-api.ts";
 import {isApiError} from "../../network";
 import {checkFileLanguageMode} from "../../utils/common.ts";
+import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
 
 type MenuName = "language" | "theme" | "settings" | "";
 type PendingEditorAction = "close" | "reload" | "external" | "";
@@ -153,33 +154,8 @@ const selectedThemeName = computed(() => {
   return themes.find(theme => theme.key === currentTheme.value)?.name ?? currentTheme.value;
 });
 
-const formatSize = (size?: number) => {
-  if (!size) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = size;
-  let index = 0;
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024;
-    index += 1;
-  }
-  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
-}
-
-const formatDate = (srcDate?: string) => {
-  if (!srcDate) return "-";
-  const date = new Date(srcDate);
-  if (Number.isNaN(date.getTime())) return srcDate;
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(date);
-}
-
 const editorMetaText = computed(() => {
-  const parts = [selectedModeName.value, formatSize(fileInfo.value?.size), wrap.value ? "自动换行" : "不换行"];
+  const parts = [selectedModeName.value, formatEntrySize(fileInfo.value?.size, "0 B"), wrap.value ? "自动换行" : "不换行"];
   return parts.join(" · ");
 });
 
@@ -670,7 +646,7 @@ onBeforeUnmount(() => {
         <span>{{ editorMetaText }}</span>
       </div>
       <div class="editor-info-right">
-        <span>修改时间：{{ formatDate(fileInfo?.modified) }}</span>
+        <span>修改时间：{{ formatEntryDate(fileInfo?.modified) }}</span>
         <span>UTF-8</span>
       </div>
     </div>
@@ -837,7 +813,7 @@ onBeforeUnmount(() => {
         <span>{{ cursorStatusText }}</span>
         <span v-if="selectionStatusText">{{ selectionStatusText }}</span>
         <span>{{ selectedModeName }}</span>
-        <span>{{ formatSize(fileInfo?.size) }}</span>
+        <span>{{ formatEntrySize(fileInfo?.size, "0 B") }}</span>
         <span>{{ wrap ? "自动换行" : "不换行" }}</span>
       </div>
     </footer>

@@ -2,6 +2,7 @@
 import {computed, ref} from "vue";
 import Icon from "../Icon.vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
+import {entryTypeText, fileEntryIcon, formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
 
 const props = defineProps<{
   visible: boolean;
@@ -29,36 +30,6 @@ const parentPath = (path: string) => {
   return `/${parts.slice(0, -1).join("/")}`;
 }
 
-const formatBytes = (bytes?: number) => {
-  if (!bytes) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = bytes;
-  let index = 0;
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024;
-    index += 1;
-  }
-  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
-}
-
-const formatDate = (srcDate?: string) => {
-  if (!srcDate) return "-";
-  const date = new Date(srcDate);
-  if (Number.isNaN(date.getTime())) return srcDate;
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(date);
-}
-
-const entryTypeText = (entry: ExplorerEntry) => {
-  if (entry.type === "folder") return "文件夹";
-  return entry.extension ? `${entry.extension.toUpperCase()} 文件` : "文件";
-}
-
 const singleEntry = computed(() => props.entries.length === 1 ? props.entries[0] : null);
 const folderCount = computed(() => props.entries.filter(entry => entry.type === "folder").length);
 const fileEntries = computed(() => props.entries.filter(entry => entry.type === "file"));
@@ -70,13 +41,12 @@ const subtitle = computed(() => singleEntry.value ? "项目属性" : "选中项�
 const panelIcon = computed(() => {
   const entry = singleEntry.value;
   if (!entry) return "icon-file-common-filling";
-  if (entry.type === "folder") return "icon-folder-fill";
-  return "icon-file-fill";
+  return fileEntryIcon(entry);
 });
 const sizeText = computed(() => {
-  if (singleEntry.value) return singleEntry.value.type === "file" ? formatBytes(singleEntry.value.size) : "-";
+  if (singleEntry.value) return singleEntry.value.type === "file" ? formatEntrySize(singleEntry.value.size, "0 B") : "-";
   const suffix = missingSizeCount.value ? `，${missingSizeCount.value} 个文件未加载大小` : "";
-  return `${formatBytes(knownSize.value)}${suffix}`;
+  return `${formatEntrySize(knownSize.value, "0 B")}${suffix}`;
 });
 const rows = computed(() => {
   const entry = singleEntry.value;
@@ -87,7 +57,7 @@ const rows = computed(() => {
       {label: "位置", value: parentPath(entry.path)},
       {label: "路径", value: entry.path},
       {label: "大小", value: sizeText.value},
-      {label: "修改时间", value: formatDate(entry.modified)}
+      {label: "修改时间", value: formatEntryDate(entry.modified)}
     ];
   }
   return [

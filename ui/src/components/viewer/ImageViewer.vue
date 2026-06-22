@@ -6,6 +6,7 @@ import {useImageZoomPan} from "../../composables/useImageZoomPan.ts";
 import {downloadUrl} from "../../network/api.ts";
 import Icon from "../Icon.vue";
 import type {ShellNoticePayload} from "../shell/types.ts";
+import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
 
 const props = defineProps<{
   visible: boolean;
@@ -101,38 +102,13 @@ const subtitle = computed(() => {
   const entry = props.entry;
   if (!entry) return "";
   const position = currentIndex.value >= 0 && imageCount.value > 1 ? `${currentIndex.value + 1} / ${imageCount.value} · ` : "";
-  return `${position}${formatBytes(entry.size)} · ${formatDate(entry.modified)}`;
+  return `${position}${formatEntrySize(entry.size, "0 B")} · ${formatEntryDate(entry.modified)}`;
 });
 
 const pageFullscreenTitle = computed(() => pageFullscreen.value ? "退出网页全屏 (F)" : "网页全屏 (F)");
 const browserFullscreenTitle = computed(() => browserFullscreen.value ? "退出浏览器全屏" : "浏览器全屏");
 const filmstripTitle = computed(() => showFilmstrip.value ? "隐藏缩略图 (T)" : "显示缩略图 (T)");
 const stageTitle = computed(() => fit.value ? "双击按原始大小查看" : "双击适应窗口，拖拽移动图片");
-
-const formatBytes = (bytes?: number) => {
-  if (!bytes) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = bytes;
-  let index = 0;
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024;
-    index += 1;
-  }
-  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
-}
-
-const formatDate = (srcDate?: string) => {
-  if (!srcDate) return "-";
-  const date = new Date(srcDate);
-  if (Number.isNaN(date.getTime())) return srcDate;
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(date);
-}
 
 const setThumbRef = (path: string, element: Element | ComponentPublicInstance | null) => {
   if (element instanceof HTMLElement) {
