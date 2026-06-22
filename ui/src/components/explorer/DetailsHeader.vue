@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type {DirSortKey, DirSortOrder} from "../../class.ts";
-
-type DetailsColumnKey = "name" | "modified" | "type" | "size";
+import type {DetailsColumnKey} from "./types.ts";
 
 const props = defineProps<{
   gridStyle: Record<string, string>;

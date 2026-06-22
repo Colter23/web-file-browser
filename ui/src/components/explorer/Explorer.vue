@@ -3,7 +3,9 @@ import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} fr
 import type {ComponentPublicInstance} from "vue";
 import type {DirSortKey, DirSortOrder, ExplorerIconSize, ExplorerViewMode, FolderData, FolderQueryParams} from "../../class.ts";
 import {useFileStore} from "../../store";
-import {downloadUrl, getFolderData} from "../../network/file-api.ts";
+import {getFolderData} from "../../network/file-api.ts";
+import {useDetailsColumns} from "../../composables/useDetailsColumns.ts";
+import {useExplorerThumbnails} from "../../composables/useExplorerThumbnails.ts";
 import DetailsHeader from "./DetailsHeader.vue";
 import ExplorerContextMenu from "./ExplorerContextMenu.vue";
 import ExplorerCommandRow from "./ExplorerCommandRow.vue";
@@ -52,9 +54,6 @@ type ViewDensityStep = {
   mode: ExplorerViewMode;
   iconSize: ExplorerIconSize;
 }
-
-type DetailsColumnKey = "name" | "modified" | "type" | "size";
-type DetailsColumnWidths = Record<DetailsColumnKey, number>;
 
 type SelectionSnapshot = {
   paths: string[];
@@ -107,8 +106,6 @@ const loadedSignature = ref("");
 const viewportRef = ref<HTMLElement | null>(null);
 const itemRefs = new Map<string, HTMLElement>();
 const renameInputRefs = new Map<string, HTMLInputElement>();
-const visibleThumbnailPaths = ref<Set<string>>(new Set());
-const failedThumbnailPaths = ref<Set<string>>(new Set());
 const pageSize = 200;
 const contextMenu = reactive({visible: false, x: 0, y: 0, targetPath: "", background: false});
 const renamingPath = ref("");
@@ -127,7 +124,6 @@ const selectionBox = reactive<SelectionBox>({
   width: 0,
   height: 0
 });
-let thumbnailObserver: IntersectionObserver | null = null;
 let marqueePointerX = 0;
 let marqueePointerY = 0;
 let marqueeScrollFrame = 0;
@@ -140,30 +136,12 @@ const typeaheadResetMs = 900;
 let typeaheadResetTimer = 0;
 let viewWheelDelta = 0;
 
-const detailsColumnStorageKey = "explorer.detailsColumnWidths";
-const detailsColumnDefaults: DetailsColumnWidths = {
-  name: 320,
-  modified: 176,
-  type: 144,
-  size: 112
-};
-const detailsColumnMinWidths: DetailsColumnWidths = {
-  name: 160,
-  modified: 132,
-  type: 96,
-  size: 88
-};
-const detailsColumnMaxWidths: DetailsColumnWidths = {
-  name: 960,
-  modified: 320,
-  type: 280,
-  size: 220
-};
-const detailsColumnResize = reactive<{key: DetailsColumnKey | null; startX: number; startWidth: number}>({
-  key: null,
-  startX: 0,
-  startWidth: 0
-});
+const {
+  gridStyle: detailsGridStyle,
+  startResize: startDetailsColumnResize,
+  handleResizeMove: handleDetailsColumnResizeMove,
+  finishResize: finishDetailsColumnResize
+} = useDetailsColumns();
 
 const viewDensitySteps: ViewDensityStep[] = [
   {mode: "details", iconSize: "small"},
@@ -173,46 +151,6 @@ const viewDensitySteps: ViewDensityStep[] = [
   {mode: "icons", iconSize: "medium"},
   {mode: "icons", iconSize: "large"}
 ];
-
-const clampDetailsColumnWidth = (key: DetailsColumnKey, width: number) => {
-  const safeWidth = Number.isFinite(width) ? width : detailsColumnDefaults[key];
-  return Math.round(Math.min(Math.max(safeWidth, detailsColumnMinWidths[key]), detailsColumnMaxWidths[key]));
-}
-
-const readDetailsColumnWidths = (): DetailsColumnWidths => {
-  if (typeof localStorage === "undefined") return {...detailsColumnDefaults};
-  try {
-    const raw = localStorage.getItem(detailsColumnStorageKey);
-    const parsed = raw ? JSON.parse(raw) as Partial<DetailsColumnWidths> : {};
-    return {
-      name: clampDetailsColumnWidth("name", parsed.name ?? detailsColumnDefaults.name),
-      modified: clampDetailsColumnWidth("modified", parsed.modified ?? detailsColumnDefaults.modified),
-      type: clampDetailsColumnWidth("type", parsed.type ?? detailsColumnDefaults.type),
-      size: clampDetailsColumnWidth("size", parsed.size ?? detailsColumnDefaults.size)
-    };
-  } catch {
-    return {...detailsColumnDefaults};
-  }
-}
-
-const writeDetailsColumnWidths = (widths: DetailsColumnWidths) => {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(detailsColumnStorageKey, JSON.stringify(widths));
-  } catch {
-    // 本地存储不可用时，只保留本次会话的列宽。
-  }
-}
-
-const detailsColumnWidths = ref<DetailsColumnWidths>(readDetailsColumnWidths());
-
-const detailsGridStyle = computed(() => ({
-  "--details-name-width": `${detailsColumnWidths.value.name}px`,
-  "--details-modified-width": `${detailsColumnWidths.value.modified}px`,
-  "--details-type-width": `${detailsColumnWidths.value.type}px`,
-  "--details-size-width": `${detailsColumnWidths.value.size}px`,
-  "--details-grid-width": `${detailsColumnWidths.value.name + detailsColumnWidths.value.modified + detailsColumnWidths.value.type + detailsColumnWidths.value.size}px`
-}));
 
 const normalizeFolderData = (data: FolderData): FolderData => ({
   path: data.path || "/",
@@ -359,77 +297,22 @@ const isImageFile = (entry: ExplorerEntry) => {
 }
 
 const imageEntries = computed(() => entries.value.filter(isImageFile));
-
-const shouldLoadThumbnail = (entry: ExplorerEntry) => {
-  return isIconLikeMode.value && isImageFile(entry) && visibleThumbnailPaths.value.has(entry.path) && !failedThumbnailPaths.value.has(entry.path);
-}
-
-const thumbnailUrl = (entry: ExplorerEntry) => downloadUrl(entry.path);
-
-const handleThumbnailError = (entry: ExplorerEntry) => {
-  addFailedThumbnailPath(entry.path);
-  unobserveThumbnail(entry.path);
-}
-
-const addVisibleThumbnailPath = (path: string) => {
-  if (visibleThumbnailPaths.value.has(path)) return;
-  visibleThumbnailPaths.value = new Set([...visibleThumbnailPaths.value, path]);
-}
-
-const addFailedThumbnailPath = (path: string) => {
-  if (failedThumbnailPaths.value.has(path)) return;
-  failedThumbnailPaths.value = new Set([...failedThumbnailPaths.value, path]);
-}
-
-const clearThumbnailState = () => {
-  visibleThumbnailPaths.value = new Set();
-  failedThumbnailPaths.value = new Set();
-  thumbnailObserver?.disconnect();
-  thumbnailObserver = null;
-}
-
-const createThumbnailObserver = () => {
-  if (thumbnailObserver || typeof IntersectionObserver === "undefined") return thumbnailObserver;
-  thumbnailObserver = new IntersectionObserver(records => {
-    records.forEach(record => {
-      if (!record.isIntersecting) return;
-      const path = (record.target as HTMLElement).dataset.thumbnailPath;
-      if (!path) return;
-      addVisibleThumbnailPath(path);
-      thumbnailObserver?.unobserve(record.target);
-    });
-  }, {
-    root: viewportRef.value,
-    rootMargin: "240px",
-    threshold: 0.01
-  });
-  return thumbnailObserver;
-}
-
-const unobserveThumbnail = (path: string) => {
-  const element = itemRefs.get(path);
-  if (!element) return;
-  thumbnailObserver?.unobserve(element);
-  delete element.dataset.thumbnailPath;
-}
-
-const observeThumbnail = (entry: ExplorerEntry, element: HTMLElement) => {
-  if (!isIconLikeMode.value || !isImageFile(entry) || visibleThumbnailPaths.value.has(entry.path) || failedThumbnailPaths.value.has(entry.path)) return;
-  if (typeof IntersectionObserver === "undefined") {
-    addVisibleThumbnailPath(entry.path);
-    return;
-  }
-  element.dataset.thumbnailPath = entry.path;
-  createThumbnailObserver()?.observe(element);
-}
-
-const observePendingThumbnails = () => {
-  if (!isIconLikeMode.value) return;
-  entries.value.forEach(entry => {
-    const element = itemRefs.get(entry.path);
-    if (element) observeThumbnail(entry, element);
-  });
-}
+const {
+  shouldLoad: shouldLoadThumbnail,
+  thumbnailUrl,
+  handleError: handleThumbnailError,
+  observe: observeThumbnail,
+  observePending: observePendingThumbnails,
+  unobserve: unobserveThumbnail,
+  clearState: clearThumbnailState,
+  disconnectObserver: disconnectThumbnailObserver
+} = useExplorerThumbnails({
+  entries,
+  itemRefs,
+  viewportRef,
+  active: isIconLikeMode,
+  isImageFile
+});
 
 const setItemRef = (path: string, element: Element | ComponentPublicInstance | null) => {
   const current = itemRefs.get(path);
@@ -815,8 +698,7 @@ watch(() => [fileStore.activeTabId, fileStore.currentPath] as const, async ([, p
 watch(isIconLikeMode, async iconLike => {
   resetTypeahead();
   if (!iconLike) {
-    thumbnailObserver?.disconnect();
-    thumbnailObserver = null;
+    disconnectThumbnailObserver();
     return;
   }
   await nextTick();
@@ -847,7 +729,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("pointercancel", finishDetailsColumnResize);
   stopMarqueeAutoScroll();
   resetTypeahead();
-  thumbnailObserver?.disconnect();
+  disconnectThumbnailObserver();
   itemRefs.clear();
   renameInputRefs.clear();
 });
@@ -1539,31 +1421,6 @@ const cycleIconSize = () => {
   const next = fileStore.iconSize === "small" ? "medium" : fileStore.iconSize === "medium" ? "large" : "small";
   fileStore.setIconSize(next);
   nextTick(() => viewportRef.value?.focus());
-}
-
-const startDetailsColumnResize = (event: PointerEvent, key: DetailsColumnKey) => {
-  event.preventDefault();
-  event.stopPropagation();
-  if (event.currentTarget instanceof HTMLElement) event.currentTarget.setPointerCapture(event.pointerId);
-  detailsColumnResize.key = key;
-  detailsColumnResize.startX = event.clientX;
-  detailsColumnResize.startWidth = detailsColumnWidths.value[key];
-}
-
-const handleDetailsColumnResizeMove = (event: PointerEvent) => {
-  const key = detailsColumnResize.key;
-  if (!key) return;
-  const width = clampDetailsColumnWidth(key, detailsColumnResize.startWidth + event.clientX - detailsColumnResize.startX);
-  detailsColumnWidths.value = {
-    ...detailsColumnWidths.value,
-    [key]: width
-  };
-}
-
-const finishDetailsColumnResize = () => {
-  if (!detailsColumnResize.key) return;
-  detailsColumnResize.key = null;
-  writeDetailsColumnWidths(detailsColumnWidths.value);
 }
 
 const primaryContextEntry = computed(() => contextEntry());

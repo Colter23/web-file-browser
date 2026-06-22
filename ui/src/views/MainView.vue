@@ -2,7 +2,7 @@
 import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import FileTree from "../components/FileTree.vue";
-import {ArchiveFormat, ExplorerIconSize, ExplorerViewMode, FileInfo, FileTreeData, TaskStatus} from "../class";
+import {ArchiveFormat, ExplorerIconSize, ExplorerViewMode, FileTreeData, TaskStatus} from "../class";
 import {useFileStore} from "../store";
 import {
   cancelTask,
@@ -32,18 +32,11 @@ import ContentToolbar from "../components/shell/ContentToolbar.vue";
 import CommandBar from "../components/shell/CommandBar.vue";
 import ShellNotice from "../components/shell/ShellNotice.vue";
 import UploadDropOverlay from "../components/shell/UploadDropOverlay.vue";
+import type {ExplorerEntry} from "../components/explorer/types.ts";
+import {usePreviewPaneResize} from "../composables/usePreviewPaneResize.ts";
+import {useShellNotice} from "../composables/useShellNotice.ts";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
-
-type ExplorerEntry = {
-  type: "folder" | "file";
-  name: string;
-  path: string;
-  modified?: string;
-  size?: number;
-  extension?: string;
-  file?: FileInfo;
-}
 
 type CopyPathPayload = {
   paths: string[];
@@ -106,15 +99,6 @@ type TaskCancelConfirmState = {
   task: TaskStatus | null;
   submitting: boolean;
   error: string;
-}
-
-type ShellNoticeKind = "info" | "success" | "warning" | "error";
-
-type ShellNoticeState = {
-  visible: boolean;
-  kind: ShellNoticeKind;
-  title: string;
-  message: string;
 }
 
 type TabContextMenuState = {
@@ -180,43 +164,29 @@ const iconSizeLabel: Record<ExplorerIconSize, string> = {
 };
 
 const viewShortcut = (code: string) => viewShortcutMap[code] ?? viewShortcutMap[code.replace("Numpad", "Digit")];
-const previewPaneStorageKey = "explorer.previewPaneWidth";
-const previewPaneDefaultWidth = 352;
-const previewPaneMinWidth = 280;
-const previewPaneMaxWidth = 720;
-const previewPaneViewportReserve = 520;
-
-const previewPaneMaxForViewport = () => {
-  if (typeof window === "undefined") return previewPaneMaxWidth;
-  return Math.max(previewPaneMinWidth, Math.min(previewPaneMaxWidth, window.innerWidth - previewPaneViewportReserve));
-}
-
-const clampPreviewPaneWidth = (width: number) => {
-  const safeWidth = Number.isFinite(width) ? width : previewPaneDefaultWidth;
-  return Math.round(Math.min(Math.max(safeWidth, previewPaneMinWidth), previewPaneMaxForViewport()));
-}
-
-const readPreviewPaneWidth = () => {
-  if (typeof localStorage === "undefined") return clampPreviewPaneWidth(previewPaneDefaultWidth);
-  try {
-    const raw = localStorage.getItem(previewPaneStorageKey);
-    return clampPreviewPaneWidth(raw ? Number(raw) : previewPaneDefaultWidth);
-  } catch {
-    return clampPreviewPaneWidth(previewPaneDefaultWidth);
-  }
-}
-
-const writePreviewPaneWidth = (width: number) => {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(previewPaneStorageKey, String(clampPreviewPaneWidth(width)));
-  } catch {
-    // 本地存储不可用时，只保留本次会话里的宽度。
-  }
-}
 
 const router = useRouter();
 const fileStore = useFileStore();
+const {
+  width: previewPaneWidth,
+  resizing: previewPaneResizing,
+  minWidth: previewPaneMinWidth,
+  maxWidth: previewPaneMaxWidth,
+  areaStyle: browserAreaStyle,
+  startResize: startPreviewPaneResize,
+  handleResizeMove: handlePreviewPaneResizeMove,
+  finishResize: finishPreviewPaneResize,
+  resetWidth: resetPreviewPaneWidth,
+  handleWindowResize,
+  handleResizeKeyDown: handlePreviewPaneResizeKeyDown
+} = usePreviewPaneResize();
+const {
+  notice: shellNotice,
+  show: showShellNotice,
+  showError: showErrorNotice,
+  close: closeShellNotice,
+  stopTimer: stopShellNoticeTimer
+} = useShellNotice();
 const treeData = ref<FileTreeData[]>([]);
 const explorerRef = ref<ExplorerExpose | null>(null);
 const contentToolbarRef = ref<ContentToolbarExpose | null>(null);
@@ -236,8 +206,6 @@ const isFiltering = computed(() => Boolean(searchText.value.trim()));
 const previewPanelVisible = ref(false);
 const previewEntry = ref<ExplorerEntry | null>(null);
 const previewReloadKey = ref(0);
-const previewPaneWidth = ref(readPreviewPaneWidth());
-const previewPaneResizing = ref(false);
 const imageViewerVisible = ref(false);
 const imageViewerEntry = ref<ExplorerEntry | null>(null);
 const imageViewerEntries = ref<ExplorerEntry[]>([]);
@@ -273,12 +241,6 @@ const taskCancelConfirm = ref<TaskCancelConfirmState>({
   submitting: false,
   error: ""
 });
-const shellNotice = ref<ShellNoticeState>({
-  visible: false,
-  kind: "info",
-  title: "提示",
-  message: ""
-});
 const tabContextMenu = ref<TabContextMenuState>({
   visible: false,
   x: 0,
@@ -290,9 +252,6 @@ const tabDropTargetId = ref("");
 const tabDropPlacement = ref<TabDropPlacement | "">("");
 let uploadDragDepth = 0;
 let taskPollTimer: number | undefined;
-let shellNoticeTimer: number | undefined;
-let previewPaneResizeStartX = 0;
-let previewPaneResizeStartWidth = 0;
 const tabContextMenuWidth = 184;
 const tabContextMenuHeight = 252;
 let suppressSelectionPersistence = false;
@@ -379,87 +338,6 @@ const operationPanelNameLabel = computed(() => {
       return "名称";
   }
 });
-const browserAreaStyle = computed(() => ({
-  "--preview-pane-width": `${previewPaneWidth.value}px`
-}));
-
-const errorMessage = (error: unknown, fallback: string) => {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
-
-const stopShellNoticeTimer = () => {
-  if (shellNoticeTimer) {
-    window.clearTimeout(shellNoticeTimer);
-    shellNoticeTimer = undefined;
-  }
-}
-
-const closeShellNotice = () => {
-  stopShellNoticeTimer();
-  shellNotice.value.visible = false;
-}
-
-const setPreviewPaneWidth = (width: number, persist = true) => {
-  previewPaneWidth.value = clampPreviewPaneWidth(width);
-  if (persist) writePreviewPaneWidth(previewPaneWidth.value);
-}
-
-const resetPreviewPaneWidth = () => {
-  setPreviewPaneWidth(previewPaneDefaultWidth);
-}
-
-const finishPreviewPaneResize = () => {
-  if (previewPaneResizing.value) writePreviewPaneWidth(previewPaneWidth.value);
-  previewPaneResizing.value = false;
-}
-
-const resizePreviewPane = (clientX: number) => {
-  setPreviewPaneWidth(previewPaneResizeStartWidth + previewPaneResizeStartX - clientX, false);
-}
-
-const handlePreviewPaneResizeMove = (event: PointerEvent) => {
-  if (!previewPaneResizing.value) return;
-  event.preventDefault();
-  resizePreviewPane(event.clientX);
-}
-
-const startPreviewPaneResize = (event: PointerEvent) => {
-  if (event.button !== 0) return;
-  event.preventDefault();
-  previewPaneResizeStartX = event.clientX;
-  previewPaneResizeStartWidth = previewPaneWidth.value;
-  previewPaneResizing.value = true;
-}
-
-const handleWindowResize = () => {
-  setPreviewPaneWidth(previewPaneWidth.value);
-}
-
-const adjustPreviewPaneWidth = (delta: number) => {
-  setPreviewPaneWidth(previewPaneWidth.value + delta);
-}
-
-const handlePreviewPaneResizeKeyDown = (event: KeyboardEvent) => {
-  if (event.key === "ArrowLeft") {
-    event.preventDefault();
-    adjustPreviewPaneWidth(event.shiftKey ? 64 : 24);
-    return;
-  }
-  if (event.key === "ArrowRight") {
-    event.preventDefault();
-    adjustPreviewPaneWidth(event.shiftKey ? -64 : -24);
-    return;
-  }
-  if (event.key === "Home") {
-    event.preventDefault();
-    setPreviewPaneWidth(previewPaneMinWidth);
-    return;
-  }
-  if (event.key === "End") {
-    event.preventDefault();
-    setPreviewPaneWidth(previewPaneMaxWidth);
-  }
-}
 
 const resetImageViewerState = () => {
   imageViewerVisible.value = false;
@@ -477,29 +355,6 @@ const closeImageViewer = () => {
 
 const setImageViewerEntry = (entry: ExplorerEntry) => {
   imageViewerEntry.value = entry;
-}
-
-const showShellNotice = (message: string, kind: ShellNoticeKind = "info", title?: string, timeoutMs?: number) => {
-  stopShellNoticeTimer();
-  shellNotice.value = {
-    visible: true,
-    kind,
-    title: title ?? ({
-      info: "提示",
-      success: "完成",
-      warning: "需要注意",
-      error: "操作失败"
-    }[kind]),
-    message
-  };
-  const duration = timeoutMs ?? (kind === "error" ? 7000 : 3500);
-  if (duration > 0) {
-    shellNoticeTimer = window.setTimeout(closeShellNotice, duration);
-  }
-}
-
-const showErrorNotice = (error: unknown, fallback: string, title = "操作失败") => {
-  showShellNotice(errorMessage(error, fallback), "error", title);
 }
 
 const clearPreviewContent = () => {

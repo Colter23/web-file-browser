@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import {computed} from "vue";
 import Icon from "../Icon.vue";
-
-type ShellNoticeKind = "info" | "success" | "warning" | "error";
+import type {ShellNoticeKind} from "./types.ts";
 
 const props = defineProps<{
   kind: ShellNoticeKind;

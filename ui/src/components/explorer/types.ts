@@ -1,5 +1,7 @@
 import type {FileInfo} from "../../class.ts";
 
+export type DetailsColumnKey = "name" | "modified" | "type" | "size";
+
 export type ExplorerEntryType = "folder" | "file";
 
 export type ExplorerEntry = {

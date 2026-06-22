@@ -1,40 +1,23 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ComponentPublicInstance} from "vue";
-import type {FileInfo} from "../../class.ts";
+import type {ExplorerEntry} from "../explorer/types.ts";
 import {useImageZoomPan} from "../../composables/useImageZoomPan.ts";
 import {downloadUrl} from "../../network/api.ts";
 import Icon from "../Icon.vue";
-
-type ImageViewerEntry = {
-  type: "folder" | "file";
-  name: string;
-  path: string;
-  modified?: string;
-  size?: number;
-  extension?: string;
-  file?: FileInfo;
-}
-
-type NoticeKind = "info" | "success" | "warning" | "error";
-
-type NoticePayload = {
-  kind: NoticeKind;
-  title: string;
-  message: string;
-}
+import type {ShellNoticePayload} from "../shell/types.ts";
 
 const props = defineProps<{
   visible: boolean;
-  entry: ImageViewerEntry | null;
-  entries: ImageViewerEntry[];
+  entry: ExplorerEntry | null;
+  entries: ExplorerEntry[];
 }>();
 
 const emit = defineEmits<{
   (e: "close"): void;
-  (e: "select", entry: ImageViewerEntry): void;
-  (e: "download", entry: ImageViewerEntry): void;
-  (e: "notice", payload: NoticePayload): void;
+  (e: "select", entry: ExplorerEntry): void;
+  (e: "download", entry: ExplorerEntry): void;
+  (e: "notice", payload: ShellNoticePayload): void;
 }>();
 
 const filmstripStorageKey = "explorer.imageViewer.showFilmstrip";

@@ -1,28 +1,12 @@
 <script setup lang="ts">
 import {computed, onBeforeUnmount, ref, watch} from "vue";
-import type {FileInfo} from "../../class.ts";
+import type {ExplorerEntry} from "../explorer/types.ts";
 import {useImageZoomPan} from "../../composables/useImageZoomPan.ts";
 import {downloadUrl, getFile} from "../../network/api.ts";
 import Icon from "../Icon.vue";
-
-type PreviewEntry = {
-  type: "folder" | "file";
-  name: string;
-  path: string;
-  modified?: string;
-  size?: number;
-  extension?: string;
-  file?: FileInfo;
-}
+import type {ShellNoticePayload} from "../shell/types.ts";
 
 type PreviewKind = "image" | "text" | "audio" | "video" | "unknown";
-type NoticeKind = "info" | "success" | "warning" | "error";
-
-type NoticePayload = {
-  kind: NoticeKind;
-  title: string;
-  message: string;
-}
 
 const textPreviewExtensions = ["txt", "log", "md", "json", "yaml", "yml", "toml", "xml", "csv"];
 const imagePreviewExtensions = ["apng", "avif", "bmp", "gif", "ico", "jpeg", "jpg", "png", "svg", "webp"];
@@ -30,7 +14,7 @@ const audioPreviewExtensions = ["mp3", "wav", "ogg", "flac", "m4a", "aac"];
 const videoPreviewExtensions = ["mp4", "webm", "mov", "mkv", "avi"];
 
 const props = defineProps<{
-  entry: PreviewEntry | null;
+  entry: ExplorerEntry | null;
   editableExtensions: string[];
   reloadKey: number;
   emptyTitle?: string;
@@ -40,10 +24,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "close"): void;
-  (e: "edit", entry: PreviewEntry): void;
-  (e: "download", entry: PreviewEntry): void;
-  (e: "open-image", entry: PreviewEntry): void;
-  (e: "notice", payload: NoticePayload): void;
+  (e: "edit", entry: ExplorerEntry): void;
+  (e: "download", entry: ExplorerEntry): void;
+  (e: "open-image", entry: ExplorerEntry): void;
+  (e: "notice", payload: ShellNoticePayload): void;
 }>();
 
 const previewLoading = ref(false);
@@ -148,7 +132,7 @@ const resetPreviewRuntime = () => {
   previewCopied.value = false;
 }
 
-const loadPreview = async (entry: PreviewEntry) => {
+const loadPreview = async (entry: ExplorerEntry) => {
   const version = ++previewLoadVersion;
   previewLoading.value = false;
   previewText.value = "";

@@ -2,15 +2,7 @@
 import {computed} from "vue";
 import type {ArchiveFormat} from "../../class";
 import Icon from "../Icon.vue";
-
-type ExplorerEntry = {
-  type: "folder" | "file";
-  name: string;
-  path: string;
-  modified?: string;
-  size?: number;
-  extension?: string;
-}
+import type {ExplorerEntry} from "../explorer/types.ts";
 
 type OperationPanelKind = "createFile" | "createFolder" | "archive" | "extract";
 

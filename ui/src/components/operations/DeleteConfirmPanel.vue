@@ -1,12 +1,7 @@
 <script setup lang="ts">
 import {computed, ref} from "vue";
 import Icon from "../Icon.vue";
-
-type ExplorerEntry = {
-  type: "folder" | "file";
-  name: string;
-  path: string;
-}
+import type {ExplorerEntry} from "../explorer/types.ts";
 
 type DeleteConfirmState = {
   visible: boolean;
