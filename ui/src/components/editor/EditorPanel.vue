@@ -9,16 +9,14 @@ import {getFile, saveFile} from "../../network/file-api.ts";
 import {isApiError} from "../../network";
 import {useEditorPreferences} from "../../composables/useEditorPreferences.ts";
 import {useEditorSearch} from "../../composables/useEditorSearch.ts";
+import {useEditorStatusText} from "../../composables/useEditorStatusText.ts";
 import {checkFileLanguageMode} from "../../utils/common.ts";
-import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
-import type {CodeEditorExpose, EditorCursorStatus, EditorMenuName} from "./types.ts";
+import type {CodeEditorExpose, EditorCursorStatus, EditorMenuName, PendingEditorAction} from "./types.ts";
 import EditorGotoBar from "./EditorGotoBar.vue";
 import EditorInfoBar from "./EditorInfoBar.vue";
 import EditorMenuLayer from "./EditorMenuLayer.vue";
 import EditorSearchBar from "./EditorSearchBar.vue";
 import EditorStatusBar from "./EditorStatusBar.vue";
-
-type PendingEditorAction = "close" | "reload" | "external" | "";
 
 const fileStore = useFileStore();
 const defaultCursorStatus = (): EditorCursorStatus => ({line: 1, column: 1, selectedRows: 0, selectedCharacters: 0});
@@ -95,68 +93,39 @@ const {
   closeMenus
 });
 
-const fileTitle = computed(() => fileInfo.value?.name ?? "未打开文件");
-
-const filePathText = computed(() => fileInfo.value?.path ?? "");
-
-const selectedModeName = computed(() => editorConfig.mode.find(mode => mode.key === currentMode.value)?.name ?? currentMode.value);
-
-const selectedThemeName = computed(() => {
-  const themes = [...editorConfig.theme.light, ...editorConfig.theme.dark];
-  return themes.find(theme => theme.key === currentTheme.value)?.name ?? currentTheme.value;
-});
-
-const editorMetaText = computed(() => {
-  const parts = [selectedModeName.value, formatEntrySize(fileInfo.value?.size, "0 B"), wrap.value ? "自动换行" : "不换行"];
-  return parts.join(" · ");
-});
-
-const modifiedText = computed(() => formatEntryDate(fileInfo.value?.modified));
-
-const fileSizeText = computed(() => formatEntrySize(fileInfo.value?.size, "0 B"));
-
-const wrapText = computed(() => wrap.value ? "自动换行" : "不换行");
-
-const cursorStatusText = computed(() => `第 ${cursorStatus.value.line} 行，第 ${cursorStatus.value.column} 列`);
-
-const selectionStatusText = computed(() => {
-  if (!cursorStatus.value.selectedCharacters) return "";
-  const rows = cursorStatus.value.selectedRows > 1 ? `${cursorStatus.value.selectedRows} 行，` : "";
-  return `已选中 ${rows}${cursorStatus.value.selectedCharacters} 字符`;
-});
-
-const dirtyText = computed(() => {
-  if (saving.value) return "保存中";
-  if (loading.value) return "加载中";
-  if (saveConflict.value) return "需重新载入";
-  if (isChange.value) return "未保存";
-  return statusText.value || "已同步";
-});
-
-const editorMessageText = computed(() => errorText.value || (saveConflict.value ? "文件版本已变化，请重新载入后再保存" : ""));
-
-const confirmTitle = computed(() => {
-  if (pendingAction.value === "reload") return "重新载入文件？";
-  if (pendingAction.value === "external") return "离开编辑器？";
-  return "关闭编辑器？";
-});
-
-const confirmDescription = computed(() => {
-  if (pendingAction.value === "reload") return "当前修改还没有保存，重新载入会用磁盘上的最新内容覆盖编辑区。";
-  if (pendingAction.value === "external") return "当前修改还没有保存，继续操作会离开编辑器并丢弃未保存内容。";
-  return "当前修改还没有保存，关闭后未保存的内容会被丢弃。";
-});
-
-const confirmSaveText = computed(() => {
-  if (pendingBusy.value) return "处理中";
-  if (pendingAction.value === "external") return "保存并离开";
-  return pendingAction.value === "reload" ? "保存并重新载入" : "保存并关闭";
-});
-
-const confirmDiscardText = computed(() => {
-  if (pendingAction.value === "reload") return "放弃并重新载入";
-  if (pendingAction.value === "external") return "放弃并离开";
-  return "放弃并关闭";
+const {
+  fileTitle,
+  filePathText,
+  selectedModeName,
+  selectedThemeName,
+  editorMetaText,
+  modifiedText,
+  fileSizeText,
+  wrapText,
+  cursorStatusText,
+  selectionStatusText,
+  dirtyText,
+  editorMessageText,
+  confirmTitle,
+  confirmDescription,
+  confirmSaveText,
+  confirmDiscardText
+} = useEditorStatusText({
+  fileInfo,
+  currentMode,
+  currentTheme,
+  modes: editorConfig.mode,
+  themes: editorConfig.theme,
+  wrap,
+  cursorStatus,
+  saving,
+  loading,
+  saveConflict,
+  isChange,
+  statusText,
+  errorText,
+  pendingAction,
+  pendingBusy
 });
 
 const toggleMenu = (menu: EditorMenuName) => {
