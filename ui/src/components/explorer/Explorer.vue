@@ -11,6 +11,7 @@ import {useExplorerKeyboard} from "../../composables/useExplorerKeyboard.ts";
 import {useExplorerMarqueeSelection} from "../../composables/useExplorerMarqueeSelection.ts";
 import {useExplorerRename} from "../../composables/useExplorerRename.ts";
 import {useExplorerSelection} from "../../composables/useExplorerSelection.ts";
+import {useExplorerStatusText} from "../../composables/useExplorerStatusText.ts";
 import {useExplorerThumbnails} from "../../composables/useExplorerThumbnails.ts";
 import {useExplorerTypeahead} from "../../composables/useExplorerTypeahead.ts";
 import {useExplorerViewDensity} from "../../composables/useExplorerViewDensity.ts";
@@ -26,6 +27,7 @@ import {
 import DetailsHeader from "./DetailsHeader.vue";
 import ExplorerContextMenu from "./ExplorerContextMenu.vue";
 import ExplorerCommandRow from "./ExplorerCommandRow.vue";
+import ExplorerEmptyState from "./ExplorerEmptyState.vue";
 import ExplorerStatusBar from "./ExplorerStatusBar.vue";
 import ExplorerEntryItem from "./ExplorerEntryItem.vue";
 import type {ExplorerEntry} from "./types.ts";
@@ -119,16 +121,6 @@ const {
   viewportRef
 });
 
-const emptyText = computed(() => {
-  if (filterKeyword.value) return `没有匹配“${filterKeyword.value}”的项目`;
-  return "此文件夹为空";
-});
-
-const emptyHintText = computed(() => {
-  if (!filterKeyword.value) return "";
-  return folderData.value.hasMore ? "当前只筛选已加载项目，清除筛选后可继续加载更多。" : "清除筛选可查看全部已加载项目。";
-});
-
 const {
   selectedPaths,
   focusedPath,
@@ -164,18 +156,23 @@ const {
   currentPageStep: columns => currentPageStep(columns)
 });
 
-const selectedFileEntries = computed(() => selectedEntries.value.filter(entry => entry.type === "file"));
-const selectedFolderCount = computed(() => selectedEntries.value.length - selectedFileEntries.value.length);
+const hasMoreEntries = computed(() => Boolean(folderData.value.hasMore));
 
-const hasLoadedFileSize = (entry: ExplorerEntry): entry is ExplorerEntry & {type: "file"; size: number} => {
-  return entry.type === "file" && Number.isFinite(entry.size);
-}
-
-const selectedKnownSize = computed(() => selectedFileEntries.value.reduce((total, entry) => {
-  return hasLoadedFileSize(entry) ? total + entry.size : total;
-}, 0));
-
-const selectedMissingSizeCount = computed(() => selectedFileEntries.value.filter(entry => !hasLoadedFileSize(entry)).length);
+const {
+  filterActive,
+  emptyText,
+  emptyHintText,
+  selectedCountText,
+  totalCountText,
+  folderStatusText,
+  selectedStatusText
+} = useExplorerStatusText({
+  allEntries,
+  entries,
+  selectedEntries,
+  filterKeyword,
+  hasMore: hasMoreEntries
+});
 
 watch(selectedEntries, selected => {
   emit("selection-change", selected);
@@ -190,45 +187,6 @@ const sortOptions: {key: DirSortKey; label: string}[] = [
   {key: "modified", label: "修改"},
   {key: "size", label: "大小"}
 ];
-const selectedCountText = computed(() => {
-  const count = selectedPaths.value.length;
-  if (!count) return "未选择项目";
-  return `已选择 ${count} 项`;
-});
-
-const totalCountText = computed(() => {
-  const loadedCount = allEntries.value.length;
-  const hasMore = folderData.value.hasMore ? "，还有更多" : "";
-  return filterKeyword.value ? `已加载 ${loadedCount} 项，筛选 ${entries.value.length} 项${hasMore}` : `已加载 ${loadedCount} 项${hasMore}`;
-});
-
-const folderStatusText = computed(() => {
-  const source = filterKeyword.value ? entries.value : allEntries.value;
-  const folderCount = source.filter(entry => entry.type === "folder").length;
-  const fileCount = source.length - folderCount;
-  const prefix = filterKeyword.value ? "筛选结果" : "当前已加载";
-  const suffix = folderData.value.hasMore && !filterKeyword.value ? "，还有更多" : "";
-  return `${prefix}：${folderCount} 个文件夹，${fileCount} 个文件${suffix}`;
-});
-
-const selectedSizeText = computed(() => {
-  const fileCount = selectedFileEntries.value.length;
-  if (!fileCount) return "";
-  const missing = selectedMissingSizeCount.value;
-  if (missing === fileCount) return `${fileCount} 个文件大小未加载`;
-  if (missing) return `${formatSize(selectedKnownSize.value)} 已知，${missing} 个文件未加载大小`;
-  return formatSize(selectedKnownSize.value);
-});
-
-const selectedStatusText = computed(() => {
-  const selectedCount = selectedEntries.value.length;
-  if (!selectedCount) return "未选择项目";
-  const detail = [];
-  if (selectedFileEntries.value.length) detail.push(`${selectedFileEntries.value.length} 个文件`);
-  if (selectedFolderCount.value) detail.push(`${selectedFolderCount.value} 个文件夹`);
-  if (selectedSizeText.value) detail.push(selectedSizeText.value);
-  return `已选择 ${selectedCount} 项${detail.length ? ` · ${detail.join("，")}` : ""}`;
-});
 
 const itemSizeClass = computed(() => ({
   small: fileStore.iconSize === "small",
@@ -736,13 +694,14 @@ defineExpose({
           @change-sort="changeSort"
           @resize-column="startDetailsColumnResize" />
 
-      <div v-if="loading" class="explorer-empty">正在加载...</div>
-      <div v-else-if="message" class="explorer-empty error">{{ message }}</div>
-      <div v-else-if="!entries.length" class="explorer-empty">
-        <span>{{ emptyText }}</span>
-        <small v-if="emptyHintText">{{ emptyHintText }}</small>
-        <button v-if="filterKeyword" type="button" class="empty-action" @click.stop="emit('clear-filter')">清除筛选</button>
-      </div>
+      <explorer-empty-state
+          v-if="loading || message || !entries.length"
+          :loading="loading"
+          :message="message"
+          :empty-text="emptyText"
+          :empty-hint-text="emptyHintText"
+          :filter-active="filterActive"
+          @clear-filter="emit('clear-filter')" />
 
       <div v-else class="entry-surface">
         <explorer-entry-item
@@ -905,22 +864,6 @@ defineExpose({
 
 .load-more-button {
   @apply h-8 rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-600 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400;
-}
-
-.explorer-empty {
-  @apply flex h-48 flex-col items-center justify-center gap-1 text-center text-sm text-slate-500;
-}
-
-.explorer-empty small {
-  @apply max-w-md px-4 text-xs leading-5 text-slate-400;
-}
-
-.empty-action {
-  @apply mt-2 h-8 rounded-md border border-blue-200 bg-white px-3 text-xs font-medium text-blue-700 shadow-sm hover:border-blue-300 hover:bg-blue-50;
-}
-
-.explorer-empty.error {
-  @apply text-red-600;
 }
 
 .selection-box {
