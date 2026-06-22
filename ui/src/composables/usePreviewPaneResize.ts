@@ -1,4 +1,5 @@
 import {computed, ref} from "vue";
+import {readNumberStorage, writeNumberStorage} from "../utils/safe-storage.ts";
 
 const storageKey = "explorer.previewPaneWidth";
 const defaultWidth = 352;
@@ -17,22 +18,11 @@ const clampWidth = (width: number) => {
 }
 
 const readWidth = () => {
-  if (typeof localStorage === "undefined") return clampWidth(defaultWidth);
-  try {
-    const raw = localStorage.getItem(storageKey);
-    return clampWidth(raw ? Number(raw) : defaultWidth);
-  } catch {
-    return clampWidth(defaultWidth);
-  }
+  return clampWidth(readNumberStorage(storageKey, defaultWidth));
 }
 
 const writeWidth = (width: number) => {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(storageKey, String(clampWidth(width)));
-  } catch {
-    // 本地存储不可用时，只保留本次会话里的宽度。
-  }
+  writeNumberStorage(storageKey, clampWidth(width));
 }
 
 export const usePreviewPaneResize = () => {

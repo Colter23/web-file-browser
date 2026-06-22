@@ -5,6 +5,7 @@ import {useImageZoomPan} from "../../composables/useImageZoomPan.ts";
 import {downloadUrl} from "../../network/api.ts";
 import type {ShellNoticePayload} from "../shell/types.ts";
 import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
+import {readBooleanStorage, writeBooleanStorage} from "../../utils/safe-storage.ts";
 import ImageViewerFilmstrip from "./ImageViewerFilmstrip.vue";
 import ImageViewerToolbar from "./ImageViewerToolbar.vue";
 
@@ -25,26 +26,6 @@ const filmstripStorageKey = "explorer.imageViewer.showFilmstrip";
 const minZoom = 25;
 const maxZoom = 500;
 const zoomStep = 25;
-
-const readBooleanStorage = (key: string, fallback: boolean) => {
-  if (typeof localStorage === "undefined") return fallback;
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw === null) return fallback;
-    return raw === "true";
-  } catch {
-    return fallback;
-  }
-}
-
-const writeBooleanStorage = (key: string, value: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(key, String(value));
-  } catch {
-    // 本地存储不可用时，只保留本次会话里的查看器设置。
-  }
-}
 
 const viewerRef = ref<HTMLElement | null>(null);
 const loading = ref(false);

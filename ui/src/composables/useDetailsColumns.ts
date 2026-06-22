@@ -1,5 +1,6 @@
 import {computed, reactive, ref} from "vue";
 import type {DetailsColumnKey} from "../components/explorer/types.ts";
+import {readJsonStorage, writeJsonStorage} from "../utils/safe-storage.ts";
 
 type DetailsColumnFitOptions<Entry> = {
   entries: Entry[];
@@ -58,28 +59,18 @@ const clampWidth = (key: DetailsColumnKey, width: number) => {
 }
 
 const readWidths = (): DetailsColumnWidths => {
-  if (typeof localStorage === "undefined") return {...defaultWidths};
-  try {
-    const raw = localStorage.getItem(storageKey);
-    const parsed = raw ? JSON.parse(raw) as Partial<DetailsColumnWidths> : {};
-    return {
-      name: clampWidth("name", parsed.name ?? defaultWidths.name),
-      modified: clampWidth("modified", parsed.modified ?? defaultWidths.modified),
-      type: clampWidth("type", parsed.type ?? defaultWidths.type),
-      size: clampWidth("size", parsed.size ?? defaultWidths.size)
-    };
-  } catch {
-    return {...defaultWidths};
-  }
+  const stored = readJsonStorage<unknown>(storageKey, {});
+  const parsed = stored && typeof stored === "object" ? stored as Partial<DetailsColumnWidths> : {};
+  return {
+    name: clampWidth("name", parsed.name ?? defaultWidths.name),
+    modified: clampWidth("modified", parsed.modified ?? defaultWidths.modified),
+    type: clampWidth("type", parsed.type ?? defaultWidths.type),
+    size: clampWidth("size", parsed.size ?? defaultWidths.size)
+  };
 }
 
 const writeWidths = (widths: DetailsColumnWidths) => {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(widths));
-  } catch {
-    // 本地存储不可用时，只保留本次会话的列宽。
-  }
+  writeJsonStorage(storageKey, widths);
 }
 
 const measureTextWidth = (text: string, font: string) => {

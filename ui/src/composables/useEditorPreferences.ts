@@ -1,5 +1,6 @@
 import {ref, watch} from "vue";
 import editorConfig from "../assets/editor-config.json";
+import {readBooleanStorage, readStorageItem, writeBooleanStorage, writeStorageItem} from "../utils/safe-storage.ts";
 
 const storageKeys = {
   theme: "editor.theme",
@@ -9,24 +10,6 @@ const storageKeys = {
 };
 
 const allThemeKeys = [...editorConfig.theme.light, ...editorConfig.theme.dark].map(theme => theme.key);
-
-const readStorageItem = (key: string): string | null => {
-  if (typeof localStorage === "undefined") return null;
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-const writeStorageItem = (key: string, value: string) => {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // 本地存储不可用时，仍保留当前会话内的编辑设置。
-  }
-}
 
 const normalizeNumberPreference = (value: unknown, fallback: number, min: number, max: number) => {
   const numeric = typeof value === "number" ? value : Number(value);
@@ -44,10 +27,7 @@ const readNumberPreference = (key: string, fallback: number, min: number, max: n
 }
 
 const readBooleanPreference = (key: string, fallback: boolean) => {
-  const value = readStorageItem(key);
-  if (value === "true") return true;
-  if (value === "false") return false;
-  return fallback;
+  return readBooleanStorage(key, fallback);
 }
 
 export const useEditorPreferences = () => {
@@ -79,7 +59,7 @@ export const useEditorPreferences = () => {
   });
 
   watch(wrap, value => {
-    writeStorageItem(storageKeys.wrap, String(Boolean(value)));
+    writeBooleanStorage(storageKeys.wrap, Boolean(value));
   });
 
   return {

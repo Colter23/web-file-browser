@@ -6,6 +6,7 @@ import type {
     ExplorerTab,
     ExplorerViewMode
 } from "../class.ts";
+import {readJsonStorage, readStorageItem, writeJsonStorage, writeStorageItem} from "../utils/safe-storage.ts";
 
 export const closedTabStackLimit = 12;
 
@@ -59,24 +60,6 @@ export const normalizeScrollTop = (scrollTop?: number): number => {
 
 const createTabId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-const readStorageItem = (key: string): string | null => {
-    if (typeof localStorage === "undefined") return null;
-    try {
-        return localStorage.getItem(key);
-    } catch {
-        return null;
-    }
-}
-
-const writeStorageItem = (key: string, value: string) => {
-    if (typeof localStorage === "undefined") return;
-    try {
-        localStorage.setItem(key, value);
-    } catch {
-        // 浏览器禁用本地存储时，不影响本次会话内使用。
-    }
-}
-
 export const readViewMode = (): ExplorerViewMode => {
     const value = readStorageItem(storageKeys.viewMode);
     return viewModes.includes(value as ExplorerViewMode) ? value as ExplorerViewMode : "details";
@@ -107,7 +90,7 @@ export const writeSortPrefs = (key: DirSortKey, order: DirSortOrder) => {
 }
 
 export const writeTabsStorage = (tabs: ExplorerTab[], activeTabId: string) => {
-    writeStorageItem(storageKeys.tabs, JSON.stringify(tabs));
+    writeJsonStorage(storageKeys.tabs, tabs);
     writeStorageItem(storageKeys.activeTabId, activeTabId);
 }
 
@@ -153,25 +136,19 @@ const normalizeTab = (tab: Partial<ExplorerTab>): ExplorerTab | null => {
 }
 
 export const readTabs = (): ExplorerTab[] => {
-    const raw = readStorageItem(storageKeys.tabs);
-    if (!raw) return [createTab("/")];
-    try {
-        const parsed = JSON.parse(raw) as unknown;
-        if (!Array.isArray(parsed)) return [createTab("/")];
-        const seen = new Set<string>();
-        const tabs = parsed.flatMap((item): ExplorerTab[] => {
-            if (!item || typeof item !== "object") return [];
-            const tab = item as Partial<ExplorerTab>;
-            const normalized = normalizeTab(tab);
-            if (!normalized) return [];
-            if (seen.has(normalized.id)) return [];
-            seen.add(normalized.id);
-            return [normalized];
-        });
-        return tabs.length ? tabs : [createTab("/")];
-    } catch {
-        return [createTab("/")];
-    }
+    const parsed = readJsonStorage<unknown>(storageKeys.tabs, []);
+    if (!Array.isArray(parsed)) return [createTab("/")];
+    const seen = new Set<string>();
+    const tabs = parsed.flatMap((item): ExplorerTab[] => {
+        if (!item || typeof item !== "object") return [];
+        const tab = item as Partial<ExplorerTab>;
+        const normalized = normalizeTab(tab);
+        if (!normalized) return [];
+        if (seen.has(normalized.id)) return [];
+        seen.add(normalized.id);
+        return [normalized];
+    });
+    return tabs.length ? tabs : [createTab("/")];
 }
 
 export const readActiveTabId = (tabs: ExplorerTab[]) => {
