@@ -40,6 +40,15 @@ const revealActiveTab = async () => {
   tabButtonRefs.get(props.activeTabId)?.scrollIntoView({block: "nearest", inline: "nearest"});
 }
 
+const handleTabWheel = (event: WheelEvent) => {
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLElement)) return;
+  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+  if (!delta || target.scrollWidth <= target.clientWidth) return;
+  event.preventDefault();
+  target.scrollLeft += delta;
+}
+
 watch(() => [props.activeTabId, props.tabs.length] as const, () => {
   void revealActiveTab();
 }, {immediate: true});
@@ -64,7 +73,7 @@ const emit = defineEmits<{
 
 <template>
   <nav class="tab-strip" aria-label="目录标签">
-    <div class="tab-scroll">
+    <div class="tab-scroll" @wheel="handleTabWheel">
       <button
           v-for="tab in tabs"
           :key="tab.id"

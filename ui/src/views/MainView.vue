@@ -1389,6 +1389,15 @@ const switchRelativeTab = async (offset: number) => {
   return true;
 }
 
+const tabShortcutTargetId = (code: string) => {
+  const match = /^(?:Digit|Numpad)([1-9])$/.exec(code);
+  if (!match) return "";
+  const shortcutNumber = Number(match[1]);
+  const index = shortcutNumber === 9 ? fileStore.tabs.length - 1 : shortcutNumber - 1;
+  const nextTab = fileStore.tabs[index];
+  return nextTab?.id ?? "";
+}
+
 const closeActiveTab = async () => {
   if (fileStore.tabs.length <= 1) return false;
   if (!await fileStore.requestEditorLeave()) return false;
@@ -1464,6 +1473,12 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
   if (commandKey && !event.altKey && !shouldIgnoreShellShortcut(event.target)) {
     if (handleClipboardShortcut(key, event)) return;
     if (handleSelectAllShortcut(key, event)) return;
+    const tabShortcutId = !event.shiftKey ? tabShortcutTargetId(event.code) : "";
+    if (tabShortcutId) {
+      event.preventDefault();
+      if (tabShortcutId !== fileStore.activeTabId) void switchTab(tabShortcutId);
+      return;
+    }
     if (key === "t") {
       event.preventDefault();
       void openTab();
