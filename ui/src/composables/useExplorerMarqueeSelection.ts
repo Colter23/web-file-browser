@@ -50,7 +50,11 @@ export const useExplorerMarqueeSelection = ({
   });
   let pointerX = 0;
   let pointerY = 0;
+  let tracking = false;
+  let originClientX = 0;
+  let originClientY = 0;
   let scrollFrame = 0;
+  const startThreshold = 4;
   const scrollEdge = 48;
   const maxScrollSpeed = 24;
   const interactiveSelector = "button, a, input, textarea, select, [contenteditable='true']";
@@ -63,6 +67,7 @@ export const useExplorerMarqueeSelection = ({
 
   const resetSelectionBox = () => {
     stopAutoScroll();
+    tracking = false;
     selectionBox.active = false;
     selectionBox.additive = false;
     selectionBox.basePaths = [];
@@ -81,13 +86,17 @@ export const useExplorerMarqueeSelection = ({
     const viewport = viewportRef.value;
     if (!viewport) return;
     const rect = viewport.getBoundingClientRect();
+    event.preventDefault();
     pointerX = event.clientX;
     pointerY = event.clientY;
+    originClientX = event.clientX;
+    originClientY = event.clientY;
+    tracking = true;
     focusViewport();
     if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
       clearSelection();
     }
-    selectionBox.active = true;
+    selectionBox.active = false;
     selectionBox.additive = Boolean(event.ctrlKey || event.metaKey);
     selectionBox.basePaths = selectionBox.additive ? [...selectedPaths.value] : [];
     selectionBox.originX = event.clientX - rect.left + viewport.scrollLeft;
@@ -144,10 +153,19 @@ export const useExplorerMarqueeSelection = ({
     scrollFrame = window.requestAnimationFrame(runAutoScroll);
   }
 
+  const shouldStartSelectionBox = (clientX: number, clientY: number) => {
+    return Math.abs(clientX - originClientX) >= startThreshold || Math.abs(clientY - originClientY) >= startThreshold;
+  }
+
   const handleSelectionMove = (event: MouseEvent) => {
-    if (!selectionBox.active) return;
+    if (!tracking) return;
+    event.preventDefault();
     pointerX = event.clientX;
     pointerY = event.clientY;
+    if (!selectionBox.active) {
+      if (!shouldStartSelectionBox(event.clientX, event.clientY)) return;
+      selectionBox.active = true;
+    }
     updateSelectionBoxFromPointer(event.clientX, event.clientY);
     scheduleAutoScroll();
   }
@@ -182,9 +200,10 @@ export const useExplorerMarqueeSelection = ({
   }
 
   const finishMarqueeSelection = () => {
-    if (!selectionBox.active) return;
+    if (!tracking && !selectionBox.active) return;
+    const finishedActiveBox = selectionBox.active;
     resetSelectionBox();
-    if (focusedPath.value) anchorPath.value = focusedPath.value;
+    if (finishedActiveBox && focusedPath.value) anchorPath.value = focusedPath.value;
   }
 
   return {

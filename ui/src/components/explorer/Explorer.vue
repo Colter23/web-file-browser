@@ -518,6 +518,7 @@ onMounted(async () => {
   window.addEventListener("keydown", handleKeyDown);
   window.addEventListener("mousemove", handleSelectionMove);
   window.addEventListener("mouseup", finishMarqueeSelection);
+  window.addEventListener("blur", resetSelectionBox);
   window.addEventListener("pointermove", handleDetailsColumnResizeMove);
   window.addEventListener("pointerup", finishDetailsColumnResize);
   window.addEventListener("pointercancel", finishDetailsColumnResize);
@@ -528,6 +529,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeyDown);
   window.removeEventListener("mousemove", handleSelectionMove);
   window.removeEventListener("mouseup", finishMarqueeSelection);
+  window.removeEventListener("blur", resetSelectionBox);
   window.removeEventListener("pointermove", handleDetailsColumnResizeMove);
   window.removeEventListener("pointerup", finishDetailsColumnResize);
   window.removeEventListener("pointercancel", finishDetailsColumnResize);
