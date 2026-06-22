@@ -4,8 +4,9 @@ FROM node:22-bookworm-slim AS ui-builder
 WORKDIR /app/ui
 
 # 先安装前端依赖，利用 Docker 缓存减少重复下载。
-COPY ui/package.json ui/yarn.lock ./
-RUN corepack enable && yarn install --frozen-lockfile
+# .yarnrc.yml 必须在安装前复制，否则 Yarn 4 会使用默认 linker，构建时找不到 node_modules 安装状态。
+COPY ui/package.json ui/yarn.lock ui/.yarnrc.yml ./
+RUN corepack enable && yarn install --immutable
 
 COPY ui/ ./
 RUN yarn build
