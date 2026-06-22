@@ -35,6 +35,7 @@ import {useExplorerViewMode} from "../composables/useExplorerViewMode.ts";
 import {shouldIgnoreNavigationShortcut, useExplorerShortcuts} from "../composables/useExplorerShortcuts.ts";
 import {useFileTreeLoader} from "../composables/useFileTreeLoader.ts";
 import {useMainViewShellActions} from "../composables/useMainViewShellActions.ts";
+import {usePanelFocusRestore} from "../composables/usePanelFocusRestore.ts";
 import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
 import {isExtractableArchiveEntry} from "../utils/file-entry.ts";
@@ -459,45 +460,33 @@ const editPreviewEntry = (entry: ExplorerEntry) => {
   void openPreviewInEditor(entry);
 }
 
-const focusExplorerAfterPanelClose = async (closed: boolean) => {
-  if (!closed || fileStore.showEditor) return;
-  await focusExplorer();
-}
+const {closeAndFocusExplorer} = usePanelFocusRestore({
+  editorVisible: () => fileStore.showEditor,
+  focusExplorer
+});
 
 const closeTaskPanelAndFocus = async () => {
-  const wasVisible = taskPanelVisible.value;
-  closeTaskPanel();
-  await focusExplorerAfterPanelClose(wasVisible && !taskPanelVisible.value);
+  await closeAndFocusExplorer(() => taskPanelVisible.value, closeTaskPanel);
 }
 
 const closeOperationPanelAndFocus = async () => {
-  const wasVisible = operationPanel.value.visible;
-  closeOperationPanel();
-  await focusExplorerAfterPanelClose(wasVisible && !operationPanel.value.visible);
+  await closeAndFocusExplorer(() => operationPanel.value.visible, closeOperationPanel);
 }
 
 const closeDeleteConfirmAndFocus = async () => {
-  const wasVisible = deleteConfirm.value.visible;
-  closeDeleteConfirm();
-  await focusExplorerAfterPanelClose(wasVisible && !deleteConfirm.value.visible);
+  await closeAndFocusExplorer(() => deleteConfirm.value.visible, closeDeleteConfirm);
 }
 
 const closePropertiesPanelAndFocus = async () => {
-  const wasVisible = propertiesPanel.value.visible;
-  closePropertiesPanel();
-  await focusExplorerAfterPanelClose(wasVisible && !propertiesPanel.value.visible);
+  await closeAndFocusExplorer(() => propertiesPanel.value.visible, closePropertiesPanel);
 }
 
 const closePreviewAndFocus = async () => {
-  const wasVisible = previewPanelVisible.value;
-  closePreview();
-  await focusExplorerAfterPanelClose(wasVisible && !previewPanelVisible.value);
+  await closeAndFocusExplorer(() => previewPanelVisible.value, closePreview);
 }
 
 const closeImageViewerAndFocus = async () => {
-  const wasVisible = imageViewerVisible.value;
-  closeImageViewer();
-  await focusExplorerAfterPanelClose(wasVisible && !imageViewerVisible.value);
+  await closeAndFocusExplorer(() => imageViewerVisible.value, closeImageViewer);
 }
 
 const openSettings = async () => {
