@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {nextTick, watch} from "vue";
 import type {ExplorerTab} from "../../class";
 import Icon from "../Icon.vue";
 
@@ -11,7 +12,7 @@ type TabContextMenuState = {
   tabId: string;
 }
 
-defineProps<{
+const props = defineProps<{
   tabs: ExplorerTab[];
   activeTabId: string;
   draggingTabId: string;
@@ -23,6 +24,25 @@ defineProps<{
   canCloseOtherTabs: boolean;
   canCloseRightTabs: boolean;
 }>();
+
+const tabButtonRefs = new Map<string, HTMLElement>();
+
+const setTabButtonRef = (tabId: string, element: unknown) => {
+  if (element instanceof HTMLElement) {
+    tabButtonRefs.set(tabId, element);
+  } else {
+    tabButtonRefs.delete(tabId);
+  }
+}
+
+const revealActiveTab = async () => {
+  await nextTick();
+  tabButtonRefs.get(props.activeTabId)?.scrollIntoView({block: "nearest", inline: "nearest"});
+}
+
+watch(() => [props.activeTabId, props.tabs.length] as const, () => {
+  void revealActiveTab();
+}, {immediate: true});
 
 const emit = defineEmits<{
   (e: "new-tab"): void;
@@ -44,32 +64,35 @@ const emit = defineEmits<{
 
 <template>
   <nav class="tab-strip" aria-label="目录标签">
-    <button
-        v-for="tab in tabs"
-        :key="tab.id"
-        class="tab-button"
-        :class="{
-          active: tab.id === activeTabId,
-          dragging: draggingTabId === tab.id,
-          dropBefore: dropTargetId === tab.id && dropPlacement === 'before',
-          dropAfter: dropTargetId === tab.id && dropPlacement === 'after'
-        }"
-        :title="`${tab.path} · Ctrl+Tab 切换 · 中键关闭`"
-        draggable="true"
-        @click="emit('activate-tab', tab.id)"
-        @auxclick="emit('tab-aux-click', $event, tab.id)"
-        @contextmenu="emit('tab-context-menu', $event, tab.id)"
-        @dragstart="emit('tab-drag-start', $event, tab.id)"
-        @dragover="emit('tab-drag-over', $event, tab.id)"
-        @dragleave="emit('tab-drag-leave', $event, tab.id)"
-        @drop="emit('tab-drop', $event, tab.id)"
-        @dragend="emit('tab-drag-end')">
-      <icon icon="icon-folder-fill" />
-      <span>{{ tab.title }}</span>
-      <span class="tab-close" title="关闭标签页 (Ctrl+W)" @click="emit('close-tab', $event, tab.id)">
-        <icon icon="icon-close" size="small" />
-      </span>
-    </button>
+    <div class="tab-scroll">
+      <button
+          v-for="tab in tabs"
+          :key="tab.id"
+          :ref="element => setTabButtonRef(tab.id, element)"
+          class="tab-button"
+          :class="{
+            active: tab.id === activeTabId,
+            dragging: draggingTabId === tab.id,
+            dropBefore: dropTargetId === tab.id && dropPlacement === 'before',
+            dropAfter: dropTargetId === tab.id && dropPlacement === 'after'
+          }"
+          :title="`${tab.path} · Ctrl+Tab 切换 · 中键关闭`"
+          draggable="true"
+          @click="emit('activate-tab', tab.id)"
+          @auxclick="emit('tab-aux-click', $event, tab.id)"
+          @contextmenu="emit('tab-context-menu', $event, tab.id)"
+          @dragstart="emit('tab-drag-start', $event, tab.id)"
+          @dragover="emit('tab-drag-over', $event, tab.id)"
+          @dragleave="emit('tab-drag-leave', $event, tab.id)"
+          @drop="emit('tab-drop', $event, tab.id)"
+          @dragend="emit('tab-drag-end')">
+        <icon icon="icon-folder-fill" />
+        <span>{{ tab.title }}</span>
+        <span class="tab-close" title="关闭标签页 (Ctrl+W)" @click="emit('close-tab', $event, tab.id)">
+          <icon icon="icon-close" size="small" />
+        </span>
+      </button>
+    </div>
     <button class="tab-add" title="新建标签页 (Ctrl+T)" @click="emit('new-tab')">
       <icon icon="icon-add" />
     </button>
@@ -97,8 +120,26 @@ const emit = defineEmits<{
   @apply flex min-w-0 grow items-center gap-2 overflow-hidden rounded-xl border border-white bg-white/70 p-1 shadow-sm backdrop-blur;
 }
 
+.tab-scroll {
+  @apply flex min-w-0 grow items-center gap-2 overflow-x-auto overflow-y-hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(203 213 225) transparent;
+}
+
+.tab-scroll::-webkit-scrollbar {
+  height: 0.45rem;
+}
+
+.tab-scroll::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+.tab-scroll::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-slate-300;
+}
+
 .tab-button {
-  @apply relative inline-flex h-9 min-w-32 max-w-52 shrink items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 shadow-sm hover:bg-slate-50;
+  @apply relative inline-flex h-9 min-w-32 max-w-52 shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 shadow-sm hover:bg-slate-50;
 }
 
 .tab-button.active {
