@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
-import type {ComponentPublicInstance} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import {useImageZoomPan} from "../../composables/useImageZoomPan.ts";
 import {downloadUrl} from "../../network/api.ts";
-import Icon from "../Icon.vue";
 import type {ShellNoticePayload} from "../shell/types.ts";
 import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
+import ImageViewerFilmstrip from "./ImageViewerFilmstrip.vue";
+import ImageViewerToolbar from "./ImageViewerToolbar.vue";
 
 const props = defineProps<{
   visible: boolean;
@@ -52,7 +52,6 @@ const error = ref("");
 const pageFullscreen = ref(false);
 const browserFullscreen = ref(false);
 const showFilmstrip = ref(readBooleanStorage(filmstripStorageKey, true));
-const thumbRefs = new Map<string, HTMLElement>();
 
 const currentEntry = computed(() => props.visible ? props.entry : null);
 
@@ -105,24 +104,7 @@ const subtitle = computed(() => {
   return `${position}${formatEntrySize(entry.size, "0 B")} · ${formatEntryDate(entry.modified)}`;
 });
 
-const pageFullscreenTitle = computed(() => pageFullscreen.value ? "退出网页全屏 (F)" : "网页全屏 (F)");
-const browserFullscreenTitle = computed(() => browserFullscreen.value ? "退出浏览器全屏" : "浏览器全屏");
-const filmstripTitle = computed(() => showFilmstrip.value ? "隐藏缩略图 (T)" : "显示缩略图 (T)");
 const stageTitle = computed(() => fit.value ? "双击按原始大小查看" : "双击适应窗口，拖拽移动图片");
-
-const setThumbRef = (path: string, element: Element | ComponentPublicInstance | null) => {
-  if (element instanceof HTMLElement) {
-    thumbRefs.set(path, element);
-  } else {
-    thumbRefs.delete(path);
-  }
-}
-
-const revealActiveThumb = async () => {
-  if (!canShowFilmstrip.value || !props.entry) return;
-  await nextTick();
-  thumbRefs.get(props.entry.path)?.scrollIntoView({block: "nearest", inline: "center"});
-}
 
 const resetRuntimeState = () => {
   if (document.fullscreenElement === viewerRef.value) void document.exitFullscreen().catch(() => undefined);
@@ -139,7 +121,6 @@ const prepareEntry = async () => {
   resetZoom();
   await nextTick();
   viewerRef.value?.focus();
-  await revealActiveThumb();
 }
 
 const close = () => emit("close");
@@ -285,10 +266,6 @@ watch(() => props.entry?.path, () => {
   void prepareEntry();
 });
 
-watch(showFilmstrip, () => {
-  void revealActiveThumb();
-});
-
 onMounted(() => {
   window.addEventListener("keydown", handleWindowKeyDown, true);
   document.addEventListener("fullscreenchange", handleFullscreenChange);
@@ -310,40 +287,31 @@ onBeforeUnmount(() => {
         :class="{pageFullscreen}"
         tabindex="-1"
         @keydown.esc.prevent="close">
-      <div class="image-viewer-toolbar">
-        <div class="image-viewer-title">
-          <strong>{{ currentEntry.name }}</strong>
-          <span>{{ subtitle }}</span>
-        </div>
-        <div class="image-viewer-actions">
-          <button title="上一张 (←)" :disabled="!canShowPrevious" @click="showAdjacent(-1)">
-            <icon icon="icon-back_android" color="currentColor" />
-          </button>
-          <button title="下一张 (→)" :disabled="!canShowNext" @click="showAdjacent(1)">
-            <icon icon="icon-back_android" color="currentColor" class="rotate-180" />
-          </button>
-          <button class="text-action" :class="{active: fit}" title="适应窗口 (0)" @click="resetZoom">适应</button>
-          <button class="text-action" :class="{active: actualSizeActive}" title="原始大小" @click="setActualSize">1:1</button>
-          <button title="缩小 (-)" :disabled="!canZoomOut" @click="zoomImage(-zoomStep)">-</button>
-          <span>{{ zoomText }}</span>
-          <button title="放大 (+)" :disabled="!canZoomIn" @click="zoomImage(zoomStep)">+</button>
-          <button :title="pageFullscreenTitle" :class="{active: pageFullscreen}" @click="togglePageFullscreen">
-            <icon icon="icon-renamebox" color="currentColor" />
-          </button>
-          <button :title="browserFullscreenTitle" :class="{active: browserFullscreen}" @click="toggleBrowserFullscreen">
-            <icon icon="icon-unfold" color="currentColor" />
-          </button>
-          <button :title="filmstripTitle" :class="{active: showFilmstrip}" :disabled="imageCount <= 1" @click="toggleFilmstrip">
-            <icon icon="icon-viewgrid" color="currentColor" />
-          </button>
-          <button title="下载" @click="downloadCurrent">
-            <icon icon="icon-download" color="currentColor" />
-          </button>
-          <button title="关闭" @click="close">
-            <icon icon="icon-close" color="currentColor" />
-          </button>
-        </div>
-      </div>
+      <image-viewer-toolbar
+          :entry="currentEntry"
+          :subtitle="subtitle"
+          :can-show-previous="canShowPrevious"
+          :can-show-next="canShowNext"
+          :fit="fit"
+          :actual-size-active="actualSizeActive"
+          :zoom-text="zoomText"
+          :can-zoom-out="canZoomOut"
+          :can-zoom-in="canZoomIn"
+          :zoom-step="zoomStep"
+          :page-fullscreen="pageFullscreen"
+          :browser-fullscreen="browserFullscreen"
+          :show-filmstrip="showFilmstrip"
+          :image-count="imageCount"
+          @previous="showAdjacent(-1)"
+          @next="showAdjacent(1)"
+          @reset-zoom="resetZoom"
+          @actual-size="setActualSize"
+          @zoom="zoomImage"
+          @toggle-page-fullscreen="togglePageFullscreen"
+          @toggle-browser-fullscreen="toggleBrowserFullscreen"
+          @toggle-filmstrip="toggleFilmstrip"
+          @download="downloadCurrent"
+          @close="close" />
       <div
           class="image-viewer-stage"
           :class="{fit, panning: canPan, dragging}"
@@ -365,19 +333,12 @@ onBeforeUnmount(() => {
             @load="handleLoad"
             @error="handleError">
       </div>
-      <div v-if="canShowFilmstrip" class="image-viewer-filmstrip" aria-label="图片列表">
-        <button
-            v-for="item in filmstripEntries"
-            :key="item.entry.path"
-            :ref="element => setThumbRef(item.entry.path, element)"
-            class="image-viewer-thumb"
-            :class="{active: item.entry.path === currentEntry.path}"
-            :title="`${item.index + 1} / ${imageCount} · ${item.entry.name}`"
-            @click="showImageAt(item.index)">
-          <img :src="downloadUrl(item.entry.path)" :alt="item.entry.name" loading="lazy">
-          <span>{{ item.index + 1 }}</span>
-        </button>
-      </div>
+      <image-viewer-filmstrip
+          v-if="canShowFilmstrip"
+          :items="filmstripEntries"
+          :current-path="currentEntry.path"
+          :image-count="imageCount"
+          @select="showImageAt" />
     </section>
   </Teleport>
 </template>
@@ -391,46 +352,6 @@ onBeforeUnmount(() => {
 
 .image-viewer.pageFullscreen {
   @apply fixed inset-0 z-50 rounded-none;
-}
-
-.image-viewer-toolbar {
-  @apply flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/15 bg-slate-950/75 px-4 backdrop-blur;
-}
-
-.image-viewer-title {
-  @apply flex min-w-0 flex-col;
-}
-
-.image-viewer-title strong {
-  @apply truncate text-sm font-semibold;
-}
-
-.image-viewer-title span {
-  @apply truncate text-xs text-slate-300;
-}
-
-.image-viewer-actions {
-  @apply flex shrink-0 items-center gap-1 text-xs text-slate-100;
-}
-
-.image-viewer-actions button {
-  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-white/30 bg-white/15 px-2 text-sm font-medium text-white shadow-sm hover:border-white/45 hover:bg-white/25;
-}
-
-.image-viewer-actions button:disabled {
-  @apply cursor-not-allowed border-white/10 bg-white/5 opacity-35 hover:border-white/10 hover:bg-white/5;
-}
-
-.image-viewer-actions button.active {
-  @apply border-blue-200/80 bg-blue-500/50 text-white shadow-[0_0_0_1px_rgba(191,219,254,0.22)];
-}
-
-.image-viewer-actions button.text-action {
-  @apply min-w-11 px-3;
-}
-
-.image-viewer-actions span {
-  @apply w-14 text-center font-medium tabular-nums text-white;
 }
 
 .image-viewer-stage {
@@ -457,25 +378,5 @@ onBeforeUnmount(() => {
   @apply max-h-full max-w-full select-none rounded object-contain shadow-2xl;
   user-select: none;
   -webkit-user-drag: none;
-}
-
-.image-viewer-filmstrip {
-  @apply flex h-24 shrink-0 items-center gap-2 overflow-x-auto border-t border-white/10 bg-slate-950/45 px-4 py-2 backdrop-blur;
-}
-
-.image-viewer-thumb {
-  @apply relative h-16 w-20 shrink-0 overflow-hidden rounded-md border border-white/10 bg-white/5 p-0.5 text-white opacity-75 outline-none hover:border-white/35 hover:opacity-100;
-}
-
-.image-viewer-thumb.active {
-  @apply border-blue-300 bg-blue-500/20 opacity-100 shadow-[0_0_0_2px_rgba(96,165,250,0.25)];
-}
-
-.image-viewer-thumb img {
-  @apply h-full w-full rounded object-cover;
-}
-
-.image-viewer-thumb span {
-  @apply absolute bottom-1 right-1 rounded bg-slate-950/70 px-1 text-[10px] leading-4 text-slate-100;
 }
 </style>
