@@ -93,7 +93,7 @@ const updateRenameDraft = (event: Event) => {
             @mousedown.stop
             @dblclick.stop
             @keydown.enter.prevent="emit('commit-rename')"
-            @keydown.esc.prevent="emit('cancel-rename')"
+            @keydown.esc.prevent.stop="emit('cancel-rename')"
             @blur="emit('commit-rename')">
         <span v-else class="entry-name">{{ entry.name }}</span>
         <span v-if="viewMode !== 'details'" class="entry-meta">{{ typeText }}</span>

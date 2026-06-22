@@ -61,7 +61,7 @@ defineExpose({
 </script>
 
 <template>
-  <form v-if="state.visible" class="operation-panel" @submit.prevent="emit('submit')" @keydown.esc.prevent="emit('close')">
+  <form v-if="state.visible" class="operation-panel" @submit.prevent="emit('submit')" @keydown.esc.prevent.stop="emit('close')">
     <div class="operation-panel-header">
       <div class="operation-panel-icon">
         <icon :icon="panelIcon" />

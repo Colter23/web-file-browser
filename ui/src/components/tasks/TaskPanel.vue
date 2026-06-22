@@ -179,7 +179,7 @@ watch(() => props.cancelConfirm.visible, async visible => {
         ref="cancelConfirmRef"
         class="task-cancel-confirm"
         tabindex="-1"
-        @keydown.esc.prevent="emit('close-cancel')">
+        @keydown.esc.prevent.stop="emit('close-cancel')">
       <div class="task-cancel-confirm-main">
         <strong>{{ taskCancelTitle }}</strong>
         <span>{{ taskCancelMessage }}</span>

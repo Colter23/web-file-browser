@@ -38,7 +38,7 @@ defineExpose({
       ref="panelRef"
       class="delete-confirm-panel"
       tabindex="-1"
-      @keydown.esc.prevent="emit('close')">
+      @keydown.esc.prevent.stop="emit('close')">
     <div class="delete-confirm-header">
       <div class="delete-confirm-icon">
         <icon icon="icon-delete-fill" />

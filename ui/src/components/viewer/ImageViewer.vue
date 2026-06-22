@@ -294,7 +294,7 @@ onBeforeUnmount(() => {
         class="image-viewer"
         :class="{pageFullscreen}"
         tabindex="-1"
-        @keydown.esc.prevent="close">
+        @keydown.esc.prevent.stop="close">
       <image-viewer-toolbar
           :entry="currentEntry"
           :subtitle="subtitle"

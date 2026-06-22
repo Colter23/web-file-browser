@@ -67,7 +67,7 @@ defineExpose({
       ref="panelRef"
       class="properties-panel"
       tabindex="-1"
-      @keydown.esc.prevent="emit('close')">
+      @keydown.esc.prevent.stop="emit('close')">
     <div class="properties-header">
       <div class="properties-icon">
         <icon :icon="panelIcon" />
