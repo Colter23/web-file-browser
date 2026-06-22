@@ -5,6 +5,7 @@ import type {DirSortKey, DirSortOrder, ExplorerIconSize, ExplorerViewMode, Folde
 import {useFileStore} from "../../store";
 import {getFolderData} from "../../network/file-api.ts";
 import {useDetailsColumns} from "../../composables/useDetailsColumns.ts";
+import {useExplorerEntryDrag} from "../../composables/useExplorerEntryDrag.ts";
 import {useExplorerThumbnails} from "../../composables/useExplorerThumbnails.ts";
 import DetailsHeader from "./DetailsHeader.vue";
 import ExplorerContextMenu from "./ExplorerContextMenu.vue";
@@ -108,11 +109,12 @@ const itemRefs = new Map<string, HTMLElement>();
 const renameInputRefs = new Map<string, HTMLInputElement>();
 const pageSize = 200;
 const contextMenu = reactive({visible: false, x: 0, y: 0, targetPath: "", background: false});
+const closeContextMenu = () => {
+  contextMenu.visible = false;
+}
 const renamingPath = ref("");
 const renameDraft = ref("");
 const renameSubmitting = ref(false);
-const draggingEntries = ref<ExplorerEntry[]>([]);
-const dragState = reactive({active: false, overPath: "", overCurrentFolder: false, copy: false});
 const selectionBox = reactive<SelectionBox>({
   active: false,
   additive: false,
@@ -551,6 +553,33 @@ const commitRename = async () => {
 
 const isRenaming = (entry: ExplorerEntry) => renamingPath.value === entry.path;
 
+const {
+  dragState,
+  dragHintText,
+  isDragged,
+  isDropTarget,
+  beginEntryDrag,
+  resetEntryDrag,
+  dragOverEntry,
+  dragLeaveEntry,
+  dropOnEntry,
+  dragOverCurrentFolder,
+  dragLeaveCurrentFolder,
+  dropOnCurrentFolder
+} = useExplorerEntryDrag({
+  selectedPaths,
+  selectedEntries,
+  itemRefs,
+  viewportRef,
+  isSelected,
+  isRenaming,
+  setSelection,
+  focusViewport,
+  closeContextMenu,
+  dropEntries: (entries, target, action) => emit("drop-entries", {entries, target, action}),
+  dropToCurrentFolder: (entries, action) => emit("drop-to-current-folder", {entries, action})
+});
+
 const selectAllEntries = () => {
   if (!entries.value.length) return false;
   setSelection(entries.value.map(entry => entry.path), focusedPath.value || entries.value[0]?.path || "");
@@ -741,10 +770,6 @@ onBeforeUnmount(() => {
   renameInputRefs.clear();
 });
 
-const closeContextMenu = () => {
-  contextMenu.visible = false;
-}
-
 const showContextMenu = (x: number, y: number, targetPath = "", background = false) => {
   contextMenu.x = x;
   contextMenu.y = y;
@@ -838,120 +863,6 @@ const fileIcon = (entry: ExplorerEntry) => {
 }
 
 const isDimmed = (entry: ExplorerEntry) => props.dimmedPaths.includes(entry.path);
-
-const isDragged = (entry: ExplorerEntry) => draggingEntries.value.some(item => item.path === entry.path);
-
-const isDropTarget = (entry: ExplorerEntry) => dragState.active && dragState.overPath === entry.path;
-
-const canDropOnEntry = (entry: ExplorerEntry) => {
-  if (entry.type !== "folder") return false;
-  if (!draggingEntries.value.length) return false;
-  return !draggingEntries.value.some(item => item.path === entry.path || entry.path.startsWith(`${item.path}/`));
-}
-
-const dragHintText = computed(() => {
-  if (!dragState.active || !draggingEntries.value.length) return "";
-  const actionText = dragState.copy ? "复制" : "移动";
-  return `${actionText} ${draggingEntries.value.length} 项`;
-});
-
-const selectedEntriesForDrag = (entry: ExplorerEntry) => {
-  if (selectedPaths.value.includes(entry.path)) return selectedEntries.value;
-  return [entry];
-}
-
-const beginEntryDrag = (event: DragEvent, entry: ExplorerEntry) => {
-  if (isRenaming(entry)) return;
-  focusViewport();
-  const entriesToDrag = selectedEntriesForDrag(entry);
-  if (!entriesToDrag.length) return;
-  if (!isSelected(entry.path)) setSelection([entry.path], entry.path);
-  draggingEntries.value = entriesToDrag;
-  dragState.active = true;
-  dragState.overPath = "";
-  dragState.copy = Boolean(event.ctrlKey || event.metaKey);
-  contextMenu.visible = false;
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = "copyMove";
-    event.dataTransfer.dropEffect = dragState.copy ? "copy" : "move";
-    event.dataTransfer.setData("text/plain", entriesToDrag.map(item => item.path).join("\n"));
-  }
-}
-
-const resetEntryDrag = () => {
-  draggingEntries.value = [];
-  dragState.active = false;
-  dragState.overPath = "";
-  dragState.overCurrentFolder = false;
-  dragState.copy = false;
-}
-
-const dragOverEntry = (event: DragEvent, entry: ExplorerEntry) => {
-  if (!dragState.active || !canDropOnEntry(entry)) return;
-  event.preventDefault();
-  event.stopPropagation();
-  dragState.overPath = entry.path;
-  dragState.overCurrentFolder = false;
-  dragState.copy = Boolean(event.ctrlKey || event.metaKey);
-  if (event.dataTransfer) event.dataTransfer.dropEffect = dragState.copy ? "copy" : "move";
-}
-
-const dragLeaveEntry = (event: DragEvent, entry: ExplorerEntry) => {
-  if (!dragState.active || dragState.overPath !== entry.path) return;
-  const related = event.relatedTarget;
-  const element = itemRefs.get(entry.path);
-  if (related instanceof Node && element?.contains(related)) return;
-  dragState.overPath = "";
-}
-
-const dropOnEntry = (event: DragEvent, entry: ExplorerEntry) => {
-  if (!dragState.active || !canDropOnEntry(entry)) return;
-  event.preventDefault();
-  event.stopPropagation();
-  const entriesToDrop = draggingEntries.value;
-  const action = event.ctrlKey || event.metaKey ? "copy" : "move";
-  resetEntryDrag();
-  emit("drop-entries", {entries: entriesToDrop, target: entry, action});
-}
-
-const isInternalEntryDrag = (event: DragEvent) => {
-  const types = Array.from(event.dataTransfer?.types ?? []);
-  return dragState.active && types.includes("text/plain");
-}
-
-const isEntryDragSurface = (target: EventTarget | null) => target instanceof HTMLElement && Boolean(target.closest(".entry-item"));
-
-const dragOverCurrentFolder = (event: DragEvent) => {
-  if (!isInternalEntryDrag(event)) return;
-  if (isEntryDragSurface(event.target)) {
-    dragState.overCurrentFolder = false;
-    return;
-  }
-  event.preventDefault();
-  event.stopPropagation();
-  dragState.overPath = "";
-  dragState.overCurrentFolder = true;
-  dragState.copy = Boolean(event.ctrlKey || event.metaKey);
-  if (event.dataTransfer) event.dataTransfer.dropEffect = dragState.copy ? "copy" : "move";
-}
-
-const dragLeaveCurrentFolder = (event: DragEvent) => {
-  if (!dragState.overCurrentFolder) return;
-  const related = event.relatedTarget;
-  if (related instanceof Node && viewportRef.value?.contains(related)) return;
-  dragState.overCurrentFolder = false;
-}
-
-const dropOnCurrentFolder = (event: DragEvent) => {
-  if (!isInternalEntryDrag(event) || !dragState.overCurrentFolder) return;
-  if (isEntryDragSurface(event.target)) return;
-  event.preventDefault();
-  event.stopPropagation();
-  const entriesToDrop = draggingEntries.value;
-  const action = event.ctrlKey || event.metaKey ? "copy" : "move";
-  resetEntryDrag();
-  emit("drop-to-current-folder", {entries: entriesToDrop, action});
-}
 
 const formatDate = (srcDate: string) => {
   if (!srcDate) return "-";
