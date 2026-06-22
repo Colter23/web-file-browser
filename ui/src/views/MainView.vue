@@ -2,7 +2,6 @@
 import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import FileTree from "../components/FileTree.vue";
-import {FileTreeData} from "../class";
 import {useFileStore} from "../store";
 import {
   cancelTask,
@@ -31,8 +30,10 @@ import {useExplorerTabs} from "../composables/useExplorerTabs.ts";
 import {useExplorerTabContext} from "../composables/useExplorerTabContext.ts";
 import {useExplorerPreview} from "../composables/useExplorerPreview.ts";
 import {useExplorerNavigation} from "../composables/useExplorerNavigation.ts";
+import {useExplorerSearchBox} from "../composables/useExplorerSearchBox.ts";
 import {useExplorerViewMode} from "../composables/useExplorerViewMode.ts";
 import {shouldIgnoreNavigationShortcut, useExplorerShortcuts} from "../composables/useExplorerShortcuts.ts";
+import {useFileTreeLoader} from "../composables/useFileTreeLoader.ts";
 import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
 import {isExtractableArchiveEntry} from "../utils/file-entry.ts";
@@ -106,19 +107,30 @@ const {
   cancelTask,
   showError: showErrorNotice
 });
-const treeData = ref<FileTreeData[]>([]);
 const explorerRef = ref<ExplorerExpose | null>(null);
 const contentToolbarRef = ref<ContentToolbarExpose | null>(null);
 const deleteConfirmRef = ref<FocusablePanelExpose | null>(null);
 const propertiesPanelRef = ref<FocusablePanelExpose | null>(null);
 const uploadInput = ref<HTMLInputElement | null>(null);
-const searchInput = ref<HTMLInputElement | null>(null);
-const searchText = ref("");
-const isFiltering = computed(() => Boolean(searchText.value.trim()));
 
 const activeTab = computed(() => fileStore.tabs.find(tab => tab.id === fileStore.activeTabId) ?? fileStore.tabs[0]);
 
 const selectedEntry = () => explorerRef.value?.getSelectedEntry() ?? null;
+
+const focusExplorer = async () => {
+  if (fileStore.showEditor) return;
+  await nextTick();
+  explorerRef.value?.focus();
+}
+
+const {
+  setSearchInputRef,
+  searchText,
+  isFiltering,
+  clearSearch,
+  handleSearchEscape,
+  focusSearchInput
+} = useExplorerSearchBox({focusExplorer});
 
 const {
   shouldPersistSelection,
@@ -189,18 +201,6 @@ const closePanels = () => {
   closeImageViewer();
 }
 
-const focusExplorer = async () => {
-  if (fileStore.showEditor) return;
-  await nextTick();
-  explorerRef.value?.focus();
-}
-
-const clearSearch = (focus: "explorer" | "search" | false = "explorer") => {
-  searchText.value = "";
-  if (focus === "search") searchInput.value?.focus();
-  if (focus === "explorer") void focusExplorer();
-}
-
 const {
   currentFolder,
   canNavigateBack,
@@ -266,36 +266,11 @@ const {
   showNotice: showShellNotice
 });
 
-const handleSearchEscape = () => {
-  if (isFiltering.value) {
-    clearSearch();
-    return;
-  }
-  searchInput.value?.blur();
-  void focusExplorer();
-}
-
-const loadRoot = async () => {
-  const data = await getFolderData("/");
-  treeData.value = fileStore.saveAndConvertFolderData(data);
-}
-
-const handleLoad = (node: FileTreeData) => {
-  return new Promise<void>(async (resolve) => {
-    if (!await fileStore.requestEditorLeave()) {
-      resolve();
-      return;
-    }
-    try {
-      const data = await getFolderData(node.path);
-      node.children = fileStore.saveAndConvertFolderData(data);
-      await navigateToPath(data.path, {skipEditorLeave: true});
-    } catch (error) {
-      showErrorNotice(error, "加载目录失败");
-    }
-    resolve();
-  });
-}
+const {treeData, loadRoot, handleLoad} = useFileTreeLoader({
+  getFolderData,
+  navigateToPath,
+  showError: showErrorNotice
+});
 
 onMounted(async () => {
   fileStore.ensureActiveTab();
@@ -443,10 +418,7 @@ const {
   imageViewerVisible,
   previewPanelVisible,
   hasPreviewableSelection: () => singleSelection.value?.type === "file",
-  focusSearchInput: () => {
-    searchInput.value?.focus();
-    searchInput.value?.select();
-  },
+  focusSearchInput,
   focusBreadcrumbInput: () => contentToolbarRef.value?.focusInput(),
   selectAllEntries: () => explorerRef.value?.selectAllEntries(),
   applyViewShortcut,
@@ -536,7 +508,7 @@ const signOut = async () => {
       <div class="top-actions">
         <label class="search-box" :class="{active: isFiltering}">
           <input
-              ref="searchInput"
+              :ref="setSearchInputRef"
               v-model="searchText"
               type="search"
               placeholder="搜索当前文件夹"
