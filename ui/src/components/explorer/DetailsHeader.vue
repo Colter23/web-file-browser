@@ -12,6 +12,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "change-sort", key: DirSortKey): void;
   (e: "resize-column", event: PointerEvent, key: DetailsColumnKey): void;
+  (e: "fit-column", key: DetailsColumnKey): void;
 }>();
 
 const sortButtonClass = (key: DirSortKey) => ({
@@ -23,6 +24,8 @@ const sortIndicator = (key: DirSortKey) => {
   if (props.sortKey !== key) return "";
   return props.sortOrder === "asc" ? "↑" : "↓";
 }
+
+const resizeTitle = (label: string) => `拖拽调整${label}列宽，双击自动适配`;
 </script>
 
 <template>
@@ -30,21 +33,21 @@ const sortIndicator = (key: DirSortKey) => {
     <button class="sort-button name-cell" :class="sortButtonClass('name')" :disabled="loading" @click.stop="emit('change-sort', 'name')">
       <span>名称</span>
       <span class="sort-indicator">{{ sortIndicator('name') }}</span>
-      <span class="column-resizer" title="拖拽调整名称列宽" @click.stop @pointerdown="emit('resize-column', $event, 'name')"></span>
+      <span class="column-resizer" :title="resizeTitle('名称')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'name')" @pointerdown="emit('resize-column', $event, 'name')"></span>
     </button>
     <button class="sort-button" :class="sortButtonClass('modified')" :disabled="loading" @click.stop="emit('change-sort', 'modified')">
       <span>修改日期</span>
       <span class="sort-indicator">{{ sortIndicator('modified') }}</span>
-      <span class="column-resizer" title="拖拽调整修改日期列宽" @click.stop @pointerdown="emit('resize-column', $event, 'modified')"></span>
+      <span class="column-resizer" :title="resizeTitle('修改日期')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'modified')" @pointerdown="emit('resize-column', $event, 'modified')"></span>
     </button>
     <span class="header-cell">
       类型
-      <span class="column-resizer" title="拖拽调整类型列宽" @click.stop @pointerdown="emit('resize-column', $event, 'type')"></span>
+      <span class="column-resizer" :title="resizeTitle('类型')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'type')" @pointerdown="emit('resize-column', $event, 'type')"></span>
     </span>
     <button class="sort-button size-cell" :class="sortButtonClass('size')" :disabled="loading" @click.stop="emit('change-sort', 'size')">
       <span>大小</span>
       <span class="sort-indicator">{{ sortIndicator('size') }}</span>
-      <span class="column-resizer" title="拖拽调整大小列宽" @click.stop @pointerdown="emit('resize-column', $event, 'size')"></span>
+      <span class="column-resizer" :title="resizeTitle('大小')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'size')" @pointerdown="emit('resize-column', $event, 'size')"></span>
     </button>
   </div>
 </template>

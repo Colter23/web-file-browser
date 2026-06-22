@@ -93,10 +93,19 @@ export const useDetailsColumns = () => {
     writeWidths(widths.value);
   }
 
+  const fitColumn = (key: DetailsColumnKey, width: number) => {
+    widths.value = {
+      ...widths.value,
+      [key]: clampWidth(key, width)
+    };
+    writeWidths(widths.value);
+  }
+
   return {
     gridStyle,
     startResize,
     handleResizeMove,
-    finishResize
+    finishResize,
+    fitColumn
   };
 }
