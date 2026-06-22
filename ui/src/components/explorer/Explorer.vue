@@ -5,6 +5,7 @@ import type {DirSortKey, DirSortOrder} from "../../class.ts";
 import {useFileStore} from "../../store";
 import {useDetailsColumns} from "../../composables/useDetailsColumns.ts";
 import {useExplorerContextMenu} from "../../composables/useExplorerContextMenu.ts";
+import {useExplorerEntryActions} from "../../composables/useExplorerEntryActions.ts";
 import {useExplorerEntryDrag} from "../../composables/useExplorerEntryDrag.ts";
 import {useExplorerFolderData} from "../../composables/useExplorerFolderData.ts";
 import {useExplorerKeyboard} from "../../composables/useExplorerKeyboard.ts";
@@ -20,7 +21,6 @@ import {
   fileEntryIcon,
   formatEntryDate as formatDate,
   formatEntrySize as formatSize,
-  isEditableEntry,
   isExtractableArchiveEntry as canExtract,
   isImageEntry as isImageFile
 } from "../../utils/file-entry.ts";
@@ -309,6 +309,28 @@ const {
 });
 
 const {
+  canEditEntry,
+  editEntry,
+  openEntry,
+  openEntryInNewTab,
+  copySelectedPaths
+} = useExplorerEntryActions({
+  currentPath: () => fileStore.currentPath || "/",
+  editableExtensions: () => fileStore.extensions,
+  selectedEntries,
+  imageEntries,
+  isRenaming,
+  requestEditorLeave: () => fileStore.requestEditorLeave(),
+  openEditor: file => fileStore.openEditor(file),
+  loadFolder: path => loadFolder(path),
+  previewEntry: entry => emit("preview", entry),
+  openImageViewer: payload => emit("open-image-viewer", payload),
+  openNewTab: entry => emit("open-new-tab", entry),
+  copyPath: payload => emit("copy-path", payload),
+  closeContextMenu
+});
+
+const {
   dragState,
   dragHintText,
   isDragged,
@@ -334,29 +356,6 @@ const {
   dropEntries: (entries, target, action) => emit("drop-entries", {entries, target, action}),
   dropToCurrentFolder: (entries, action) => emit("drop-to-current-folder", {entries, action})
 });
-
-const copySelectedPaths = () => {
-  const paths = selectedEntries.value.length ? selectedEntries.value.map(entry => entry.path) : [fileStore.currentPath || "/"];
-  emit("copy-path", {paths});
-}
-
-const openEntry = async (entry: ExplorerEntry) => {
-  if (isRenaming(entry)) return;
-  if (entry.type === "folder") {
-    if (!await fileStore.requestEditorLeave()) return;
-    await loadFolder(entry.path);
-    return;
-  }
-  if (isImageFile(entry)) {
-    emit("open-image-viewer", {entry, entries: imageEntries.value});
-    return;
-  }
-  if (canEditEntry(entry)) {
-    await editEntry(entry);
-  } else {
-    emit("preview", entry);
-  }
-}
 
 const loadFolder = async (path: string = fileStore.currentPath || "/") => {
   return loadFolderData(path, {
@@ -414,22 +413,6 @@ watch(isIconLikeMode, async iconLike => {
 
 watch(() => props.filterText, resetTypeahead);
 
-const canEditEntry = (entry: ExplorerEntry | null) => {
-  return isEditableEntry(entry, fileStore.extensions);
-}
-
-const editEntry = async (entry: ExplorerEntry) => {
-  if (!canEditEntry(entry)) return;
-  if (!await fileStore.requestEditorLeave()) return;
-  fileStore.openEditor(entry.file ?? {
-    path: entry.path,
-    name: entry.name,
-    size: entry.size ?? 0,
-    extension: entry.extension ?? "",
-    modified: entry.modified ?? ""
-  });
-}
-
 const fileIcon = (entry: ExplorerEntry) => {
   return fileEntryIcon(entry, fileStore.extensions);
 }
@@ -484,12 +467,6 @@ const {
 });
 
 const primarySelected = () => firstSelectedEntry();
-
-const openEntryInNewTab = (entry: ExplorerEntry) => {
-  if (entry.type !== "folder") return;
-  closeContextMenu();
-  emit("open-new-tab", entry);
-}
 
 
 const {
@@ -589,7 +566,7 @@ const {handleKeyDown} = useExplorerKeyboard({
   selectAllEntries,
   invertCurrentSelection,
   openEntry,
-  openEntryInNewTab: entry => emit("open-new-tab", entry),
+  openEntryInNewTab,
   deleteEntry: entry => emit("delete", entry),
   startRename,
   handleTypeahead,
