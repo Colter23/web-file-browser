@@ -18,17 +18,31 @@ const input = ref<HTMLElement | null>(null);
 const pathInput = ref<HTMLInputElement | null>(null);
 const isInput = ref(false);
 
+const handlePathBoxWheel = (event: WheelEvent) => {
+  const pathBoxEl = pathBox.value;
+  if (!pathBoxEl) return;
+  event.preventDefault();
+  pathBoxEl.scrollLeft += event.deltaY || event.deltaX;
+}
+
+const scrollPathBoxToEnd = async () => {
+  await nextTick();
+  const pathBoxEl = pathBox.value;
+  if (!pathBoxEl) return;
+  pathBoxEl.scrollLeft = pathBoxEl.scrollWidth;
+}
+
 watch(() => fileStore.currentPath, (path: string) => {
   pathList.value = splitPath(path);
+  if (pathInput.value) pathInput.value.value = path || "/";
+  if (!isInput.value) void scrollPathBoxToEnd();
 });
 
 onMounted(() => {
   const pathBoxEl = pathBox.value;
   if (pathBoxEl == null) return;
-  pathBoxEl.addEventListener("wheel", (event: WheelEvent) => {
-    event.preventDefault();
-    pathBoxEl.scrollLeft += event.deltaY;
-  });
+  pathBoxEl.addEventListener("wheel", handlePathBoxWheel, {passive: false});
+  void scrollPathBoxToEnd();
 });
 
 let stopInputListeners: (() => void) | null = null;
@@ -41,6 +55,7 @@ const cleanupInputListeners = () => {
 const stopInput = () => {
   isInput.value = false;
   cleanupInputListeners();
+  void scrollPathBoxToEnd();
 }
 
 const focusInput = async () => {
@@ -54,26 +69,29 @@ const changeInput = (event?: Event) => {
   event?.stopPropagation();
   cleanupInputListeners();
 
-  const mouseHandle = (mouseEvent: MouseEvent) => {
-    if (input.value != null && !input.value.contains(mouseEvent.target as Node)) {
+  const pointerHandle = (pointerEvent: PointerEvent) => {
+    if (input.value != null && !input.value.contains(pointerEvent.target as Node)) {
       stopInput();
     }
   }
   const keyHandle = (keyEvent: KeyboardEvent) => {
     if (keyEvent.code === "Enter") {
       keyEvent.preventDefault();
+      keyEvent.stopPropagation();
       emit("navigate", pathInput.value?.value ?? "/", (navigated) => {
         if (navigated) stopInput();
       });
     } else if (keyEvent.code === "Escape") {
+      keyEvent.preventDefault();
+      keyEvent.stopPropagation();
       stopInput();
     }
   }
 
-  document.addEventListener("mousedown", mouseHandle);
+  document.addEventListener("pointerdown", pointerHandle);
   document.addEventListener("keydown", keyHandle);
   stopInputListeners = () => {
-    document.removeEventListener("mousedown", mouseHandle);
+    document.removeEventListener("pointerdown", pointerHandle);
     document.removeEventListener("keydown", keyHandle);
   };
   void focusInput();
@@ -87,7 +105,10 @@ defineExpose({
   focusInput: changeInput
 });
 
-onBeforeUnmount(cleanupInputListeners);
+onBeforeUnmount(() => {
+  cleanupInputListeners();
+  pathBox.value?.removeEventListener("wheel", handlePathBoxWheel);
+});
 </script>
 
 <template>
