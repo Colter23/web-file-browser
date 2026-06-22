@@ -41,31 +41,37 @@ export const useMenuKeyboardNavigation = ({
     if (event.key === "Escape") {
       if (!onEscape) return false;
       event.preventDefault();
+      event.stopPropagation();
       onEscape();
       return true;
     }
     if (event.key === "ArrowDown") {
       event.preventDefault();
+      event.stopPropagation();
       moveMenuFocus(1);
       return true;
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
+      event.stopPropagation();
       moveMenuFocus(-1);
       return true;
     }
     if (event.key === "Home") {
       event.preventDefault();
+      event.stopPropagation();
       focusMenuButton(0);
       return true;
     }
     if (event.key === "End") {
       event.preventDefault();
+      event.stopPropagation();
       focusMenuButton(menuButtons().length - 1);
       return true;
     }
     if (event.key === "Tab") {
       event.preventDefault();
+      event.stopPropagation();
       moveMenuFocus(event.shiftKey ? -1 : 1);
       return true;
     }

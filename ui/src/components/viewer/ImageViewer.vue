@@ -111,6 +111,7 @@ const resetRuntimeState = () => {
   loading.value = false;
   error.value = "";
   pageFullscreen.value = false;
+  browserFullscreen.value = false;
   resetZoom();
 }
 
@@ -124,6 +125,11 @@ const prepareEntry = async () => {
 }
 
 const close = () => emit("close");
+
+const focusViewer = async () => {
+  await nextTick();
+  viewerRef.value?.focus();
+}
 
 const showAdjacent = (direction: -1 | 1) => {
   const next = props.entries[currentIndex.value + direction];
@@ -142,9 +148,9 @@ const showImageAt = (index: number) => {
 }
 
 const togglePageFullscreen = async () => {
+  releasePointer();
   pageFullscreen.value = !pageFullscreen.value;
-  await nextTick();
-  viewerRef.value?.focus();
+  await focusViewer();
 }
 
 const toggleBrowserFullscreen = async () => {
@@ -154,8 +160,10 @@ const toggleBrowserFullscreen = async () => {
     if (document.fullscreenElement === target) {
       await document.exitFullscreen();
     } else {
+      releasePointer();
       await target.requestFullscreen();
     }
+    await focusViewer();
   } catch {
     emit("notice", {
       kind: "warning",

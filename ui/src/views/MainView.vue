@@ -459,6 +459,47 @@ const editPreviewEntry = (entry: ExplorerEntry) => {
   void openPreviewInEditor(entry);
 }
 
+const focusExplorerAfterPanelClose = async (closed: boolean) => {
+  if (!closed || fileStore.showEditor) return;
+  await focusExplorer();
+}
+
+const closeTaskPanelAndFocus = async () => {
+  const wasVisible = taskPanelVisible.value;
+  closeTaskPanel();
+  await focusExplorerAfterPanelClose(wasVisible && !taskPanelVisible.value);
+}
+
+const closeOperationPanelAndFocus = async () => {
+  const wasVisible = operationPanel.value.visible;
+  closeOperationPanel();
+  await focusExplorerAfterPanelClose(wasVisible && !operationPanel.value.visible);
+}
+
+const closeDeleteConfirmAndFocus = async () => {
+  const wasVisible = deleteConfirm.value.visible;
+  closeDeleteConfirm();
+  await focusExplorerAfterPanelClose(wasVisible && !deleteConfirm.value.visible);
+}
+
+const closePropertiesPanelAndFocus = async () => {
+  const wasVisible = propertiesPanel.value.visible;
+  closePropertiesPanel();
+  await focusExplorerAfterPanelClose(wasVisible && !propertiesPanel.value.visible);
+}
+
+const closePreviewAndFocus = async () => {
+  const wasVisible = previewPanelVisible.value;
+  closePreview();
+  await focusExplorerAfterPanelClose(wasVisible && !previewPanelVisible.value);
+}
+
+const closeImageViewerAndFocus = async () => {
+  const wasVisible = imageViewerVisible.value;
+  closeImageViewer();
+  await focusExplorerAfterPanelClose(wasVisible && !imageViewerVisible.value);
+}
+
 const openSettings = async () => {
   if (!await fileStore.requestEditorLeave()) return;
   await router.push("/setting");
@@ -600,7 +641,7 @@ const signOut = async () => {
             :last-updated-at="taskLastUpdatedAt"
             :cancel-confirm="taskCancelConfirm"
             @refresh="loadTasks()"
-            @close="closeTaskPanel"
+            @close="closeTaskPanelAndFocus"
             @cancel="cancelTaskById"
             @close-cancel="closeTaskCancelConfirm"
             @confirm-cancel="submitTaskCancelConfirm">
@@ -657,19 +698,19 @@ const signOut = async () => {
                 :state="operationPanel"
                 @update:name="value => operationPanel.name = value"
                 @update:format="value => operationPanel.format = value"
-                @close="closeOperationPanel"
+                @close="closeOperationPanelAndFocus"
                 @submit="submitOperationPanel" />
             <delete-confirm-panel
                 ref="deleteConfirmRef"
                 :state="deleteConfirm"
-                @close="closeDeleteConfirm"
+                @close="closeDeleteConfirmAndFocus"
                 @submit="submitDeleteConfirm" />
             <properties-panel
                 ref="propertiesPanelRef"
                 :visible="propertiesPanel.visible"
                 :entries="propertiesPanel.entries"
                 :current-folder="currentFolder()"
-                @close="closePropertiesPanel" />
+                @close="closePropertiesPanelAndFocus" />
           </div>
           <aside v-if="previewPanelVisible" class="preview-pane">
             <div
@@ -692,7 +733,7 @@ const signOut = async () => {
                 :empty-title="previewEmptyTitle"
                 :empty-subtitle="previewEmptySubtitle"
                 :empty-icon="previewEmptyIcon"
-                @close="closePreview"
+                @close="closePreviewAndFocus"
                 @edit="editPreviewEntry"
                 @download="downloadSelected"
                 @open-image="openPreviewEntryImageViewer"
@@ -705,7 +746,7 @@ const signOut = async () => {
             :visible="imageViewerVisible"
             :entry="imageViewerEntry"
             :entries="imageViewerEntries"
-            @close="closeImageViewer"
+            @close="closeImageViewerAndFocus"
             @select="setImageViewerEntry"
             @download="downloadSelected"
             @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)">
