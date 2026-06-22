@@ -3,6 +3,7 @@ import {onBeforeUnmount, onMounted, ref} from "vue";
 import Breadcrumb from "../Breadcrumb.vue";
 import Icon from "../Icon.vue";
 import type {ExplorerIconSize, ExplorerViewMode} from "../../class";
+import type {ExplorerViewModeSelection} from "../../composables/useExplorerViewMode.ts";
 
 type BreadcrumbExpose = {
   focusInput: () => void;
@@ -18,12 +19,6 @@ type ViewModeOption = {
   description: string;
   icon: string;
   shortcut: string;
-}
-
-type ViewModeSelection = {
-  mode: ExplorerViewMode;
-  iconSize?: ExplorerIconSize;
-  label: string;
 }
 
 const props = defineProps<{
@@ -48,7 +43,7 @@ const emit = defineEmits<{
   (e: "navigate-up"): void;
   (e: "refresh"): void;
   (e: "breadcrumb-navigate", path: string, complete?: NavigateComplete): void;
-  (e: "select-view-mode", selection: ViewModeSelection): void;
+  (e: "select-view-mode", selection: ExplorerViewModeSelection): void;
   (e: "toggle-preview"): void;
 }>();
 

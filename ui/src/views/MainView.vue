@@ -2,7 +2,7 @@
 import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import FileTree from "../components/FileTree.vue";
-import {ExplorerIconSize, ExplorerViewMode, FileTreeData} from "../class";
+import {FileTreeData} from "../class";
 import {useFileStore} from "../store";
 import {
   cancelTask,
@@ -30,6 +30,7 @@ import {useFileOperations} from "../composables/useFileOperations.ts";
 import {useExplorerTabs} from "../composables/useExplorerTabs.ts";
 import {useExplorerPreview} from "../composables/useExplorerPreview.ts";
 import {useExplorerNavigation} from "../composables/useExplorerNavigation.ts";
+import {useExplorerViewMode} from "../composables/useExplorerViewMode.ts";
 import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
 import {isExtractableArchiveEntry} from "../utils/file-entry.ts";
@@ -58,35 +59,6 @@ type ContentToolbarExpose = {
 type FocusablePanelExpose = {
   focus: () => void;
 }
-
-type ViewModeSelection = {
-  mode: ExplorerViewMode;
-  iconSize?: ExplorerIconSize;
-  label: string;
-}
-
-const viewModeMeta: Record<ExplorerViewMode, {label: string; icon: string}> = {
-  details: {label: "详细信息", icon: "icon-view-list"},
-  list: {label: "列表", icon: "icon-listview"},
-  icons: {label: "图标", icon: "icon-viewgrid"},
-  tiles: {label: "平铺", icon: "icon-file-common-filling"}
-};
-const viewShortcutMap: Record<string, {mode: ExplorerViewMode; iconSize: ExplorerIconSize; label: string}> = {
-  Digit1: {mode: "icons", iconSize: "large", label: "大图标"},
-  Digit2: {mode: "icons", iconSize: "large", label: "大图标"},
-  Digit3: {mode: "icons", iconSize: "medium", label: "中图标"},
-  Digit4: {mode: "icons", iconSize: "small", label: "小图标"},
-  Digit5: {mode: "list", iconSize: "small", label: "列表"},
-  Digit6: {mode: "details", iconSize: "small", label: "详细信息"},
-  Digit7: {mode: "tiles", iconSize: "medium", label: "平铺"}
-};
-const iconSizeLabel: Record<ExplorerIconSize, string> = {
-  small: "小图标",
-  medium: "中图标",
-  large: "大图标"
-};
-
-const viewShortcut = (code: string) => viewShortcutMap[code] ?? viewShortcutMap[code.replace("Numpad", "Digit")];
 
 const router = useRouter();
 const fileStore = useFileStore();
@@ -147,9 +119,6 @@ let tabContextRestoreToken = 0;
 let scrollPersistTimer: number | undefined;
 
 const activeTab = computed(() => fileStore.tabs.find(tab => tab.id === fileStore.activeTabId) ?? fileStore.tabs[0]);
-const currentViewModeMeta = computed(() => viewModeMeta[fileStore.viewMode]);
-const currentViewModeLabel = computed(() => fileStore.viewMode === "icons" ? iconSizeLabel[fileStore.iconSize] : currentViewModeMeta.value.label);
-const viewModeButtonTitle = computed(() => `当前：${currentViewModeLabel.value}，点击选择查看模式。Ctrl+Shift+1-7 可直接切换查看模式`);
 
 const selectedEntry = () => explorerRef.value?.getSelectedEntry() ?? null;
 
@@ -592,17 +561,17 @@ const togglePreviewFromShortcut = async () => {
   return true;
 }
 
-const selectViewMode = (selection: ViewModeSelection) => {
-  fileStore.setViewMode(selection.mode);
-  if (selection.iconSize) fileStore.setIconSize(selection.iconSize);
-  closeTabContextMenu();
-  void nextTick(() => explorerRef.value?.focus());
-  showShellNotice(`已切换为${selection.label}`, "info", "查看模式", 1400);
-}
-
-const applyViewShortcut = (shortcut: ViewModeSelection) => {
-  selectViewMode(shortcut);
-}
+const {
+  currentViewModeMeta,
+  currentViewModeLabel,
+  viewModeButtonTitle,
+  selectViewMode,
+  applyViewShortcut
+} = useExplorerViewMode({
+  focusExplorer: () => explorerRef.value?.focus(),
+  closeMenus: closeTabContextMenu,
+  showNotice: showShellNotice
+});
 
 const shouldIgnoreShellShortcut = (target: EventTarget | null) => {
   return fileStore.showEditor || shouldIgnoreNavigationShortcut(target);
@@ -613,10 +582,8 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
   const key = event.key.toLowerCase();
   const commandKey = event.ctrlKey || event.metaKey;
   if (commandKey && event.shiftKey && !event.altKey && !shouldIgnoreShellShortcut(event.target)) {
-    const shortcut = viewShortcut(event.code);
-    if (shortcut) {
+    if (applyViewShortcut(event.code)) {
       event.preventDefault();
-      applyViewShortcut(shortcut);
       return;
     }
   }
