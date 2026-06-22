@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, watch} from "vue";
-import type {DirSortKey, DirSortOrder} from "../../class.ts";
 import {useFileStore} from "../../store";
 import {useDetailsColumns} from "../../composables/useDetailsColumns.ts";
 import {useExplorerContextMenu} from "../../composables/useExplorerContextMenu.ts";
@@ -9,12 +8,12 @@ import {useExplorerEntryDrag} from "../../composables/useExplorerEntryDrag.ts";
 import {useExplorerFolderData} from "../../composables/useExplorerFolderData.ts";
 import {useExplorerKeyboard} from "../../composables/useExplorerKeyboard.ts";
 import {useExplorerMarqueeSelection} from "../../composables/useExplorerMarqueeSelection.ts";
+import {useExplorerPresentation} from "../../composables/useExplorerPresentation.ts";
 import {useExplorerRename} from "../../composables/useExplorerRename.ts";
 import {useExplorerSelection} from "../../composables/useExplorerSelection.ts";
 import {useExplorerStatusText} from "../../composables/useExplorerStatusText.ts";
 import {useExplorerThumbnails} from "../../composables/useExplorerThumbnails.ts";
 import {useExplorerTypeahead} from "../../composables/useExplorerTypeahead.ts";
-import {useExplorerViewDensity} from "../../composables/useExplorerViewDensity.ts";
 import {useExplorerItemRefs, useExplorerViewport} from "../../composables/useExplorerViewport.ts";
 import {
   entryTypeText,
@@ -190,36 +189,7 @@ watch(selectedEntries, selected => {
   emit("selection-change", selected);
 }, {immediate: true});
 
-const viewMode = computed(() => fileStore.viewMode);
-const isIconLikeMode = computed(() => fileStore.viewMode === "icons" || fileStore.viewMode === "tiles");
-const sortKey = computed(() => fileStore.sortKey);
-const sortOrder = computed(() => fileStore.sortOrder);
-const sortOptions: {key: DirSortKey; label: string}[] = [
-  {key: "name", label: "名称"},
-  {key: "modified", label: "修改"},
-  {key: "size", label: "大小"}
-];
-
-const itemSizeClass = computed(() => ({
-  small: fileStore.iconSize === "small",
-  medium: fileStore.iconSize === "medium",
-  large: fileStore.iconSize === "large"
-}));
-
-const iconSizeText = computed(() => ({
-  small: "小图标",
-  medium: "中图标",
-  large: "大图标"
-}[fileStore.iconSize]));
-
-const sortText = computed(() => {
-  const keyText = sortOptions.find(option => option.key === fileStore.sortKey)?.label ?? "名称";
-  const orderText = fileStore.sortOrder === "asc" ? "升序" : "降序";
-  return `${keyText} ${orderText}`;
-});
-
-const nextSortOrder = computed<DirSortOrder>(() => fileStore.sortOrder === "asc" ? "desc" : "asc");
-
+const thumbnailActive = computed(() => fileStore.viewMode === "icons" || fileStore.viewMode === "tiles");
 const imageEntries = computed(() => entries.value.filter(isImageFile));
 const {
   shouldLoad: shouldLoadThumbnail,
@@ -234,7 +204,7 @@ const {
   entries,
   itemRefs,
   viewportRef,
-  active: isIconLikeMode,
+  active: thumbnailActive,
   isImageFile
 });
 
@@ -365,21 +335,30 @@ const handleViewportScroll = () => {
   maybeLoadMoreOnScroll({afterRender: observePendingThumbnails});
 }
 
-const changeSort = async (key: DirSortKey) => {
-  if (loading.value) return;
-  const snapshot = captureSelectionSnapshot();
-  fileStore.setSort(key);
-  markStale();
-  if (await loadFolder(fileStore.currentPath || "/")) await restoreSelectionSnapshot(snapshot);
-}
-
-const changeSortOrder = async (order: DirSortOrder) => {
-  if (loading.value || fileStore.sortOrder === order) return;
-  const snapshot = captureSelectionSnapshot();
-  fileStore.setSort(fileStore.sortKey, order);
-  markStale();
-  if (await loadFolder(fileStore.currentPath || "/")) await restoreSelectionSnapshot(snapshot);
-}
+const {
+  viewMode,
+  sortKey,
+  sortOrder,
+  sortOptions,
+  itemSizeClass,
+  iconSizeText,
+  sortText,
+  nextSortOrder,
+  changeSort,
+  changeSortOrder,
+  setViewMode,
+  handleViewportWheel,
+  cycleIconSize
+} = useExplorerPresentation({
+  loading,
+  markStale,
+  loadFolder,
+  captureSelectionSnapshot,
+  restoreSelectionSnapshot,
+  focusViewport,
+  observePendingThumbnails,
+  viewportHeight
+});
 
 watch(() => [fileStore.activeTabId, fileStore.currentPath] as const, async ([, path]) => {
   if (!path || fileStore.showEditor) return;
@@ -387,7 +366,7 @@ watch(() => [fileStore.activeTabId, fileStore.currentPath] as const, async ([, p
   await loadFolder(path);
 });
 
-watch(isIconLikeMode, async iconLike => {
+watch(thumbnailActive, async iconLike => {
   resetTypeahead();
   if (!iconLike) {
     disconnectThumbnailObserver();
@@ -417,16 +396,6 @@ const activateViewport = () => {
   focusViewport();
   ensureFocusAnchor();
 }
-
-const {
-  setViewMode,
-  handleViewportWheel,
-  cycleIconSize
-} = useExplorerViewDensity({
-  focusViewport,
-  observePendingThumbnails,
-  viewportHeight
-});
 
 const primarySelected = () => firstSelectedEntry();
 
