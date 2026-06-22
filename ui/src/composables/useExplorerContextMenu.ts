@@ -117,6 +117,20 @@ export const useExplorerContextMenu = ({
     if (restoreFocus) focusViewport();
   }
 
+  const runEntryContextAction = (action: (entry: ExplorerEntry) => void, restoreFocus = false) => {
+    const entry = primaryContextEntry.value;
+    runContextAction(() => {
+      if (entry) action(entry);
+    }, restoreFocus);
+  }
+
+  const runAsyncEntryContextAction = async (action: (entry: ExplorerEntry) => MaybePromise, restoreFocus = false) => {
+    const entry = primaryContextEntry.value;
+    await runAsyncContextAction(async () => {
+      if (entry) await action(entry);
+    }, restoreFocus);
+  }
+
   const openContextMenu = (event: MouseEvent, entry: ExplorerEntry) => {
     focusViewport();
     ensureEntrySelected(entry);
@@ -161,44 +175,29 @@ export const useExplorerContextMenu = ({
 
   const openEntryFromContext = async () => {
     const entry = primaryContextEntry.value;
-    await runAsyncContextAction(async () => {
-      if (entry) await openEntry(entry);
-    }, Boolean(entry && (entry.type === "folder" || !isImageFile(entry) && !canEditEntry(entry))));
+    await runAsyncEntryContextAction(openEntry, Boolean(entry && (entry.type === "folder" || !isImageFile(entry) && !canEditEntry(entry))));
   }
 
   const openContextEntryInNewTab = () => {
-    const entry = primaryContextEntry.value;
-    runContextAction(() => {
-      if (entry) openNewTab(entry);
-    });
+    runEntryContextAction(openNewTab);
   }
 
   const previewContextEntry = () => {
-    const entry = primaryContextEntry.value;
-    runContextAction(() => {
-      if (entry) previewEntry(entry);
-    }, true);
+    runEntryContextAction(previewEntry, true);
   }
 
   const viewImageContextEntry = () => {
-    const entry = primaryContextEntry.value;
-    runContextAction(() => {
-      if (entry && isImageFile(entry)) openImageViewer({entry, entries: imageEntries.value});
+    runEntryContextAction(entry => {
+      if (isImageFile(entry)) openImageViewer({entry, entries: imageEntries.value});
     });
   }
 
   const editContextEntry = async () => {
-    const entry = primaryContextEntry.value;
-    await runAsyncContextAction(async () => {
-      if (entry) await editEntry(entry);
-    });
+    await runAsyncEntryContextAction(editEntry);
   }
 
   const downloadContextEntry = () => {
-    const entry = primaryContextEntry.value;
-    runContextAction(() => {
-      if (entry) downloadEntry(entry);
-    }, true);
+    runEntryContextAction(downloadEntry, true);
   }
 
   const copyPathContextEntries = () => {
@@ -209,17 +208,11 @@ export const useExplorerContextMenu = ({
   }
 
   const copyContextEntries = () => {
-    const entry = primaryContextEntry.value;
-    runContextAction(() => {
-      if (entry) copyEntry(entry);
-    }, true);
+    runEntryContextAction(copyEntry, true);
   }
 
   const cutContextEntries = () => {
-    const entry = primaryContextEntry.value;
-    runContextAction(() => {
-      if (entry) cutEntry(entry);
-    }, true);
+    runEntryContextAction(cutEntry, true);
   }
 
   const pasteIntoCurrentFolder = () => {
@@ -247,31 +240,19 @@ export const useExplorerContextMenu = ({
   }
 
   const archiveContextEntries = () => {
-    const entry = primaryContextEntry.value;
-    runContextAction(() => {
-      if (entry) archiveEntry(entry);
-    });
+    runEntryContextAction(archiveEntry);
   }
 
   const extractContextEntry = () => {
-    const entry = primaryContextEntry.value;
-    runContextAction(() => {
-      if (entry) extractEntry(entry);
-    });
+    runEntryContextAction(extractEntry);
   }
 
   const renameContextEntry = () => {
-    const entry = primaryContextEntry.value;
-    runContextAction(() => {
-      if (entry) startRename(entry);
-    });
+    runEntryContextAction(startRename);
   }
 
   const deleteContextEntries = () => {
-    const entry = primaryContextEntry.value;
-    runContextAction(() => {
-      if (entry) deleteEntry(entry);
-    });
+    runEntryContextAction(deleteEntry);
   }
 
   const showContextProperties = () => {
