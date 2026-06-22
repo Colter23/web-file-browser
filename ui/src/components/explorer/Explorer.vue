@@ -994,14 +994,20 @@ const isTextLike = (entry: ExplorerEntry) => {
 }
 
 const canEditEntry = (entry: ExplorerEntry | null) => {
-  if (!entry || entry.type !== "file" || !entry.file) return false;
-  return fileStore.extensions.includes(entry.file.extension);
+  if (!entry || entry.type !== "file") return false;
+  return fileStore.extensions.includes(entry.extension?.toLowerCase() ?? "");
 }
 
 const editEntry = async (entry: ExplorerEntry) => {
-  if (!canEditEntry(entry) || !entry.file) return;
+  if (!canEditEntry(entry)) return;
   if (!await fileStore.requestEditorLeave()) return;
-  fileStore.openEditor(entry.file);
+  fileStore.openEditor(entry.file ?? {
+    path: entry.path,
+    name: entry.name,
+    size: entry.size ?? 0,
+    extension: entry.extension ?? "",
+    modified: entry.modified ?? ""
+  });
 }
 
 const fileIcon = (entry: ExplorerEntry) => {

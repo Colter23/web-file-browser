@@ -5,9 +5,10 @@ const log = (title: string, info: string, color: string = "#3b82f6") => {
 }
 
 const checkFileLanguageMode = (extension: string): string => {
-  let key = "";
+  const normalizedExtension = extension.toLowerCase();
+  let key = "text";
   editorConfig.mode.forEach((mode) => {
-    if (mode.extensions != undefined && mode.extensions.includes(extension)) {
+    if (mode.extensions != undefined && mode.extensions.includes(normalizedExtension)) {
       key = mode.key;
     }
   });

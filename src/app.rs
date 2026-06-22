@@ -1128,6 +1128,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn edit_mode_content_returns_full_body_after_text_probe() {
+        let (root, app) = test_app("edit-mode-content-api").await;
+        let files_dir = root.path().join("files");
+        let text_dir = files_dir.join("文本Demo");
+        tokio::fs::create_dir_all(&text_dir).await.unwrap();
+        let content = "第一行中文\n第二行编辑内容";
+        tokio::fs::write(text_dir.join("文本1.txt"), content)
+            .await
+            .unwrap();
+
+        let cookie = login_cookie(&app).await;
+        create_mapping(&app, &cookie, "/Demo", &files_dir, true).await;
+
+        let response = app
+            .clone()
+            .oneshot(empty_request_with_cookie(
+                Method::GET,
+                "/api/content/Demo/%E6%96%87%E6%9C%ACDemo/%E6%96%87%E6%9C%AC1.txt?mode=edit",
+                &cookie,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let content_length = response
+            .headers()
+            .get(CONTENT_LENGTH)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .parse::<usize>()
+            .unwrap();
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(bytes.len(), content_length);
+        assert_eq!(String::from_utf8(bytes.to_vec()).unwrap(), content);
+    }
+
+    #[tokio::test]
     async fn streaming_transfer_limit_is_held_until_response_body_is_dropped() {
         let (root, app) = test_app_with_config("stream-transfer-limit-api", |config| {
             config.max_transfer_concurrency = 1;

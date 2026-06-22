@@ -441,6 +441,7 @@ async fn ensure_editable_file(
             "文件看起来不是文本文件，不能在线编辑: {virtual_path}"
         )));
     }
+    file.seek(SeekFrom::Start(0)).await?;
     Ok(())
 }
 
