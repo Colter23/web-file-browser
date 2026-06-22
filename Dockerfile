@@ -24,10 +24,7 @@ FROM debian:bookworm-slim AS runtime
 ARG WFB_UID=1000
 ARG WFB_GID=1000
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --gid "${WFB_GID}" web-file-browser \
+RUN groupadd --gid "${WFB_GID}" web-file-browser \
     && useradd --uid "${WFB_UID}" --gid "${WFB_GID}" --create-home --no-log-init web-file-browser \
     && mkdir -p /app/data /app/ui/dist /mnt/files \
     && chown -R web-file-browser:web-file-browser /app /mnt/files
@@ -48,5 +45,5 @@ ENV WEB_FILE_BROWSER_BIND=0.0.0.0 \
 EXPOSE 8080
 
 USER web-file-browser
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD curl -fsS http://127.0.0.1:8080/api/ready >/dev/null || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD ["web-file-browser", "--healthcheck"]
 ENTRYPOINT ["web-file-browser"]

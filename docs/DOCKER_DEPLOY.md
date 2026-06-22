@@ -8,7 +8,7 @@ Dockerfile 使用三阶段构建：
 
 - 前端阶段：在 Node 镜像中构建 `ui/dist`。
 - 后端阶段：在 Rust 镜像中构建 release 二进制。
-- 运行阶段：保留 Rust 二进制、前端静态文件和用于容器健康检查的 `curl`。
+- 运行阶段：保留 Rust 二进制和前端静态文件，健康检查由应用二进制自身完成。
 
 运行镜像默认：
 
@@ -55,7 +55,7 @@ http://服务器IP:8080
 
 首次启动时，`WEB_FILE_BROWSER_ADMIN_PASSWORD` 会用于初始化管理员密码哈希。`data/config.json` 已经存在管理员密码哈希后，后续启动不会用环境变量覆盖密码。
 
-镜像内置 Docker `HEALTHCHECK`，会访问 `http://127.0.0.1:8080/api/ready`。如果管理员密码没有初始化，或 `/app/data`、回收站、审计日志目录、静态文件目录不可用，容器会显示为 `unhealthy`。
+镜像内置 Docker `HEALTHCHECK`，会通过 `web-file-browser --healthcheck` 访问容器内的 `http://127.0.0.1:8080/api/ready`。如果管理员密码没有初始化，或 `/app/data`、回收站、审计日志目录、静态文件目录不可用，容器会显示为 `unhealthy`。
 
 ## 自动冒烟验证
 
