@@ -110,6 +110,7 @@ const {
 });
 const explorerRef = ref<ExplorerExpose | null>(null);
 const contentToolbarRef = ref<ContentToolbarExpose | null>(null);
+const operationPanelRef = ref<FocusablePanelExpose | null>(null);
 const deleteConfirmRef = ref<FocusablePanelExpose | null>(null);
 const propertiesPanelRef = ref<FocusablePanelExpose | null>(null);
 const uploadInput = ref<HTMLInputElement | null>(null);
@@ -350,6 +351,7 @@ const {
   showError: showErrorNotice,
   taskStarted,
   setTaskMessage: message => taskMessage.value = message,
+  focusOperationPanel: () => operationPanelRef.value?.focus(),
   focusDeleteConfirm: () => deleteConfirmRef.value?.focus(),
   focusPropertiesPanel: () => propertiesPanelRef.value?.focus()
 });
@@ -651,6 +653,7 @@ const signOut = async () => {
                 :title="uploadDropTitle"
                 :subtitle="uploadDropSubtitle" />
             <operation-panel
+                ref="operationPanelRef"
                 :state="operationPanel"
                 @update:name="value => operationPanel.name = value"
                 @update:format="value => operationPanel.format = value"

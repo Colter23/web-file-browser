@@ -34,6 +34,7 @@ type FileOperationsOptions = {
   showError: (error: unknown, fallback: string, title?: string) => void;
   taskStarted: (id: string, label?: string) => Promise<void>;
   setTaskMessage: (message: string) => void;
+  focusOperationPanel: () => void;
   focusDeleteConfirm: () => void;
   focusPropertiesPanel: () => void;
 }
@@ -51,6 +52,7 @@ export const useFileOperations = ({
   showError,
   taskStarted,
   setTaskMessage,
+  focusOperationPanel,
   focusDeleteConfirm,
   focusPropertiesPanel
 }: FileOperationsOptions) => {
@@ -71,6 +73,7 @@ export const useFileOperations = ({
     openPropertiesPanel
   } = useFileOperationPanels({
     closeShellPanels,
+    focusOperationPanel,
     focusDeleteConfirm,
     focusPropertiesPanel
   });

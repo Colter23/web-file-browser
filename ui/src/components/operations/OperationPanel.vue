@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed} from "vue";
+import {computed, ref} from "vue";
 import type {ArchiveFormat} from "../../class";
 import Icon from "../Icon.vue";
 import type {OperationPanelState} from "./types.ts";
@@ -14,6 +14,8 @@ const emit = defineEmits<{
   (e: "close"): void;
   (e: "submit"): void;
 }>();
+
+const nameInputRef = ref<HTMLInputElement | null>(null);
 
 const nameModel = computed({
   get: () => props.state.name,
@@ -52,6 +54,10 @@ const panelIcon = computed(() => {
       return "icon-file-common-filling";
   }
 });
+
+defineExpose({
+  focus: () => nameInputRef.value?.focus()
+});
 </script>
 
 <template>
@@ -71,6 +77,7 @@ const panelIcon = computed(() => {
     <label class="operation-field">
       <span>{{ nameLabel }}</span>
       <input
+          ref="nameInputRef"
           v-model="nameModel"
           type="text"
           autocomplete="off"

@@ -4,6 +4,7 @@ import type {DeleteConfirmState, OperationPanelState, PropertiesPanelState} from
 
 type FileOperationPanelsOptions = {
   closeShellPanels: () => void;
+  focusOperationPanel: () => void;
   focusDeleteConfirm: () => void;
   focusPropertiesPanel: () => void;
 }
@@ -37,6 +38,7 @@ const emptyPropertiesPanel = (): PropertiesPanelState => ({
 
 export const useFileOperationPanels = ({
   closeShellPanels,
+  focusOperationPanel,
   focusDeleteConfirm,
   focusPropertiesPanel
 }: FileOperationPanelsOptions) => {
@@ -78,13 +80,15 @@ export const useFileOperationPanels = ({
     closePropertiesPanel();
   }
 
-  const openOperationPanel = (next: OperationPanelDraft) => {
+  const openOperationPanel = async (next: OperationPanelDraft) => {
     closePanels();
     operationPanel.value = {
       ...next,
       visible: true,
       submitting: false
     };
+    await nextTick();
+    focusOperationPanel();
   }
 
   const closeOperationPanel = () => {
