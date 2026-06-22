@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ComponentPublicInstance} from "vue";
-import type {DirSortKey, DirSortOrder, FolderData, FolderQueryParams} from "../../class.ts";
+import type {DirSortKey, DirSortOrder} from "../../class.ts";
 import {useFileStore} from "../../store";
-import {getFolderData} from "../../network/file-api.ts";
 import {useDetailsColumns} from "../../composables/useDetailsColumns.ts";
 import {useExplorerContextMenu} from "../../composables/useExplorerContextMenu.ts";
 import {useExplorerEntryDrag} from "../../composables/useExplorerEntryDrag.ts";
+import {useExplorerFolderData} from "../../composables/useExplorerFolderData.ts";
 import {useExplorerKeyboard} from "../../composables/useExplorerKeyboard.ts";
 import {useExplorerMarqueeSelection} from "../../composables/useExplorerMarqueeSelection.ts";
 import {useExplorerRename} from "../../composables/useExplorerRename.ts";
@@ -89,17 +89,10 @@ const props = withDefaults(defineProps<{
 })
 
 const fileStore = useFileStore();
-const folderData = ref<FolderData>({ path: "/", folder: [], file: [] });
-const loading = ref(false);
-const loadingMore = ref(false);
-const message = ref("");
-const loadedSignature = ref("");
 const viewportRef = ref<HTMLElement | null>(null);
 const itemRefs = new Map<string, HTMLElement>();
-const pageSize = 200;
 let closeContextMenuHandler = () => {};
 const closeContextMenu = () => closeContextMenuHandler();
-const autoLoadMoreDistance = 360;
 
 const {
   gridStyle: detailsGridStyle,
@@ -108,41 +101,22 @@ const {
   finishResize: finishDetailsColumnResize
 } = useDetailsColumns();
 
-const normalizeFolderData = (data: FolderData): FolderData => ({
-  path: data.path || "/",
-  folder: data.folder ?? [],
-  file: data.file ?? [],
-  folderTotal: data.folderTotal,
-  fileTotal: data.fileTotal,
-  offset: data.offset,
-  limit: data.limit,
-  hasMore: data.hasMore
-})
-
-const allEntries = computed<ExplorerEntry[]>(() => [
-  ...(folderData.value.folder ?? []).map(folder => ({
-    type: "folder" as const,
-    name: folder.name,
-    path: folder.path,
-    modified: folder.modified
-  })),
-  ...(folderData.value.file ?? []).map(file => ({
-    type: "file" as const,
-    name: file.name,
-    path: file.path,
-    modified: file.modified,
-    size: file.size,
-    extension: file.extension,
-    file
-  }))
-]);
-
-const filterKeyword = computed(() => props.filterText.trim());
-
-const entries = computed<ExplorerEntry[]>(() => {
-  const keyword = filterKeyword.value.toLowerCase();
-  if (!keyword) return allEntries.value;
-  return allEntries.value.filter(entry => entry.name.toLowerCase().includes(keyword));
+const {
+  folderData,
+  loading,
+  loadingMore,
+  message,
+  allEntries,
+  filterKeyword,
+  entries,
+  loadFolder: loadFolderData,
+  loadMore: loadMoreData,
+  maybeLoadMoreOnScroll,
+  isLoadedFor,
+  markStale
+} = useExplorerFolderData({
+  filterText: () => props.filterText,
+  viewportRef
 });
 
 const emptyText = computed(() => {
@@ -426,96 +400,33 @@ const openEntry = async (entry: ExplorerEntry) => {
   }
 }
 
-const folderRequestSignature = (path: string = fileStore.currentPath || "/") => {
-  return `${path}|${fileStore.sortKey}|${fileStore.sortOrder}`;
-}
-
-const folderQuery = (offset = 0): FolderQueryParams => {
-  const needsFullDetail = fileStore.sortKey !== "name";
-  return {
-    offset,
-    limit: pageSize,
-    detail: needsFullDetail ? "full" as const : "basic" as const,
-    sort: fileStore.sortKey,
-    order: fileStore.sortOrder
-  };
-}
-
-const mergeFolderData = (current: FolderData, next: FolderData): FolderData => ({
-  ...next,
-  folder: [...(current.folder ?? []), ...(next.folder ?? [])],
-  file: [...(current.file ?? []), ...(next.file ?? [])]
-})
-
 const loadFolder = async (path: string = fileStore.currentPath || "/") => {
-  loading.value = true;
-  message.value = "";
-  let loaded = false;
-  resetRename();
-  resetTypeahead();
-  resetSelectionBox();
-  clearThumbnailState();
-  try {
-    const data = normalizeFolderData(await getFolderData(path, folderQuery()));
-    fileStore.saveFolderData(data);
-    folderData.value = data;
-    loadedSignature.value = folderRequestSignature(data.path || path);
-    clearSelection();
-    fileStore.setCurrentPath(data.path);
-    fileStore.closeEditor();
-    await nextTick();
-    observePendingThumbnails();
-    loaded = true;
-  } catch (error) {
-    message.value = error instanceof Error ? error.message : "加载目录失败";
-  } finally {
-    loading.value = false;
-    if (loaded) window.requestAnimationFrame(maybeLoadMoreOnScroll);
-  }
-  return loaded;
+  return loadFolderData(path, {
+    resetBeforeLoad: () => {
+      resetRename();
+      resetTypeahead();
+      resetSelectionBox();
+      clearThumbnailState();
+    },
+    clearSelection,
+    afterRender: observePendingThumbnails
+  });
 }
 
 const loadMore = async () => {
-  if (loading.value || loadingMore.value || !folderData.value.hasMore) return;
-  loadingMore.value = true;
-  message.value = "";
-  let loaded = false;
-  try {
-    const current = folderData.value;
-    const offset = (current.offset ?? 0) + (current.limit ?? allEntries.value.length);
-    const data = normalizeFolderData(await getFolderData(current.path || fileStore.currentPath || "/", folderQuery(offset)));
-    const merged = normalizeFolderData(mergeFolderData(current, data));
-    fileStore.saveFolderData(merged);
-    folderData.value = merged;
-    loadedSignature.value = folderRequestSignature(merged.path || current.path);
-    await nextTick();
-    observePendingThumbnails();
-    loaded = true;
-  } catch (error) {
-    message.value = error instanceof Error ? error.message : "加载更多失败";
-  } finally {
-    loadingMore.value = false;
-    if (loaded) window.requestAnimationFrame(maybeLoadMoreOnScroll);
-  }
-}
-
-const maybeLoadMoreOnScroll = () => {
-  const viewport = viewportRef.value;
-  if (!viewport || props.filterText.trim() || loading.value || loadingMore.value || !folderData.value.hasMore) return;
-  const distanceToBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-  if (distanceToBottom <= autoLoadMoreDistance) void loadMore();
+  await loadMoreData({afterRender: observePendingThumbnails});
 }
 
 const handleViewportScroll = () => {
   emit("scroll-change", getScrollTop());
-  maybeLoadMoreOnScroll();
+  maybeLoadMoreOnScroll({afterRender: observePendingThumbnails});
 }
 
 const changeSort = async (key: DirSortKey) => {
   if (loading.value) return;
   const snapshot = captureSelectionSnapshot();
   fileStore.setSort(key);
-  loadedSignature.value = "";
+  markStale();
   if (await loadFolder(fileStore.currentPath || "/")) await restoreSelectionSnapshot(snapshot);
 }
 
@@ -523,13 +434,13 @@ const changeSortOrder = async (order: DirSortOrder) => {
   if (loading.value || fileStore.sortOrder === order) return;
   const snapshot = captureSelectionSnapshot();
   fileStore.setSort(fileStore.sortKey, order);
-  loadedSignature.value = "";
+  markStale();
   if (await loadFolder(fileStore.currentPath || "/")) await restoreSelectionSnapshot(snapshot);
 }
 
 watch(() => [fileStore.activeTabId, fileStore.currentPath] as const, async ([, path]) => {
   if (!path || fileStore.showEditor) return;
-  if (loadedSignature.value === folderRequestSignature(path)) return;
+  if (isLoadedFor(path)) return;
   await loadFolder(path);
 });
 
