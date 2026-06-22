@@ -529,9 +529,16 @@ const closePanels = () => {
   closeImageViewer();
 }
 
-const clearSearch = (focus = true) => {
+const focusExplorer = async () => {
+  if (fileStore.showEditor) return;
+  await nextTick();
+  explorerRef.value?.focus();
+}
+
+const clearSearch = (focus: "explorer" | "search" | false = "explorer") => {
   searchText.value = "";
-  if (focus) searchInput.value?.focus();
+  if (focus === "search") searchInput.value?.focus();
+  if (focus === "explorer") void focusExplorer();
 }
 
 const finishTabContextRestore = (token: number) => {
@@ -598,6 +605,7 @@ const handleSearchEscape = () => {
     return;
   }
   searchInput.value?.blur();
+  void focusExplorer();
 }
 
 const loadRoot = async () => {
@@ -1482,7 +1490,7 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
     focusBreadcrumb();
     return;
   }
-  if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "f") {
+  if (commandKey && !event.altKey && !event.shiftKey && (key === "f" || key === "e")) {
     if (shouldKeepEditorFindShortcut(event.target)) return;
     event.preventDefault();
     focusSearch();
@@ -1899,7 +1907,8 @@ const signOut = async () => {
               type="search"
               placeholder="搜索当前文件夹"
               aria-label="搜索当前文件夹"
-              title="搜索当前文件夹 (Ctrl+F)"
+              title="搜索当前文件夹 (Ctrl+F / Ctrl+E)"
+              @keydown.enter.prevent="focusExplorer"
               @keydown.escape.prevent="handleSearchEscape">
           <button v-if="isFiltering" type="button" title="清除筛选" @click.prevent="() => clearSearch()">
             <icon icon="icon-close" />
