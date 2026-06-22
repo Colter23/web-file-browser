@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, nextTick, onBeforeUnmount, onMounted, watch} from "vue";
+import {computed, nextTick, watch} from "vue";
 import {useFileStore} from "../../store";
 import {useDetailsColumns} from "../../composables/useDetailsColumns.ts";
 import {useExplorerContextMenu} from "../../composables/useExplorerContextMenu.ts";
@@ -7,6 +7,7 @@ import {useExplorerEntryActions} from "../../composables/useExplorerEntryActions
 import {useExplorerEntryDrag} from "../../composables/useExplorerEntryDrag.ts";
 import {useExplorerFolderData} from "../../composables/useExplorerFolderData.ts";
 import {useExplorerKeyboard} from "../../composables/useExplorerKeyboard.ts";
+import {useExplorerLifecycle} from "../../composables/useExplorerLifecycle.ts";
 import {useExplorerMarqueeSelection} from "../../composables/useExplorerMarqueeSelection.ts";
 import {useExplorerPresentation} from "../../composables/useExplorerPresentation.ts";
 import {useExplorerRename} from "../../composables/useExplorerRename.ts";
@@ -531,33 +532,23 @@ const handleAuxClick = (event: MouseEvent, entry: ExplorerEntry) => {
   openEntryInNewTab(entry);
 }
 
-onMounted(async () => {
-  fileStore.ensureActiveTab();
-  await loadFolder(fileStore.currentPath || "/");
-  window.addEventListener("click", closeContextMenu);
-  window.addEventListener("keydown", handleKeyDown);
-  window.addEventListener("mousemove", handleSelectionMove);
-  window.addEventListener("mouseup", finishMarqueeSelection);
-  window.addEventListener("blur", resetSelectionBox);
-  window.addEventListener("pointermove", handleDetailsColumnResizeMove);
-  window.addEventListener("pointerup", finishDetailsColumnResize);
-  window.addEventListener("pointercancel", finishDetailsColumnResize);
-});
-
-onBeforeUnmount(() => {
-  window.removeEventListener("click", closeContextMenu);
-  window.removeEventListener("keydown", handleKeyDown);
-  window.removeEventListener("mousemove", handleSelectionMove);
-  window.removeEventListener("mouseup", finishMarqueeSelection);
-  window.removeEventListener("blur", resetSelectionBox);
-  window.removeEventListener("pointermove", handleDetailsColumnResizeMove);
-  window.removeEventListener("pointerup", finishDetailsColumnResize);
-  window.removeEventListener("pointercancel", finishDetailsColumnResize);
-  stopMarqueeAutoScroll();
-  resetTypeahead();
-  disconnectThumbnailObserver();
-  clearItemRefs();
-  clearRenameInputRefs();
+useExplorerLifecycle({
+  initialize: async () => {
+    fileStore.ensureActiveTab();
+    await loadFolder(fileStore.currentPath || "/");
+  },
+  handleKeyDown,
+  closeContextMenu,
+  handleSelectionMove,
+  finishMarqueeSelection,
+  resetSelectionBox,
+  handleDetailsColumnResizeMove,
+  finishDetailsColumnResize,
+  stopMarqueeAutoScroll,
+  resetTypeahead,
+  disconnectThumbnailObserver,
+  clearItemRefs,
+  clearRenameInputRefs
 });
 
 defineExpose({
