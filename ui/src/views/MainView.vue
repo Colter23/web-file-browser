@@ -29,10 +29,10 @@ import {useShellNotice} from "../composables/useShellNotice.ts";
 import {useFileOperations} from "../composables/useFileOperations.ts";
 import {useExplorerTabs} from "../composables/useExplorerTabs.ts";
 import {useExplorerPreview} from "../composables/useExplorerPreview.ts";
+import {useExplorerNavigation} from "../composables/useExplorerNavigation.ts";
 import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
 import {isExtractableArchiveEntry} from "../utils/file-entry.ts";
-import {normalizePathText, parentPath} from "../utils/file-path.ts";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
 
@@ -57,11 +57,6 @@ type ContentToolbarExpose = {
 
 type FocusablePanelExpose = {
   focus: () => void;
-}
-
-type NavigateToPathOptions = {
-  skipEditorLeave?: boolean;
-  focusExplorer?: boolean;
 }
 
 type ViewModeSelection = {
@@ -150,22 +145,8 @@ let suppressSelectionPersistence = false;
 let suppressScrollPersistence = false;
 let tabContextRestoreToken = 0;
 let scrollPersistTimer: number | undefined;
-let historyMouseButton = -1;
 
 const activeTab = computed(() => fileStore.tabs.find(tab => tab.id === fileStore.activeTabId) ?? fileStore.tabs[0]);
-const currentFolder = () => fileStore.currentPath || "/";
-const canNavigateBack = computed(() => Boolean(activeTab.value?.backStack?.length));
-const canNavigateForward = computed(() => Boolean(activeTab.value?.forwardStack?.length));
-const canNavigateUp = computed(() => currentFolder() !== "/");
-const navigateBackTarget = computed(() => {
-  const stack = activeTab.value?.backStack ?? [];
-  return stack[stack.length - 1] ?? "";
-});
-const navigateForwardTarget = computed(() => activeTab.value?.forwardStack?.[0] ?? "");
-const navigateUpTarget = computed(() => canNavigateUp.value ? parentPath(currentFolder()) : "");
-const navigateBackTitle = computed(() => navigateBackTarget.value ? `后退到 ${navigateBackTarget.value} (Alt+← / 鼠标后退键)` : "后退 (Alt+← / 鼠标后退键)");
-const navigateForwardTitle = computed(() => navigateForwardTarget.value ? `前进到 ${navigateForwardTarget.value} (Alt+→ / 鼠标前进键)` : "前进 (Alt+→ / 鼠标前进键)");
-const navigateUpTitle = computed(() => navigateUpTarget.value ? `返回上级 ${navigateUpTarget.value} (Alt+↑)` : "返回上级 (Alt+↑)");
 const currentViewModeMeta = computed(() => viewModeMeta[fileStore.viewMode]);
 const currentViewModeLabel = computed(() => fileStore.viewMode === "icons" ? iconSizeLabel[fileStore.iconSize] : currentViewModeMeta.value.label);
 const viewModeButtonTitle = computed(() => `当前：${currentViewModeLabel.value}，点击选择查看模式。Ctrl+Shift+1-7 可直接切换查看模式`);
@@ -295,6 +276,33 @@ const syncActiveTabContext = async () => {
   await explorerRef.value?.setScrollTop(scrollTop);
   finishTabScrollRestore(token);
 }
+
+const {
+  currentFolder,
+  canNavigateBack,
+  canNavigateForward,
+  canNavigateUp,
+  navigateBackTitle,
+  navigateForwardTitle,
+  navigateUpTitle,
+  navigateToPath,
+  navigateBack,
+  navigateForward,
+  navigateUp,
+  handleBreadcrumbNavigate,
+  handleBackspaceNavigation,
+  handleHistoryMouseDown,
+  handleHistoryMouseUp,
+  handleHistoryAuxClick
+} = useExplorerNavigation({
+  activeTab,
+  refreshExplorer: async path => await explorerRef.value?.refresh(path) ?? false,
+  focusExplorer,
+  closePanels,
+  syncActiveTabContext,
+  persistCurrentExplorerScrollTop,
+  shouldIgnoreNavigationShortcut: target => shouldIgnoreNavigationShortcut(target)
+});
 
 const {
   tabContextMenu,
@@ -600,44 +608,6 @@ const shouldIgnoreShellShortcut = (target: EventTarget | null) => {
   return fileStore.showEditor || shouldIgnoreNavigationShortcut(target);
 }
 
-const handleBackspaceNavigation = () => {
-  if (canNavigateBack.value) {
-    void navigateBack();
-    return;
-  }
-  void navigateUp();
-}
-
-const handleHistoryMouseButton = (event: MouseEvent) => {
-  if (fileStore.showEditor || shouldIgnoreNavigationShortcut(event.target)) return false;
-  if (event.button === 3 && canNavigateBack.value) {
-    event.preventDefault();
-    void navigateBack();
-    return true;
-  }
-  if (event.button === 4 && canNavigateForward.value) {
-    event.preventDefault();
-    void navigateForward();
-    return true;
-  }
-  return false;
-}
-
-const handleHistoryMouseDown = (event: MouseEvent) => {
-  historyMouseButton = handleHistoryMouseButton(event) ? event.button : -1;
-}
-
-const handleHistoryMouseUp = (event: MouseEvent) => {
-  if (historyMouseButton >= 0 && event.button === historyMouseButton) {
-    event.preventDefault();
-    historyMouseButton = -1;
-  }
-}
-
-const handleHistoryAuxClick = (event: MouseEvent) => {
-  if (event.button === 3 || event.button === 4) event.preventDefault();
-}
-
 const handleWindowKeyDown = (event: KeyboardEvent) => {
   if (imageViewerVisible.value) return;
   const key = event.key.toLowerCase();
@@ -735,58 +705,6 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
     event.preventDefault();
     void navigateUp();
   }
-}
-
-const navigateBack = async () => {
-  if (!await fileStore.requestEditorLeave()) return;
-  persistCurrentExplorerScrollTop();
-  const path = fileStore.goBack();
-  if (!path) return;
-  await finishPathNavigation(path);
-}
-
-const navigateForward = async () => {
-  if (!await fileStore.requestEditorLeave()) return;
-  persistCurrentExplorerScrollTop();
-  const path = fileStore.goForward();
-  if (!path) return;
-  await finishPathNavigation(path);
-}
-
-const finishPathNavigation = async (path: string, focusExplorer = true) => {
-  closePanels();
-  const loaded = await explorerRef.value?.refresh(path) ?? false;
-  if (!loaded) {
-    if (focusExplorer) {
-      await nextTick();
-      explorerRef.value?.focus();
-    }
-    return false;
-  }
-  await syncActiveTabContext();
-  if (focusExplorer) {
-    await nextTick();
-    explorerRef.value?.focus();
-  }
-  return true;
-}
-
-const navigateToPath = async (path: string, options: NavigateToPathOptions = {}) => {
-  const targetPath = normalizePathText(path);
-  if (!options.skipEditorLeave && !await fileStore.requestEditorLeave()) return false;
-  persistCurrentExplorerScrollTop();
-  const loaded = await finishPathNavigation(targetPath, options.focusExplorer ?? true);
-  return loaded;
-}
-
-const handleBreadcrumbNavigate = async (path: string, complete?: (navigated: boolean) => void) => {
-  const navigated = await navigateToPath(path);
-  complete?.(navigated);
-}
-
-const navigateUp = async () => {
-  if (!canNavigateUp.value) return;
-  await navigateToPath(parentPath(currentFolder()));
 }
 
 const closePreview = () => {
