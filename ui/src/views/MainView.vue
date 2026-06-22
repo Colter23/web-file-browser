@@ -24,6 +24,7 @@ import {
 import Icon from "../components/Icon.vue";
 import Explorer from "../components/explorer/Explorer.vue";
 import Breadcrumb from "../components/Breadcrumb.vue";
+import ImageViewer from "../components/viewer/ImageViewer.vue";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
 
@@ -159,31 +160,10 @@ const viewShortcutMap: Record<string, {mode: ExplorerViewMode; iconSize: Explore
 
 const viewShortcut = (code: string) => viewShortcutMap[code] ?? viewShortcutMap[code.replace("Numpad", "Digit")];
 const previewPaneStorageKey = "explorer.previewPaneWidth";
-const imageViewerFilmstripStorageKey = "explorer.imageViewer.showFilmstrip";
 const previewPaneDefaultWidth = 352;
 const previewPaneMinWidth = 280;
 const previewPaneMaxWidth = 720;
 const previewPaneViewportReserve = 520;
-
-const readBooleanStorage = (key: string, fallback: boolean) => {
-  if (typeof localStorage === "undefined") return fallback;
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw === null) return fallback;
-    return raw === "true";
-  } catch {
-    return fallback;
-  }
-}
-
-const writeBooleanStorage = (key: string, value: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(key, String(value));
-  } catch {
-    // 本地存储不可用时，只保留本次会话里的查看器设置。
-  }
-}
 
 const previewPaneMaxForViewport = () => {
   if (typeof window === "undefined") return previewPaneMaxWidth;
@@ -221,7 +201,6 @@ const explorerRef = ref<ExplorerExpose | null>(null);
 const breadcrumbRef = ref<BreadcrumbExpose | null>(null);
 const deleteConfirmRef = ref<HTMLElement | null>(null);
 const propertiesPanelRef = ref<HTMLElement | null>(null);
-const imageViewerRef = ref<HTMLElement | null>(null);
 const uploadInput = ref<HTMLInputElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 const uploadDropActive = ref(false);
@@ -250,16 +229,6 @@ const previewPaneResizing = ref(false);
 const imageViewerVisible = ref(false);
 const imageViewerEntry = ref<ExplorerEntry | null>(null);
 const imageViewerEntries = ref<ExplorerEntry[]>([]);
-const imageViewerLoading = ref(false);
-const imageViewerError = ref("");
-const imageViewerPageFullscreen = ref(false);
-const imageViewerFullscreen = ref(false);
-const imageViewerShowFilmstrip = ref(readBooleanStorage(imageViewerFilmstripStorageKey, true));
-const imageViewerFit = ref(true);
-const imageViewerZoom = ref(100);
-const imageViewerOffsetX = ref(0);
-const imageViewerOffsetY = ref(0);
-const imageViewerDragging = ref(false);
 const currentSelection = ref<ExplorerEntry[]>([]);
 const fileClipboardAction = ref<FileClipboardAction | null>(null);
 const fileClipboardEntries = ref<ExplorerEntry[]>([]);
@@ -319,11 +288,6 @@ let previewImageDragOriginX = 0;
 let previewImageDragOriginY = 0;
 let previewPaneResizeStartX = 0;
 let previewPaneResizeStartWidth = 0;
-let imageViewerPointerId: number | null = null;
-let imageViewerDragStartX = 0;
-let imageViewerDragStartY = 0;
-let imageViewerDragOriginX = 0;
-let imageViewerDragOriginY = 0;
 const tabContextMenuWidth = 184;
 const tabContextMenuHeight = 220;
 let suppressSelectionPersistence = false;
@@ -543,60 +507,6 @@ const previewZoomText = computed(() => previewImageFit.value ? "适应" : `${pre
 
 const canPanPreviewImage = computed(() => previewKind.value === "image" && !previewImageFit.value);
 
-const imageViewerStyle = computed(() => ({
-  maxWidth: imageViewerFit.value ? "100%" : "none",
-  maxHeight: imageViewerFit.value ? "100%" : "none",
-  transform: imageViewerFit.value ? "none" : `translate3d(${imageViewerOffsetX.value}px, ${imageViewerOffsetY.value}px, 0) scale(${imageViewerZoom.value / 100})`,
-  transformOrigin: "center center"
-}));
-
-const imageViewerZoomText = computed(() => imageViewerFit.value ? "适应" : `${imageViewerZoom.value}%`);
-
-const canPanImageViewer = computed(() => imageViewerVisible.value && !imageViewerFit.value);
-
-const imageViewerActualSizeActive = computed(() => !imageViewerFit.value && imageViewerZoom.value === 100);
-
-const imageViewerIndex = computed(() => {
-  const entry = imageViewerEntry.value;
-  if (!entry) return -1;
-  return imageViewerEntries.value.findIndex(item => item.path === entry.path);
-});
-
-const imageViewerCount = computed(() => imageViewerEntries.value.length);
-
-const canShowPreviousImage = computed(() => imageViewerIndex.value > 0);
-
-const canShowNextImage = computed(() => imageViewerIndex.value >= 0 && imageViewerIndex.value < imageViewerEntries.value.length - 1);
-
-const canShowImageViewerFilmstrip = computed(() => imageViewerCount.value > 1 && imageViewerShowFilmstrip.value);
-
-const imageViewerFilmstripEntries = computed(() => {
-  const entries = imageViewerEntries.value;
-  if (entries.length <= 12) return entries.map((entry, index) => ({entry, index}));
-  const currentIndex = Math.max(0, imageViewerIndex.value);
-  const visibleCount = 11;
-  const half = Math.floor(visibleCount / 2);
-  let start = Math.max(0, currentIndex - half);
-  let end = Math.min(entries.length, start + visibleCount);
-  start = Math.max(0, end - visibleCount);
-  return entries.slice(start, end).map((entry, offset) => ({entry, index: start + offset}));
-});
-
-const imageViewerSubtitle = computed(() => {
-  const entry = imageViewerEntry.value;
-  if (!entry) return "";
-  const position = imageViewerIndex.value >= 0 && imageViewerCount.value > 1 ? `${imageViewerIndex.value + 1} / ${imageViewerCount.value} · ` : "";
-  return `${position}${formatBytes(entry.size)} · ${formatDate(entry.modified)}`;
-});
-
-const imageViewerPageFullscreenTitle = computed(() => imageViewerPageFullscreen.value ? "退出网页全屏 (F)" : "网页全屏 (F)");
-
-const imageViewerBrowserFullscreenTitle = computed(() => imageViewerFullscreen.value ? "退出浏览器全屏" : "浏览器全屏");
-
-const imageViewerFilmstripTitle = computed(() => imageViewerShowFilmstrip.value ? "隐藏缩略图 (T)" : "显示缩略图 (T)");
-
-const imageViewerStageTitle = computed(() => imageViewerFit.value ? "双击按原始大小查看" : "双击适应窗口，拖拽移动图片");
-
 const previewMeta = computed(() => {
   const entry = previewEntry.value;
   if (!entry) return [];
@@ -704,33 +614,10 @@ const handlePreviewPaneResizeKeyDown = (event: KeyboardEvent) => {
   }
 }
 
-const resetImageViewerPan = () => {
-  imageViewerOffsetX.value = 0;
-  imageViewerOffsetY.value = 0;
-  imageViewerDragging.value = false;
-  imageViewerPointerId = null;
-}
-
-const releaseImageViewerPointer = () => {
-  imageViewerDragging.value = false;
-  imageViewerPointerId = null;
-}
-
-const resetImageViewerZoom = () => {
-  imageViewerFit.value = true;
-  imageViewerZoom.value = 100;
-  resetImageViewerPan();
-}
-
 const resetImageViewerState = () => {
-  if (document.fullscreenElement === imageViewerRef.value) void document.exitFullscreen().catch(() => undefined);
   imageViewerVisible.value = false;
   imageViewerEntry.value = null;
   imageViewerEntries.value = [];
-  imageViewerLoading.value = false;
-  imageViewerError.value = "";
-  imageViewerPageFullscreen.value = false;
-  resetImageViewerZoom();
 }
 
 const closeImageViewer = () => {
@@ -743,13 +630,6 @@ const closeImageViewer = () => {
 
 const setImageViewerEntry = (entry: ExplorerEntry) => {
   imageViewerEntry.value = entry;
-  imageViewerLoading.value = true;
-  imageViewerError.value = "";
-  resetImageViewerZoom();
-}
-
-const handleFullscreenChange = () => {
-  imageViewerFullscreen.value = document.fullscreenElement === imageViewerRef.value;
 }
 
 const showShellNotice = (message: string, kind: ShellNoticeKind = "info", title?: string, timeoutMs?: number) => {
@@ -911,7 +791,6 @@ onMounted(async () => {
   window.addEventListener("pointerup", finishPreviewPaneResize);
   window.addEventListener("pointercancel", finishPreviewPaneResize);
   window.addEventListener("resize", handleWindowResize);
-  document.addEventListener("fullscreenchange", handleFullscreenChange);
 })
 
 onBeforeUnmount(() => {
@@ -929,7 +808,6 @@ onBeforeUnmount(() => {
   window.removeEventListener("pointerup", finishPreviewPaneResize);
   window.removeEventListener("pointercancel", finishPreviewPaneResize);
   window.removeEventListener("resize", handleWindowResize);
-  document.removeEventListener("fullscreenchange", handleFullscreenChange);
 })
 
 watch(() => fileStore.showEditor, (showEditor) => {
@@ -1799,56 +1677,7 @@ const handleHistoryAuxClick = (event: MouseEvent) => {
 }
 
 const handleWindowKeyDown = (event: KeyboardEvent) => {
-  if (imageViewerVisible.value) {
-    const viewerKey = event.key.toLowerCase();
-    if (viewerKey === "escape") {
-      event.preventDefault();
-      closeImageViewer();
-      return;
-    }
-    if (event.key === "ArrowLeft") {
-      event.preventDefault();
-      showAdjacentImage(-1);
-      return;
-    }
-    if (event.key === "ArrowRight") {
-      event.preventDefault();
-      showAdjacentImage(1);
-      return;
-    }
-    if (viewerKey === "+" || viewerKey === "=" || event.code === "NumpadAdd") {
-      event.preventDefault();
-      zoomImageViewer(25);
-      return;
-    }
-    if (viewerKey === "-" || event.code === "NumpadSubtract") {
-      event.preventDefault();
-      zoomImageViewer(-25);
-      return;
-    }
-    if (viewerKey === "0") {
-      event.preventDefault();
-      resetImageViewerZoom();
-      return;
-    }
-    if (viewerKey === "1" || event.code === "Numpad1") {
-      event.preventDefault();
-      setImageViewerActualSize();
-      return;
-    }
-    if (viewerKey === "f") {
-      event.preventDefault();
-      void toggleImageViewerPageFullscreen();
-      return;
-    }
-    if (viewerKey === "t") {
-      event.preventDefault();
-      toggleImageViewerFilmstrip();
-      return;
-    }
-    if (event.ctrlKey || event.metaKey || event.altKey) event.preventDefault();
-    return;
-  }
+  if (imageViewerVisible.value) return;
   const key = event.key.toLowerCase();
   const commandKey = event.ctrlKey || event.metaKey;
   if (commandKey && event.shiftKey && !event.altKey && !shouldIgnoreShellShortcut(event.target)) {
@@ -2142,8 +1971,6 @@ const openImageViewer = async ({entry, entries}: ImageViewerPayload) => {
   imageViewerEntries.value = entries.length ? entries : [entry];
   imageViewerVisible.value = true;
   setImageViewerEntry(entry);
-  await nextTick();
-  imageViewerRef.value?.focus();
 }
 
 const openPreviewImageViewer = async () => {
@@ -2151,46 +1978,6 @@ const openPreviewImageViewer = async () => {
   if (!entry || previewKind.value !== "image") return;
   const entries = explorerRef.value?.getImageEntries() ?? [];
   await openImageViewer({entry, entries: entries.some(item => item.path === entry.path) ? entries : [entry]});
-}
-
-const toggleImageViewerPageFullscreen = async () => {
-  imageViewerPageFullscreen.value = !imageViewerPageFullscreen.value;
-  await nextTick();
-  imageViewerRef.value?.focus();
-}
-
-const toggleImageViewerFullscreen = async () => {
-  const target = imageViewerRef.value;
-  if (!target) return;
-  try {
-    if (document.fullscreenElement === target) {
-      await document.exitFullscreen();
-    } else {
-      await target.requestFullscreen();
-    }
-  } catch {
-    showShellNotice("当前浏览器未允许进入全屏，仍可在页面内查看大图。", "warning", "无法全屏");
-  }
-}
-
-const toggleImageViewerFilmstrip = () => {
-  if (imageViewerCount.value <= 1) return;
-  imageViewerShowFilmstrip.value = !imageViewerShowFilmstrip.value;
-  writeBooleanStorage(imageViewerFilmstripStorageKey, imageViewerShowFilmstrip.value);
-}
-
-const showAdjacentImage = (direction: -1 | 1) => {
-  const index = imageViewerIndex.value;
-  if (index < 0) return;
-  const next = imageViewerEntries.value[index + direction];
-  if (!next) return;
-  setImageViewerEntry(next);
-}
-
-const showImageAt = (index: number) => {
-  const next = imageViewerEntries.value[index];
-  if (!next || next.path === imageViewerEntry.value?.path) return;
-  setImageViewerEntry(next);
 }
 
 const switchTab = async (tabId: string) => {
@@ -2271,40 +2058,6 @@ const handlePreviewImageWheel = (event: WheelEvent) => {
   zoomPreviewImage(event.deltaY < 0 ? 25 : -25);
 }
 
-const zoomImageViewer = (delta: number) => {
-  imageViewerFit.value = false;
-  imageViewerZoom.value = Math.min(500, Math.max(25, imageViewerZoom.value + delta));
-}
-
-const setImageViewerActualSize = () => {
-  imageViewerFit.value = false;
-  imageViewerZoom.value = 100;
-  resetImageViewerPan();
-}
-
-const toggleImageViewerZoomMode = () => {
-  if (imageViewerFit.value) {
-    setImageViewerActualSize();
-    return;
-  }
-  resetImageViewerZoom();
-}
-
-const handleImageViewerWheel = (event: WheelEvent) => {
-  event.preventDefault();
-  zoomImageViewer(event.deltaY < 0 ? 25 : -25);
-}
-
-const handleImageViewerLoad = () => {
-  imageViewerLoading.value = false;
-  imageViewerError.value = "";
-}
-
-const handleImageViewerError = () => {
-  imageViewerLoading.value = false;
-  imageViewerError.value = "图片加载失败，请检查文件是否仍可读取。";
-}
-
 const resetPreviewImageZoom = () => {
   previewImageFit.value = true;
   previewImageZoom.value = 100;
@@ -2337,34 +2090,6 @@ const stopPreviewImagePan = (event: PointerEvent) => {
   stage.releasePointerCapture?.(event.pointerId);
   previewImageDragging.value = false;
   previewImagePointerId = null;
-}
-
-const startImageViewerPan = (event: PointerEvent) => {
-  if (!canPanImageViewer.value || event.button !== 0) return;
-  event.preventDefault();
-  const stage = event.currentTarget as HTMLElement;
-  imageViewerPointerId = event.pointerId;
-  imageViewerDragging.value = true;
-  imageViewerDragStartX = event.clientX;
-  imageViewerDragStartY = event.clientY;
-  imageViewerDragOriginX = imageViewerOffsetX.value;
-  imageViewerDragOriginY = imageViewerOffsetY.value;
-  stage.setPointerCapture?.(event.pointerId);
-}
-
-const moveImageViewerPan = (event: PointerEvent) => {
-  if (!imageViewerDragging.value || imageViewerPointerId !== event.pointerId) return;
-  event.preventDefault();
-  imageViewerOffsetX.value = imageViewerDragOriginX + event.clientX - imageViewerDragStartX;
-  imageViewerOffsetY.value = imageViewerDragOriginY + event.clientY - imageViewerDragStartY;
-}
-
-const stopImageViewerPan = (event: PointerEvent) => {
-  if (imageViewerPointerId !== event.pointerId) return;
-  const stage = event.currentTarget as HTMLElement;
-  stage.releasePointerCapture?.(event.pointerId);
-  imageViewerDragging.value = false;
-  imageViewerPointerId = null;
 }
 
 const loadPreview = async (entry: ExplorerEntry) => {
@@ -2876,83 +2601,15 @@ const signOut = async () => {
           </aside>
         </div>
 
-        <Teleport to="body" :disabled="!imageViewerPageFullscreen">
-          <section
-              v-if="imageViewerVisible && imageViewerEntry"
-              ref="imageViewerRef"
-              class="image-viewer"
-              :class="{pageFullscreen: imageViewerPageFullscreen}"
-              tabindex="-1"
-              @keydown.esc.prevent="closeImageViewer">
-            <div class="image-viewer-toolbar">
-              <div class="image-viewer-title">
-                <strong>{{ imageViewerEntry.name }}</strong>
-                <span>{{ imageViewerSubtitle }}</span>
-              </div>
-              <div class="image-viewer-actions">
-                <button title="上一张 (←)" :disabled="!canShowPreviousImage" @click="showAdjacentImage(-1)">
-                  <icon icon="icon-back_android" color="currentColor" />
-                </button>
-                <button title="下一张 (→)" :disabled="!canShowNextImage" @click="showAdjacentImage(1)">
-                  <icon icon="icon-back_android" color="currentColor" class="rotate-180" />
-                </button>
-                <button class="text-action" :class="{active: imageViewerFit}" title="适应窗口 (0)" @click="resetImageViewerZoom">适应</button>
-                <button class="text-action" :class="{active: imageViewerActualSizeActive}" title="原始大小" @click="setImageViewerActualSize">1:1</button>
-                <button title="缩小 (-)" @click="zoomImageViewer(-25)">-</button>
-                <span>{{ imageViewerZoomText }}</span>
-                <button title="放大 (+)" @click="zoomImageViewer(25)">+</button>
-                <button :title="imageViewerPageFullscreenTitle" :class="{active: imageViewerPageFullscreen}" @click="toggleImageViewerPageFullscreen">
-                  <icon icon="icon-renamebox" color="currentColor" />
-                </button>
-                <button :title="imageViewerBrowserFullscreenTitle" :class="{active: imageViewerFullscreen}" @click="toggleImageViewerFullscreen">
-                  <icon icon="icon-unfold" color="currentColor" />
-                </button>
-                <button :title="imageViewerFilmstripTitle" :class="{active: imageViewerShowFilmstrip}" :disabled="imageViewerCount <= 1" @click="toggleImageViewerFilmstrip">
-                  <icon icon="icon-viewgrid" color="currentColor" />
-                </button>
-                <button title="下载" @click="downloadSelected(imageViewerEntry)">
-                  <icon icon="icon-download" color="currentColor" />
-                </button>
-                <button title="关闭" @click="closeImageViewer">
-                  <icon icon="icon-close" color="currentColor" />
-                </button>
-              </div>
-            </div>
-            <div
-                class="image-viewer-stage"
-                :class="{fit: imageViewerFit, panning: canPanImageViewer, dragging: imageViewerDragging}"
-                :title="imageViewerStageTitle"
-                @pointerdown="startImageViewerPan"
-                @pointermove="moveImageViewerPan"
-                @pointerup="stopImageViewerPan"
-                @pointercancel="stopImageViewerPan"
-                @lostpointercapture="releaseImageViewerPointer"
-                @wheel="handleImageViewerWheel"
-                @dblclick="toggleImageViewerZoomMode">
-              <div v-if="imageViewerLoading" class="image-viewer-status">正在加载图片...</div>
-              <div v-if="imageViewerError" class="image-viewer-status error">{{ imageViewerError }}</div>
-              <img
-                  :key="imageViewerEntry.path"
-                  :src="downloadUrl(imageViewerEntry.path)"
-                  :alt="imageViewerEntry.name"
-                  :style="imageViewerStyle"
-                  @load="handleImageViewerLoad"
-                  @error="handleImageViewerError">
-            </div>
-            <div v-if="canShowImageViewerFilmstrip" class="image-viewer-filmstrip" aria-label="图片列表">
-              <button
-                  v-for="item in imageViewerFilmstripEntries"
-                  :key="item.entry.path"
-                  class="image-viewer-thumb"
-                  :class="{active: item.entry.path === imageViewerEntry.path}"
-                  :title="`${item.index + 1} / ${imageViewerCount} · ${item.entry.name}`"
-                  @click="showImageAt(item.index)">
-                <img :src="downloadUrl(item.entry.path)" :alt="item.entry.name" loading="lazy">
-                <span>{{ item.index + 1 }}</span>
-              </button>
-            </div>
-          </section>
-        </Teleport>
+        <image-viewer
+            :visible="imageViewerVisible"
+            :entry="imageViewerEntry"
+            :entries="imageViewerEntries"
+            @close="closeImageViewer"
+            @select="setImageViewerEntry"
+            @download="downloadSelected"
+            @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)">
+        </image-viewer>
       </section>
     </main>
   </div>
@@ -3551,100 +3208,6 @@ const signOut = async () => {
 
 .preview-placeholder button {
   @apply rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-blue-50;
-}
-
-.image-viewer {
-  @apply absolute inset-0 z-40 flex flex-col overflow-hidden rounded-lg bg-slate-950/72 text-white outline-none backdrop-blur-sm;
-}
-
-.image-viewer.pageFullscreen {
-  @apply fixed inset-0 z-50 rounded-none;
-}
-
-.image-viewer-toolbar {
-  @apply flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/15 bg-slate-950/75 px-4 backdrop-blur;
-}
-
-.image-viewer-title {
-  @apply flex min-w-0 flex-col;
-}
-
-.image-viewer-title strong {
-  @apply truncate text-sm font-semibold;
-}
-
-.image-viewer-title span {
-  @apply truncate text-xs text-slate-300;
-}
-
-.image-viewer-actions {
-  @apply flex shrink-0 items-center gap-1 text-xs text-slate-100;
-}
-
-.image-viewer-actions button {
-  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-white/30 bg-white/15 px-2 text-sm font-medium text-white shadow-sm hover:border-white/45 hover:bg-white/25;
-}
-
-.image-viewer-actions button:disabled {
-  @apply cursor-not-allowed border-white/10 bg-white/5 opacity-35 hover:border-white/10 hover:bg-white/5;
-}
-
-.image-viewer-actions button.active {
-  @apply border-blue-200/80 bg-blue-500/50 text-white shadow-[0_0_0_1px_rgba(191,219,254,0.22)];
-}
-
-.image-viewer-actions button.text-action {
-  @apply min-w-11 px-3;
-}
-
-.image-viewer-actions span {
-  @apply w-14 text-center font-medium tabular-nums text-white;
-}
-
-.image-viewer-stage {
-  @apply relative flex min-h-0 grow touch-none select-none items-center justify-center overflow-hidden bg-transparent p-5;
-}
-
-.image-viewer-status {
-  @apply absolute rounded-md border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 shadow-xl backdrop-blur;
-}
-
-.image-viewer-status.error {
-  @apply border-red-300/30 bg-red-950/70 text-red-100;
-}
-
-.image-viewer-stage.panning {
-  @apply cursor-grab;
-}
-
-.image-viewer-stage.dragging {
-  @apply cursor-grabbing;
-}
-
-.image-viewer-stage img {
-  @apply max-h-full max-w-full select-none rounded object-contain shadow-2xl;
-  user-select: none;
-  -webkit-user-drag: none;
-}
-
-.image-viewer-filmstrip {
-  @apply flex h-24 shrink-0 items-center gap-2 overflow-x-auto border-t border-white/10 bg-slate-950/45 px-4 py-2 backdrop-blur;
-}
-
-.image-viewer-thumb {
-  @apply relative h-16 w-20 shrink-0 overflow-hidden rounded-md border border-white/10 bg-white/5 p-0.5 text-white opacity-75 outline-none hover:border-white/35 hover:opacity-100;
-}
-
-.image-viewer-thumb.active {
-  @apply border-blue-300 bg-blue-500/20 opacity-100 shadow-[0_0_0_2px_rgba(96,165,250,0.25)];
-}
-
-.image-viewer-thumb img {
-  @apply h-full w-full rounded object-cover;
-}
-
-.image-viewer-thumb span {
-  @apply absolute bottom-1 right-1 rounded bg-slate-950/70 px-1 text-[10px] leading-4 text-slate-100;
 }
 
 .task-panel {
