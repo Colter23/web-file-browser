@@ -1,14 +1,8 @@
 <script setup lang="ts">
 import {computed} from "vue";
 import type {TaskKind, TaskState, TaskStatus} from "../../class.ts";
+import type {TaskCancelConfirmState} from "../../composables/useTaskPanel.ts";
 import Icon from "../Icon.vue";
-
-type TaskCancelConfirmState = {
-  visible: boolean;
-  task: TaskStatus | null;
-  submitting: boolean;
-  error: string;
-}
 
 const props = defineProps<{
   tasks: TaskStatus[];

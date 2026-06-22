@@ -2,7 +2,7 @@
 import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import FileTree from "../components/FileTree.vue";
-import {ArchiveFormat, ExplorerIconSize, ExplorerViewMode, FileTreeData, TaskStatus} from "../class";
+import {ArchiveFormat, ExplorerIconSize, ExplorerViewMode, FileTreeData} from "../class";
 import {useFileStore} from "../store";
 import {
   cancelTask,
@@ -35,6 +35,7 @@ import UploadDropOverlay from "../components/shell/UploadDropOverlay.vue";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import {usePreviewPaneResize} from "../composables/usePreviewPaneResize.ts";
 import {useShellNotice} from "../composables/useShellNotice.ts";
+import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
@@ -93,13 +94,6 @@ type DeleteConfirmState = {
 type PropertiesPanelState = {
   visible: boolean;
   entries: ExplorerEntry[];
-}
-
-type TaskCancelConfirmState = {
-  visible: boolean;
-  task: TaskStatus | null;
-  submitting: boolean;
-  error: string;
 }
 
 type TabContextMenuState = {
@@ -188,6 +182,28 @@ const {
   close: closeShellNotice,
   stopTimer: stopShellNoticeTimer
 } = useShellNotice();
+const {
+  visible: taskPanelVisible,
+  loading: tasksLoading,
+  tasks,
+  message: taskMessage,
+  lastUpdatedAt: taskLastUpdatedAt,
+  cancelConfirm: taskCancelConfirm,
+  buttonText: taskButtonText,
+  load: loadTasks,
+  toggle: toggleTaskPanel,
+  close: closeTaskPanel,
+  stopPolling: stopTaskPolling,
+  resetCancelConfirm: resetTaskCancelConfirm,
+  requestCancel: cancelTaskById,
+  closeCancelConfirm: closeTaskCancelConfirm,
+  submitCancelConfirm: submitTaskCancelConfirm,
+  markStarted: taskStarted
+} = useTaskPanel({
+  listTasks,
+  cancelTask,
+  showError: showErrorNotice
+});
 const treeData = ref<FileTreeData[]>([]);
 const explorerRef = ref<ExplorerExpose | null>(null);
 const contentToolbarRef = ref<ContentToolbarExpose | null>(null);
@@ -195,11 +211,6 @@ const deleteConfirmRef = ref<FocusablePanelExpose | null>(null);
 const propertiesPanelRef = ref<FocusablePanelExpose | null>(null);
 const uploadInput = ref<HTMLInputElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
-const taskPanelVisible = ref(false);
-const tasksLoading = ref(false);
-const tasks = ref<TaskStatus[]>([]);
-const taskMessage = ref("");
-const taskLastUpdatedAt = ref("");
 const searchText = ref("");
 const isFiltering = computed(() => Boolean(searchText.value.trim()));
 const previewPanelVisible = ref(false);
@@ -234,12 +245,6 @@ const propertiesPanel = ref<PropertiesPanelState>({
   visible: false,
   entries: []
 });
-const taskCancelConfirm = ref<TaskCancelConfirmState>({
-  visible: false,
-  task: null,
-  submitting: false,
-  error: ""
-});
 const tabContextMenu = ref<TabContextMenuState>({
   visible: false,
   x: 0,
@@ -249,7 +254,6 @@ const tabContextMenu = ref<TabContextMenuState>({
 const draggingTabId = ref("");
 const tabDropTargetId = ref("");
 const tabDropPlacement = ref<TabDropPlacement | "">("");
-let taskPollTimer: number | undefined;
 const tabContextMenuWidth = 184;
 const tabContextMenuHeight = 252;
 let suppressSelectionPersistence = false;
@@ -319,9 +323,6 @@ const canPasteSelection = computed(() => hasClipboard.value);
 const currentViewModeMeta = computed(() => viewModeMeta[fileStore.viewMode]);
 const currentViewModeLabel = computed(() => fileStore.viewMode === "icons" ? iconSizeLabel[fileStore.iconSize] : currentViewModeMeta.value.label);
 const viewModeButtonTitle = computed(() => `当前：${currentViewModeLabel.value}，点击选择查看模式。Ctrl+Shift+1-7 可直接切换查看模式`);
-const activeTaskCount = computed(() => tasks.value.filter(task => task.state === "running" || task.state === "queued").length);
-const hasActiveTasks = computed(() => activeTaskCount.value > 0);
-const taskButtonText = computed(() => hasActiveTasks.value ? `任务 ${activeTaskCount.value}` : "任务");
 const operationPanelNameLabel = computed(() => {
   switch (operationPanel.value.kind) {
     case "createFile":
@@ -521,88 +522,6 @@ watch(searchText, text => {
 
 const currentFolder = () => fileStore.currentPath || "/";
 
-const canCancelTask = (task: TaskStatus) => task.state === "queued" || task.state === "running";
-
-const shortTaskId = (id: string) => id.slice(0, 8);
-
-const updateTaskRefreshTime = () => {
-  taskLastUpdatedAt.value = new Intl.DateTimeFormat("zh-CN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  }).format(new Date());
-}
-
-const stopTaskPolling = () => {
-  if (taskPollTimer) {
-    window.clearTimeout(taskPollTimer);
-    taskPollTimer = undefined;
-  }
-}
-
-const scheduleTaskPolling = () => {
-  stopTaskPolling();
-  if (!taskPanelVisible.value || !hasActiveTasks.value) return;
-  taskPollTimer = window.setTimeout(() => {
-    void loadTasks(true);
-  }, 1500);
-}
-
-const loadTasks = async (silent = false) => {
-  if (!silent) tasksLoading.value = true;
-  try {
-    tasks.value = await listTasks();
-    updateTaskRefreshTime();
-    scheduleTaskPolling();
-  } catch (error) {
-    stopTaskPolling();
-    showErrorNotice(error, "加载任务失败", "任务加载失败");
-  } finally {
-    if (!silent) tasksLoading.value = false;
-  }
-}
-
-const toggleTaskPanel = async () => {
-  taskPanelVisible.value = !taskPanelVisible.value;
-  if (taskPanelVisible.value) {
-    await loadTasks();
-  } else {
-    stopTaskPolling();
-  }
-}
-
-const closeTaskPanel = () => {
-  taskPanelVisible.value = false;
-  stopTaskPolling();
-}
-
-const cancelTaskById = async (task: TaskStatus) => {
-  if (!canCancelTask(task)) return;
-  taskCancelConfirm.value = {
-    visible: true,
-    task,
-    submitting: false,
-    error: ""
-  };
-}
-
-const submitTaskCancelConfirm = async () => {
-  const task = taskCancelConfirm.value.task;
-  if (!task || !canCancelTask(task) || taskCancelConfirm.value.submitting) return;
-  taskCancelConfirm.value.submitting = true;
-  taskCancelConfirm.value.error = "";
-  try {
-    await cancelTask(task.id);
-    taskMessage.value = `已发送取消请求：${shortTaskId(task.id)}`;
-    resetTaskCancelConfirm();
-    await loadTasks();
-  } catch (error) {
-    taskCancelConfirm.value.error = error instanceof Error ? error.message : "取消任务失败";
-  } finally {
-    if (taskCancelConfirm.value.visible) taskCancelConfirm.value.submitting = false;
-  }
-}
-
 const refreshCurrent = async (keepSelection = false) => {
   const keepPreview = keepSelection && previewPanelVisible.value && !fileStore.showEditor;
   const selectedPaths = keepSelection ? currentSelection.value.map(entry => entry.path) : [];
@@ -658,15 +577,6 @@ const resetDeleteConfirm = () => {
   };
 }
 
-const resetTaskCancelConfirm = () => {
-  taskCancelConfirm.value = {
-    visible: false,
-    task: null,
-    submitting: false,
-    error: ""
-  };
-}
-
 const closeDeleteConfirm = () => {
   if (deleteConfirm.value.submitting) return;
   resetDeleteConfirm();
@@ -689,11 +599,6 @@ const showProperties = async (entries = selectedEntries()) => {
   };
   await nextTick();
   propertiesPanelRef.value?.focus();
-}
-
-const closeTaskCancelConfirm = () => {
-  if (taskCancelConfirm.value.submitting) return;
-  resetTaskCancelConfirm();
 }
 
 const openOperationPanel = (next: Omit<OperationPanelState, "visible" | "submitting">) => {
@@ -805,12 +710,6 @@ const isArchiveFile = (entry: ExplorerEntry | null): entry is ExplorerEntry & { 
   if (!entry || entry.type !== "file") return false;
   const name = entry.name.toLowerCase();
   return name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz");
-}
-
-const taskStarted = async (id: string, label = "后台任务") => {
-  taskMessage.value = `${label}已创建：${shortTaskId(id)}`;
-  taskPanelVisible.value = true;
-  await loadTasks();
 }
 
 const startRenameSelected = () => {
