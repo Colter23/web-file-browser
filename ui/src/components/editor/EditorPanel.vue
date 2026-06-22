@@ -12,8 +12,10 @@ import {useEditorSearch} from "../../composables/useEditorSearch.ts";
 import {checkFileLanguageMode} from "../../utils/common.ts";
 import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
 import type {CodeEditorExpose, EditorCursorStatus, EditorMenuName} from "./types.ts";
+import EditorGotoBar from "./EditorGotoBar.vue";
 import EditorInfoBar from "./EditorInfoBar.vue";
 import EditorMenuLayer from "./EditorMenuLayer.vue";
+import EditorSearchBar from "./EditorSearchBar.vue";
 import EditorStatusBar from "./EditorStatusBar.vue";
 
 type PendingEditorAction = "close" | "reload" | "external" | "";
@@ -171,6 +173,19 @@ const changeTheme = (theme: string) => {
   currentTheme.value = theme;
   closeMenus();
   nextTick(() => editorRef.value?.focus?.());
+}
+
+const showReplace = () => {
+  replaceVisible.value = true;
+  focusReplaceInput();
+}
+
+const clearSearchStatus = () => {
+  searchStatus.value = "";
+}
+
+const clearGotoStatus = () => {
+  gotoStatus.value = "";
 }
 
 const loadCurrentFile = async () => {
@@ -458,69 +473,38 @@ onBeforeUnmount(() => {
         @change-theme="changeTheme" />
 
     <main class="editor-main">
-      <div v-if="searchVisible" class="search-bar" @click.stop>
-        <div class="search-fields">
-          <input
-              :ref="setSearchInputRef"
-              v-model="searchText"
-              class="search-input"
-              type="text"
-              placeholder="查找"
-              @keydown.enter.prevent="findFromInput"
-              @input="searchStatus = ''">
-          <input
-              v-if="replaceVisible"
-              :ref="setReplaceInputRef"
-              v-model="replaceText"
-              class="search-input replace-input"
-              type="text"
-              placeholder="替换为"
-              @keydown.enter.prevent="replaceCurrentMatch">
-        </div>
-        <div class="search-actions">
-          <span v-if="searchStatusText" class="search-status">{{ searchStatusText }}</span>
-          <button title="上一个 (Shift+Enter)" :disabled="!canFind" @click="runSearch(true)">
-            <icon icon="icon-back_android" class="rotate-90" />
-          </button>
-          <button title="下一个 (Enter)" :disabled="!canFind" @click="runSearch(false)">
-            <icon icon="icon-back_android" class="-rotate-90" />
-          </button>
-          <button v-if="!replaceVisible" title="显示替换 (Ctrl+H)" @click="replaceVisible = true; focusReplaceInput()">
-            <icon icon="icon-renamebox" />
-          </button>
-          <button v-if="replaceVisible" class="text-tool" title="替换当前" :disabled="!canReplace" @click="replaceCurrentMatch">替换</button>
-          <button v-if="replaceVisible" class="text-tool" title="全部替换" :disabled="!canReplace" @click="replaceAllMatches">全部</button>
-          <button class="text-tool" :class="{active: searchCaseSensitive}" title="区分大小写" @click="toggleSearchOption('case')">Aa</button>
-          <button class="text-tool" :class="{active: searchWholeWord}" title="全词匹配" @click="toggleSearchOption('word')">W</button>
-          <button class="text-tool" :class="{active: searchRegex}" title="正则表达式" @click="toggleSearchOption('regex')">.*</button>
-          <button title="关闭查找" @click="closeSearch">
-            <icon icon="icon-close" />
-          </button>
-        </div>
-      </div>
-      <div v-if="gotoVisible" class="goto-bar" @click.stop>
-        <div class="goto-fields">
-          <span>行</span>
-          <input
-              :ref="setGotoInputRef"
-              v-model.trim="gotoLineText"
-              class="goto-input"
-              type="number"
-              min="1"
-              :max="Math.max(1, editorLineCount)"
-              :placeholder="gotoPlaceholder"
-              @keydown.enter.prevent="submitGotoLine"
-              @input="gotoStatus = ''">
-          <span class="goto-range">/ {{ Math.max(1, editorLineCount) }}</span>
-        </div>
-        <div class="goto-actions">
-          <span v-if="gotoStatus" class="goto-status">{{ gotoStatus }}</span>
-          <button class="text-tool" title="跳转到行" :disabled="!canGotoLine" @click="submitGotoLine">跳转</button>
-          <button title="关闭跳转" @click="closeGoto">
-            <icon icon="icon-close" />
-          </button>
-        </div>
-      </div>
+      <editor-search-bar
+          v-model:search-text="searchText"
+          v-model:replace-text="replaceText"
+          :visible="searchVisible"
+          :replace-visible="replaceVisible"
+          :search-status-text="searchStatusText"
+          :case-sensitive="searchCaseSensitive"
+          :whole-word="searchWholeWord"
+          :regex="searchRegex"
+          :can-find="canFind"
+          :can-replace="canReplace"
+          :set-search-input-ref="setSearchInputRef"
+          :set-replace-input-ref="setReplaceInputRef"
+          @show-replace="showReplace"
+          @search="runSearch"
+          @search-input="findFromInput"
+          @replace-current="replaceCurrentMatch"
+          @replace-all="replaceAllMatches"
+          @toggle-option="toggleSearchOption"
+          @clear-status="clearSearchStatus"
+          @close="closeSearch" />
+      <editor-goto-bar
+          v-model:line-text="gotoLineText"
+          :visible="gotoVisible"
+          :status="gotoStatus"
+          :line-count="editorLineCount"
+          :placeholder="gotoPlaceholder"
+          :can-goto-line="canGotoLine"
+          :set-goto-input-ref="setGotoInputRef"
+          @clear-status="clearGotoStatus"
+          @submit="submitGotoLine"
+          @close="closeGoto" />
       <div class="editor-frame">
         <code-editor
             ref="editorRef"
@@ -655,58 +639,6 @@ onBeforeUnmount(() => {
 
 .editor-main {
   @apply relative flex min-h-0 grow flex-col gap-2 bg-[#f7fbff] p-2;
-}
-
-.search-bar,
-.goto-bar {
-  @apply relative z-20 flex shrink-0 items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm;
-}
-
-.search-fields,
-.goto-fields {
-  @apply flex min-w-0 grow items-center gap-2;
-}
-
-.search-input,
-.goto-input {
-  @apply h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100;
-}
-
-.goto-input {
-  @apply max-w-28 text-right tabular-nums;
-}
-
-.replace-input {
-  @apply border-slate-300;
-}
-
-.search-actions,
-.goto-actions {
-  @apply flex shrink-0 items-center gap-1 text-slate-600;
-}
-
-.search-actions button,
-.goto-actions button {
-  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white;
-}
-
-.search-actions button.active,
-.goto-actions button.active {
-  @apply border-blue-300 bg-blue-50 text-blue-700;
-}
-
-.search-actions .text-tool,
-.goto-actions .text-tool {
-  @apply min-w-9;
-}
-
-.search-status,
-.goto-status {
-  @apply max-w-28 truncate px-1 text-amber-600;
-}
-
-.goto-range {
-  @apply shrink-0 text-slate-400;
 }
 
 .editor-frame {
