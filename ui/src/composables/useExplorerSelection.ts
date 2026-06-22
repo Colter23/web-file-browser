@@ -49,16 +49,22 @@ export const useExplorerSelection = ({
 
   const indexOfPath = (path: string) => entries.value.findIndex(entry => entry.path === path);
 
-  const setSelection = (paths: string[], focusPath = paths[paths.length - 1] ?? "", keepAnchor = false) => {
+  const applySelectionState = (paths: string[], focusPath: string, nextAnchorPath: string) => {
     selectedPaths.value = Array.from(new Set(paths));
     focusedPath.value = focusPath;
-    if (!keepAnchor) anchorPath.value = focusPath || anchorPath.value;
+    anchorPath.value = nextAnchorPath;
+  }
+
+  const setSelection = (paths: string[], focusPath = paths[paths.length - 1] ?? "", keepAnchor = false) => {
+    applySelectionState(paths, focusPath, keepAnchor ? anchorPath.value : focusPath || anchorPath.value);
   }
 
   const clearSelection = () => {
-    selectedPaths.value = [];
-    focusedPath.value = "";
-    anchorPath.value = "";
+    applySelectionState([], "", "");
+  }
+
+  const commitSelectionAnchor = () => {
+    if (focusedPath.value) anchorPath.value = focusedPath.value;
   }
 
   const scrollEntryIntoView = async (path: string) => {
@@ -79,9 +85,9 @@ export const useExplorerSelection = ({
     const nextAnchor = anchorPath.value && visiblePaths.has(anchorPath.value) ? anchorPath.value : nextFocus;
     const selectionChanged = nextSelected.length !== selectedPaths.value.length
         || nextSelected.some((path, index) => path !== selectedPaths.value[index]);
-    if (selectionChanged) selectedPaths.value = nextSelected;
-    if (focusedPath.value !== nextFocus) focusedPath.value = nextFocus;
-    if (anchorPath.value !== nextAnchor) anchorPath.value = nextAnchor;
+    if (selectionChanged || focusedPath.value !== nextFocus || anchorPath.value !== nextAnchor) {
+      applySelectionState(nextSelected, nextFocus, nextAnchor);
+    }
   }
 
   watch(entries, syncSelectionWithEntries);
@@ -188,8 +194,7 @@ export const useExplorerSelection = ({
     const entry = entries.value[nextIndex];
     if (!entry) return;
     if (preserveSelection) {
-      focusedPath.value = entry.path;
-      anchorPath.value = entry.path;
+      setSelection(selectedPaths.value, entry.path);
     } else if (extend) {
       selectRange(entry.path, false);
     } else {
@@ -232,9 +237,7 @@ export const useExplorerSelection = ({
         : existingPaths[existingPaths.length - 1] ?? "";
     const nextAnchor = snapshot.anchorPath && entryByPath(snapshot.anchorPath) ? snapshot.anchorPath : nextFocus;
     if (!existingPaths.length && !nextFocus) return false;
-    selectedPaths.value = existingPaths;
-    focusedPath.value = nextFocus;
-    anchorPath.value = nextAnchor;
+    applySelectionState(existingPaths, nextFocus, nextAnchor);
     if (nextFocus) await scrollEntryIntoView(nextFocus);
     return true;
   }
@@ -251,6 +254,7 @@ export const useExplorerSelection = ({
     indexOfPath,
     setSelection,
     clearSelection,
+    commitSelectionAnchor,
     scrollEntryIntoView,
     ensureFocusAnchor,
     selectRange,

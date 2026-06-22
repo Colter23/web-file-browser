@@ -138,7 +138,6 @@ const {
 const {
   selectedPaths,
   focusedPath,
-  anchorPath,
   selectedEntries,
   entryByPath,
   firstSelectedEntry,
@@ -147,6 +146,7 @@ const {
   indexOfPath,
   setSelection,
   clearSelection,
+  commitSelectionAnchor,
   ensureFocusAnchor,
   selectRange,
   selectEntry,
@@ -239,13 +239,14 @@ const {
 } = useExplorerMarqueeSelection({
   entries,
   selectedPaths,
-  focusedPath,
-  anchorPath,
   itemRefs,
   viewportRef,
   isRenaming: () => Boolean(renamingPath.value),
   focusViewport,
-  clearSelection
+  clearSelection,
+  setSelection,
+  commitSelectionAnchor,
+  closeContextMenu
 });
 
 const {

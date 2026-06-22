@@ -17,25 +17,27 @@ type SelectionBox = {
 type ExplorerMarqueeSelectionOptions = {
   entries: ComputedRef<ExplorerEntry[]>;
   selectedPaths: Ref<string[]>;
-  focusedPath: Ref<string>;
-  anchorPath: Ref<string>;
   itemRefs: Map<string, HTMLElement>;
   viewportRef: Ref<HTMLElement | null>;
   isRenaming: () => boolean;
   focusViewport: () => void;
   clearSelection: () => void;
+  setSelection: (paths: string[], focusPath?: string, keepAnchor?: boolean) => void;
+  commitSelectionAnchor: () => void;
+  closeContextMenu: () => void;
 }
 
 export const useExplorerMarqueeSelection = ({
   entries,
   selectedPaths,
-  focusedPath,
-  anchorPath,
   itemRefs,
   viewportRef,
   isRenaming,
   focusViewport,
-  clearSelection
+  clearSelection,
+  setSelection,
+  commitSelectionAnchor,
+  closeContextMenu
 }: ExplorerMarqueeSelectionOptions) => {
   const selectionBox = reactive<SelectionBox>({
     active: false,
@@ -87,6 +89,7 @@ export const useExplorerMarqueeSelection = ({
     if (!viewport) return;
     const rect = viewport.getBoundingClientRect();
     event.preventDefault();
+    closeContextMenu();
     pointerX = event.clientX;
     pointerY = event.clientY;
     originClientX = event.clientX;
@@ -195,15 +198,14 @@ export const useExplorerMarqueeSelection = ({
     const selected = selectionBox.additive
         ? Array.from(new Set([...selectionBox.basePaths, ...marqueePaths]))
         : marqueePaths;
-    selectedPaths.value = selected;
-    focusedPath.value = marqueePaths[marqueePaths.length - 1] ?? selected[selected.length - 1] ?? "";
+    setSelection(selected, marqueePaths[marqueePaths.length - 1] ?? selected[selected.length - 1] ?? "", true);
   }
 
   const finishMarqueeSelection = () => {
     if (!tracking && !selectionBox.active) return;
     const finishedActiveBox = selectionBox.active;
     resetSelectionBox();
-    if (finishedActiveBox && focusedPath.value) anchorPath.value = focusedPath.value;
+    if (finishedActiveBox) commitSelectionAnchor();
   }
 
   return {
