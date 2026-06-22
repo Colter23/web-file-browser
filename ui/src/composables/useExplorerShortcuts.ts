@@ -31,16 +31,19 @@ type ExplorerShortcutsOptions = {
   navigateUp: () => MaybePromise;
 }
 
+const formControlSelector = "input, textarea, select, [contenteditable='true']";
+const shellOverlaySelector = ".ace_editor, .operation-panel, .delete-confirm-panel, .properties-panel, .context-menu, .tab-context-menu, .view-menu-panel, .task-panel";
+
 export const shouldIgnoreNavigationShortcut = (target: EventTarget | null) => {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
-  return Boolean(target.closest("input, textarea, select, [contenteditable='true'], .ace_editor, .operation-panel, .delete-confirm-panel, .properties-panel"));
+  return Boolean(target.closest(`${formControlSelector}, ${shellOverlaySelector}`));
 }
 
 const shouldIgnoreActionShortcut = (target: EventTarget | null) => {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
-  return Boolean(target.closest("button, a, input, textarea, select, [contenteditable='true'], .ace_editor, .operation-panel, .delete-confirm-panel, .properties-panel, .context-menu, .task-panel"));
+  return Boolean(target.closest(`button, a, ${formControlSelector}, ${shellOverlaySelector}`));
 }
 
 const shouldKeepEditorFindShortcut = (showEditor: boolean, target: EventTarget | null) => {
@@ -53,7 +56,7 @@ const shouldIgnoreAddressShortcut = (showEditor: boolean, target: EventTarget | 
   if (showEditor) return true;
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
-  return Boolean(target.closest(".ace_editor, .operation-panel, .delete-confirm-panel, .properties-panel, .context-menu, .task-panel"));
+  return Boolean(target.closest(shellOverlaySelector));
 }
 
 const hasPageTextSelection = () => {
