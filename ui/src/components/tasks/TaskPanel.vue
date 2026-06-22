@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed} from "vue";
+import {computed, nextTick, ref, watch} from "vue";
 import type {TaskKind, TaskState, TaskStatus} from "../../class.ts";
 import type {TaskCancelConfirmState} from "../../composables/useTaskPanel.ts";
 import Icon from "../Icon.vue";
@@ -19,6 +19,8 @@ const emit = defineEmits<{
   (e: "close-cancel"): void;
   (e: "confirm-cancel"): void;
 }>();
+
+const cancelConfirmRef = ref<HTMLElement | null>(null);
 
 const taskKindText = (kind: TaskKind) => ({
   copy: "复制",
@@ -109,6 +111,12 @@ const taskCancelMessage = computed(() => {
   if (!task) return "任务取消请求会发送给后端。";
   return `#${shortTaskId(task.id)} · ${taskStateText(task.state)} · ${taskProgress(task)}`;
 });
+
+watch(() => props.cancelConfirm.visible, async visible => {
+  if (!visible) return;
+  await nextTick();
+  cancelConfirmRef.value?.focus();
+});
 </script>
 
 <template>
@@ -166,7 +174,12 @@ const taskCancelMessage = computed(() => {
         <button class="task-cancel" :disabled="!canCancelTask(task)" @click="emit('cancel', task)">取消</button>
       </div>
     </div>
-    <section v-if="cancelConfirm.visible" class="task-cancel-confirm" @keydown.esc.prevent="emit('close-cancel')">
+    <section
+        v-if="cancelConfirm.visible"
+        ref="cancelConfirmRef"
+        class="task-cancel-confirm"
+        tabindex="-1"
+        @keydown.esc.prevent="emit('close-cancel')">
       <div class="task-cancel-confirm-main">
         <strong>{{ taskCancelTitle }}</strong>
         <span>{{ taskCancelMessage }}</span>
@@ -238,7 +251,11 @@ const taskCancelMessage = computed(() => {
 }
 
 .task-cancel-confirm {
-  @apply flex shrink-0 items-center justify-between gap-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900;
+  @apply flex shrink-0 items-center justify-between gap-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 outline-none;
+}
+
+.task-cancel-confirm:focus-visible {
+  @apply ring-2 ring-inset ring-amber-300;
 }
 
 .task-cancel-confirm-main {

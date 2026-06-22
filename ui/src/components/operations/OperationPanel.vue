@@ -61,7 +61,7 @@ defineExpose({
 </script>
 
 <template>
-  <form v-if="state.visible" class="operation-panel" @submit.prevent="emit('submit')">
+  <form v-if="state.visible" class="operation-panel" @submit.prevent="emit('submit')" @keydown.esc.prevent="emit('close')">
     <div class="operation-panel-header">
       <div class="operation-panel-icon">
         <icon :icon="panelIcon" />
@@ -81,8 +81,7 @@ defineExpose({
           v-model="nameModel"
           type="text"
           autocomplete="off"
-          :disabled="state.submitting"
-          @keydown.esc.prevent="emit('close')">
+          :disabled="state.submitting">
     </label>
     <div v-if="state.kind === 'archive'" class="operation-field">
       <span>压缩格式</span>
