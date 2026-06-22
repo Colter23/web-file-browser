@@ -6,6 +6,7 @@ import {useFileStore} from "../../store";
 import {getFolderData} from "../../network/file-api.ts";
 import {useDetailsColumns} from "../../composables/useDetailsColumns.ts";
 import {useExplorerEntryDrag} from "../../composables/useExplorerEntryDrag.ts";
+import {useExplorerKeyboard} from "../../composables/useExplorerKeyboard.ts";
 import {useExplorerMarqueeSelection} from "../../composables/useExplorerMarqueeSelection.ts";
 import {useExplorerRename} from "../../composables/useExplorerRename.ts";
 import {useExplorerSelection} from "../../composables/useExplorerSelection.ts";
@@ -646,135 +647,38 @@ const fileIcon = (entry: ExplorerEntry) => {
 
 const isDimmed = (entry: ExplorerEntry) => props.dimmedPaths.includes(entry.path);
 
-const handleKeyDown = async (event: KeyboardEvent) => {
-  if (!viewportRef.value?.contains(document.activeElement)) return;
-  if (renamingPath.value) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      cancelRename();
-      return;
-    }
-    if (event.key === "Enter") {
-      event.preventDefault();
-      await commitRename();
-      return;
-    }
-    return;
-  }
-  if (event.key === "Escape") {
-    event.preventDefault();
-    if (contextMenu.visible) {
-      contextMenu.visible = false;
-      return;
-    }
-    if (selectionBox.active) {
-      resetSelectionBox();
-      return;
-    }
-    clearSelection();
-    return;
-  }
-  if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
-    event.preventDefault();
-    openKeyboardContextMenu();
-    return;
-  }
-  if (event.altKey && !event.ctrlKey && !event.metaKey && event.key === "Enter") {
-    event.preventDefault();
-    contextMenu.visible = false;
-    const focused = focusedOrSelectedEntry();
-    const entriesToShow = selectedEntries.value.length ? selectedEntries.value : focused ? [focused] : [];
-    if (entriesToShow.length) emit("properties", entriesToShow);
-    return;
-  }
-  if ((event.key === " " || event.code === "Space") && !event.altKey && !event.shiftKey && (event.ctrlKey || event.metaKey)) {
-    event.preventDefault();
-    contextMenu.visible = false;
-    toggleFocusedSelection();
-    return;
-  }
-  if ((event.key === " " || event.code === "Space") && event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
-    event.preventDefault();
-    contextMenu.visible = false;
-    const entry = focusedOrSelectedEntry();
-    if (entry) selectRange(entry.path, false);
-    return;
-  }
-  if ((event.key === " " || event.code === "Space") && !event.altKey && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
-    event.preventDefault();
-    contextMenu.visible = false;
-    const entry = focusedOrSelectedEntry();
-    if (entry?.type === "file") emit("preview", entry);
-    return;
-  }
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
-    event.preventDefault();
-    if (event.shiftKey) {
-      contextMenu.visible = false;
-      copySelectedPaths();
-      return;
-    }
-    const entry = firstSelectedEntry();
-    if (entry) emit("copy", entry);
-    return;
-  }
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "x") {
-    event.preventDefault();
-    const entry = firstSelectedEntry();
-    if (entry) emit("cut", entry);
-    return;
-  }
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") {
-    event.preventDefault();
-    if (props.canPaste) emit("paste");
-    return;
-  }
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
-    event.preventDefault();
-    selectAllEntries();
-    return;
-  }
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "i") {
-    event.preventDefault();
-    contextMenu.visible = false;
-    invertCurrentSelection();
-    return;
-  }
-  if (event.key === "Enter") {
-    event.preventDefault();
-    contextMenu.visible = false;
-    const entry = focusedOrSelectedEntry();
-    if ((event.ctrlKey || event.metaKey) && entry?.type === "folder") {
-      emit("open-new-tab", entry);
-      return;
-    }
-    if ((event.ctrlKey || event.metaKey) && entry?.type === "file") {
-      emit("preview", entry);
-      return;
-    }
-    if (entry) await openEntry(entry);
-    return;
-  }
-  if (event.key === "Delete") {
-    event.preventDefault();
-    contextMenu.visible = false;
-    const entry = firstSelectedEntry();
-    if (entry) emit("delete", entry);
-    return;
-  }
-  if (event.key === "F2") {
-    event.preventDefault();
-    contextMenu.visible = false;
-    const entry = selectedEntries.value.length <= 1 ? focusedOrSelectedEntry() : null;
-    if (entry) startRename(entry);
-    return;
-  }
-  if (handleTypeahead(event)) return;
-  if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End", "PageDown", "PageUp"].includes(event.key)) return;
-  event.preventDefault();
-  contextMenu.visible = false;
-  moveFocus(event.key, event.shiftKey, (event.ctrlKey || event.metaKey) && !event.shiftKey);
-}
+const {handleKeyDown} = useExplorerKeyboard({
+  isViewportActive: () => Boolean(viewportRef.value?.contains(document.activeElement)),
+  isRenaming: () => Boolean(renamingPath.value),
+  isContextMenuVisible: () => contextMenu.visible,
+  isSelectionBoxActive: () => selectionBox.active,
+  canPaste: () => props.canPaste,
+  selectedEntries: () => selectedEntries.value,
+  focusedOrSelectedEntry,
+  firstSelectedEntry,
+  cancelRename,
+  commitRename,
+  closeContextMenu,
+  resetSelectionBox,
+  clearSelection,
+  openKeyboardContextMenu,
+  showProperties: entries => emit("properties", entries),
+  toggleFocusedSelection,
+  selectRange,
+  previewEntry: entry => emit("preview", entry),
+  copySelectedPaths,
+  copyEntry: entry => emit("copy", entry),
+  cutEntry: entry => emit("cut", entry),
+  paste: () => emit("paste"),
+  selectAllEntries,
+  invertCurrentSelection,
+  openEntry,
+  openEntryInNewTab: entry => emit("open-new-tab", entry),
+  deleteEntry: entry => emit("delete", entry),
+  startRename,
+  handleTypeahead,
+  moveFocus
+});
 
 const currentColumns = () => {
   if (!viewportRef.value) return 1;
