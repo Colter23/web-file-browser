@@ -145,7 +145,7 @@ const contextMenuViewportPadding = 8;
 const contextMenuEstimatedWidth = 176;
 const contextMenuEstimatedHeights = {
   entry: 464,
-  background: 224
+  background: 288
 };
 const viewWheelStepThreshold = 80;
 const autoLoadMoreDistance = 360;
@@ -676,6 +676,20 @@ const isRenaming = (entry: ExplorerEntry) => renamingPath.value === entry.path;
 const selectAllEntries = () => {
   if (!entries.value.length) return false;
   setSelection(entries.value.map(entry => entry.path), focusedPath.value || entries.value[0]?.path || "");
+  return true;
+}
+
+const clearCurrentSelection = () => {
+  if (!selectedPaths.value.length) return false;
+  clearSelection();
+  return true;
+}
+
+const invertCurrentSelection = () => {
+  if (!entries.value.length) return false;
+  const selected = selectedSet();
+  const inverted = entries.value.filter(entry => !selected.has(entry.path)).map(entry => entry.path);
+  setSelection(inverted, inverted[inverted.length - 1] ?? focusedPath.value);
   return true;
 }
 
@@ -1264,6 +1278,12 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     selectAllEntries();
     return;
   }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "i") {
+    event.preventDefault();
+    contextMenu.visible = false;
+    invertCurrentSelection();
+    return;
+  }
   if (event.key === "Enter") {
     event.preventDefault();
     contextMenu.visible = false;
@@ -1724,6 +1744,16 @@ const selectAllFromContext = () => {
   selectAllEntries();
 }
 
+const clearSelectionFromContext = () => {
+  closeContextMenu();
+  clearCurrentSelection();
+}
+
+const invertSelectionFromContext = () => {
+  closeContextMenu();
+  invertCurrentSelection();
+}
+
 const archiveContextEntries = () => {
   const entry = primaryContextEntry.value;
   closeContextMenu();
@@ -1770,6 +1800,8 @@ defineExpose({
   selectPaths,
   selectPathForRename,
   selectAllEntries,
+  clearCurrentSelection,
+  invertCurrentSelection,
   focus: focusViewport,
   getScrollTop,
   setScrollTop
@@ -1960,7 +1992,10 @@ defineExpose({
       <div class="context-separator"></div>
       <button :disabled="!props.canPaste" @click="pasteIntoCurrentFolder">粘贴</button>
       <button @click="copyPathContextEntries">复制当前路径</button>
+      <div class="context-separator"></div>
       <button :disabled="!entries.length" @click="selectAllFromContext">全选</button>
+      <button :disabled="!entries.length" @click="invertSelectionFromContext">反向选择</button>
+      <button :disabled="!selectedPaths.length" @click="clearSelectionFromContext">取消选择</button>
     </div>
 
     <div
