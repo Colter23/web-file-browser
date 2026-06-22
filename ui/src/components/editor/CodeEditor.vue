@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ace from "ace-builds";
 import {onBeforeUnmount, onMounted, ref, watch} from "vue";
+import type {EditorCursorStatus, EditorSearchOptions} from "./types.ts";
 
 let aceReady: Promise<void> | null = null;
 
@@ -39,21 +40,6 @@ interface CodeEditorProps {
   readOnly?: boolean;
 }
 
-type CodeEditorCursorStatus = {
-  line: number;
-  column: number;
-  selectedRows: number;
-  selectedCharacters: number;
-}
-
-type SearchOptions = {
-  needle: string;
-  backwards?: boolean;
-  caseSensitive?: boolean;
-  wholeWord?: boolean;
-  regex?: boolean;
-}
-
 const props = withDefaults(defineProps<CodeEditorProps>(), {
   mode: "text",
   theme: "dracula",
@@ -70,7 +56,7 @@ const emit = defineEmits<{
   (e: "find"): void;
   (e: "replace"): void;
   (e: "goto-line"): void;
-  (e: "cursor-change", status: CodeEditorCursorStatus): void;
+  (e: "cursor-change", status: EditorCursorStatus): void;
 }>()
 
 const editorRef = ref<HTMLElement | null>(null);
@@ -78,7 +64,7 @@ let editor: ReturnType<typeof ace.edit> | null = null;
 let syncing = false;
 let disposed = false;
 
-const findNeedle = (options: SearchOptions) => {
+const findNeedle = (options: EditorSearchOptions) => {
   if (!editor || !options.needle) return false;
   try {
     const range = editor.find(options.needle, {
