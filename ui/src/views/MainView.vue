@@ -35,6 +35,7 @@ import UploadDropOverlay from "../components/shell/UploadDropOverlay.vue";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import {usePreviewPaneResize} from "../composables/usePreviewPaneResize.ts";
 import {useShellNotice} from "../composables/useShellNotice.ts";
+import {useUploadDrop} from "../composables/useUploadDrop.ts";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
 
@@ -194,8 +195,6 @@ const deleteConfirmRef = ref<FocusablePanelExpose | null>(null);
 const propertiesPanelRef = ref<FocusablePanelExpose | null>(null);
 const uploadInput = ref<HTMLInputElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
-const uploadDropActive = ref(false);
-const uploadDropUploading = ref(false);
 const taskPanelVisible = ref(false);
 const tasksLoading = ref(false);
 const tasks = ref<TaskStatus[]>([]);
@@ -250,7 +249,6 @@ const tabContextMenu = ref<TabContextMenuState>({
 const draggingTabId = ref("");
 const tabDropTargetId = ref("");
 const tabDropPlacement = ref<TabDropPlacement | "">("");
-let uploadDragDepth = 0;
 let taskPollTimer: number | undefined;
 const tabContextMenuWidth = 184;
 const tabContextMenuHeight = 252;
@@ -522,9 +520,6 @@ watch(searchText, text => {
 });
 
 const currentFolder = () => fileStore.currentPath || "/";
-
-const uploadDropTitle = computed(() => uploadDropUploading.value ? "正在上传文件..." : "释放鼠标上传文件");
-const uploadDropSubtitle = computed(() => uploadDropUploading.value ? `目标：${currentFolder()}` : `上传到 ${currentFolder()}`);
 
 const canCancelTask = (task: TaskStatus) => task.state === "queued" || task.state === "running";
 
@@ -1091,57 +1086,20 @@ const uploadToCurrentFolder = async (files: FileList | File[]) => {
   })
 }
 
-const hasDraggedFiles = (event: DragEvent) => {
-  const dataTransfer = event.dataTransfer;
-  if (!dataTransfer || !Array.from(dataTransfer.types ?? []).includes("Files")) return false;
-  return Array.from(dataTransfer.items ?? []).some(item => item.kind === "file");
-}
-
-const resetUploadDrop = () => {
-  uploadDragDepth = 0;
-  uploadDropActive.value = false;
-}
-
-const canHandleUploadDrop = (event: DragEvent) => !fileStore.showEditor && hasDraggedFiles(event);
-
-const handleUploadDragEnter = (event: DragEvent) => {
-  if (!canHandleUploadDrop(event)) return;
-  event.preventDefault();
-  event.stopPropagation();
-  uploadDragDepth += 1;
-  uploadDropActive.value = true;
-}
-
-const handleUploadDragOver = (event: DragEvent) => {
-  if (!canHandleUploadDrop(event)) return;
-  event.preventDefault();
-  event.stopPropagation();
-  if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
-  uploadDropActive.value = true;
-}
-
-const handleUploadDragLeave = (event: DragEvent) => {
-  if (fileStore.showEditor || !uploadDropActive.value) return;
-  event.preventDefault();
-  event.stopPropagation();
-  uploadDragDepth = Math.max(0, uploadDragDepth - 1);
-  if (!uploadDragDepth) uploadDropActive.value = false;
-}
-
-const handleUploadDrop = async (event: DragEvent) => {
-  if (!canHandleUploadDrop(event)) return;
-  event.preventDefault();
-  event.stopPropagation();
-  const files = Array.from(event.dataTransfer?.files ?? []);
-  resetUploadDrop();
-  if (!files.length) return;
-  uploadDropUploading.value = true;
-  try {
-    await uploadToCurrentFolder(files);
-  } finally {
-    uploadDropUploading.value = false;
-  }
-}
+const {
+  active: uploadDropActive,
+  uploading: uploadDropUploading,
+  title: uploadDropTitle,
+  subtitle: uploadDropSubtitle,
+  handleDragEnter: handleUploadDragEnter,
+  handleDragOver: handleUploadDragOver,
+  handleDragLeave: handleUploadDragLeave,
+  handleDrop: handleUploadDrop
+} = useUploadDrop({
+  canAccept: () => !fileStore.showEditor,
+  currentFolder,
+  upload: uploadToCurrentFolder
+});
 
 const shouldIgnoreNavigationShortcut = (target: EventTarget | null) => {
   if (!(target instanceof HTMLElement)) return false;

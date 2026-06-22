@@ -10,8 +10,8 @@ import DetailsHeader from "./DetailsHeader.vue";
 import ExplorerContextMenu from "./ExplorerContextMenu.vue";
 import ExplorerCommandRow from "./ExplorerCommandRow.vue";
 import ExplorerStatusBar from "./ExplorerStatusBar.vue";
+import ExplorerEntryItem from "./ExplorerEntryItem.vue";
 import type {ExplorerEntry} from "./types.ts";
-import Icon from "../Icon.vue";
 
 type SelectionBox = {
   active: boolean;
@@ -314,13 +314,20 @@ const {
   isImageFile
 });
 
+const resolveElementRef = (element: Element | ComponentPublicInstance | null) => {
+  if (element instanceof HTMLElement) return element;
+  if (element && "$el" in element && element.$el instanceof HTMLElement) return element.$el;
+  return null;
+}
+
 const setItemRef = (path: string, element: Element | ComponentPublicInstance | null) => {
+  const target = resolveElementRef(element);
   const current = itemRefs.get(path);
-  if (current && current !== element) unobserveThumbnail(path);
-  if (element instanceof HTMLElement) {
-    itemRefs.set(path, element);
+  if (current && current !== target) unobserveThumbnail(path);
+  if (target) {
+    itemRefs.set(path, target);
     const entry = entryByPath(path);
-    if (entry) observeThumbnail(entry, element);
+    if (entry) observeThumbnail(entry, target);
   } else {
     itemRefs.delete(path);
   }
@@ -1631,61 +1638,44 @@ defineExpose({
       </div>
 
       <div v-else class="entry-surface">
-        <article
+        <explorer-entry-item
             v-for="entry in entries"
             :key="entry.path"
-            :id="entryDomId(entry.path)"
             :ref="element => setItemRef(entry.path, element)"
-            class="entry-item"
-            :class="{selected: isSelected(entry.path), focused: focusedPath === entry.path, image: isImageFile(entry), dimmed: isDimmed(entry), dragging: isDragged(entry), dropTarget: isDropTarget(entry)}"
-            :style="viewMode === 'details' ? detailsGridStyle : undefined"
-            :title="entry.name"
-            role="option"
-            :aria-selected="isSelected(entry.path)"
-            :tabindex="focusedPath === entry.path ? 0 : -1"
-            draggable="true"
-            @click.stop="selectEntry(entry, $event)"
-            @auxclick.stop="handleAuxClick($event, entry)"
-            @dblclick.stop="openEntry(entry)"
-            @dragstart.stop="beginEntryDrag($event, entry)"
-            @dragend="resetEntryDrag"
-            @dragover="dragOverEntry($event, entry)"
-            @dragleave="dragLeaveEntry($event, entry)"
+            :entry="entry"
+            :entry-id="entryDomId(entry.path)"
+            :view-mode="viewMode"
+            :grid-style="detailsGridStyle"
+            :selected="isSelected(entry.path)"
+            :focused="focusedPath === entry.path"
+            :image="isImageFile(entry)"
+            :dimmed="isDimmed(entry)"
+            :dragging="isDragged(entry)"
+            :drop-target="isDropTarget(entry)"
+            :renaming="isRenaming(entry)"
+            :rename-draft="renameDraft"
+            :rename-submitting="renameSubmitting"
+            :thumbnail-visible="shouldLoadThumbnail(entry)"
+            :thumbnail-src="thumbnailUrl(entry)"
+            :icon="fileIcon(entry)"
+            :type-text="entryTypeText(entry)"
+            :modified-text="formatDate(entry.modified)"
+            :size-text="formatSize(entry.size)"
+            :tile-meta-text="`${formatDate(entry.modified)} · ${formatSize(entry.size)}`"
+            @select="selectEntry(entry, $event)"
+            @aux-click="handleAuxClick($event, entry)"
+            @open="openEntry(entry)"
+            @drag-start="beginEntryDrag($event, entry)"
+            @drag-end="resetEntryDrag"
+            @drag-over="dragOverEntry($event, entry)"
+            @drag-leave="dragLeaveEntry($event, entry)"
             @drop="dropOnEntry($event, entry)"
-            @contextmenu.prevent.stop="openContextMenu($event, entry)">
-          <div class="entry-name-cell">
-            <div class="entry-visual">
-              <img
-                  v-if="shouldLoadThumbnail(entry)"
-                  :src="thumbnailUrl(entry)"
-                  :alt="entry.name"
-                  loading="lazy"
-                  decoding="async"
-                  @error="handleThumbnailError(entry)">
-              <icon v-else :icon="fileIcon(entry)" />
-            </div>
-            <div class="entry-main">
-              <input
-                  v-if="isRenaming(entry)"
-                  :ref="element => setRenameInputRef(entry.path, element)"
-                  v-model="renameDraft"
-                  class="entry-rename-input"
-                  :disabled="renameSubmitting"
-                  @click.stop
-                  @mousedown.stop
-                  @dblclick.stop
-                  @keydown.enter.prevent="commitRename"
-                  @keydown.esc.prevent="cancelRename"
-                  @blur="commitRename">
-              <span v-else class="entry-name">{{ entry.name }}</span>
-              <span v-if="viewMode !== 'details'" class="entry-meta">{{ entryTypeText(entry) }}</span>
-            </div>
-          </div>
-          <span v-if="viewMode === 'details'" class="entry-date">{{ formatDate(entry.modified) }}</span>
-          <span v-if="viewMode === 'details'" class="entry-type">{{ entryTypeText(entry) }}</span>
-          <span v-if="viewMode === 'details'" class="entry-size">{{ formatSize(entry.size) }}</span>
-          <span v-if="viewMode === 'tiles'" class="entry-tile-meta">{{ formatDate(entry.modified) }} · {{ formatSize(entry.size) }}</span>
-        </article>
+            @context-menu="openContextMenu($event, entry)"
+            @thumbnail-error="handleThumbnailError(entry)"
+            @rename-input-ref="element => setRenameInputRef(entry.path, element)"
+            @update:rename-draft="renameDraft = $event"
+            @commit-rename="commitRename"
+            @cancel-rename="cancelRename" />
 
         <div v-if="folderData.hasMore && !props.filterText.trim()" class="load-more-row">
           <button class="load-more-button" :disabled="loadingMore" @click.stop="loadMore">
@@ -1796,168 +1786,6 @@ defineExpose({
   @apply grid content-start grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-2 p-3;
 }
 
-.entry-item {
-  @apply relative min-w-0 cursor-default rounded-md border border-transparent text-sm text-slate-800 outline-none;
-}
-
-.entry-item:hover {
-  @apply bg-[#ebf3ff];
-}
-
-.entry-item.selected {
-  @apply border-[#7aa7f8] bg-[#cfe4ff] text-slate-950;
-}
-
-.entry-item.focused {
-  @apply ring-1 ring-inset ring-blue-600;
-}
-
-.entry-item.dimmed {
-  @apply opacity-45;
-}
-
-.entry-item.dragging {
-  @apply opacity-50;
-}
-
-.entry-item.dropTarget {
-  @apply border-blue-500 bg-blue-50 ring-2 ring-inset ring-blue-400;
-}
-
-.details .entry-item {
-  @apply grid h-8 items-center px-3;
-  grid-template-columns: var(--details-name-width) var(--details-modified-width) var(--details-type-width) var(--details-size-width);
-  width: calc(var(--details-grid-width) + 1.5rem);
-  min-width: calc(var(--details-grid-width) + 1.5rem);
-}
-
-.list .entry-item {
-  @apply flex h-8 items-center gap-2 px-2;
-}
-
-.icons .entry-item {
-  @apply flex h-32 flex-col items-center justify-start gap-2 p-2 text-center;
-}
-
-.icons.small .entry-item {
-  @apply h-24;
-}
-
-.icons.large .entry-item {
-  @apply h-40;
-}
-
-.tiles .entry-item {
-  @apply grid min-h-20 grid-cols-[3.5rem_minmax(0,1fr)] grid-rows-[auto_auto] items-center gap-x-3 gap-y-1 p-2;
-}
-
-.entry-name-cell {
-  @apply flex min-w-0 items-center gap-2;
-}
-
-.details .entry-name-cell {
-  @apply min-w-0 px-2;
-}
-
-.icons .entry-name-cell {
-  @apply flex-col justify-start gap-2 text-center;
-}
-
-.tiles .entry-name-cell {
-  @apply contents;
-}
-
-.entry-visual {
-  @apply inline-flex shrink-0 items-center justify-center overflow-hidden text-slate-700;
-}
-
-.details .entry-visual,
-.list .entry-visual {
-  @apply h-5 w-5 text-[1.15rem];
-}
-
-.icons .entry-visual {
-  @apply h-16 w-20 rounded border border-transparent bg-white text-[3rem];
-}
-
-.icons.small .entry-visual {
-  @apply h-11 w-14 text-[2.25rem];
-}
-
-.icons.large .entry-visual {
-  @apply h-24 w-32 text-[4.25rem];
-}
-
-.tiles .entry-visual {
-  @apply row-span-2 h-14 w-14 rounded border border-slate-200 bg-slate-50 text-[2rem];
-}
-
-.icons .entry-item.image .entry-visual,
-.tiles .entry-item.image .entry-visual {
-  @apply border-slate-200 bg-slate-50 shadow-sm;
-}
-
-.entry-visual img {
-  @apply h-full w-full rounded object-cover;
-}
-
-.details .entry-visual img,
-.list .entry-visual img {
-  @apply rounded-sm;
-}
-
-.entry-main {
-  @apply flex min-w-0 items-center gap-2;
-}
-
-.icons .entry-main {
-  @apply flex-col gap-0;
-}
-
-.tiles .entry-main {
-  @apply flex-col items-start gap-0 self-end;
-}
-
-.entry-name {
-  @apply min-w-0 truncate;
-}
-
-.entry-rename-input {
-  @apply h-6 min-w-0 rounded border border-blue-500 bg-white px-1 text-sm text-slate-900 outline-none ring-2 ring-blue-200;
-}
-
-.details .entry-rename-input,
-.list .entry-rename-input,
-.tiles .entry-rename-input {
-  @apply w-full;
-}
-
-.icons .entry-rename-input {
-  @apply w-full text-center;
-}
-
-.icons .entry-name {
-  @apply line-clamp-2 whitespace-normal break-all;
-}
-
-.entry-meta,
-.entry-date,
-.entry-type,
-.entry-size,
-.entry-tile-meta {
-  @apply truncate text-xs text-slate-500;
-}
-
-.entry-date,
-.entry-type,
-.entry-size {
-  @apply px-2 text-sm;
-}
-
-.entry-size {
-  @apply text-right tabular-nums;
-}
-
 .load-more-row {
   @apply flex justify-center px-3 py-4;
 }
@@ -1970,18 +1798,6 @@ defineExpose({
 
 .load-more-button {
   @apply h-8 rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-600 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400;
-}
-
-.entry-item.selected .entry-meta,
-.entry-item.selected .entry-date,
-.entry-item.selected .entry-type,
-.entry-item.selected .entry-size,
-.entry-item.selected .entry-tile-meta {
-  @apply text-slate-700;
-}
-
-.entry-tile-meta {
-  @apply col-start-2 self-start;
 }
 
 .explorer-empty {
