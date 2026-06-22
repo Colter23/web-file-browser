@@ -33,6 +33,7 @@ type ExplorerKeyboardOptions = {
   startRename: (entry: ExplorerEntry | null) => void;
   handleTypeahead: (event: KeyboardEvent) => boolean;
   moveFocus: (key: string, extend: boolean, preserveSelection?: boolean) => void;
+  applyViewShortcut?: (code: string) => boolean;
 }
 
 const navigationKeys = new Set(["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End", "PageDown", "PageUp"]);
@@ -69,7 +70,8 @@ export const useExplorerKeyboard = ({
   deleteEntry,
   startRename,
   handleTypeahead,
-  moveFocus
+  moveFocus,
+  applyViewShortcut
 }: ExplorerKeyboardOptions) => {
   const selectedOrFocusedEntry = () => firstSelectedEntry() ?? focusedOrSelectedEntry();
 
@@ -189,6 +191,14 @@ export const useExplorerKeyboard = ({
     return false;
   }
 
+  const handleViewShortcut = (event: KeyboardEvent) => {
+    if (!applyViewShortcut || (!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.altKey) return false;
+    if (!applyViewShortcut(event.code)) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
   const handleOpenShortcut = async (event: KeyboardEvent) => {
     if (event.key !== "Enter") return false;
     event.preventDefault();
@@ -233,6 +243,7 @@ export const useExplorerKeyboard = ({
   }
 
   const handleKeyDown = async (event: KeyboardEvent) => {
+    if (event.defaultPrevented) return;
     if (!isViewportActive()) return;
     if (isRenaming()) {
       await handleRenameKey(event);
@@ -244,6 +255,7 @@ export const useExplorerKeyboard = ({
     if (handleSpaceShortcut(event)) return;
     if (handleClipboardShortcut(event)) return;
     if (handleSelectionShortcut(event)) return;
+    if (handleViewShortcut(event)) return;
     if (await handleOpenShortcut(event)) return;
     if (handleActionShortcut(event)) return;
     if (handleTypeahead(event)) return;

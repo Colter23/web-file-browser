@@ -662,6 +662,7 @@ const signOut = async () => {
                 :filter-text="searchText"
                 :dimmed-paths="fileClipboardAction === 'cut' ? clipboardPaths : []"
                 :can-paste="canPasteSelection"
+                :apply-view-shortcut="applyViewShortcut"
                 @rename="renameSelected"
                 @delete="deleteSelected"
                 @download="downloadSelected"

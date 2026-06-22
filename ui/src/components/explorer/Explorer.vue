@@ -114,6 +114,7 @@ const props = withDefaults(defineProps<{
   filterText?: string;
   dimmedPaths?: string[];
   canPaste?: boolean;
+  applyViewShortcut?: (code: string) => boolean;
 }>(), {
   filterText: "",
   dimmedPaths: () => [],
@@ -562,7 +563,8 @@ const {handleKeyDown} = useExplorerKeyboard({
   deleteEntry: entry => emit("delete", entry),
   startRename,
   handleTypeahead,
-  moveFocus
+  moveFocus,
+  applyViewShortcut: code => props.applyViewShortcut?.(code) ?? false
 });
 
 const handleAuxClick = (event: MouseEvent, entry: ExplorerEntry) => {
