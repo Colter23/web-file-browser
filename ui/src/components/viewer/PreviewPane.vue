@@ -5,11 +5,11 @@ import {useImageZoomPan} from "../../composables/useImageZoomPan.ts";
 import {downloadUrl, getFile} from "../../network/api.ts";
 import Icon from "../Icon.vue";
 import type {ShellNoticePayload} from "../shell/types.ts";
+import {formatEntryDate, formatEntrySize, isImageEntry, isTextLikeEntry} from "../../utils/file-entry.ts";
+import PreviewHeader from "./PreviewHeader.vue";
+import PreviewMetaList from "./PreviewMetaList.vue";
+import type {PreviewKind, PreviewMetaItem} from "./types.ts";
 
-type PreviewKind = "image" | "text" | "audio" | "video" | "unknown";
-
-const textPreviewExtensions = ["txt", "log", "md", "json", "yaml", "yml", "toml", "xml", "csv"];
-const imagePreviewExtensions = ["apng", "avif", "bmp", "gif", "ico", "jpeg", "jpg", "png", "svg", "webp"];
 const audioPreviewExtensions = ["mp3", "wav", "ogg", "flac", "m4a", "aac"];
 const videoPreviewExtensions = ["mp4", "webm", "mov", "mkv", "avi"];
 
@@ -44,10 +44,10 @@ const previewKind = computed<PreviewKind>(() => {
   const entry = props.entry;
   if (!entry || entry.type !== "file") return "unknown";
   const extension = normalizedExtension.value;
-  if (imagePreviewExtensions.includes(extension)) return "image";
+  if (isImageEntry(entry)) return "image";
   if (audioPreviewExtensions.includes(extension)) return "audio";
   if (videoPreviewExtensions.includes(extension)) return "video";
-  if (props.editableExtensions.includes(extension) || textPreviewExtensions.includes(extension)) return "text";
+  if (isTextLikeEntry(entry, props.editableExtensions)) return "text";
   return "unknown";
 });
 
@@ -92,36 +92,16 @@ const {
   stopPan: stopPreviewImagePan
 } = useImageZoomPan({maxZoom: 300, canPan: () => previewKind.value === "image"});
 
-const previewMeta = computed(() => {
+const previewMeta = computed<PreviewMetaItem[]>(() => {
   const entry = props.entry;
   if (!entry) return [];
   return [
     {label: "类型", value: previewTypeText.value},
-    {label: "大小", value: formatBytes(entry.size)},
-    {label: "修改", value: formatDate(entry.modified)},
+    {label: "大小", value: formatEntrySize(entry.size)},
+    {label: "修改", value: formatEntryDate(entry.modified)},
     {label: "路径", value: entry.path}
   ];
 });
-
-const formatBytes = (bytes?: number) => {
-  if (bytes === undefined || Number.isNaN(bytes)) return "-";
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1024;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
-}
-
-const formatDate = (srcDate?: string) => {
-  if (!srcDate) return "-";
-  const date = new Date(srcDate);
-  if (Number.isNaN(date.getTime())) return srcDate;
-  return date.toLocaleString("zh-CN", {hour12: false});
-}
 
 const resetPreviewRuntime = () => {
   previewLoadVersion += 1;
@@ -190,29 +170,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="preview-header">
-    <div class="preview-title-block">
-      <span class="preview-title">{{ previewTitleText }}</span>
-      <span class="preview-subtitle">{{ previewSubtitleText }}</span>
-    </div>
-    <div class="preview-actions">
-      <button v-if="canEditPreview" title="编辑" @click="editPreview">
-        <icon icon="icon-edit-filling" />
-      </button>
-      <button title="下载" :disabled="!entry" @click="downloadPreview">
-        <icon icon="icon-download" />
-      </button>
-      <button title="关闭预览" @click="emit('close')">
-        <icon icon="icon-close" />
-      </button>
-    </div>
-  </div>
-  <div v-if="entry" class="preview-meta-list">
-    <div v-for="item in previewMeta" :key="item.label" :title="item.value">
-      <span>{{ item.label }}</span>
-      <strong>{{ item.value }}</strong>
-    </div>
-  </div>
+  <preview-header
+      :title="previewTitleText"
+      :subtitle="previewSubtitleText"
+      :can-edit="canEditPreview"
+      :can-download="Boolean(entry)"
+      @edit="editPreview"
+      @download="downloadPreview"
+      @close="emit('close')" />
+  <preview-meta-list v-if="entry" :items="previewMeta" />
   <div v-if="previewKind === 'image'" class="preview-tool-row">
     <button :class="{active: previewImageFit}" @click="resetPreviewImageZoom">适应</button>
     <button @click="zoomPreviewImage(-25)">-</button>
@@ -264,50 +230,6 @@ onBeforeUnmount(() => {
 
 <style scoped lang="postcss">
 @reference "tailwindcss";
-
-.preview-header {
-  @apply flex min-h-12 shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-3 text-sm font-medium;
-}
-
-.preview-title-block {
-  @apply flex min-w-0 flex-col;
-}
-
-.preview-title {
-  @apply min-w-0 truncate;
-}
-
-.preview-subtitle {
-  @apply text-xs font-normal text-slate-500;
-}
-
-.preview-actions {
-  @apply flex shrink-0 items-center gap-1;
-}
-
-.preview-header button {
-  @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40;
-}
-
-.preview-meta-list {
-  @apply grid shrink-0 grid-cols-2 gap-x-3 gap-y-1 border-b border-slate-100 bg-slate-50/70 px-3 py-2 text-xs;
-}
-
-.preview-meta-list div {
-  @apply min-w-0;
-}
-
-.preview-meta-list span {
-  @apply mr-1 text-slate-400;
-}
-
-.preview-meta-list strong {
-  @apply inline-block max-w-full truncate align-bottom font-normal text-slate-700;
-}
-
-.preview-meta-list div:last-child {
-  @apply col-span-2;
-}
 
 .preview-tool-row {
   @apply flex h-9 shrink-0 items-center gap-1 border-b border-slate-100 bg-white px-3 text-xs text-slate-500;
