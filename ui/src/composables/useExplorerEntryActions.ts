@@ -1,7 +1,7 @@
 import type {ComputedRef} from "vue";
 import type {FileInfo} from "../class.ts";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
-import {isEditableEntry, isImageEntry} from "../utils/file-entry.ts";
+import {entryFileInfo, isEditableEntry, isImageEntry} from "../utils/file-entry.ts";
 
 type ImageViewerPayload = {
   entry: ExplorerEntry;
@@ -27,14 +27,6 @@ type ExplorerEntryActionOptions = {
   copyPath: (payload: CopyPathPayload) => void;
   closeContextMenu: () => void;
 }
-
-const entryFileInfo = (entry: ExplorerEntry): FileInfo => entry.file ?? {
-  path: entry.path,
-  name: entry.name,
-  size: entry.size ?? 0,
-  extension: entry.extension ?? "",
-  modified: entry.modified ?? ""
-};
 
 export const useExplorerEntryActions = ({
   currentPath,

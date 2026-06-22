@@ -39,7 +39,7 @@ import {useMainViewLifecycle} from "../composables/useMainViewLifecycle.ts";
 import {usePanelFocusRestore} from "../composables/usePanelFocusRestore.ts";
 import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
-import {isExtractableArchiveEntry} from "../utils/file-entry.ts";
+import {entryFileInfo, isExtractableArchiveEntry} from "../utils/file-entry.ts";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
 
@@ -435,13 +435,7 @@ const openPreviewInEditor = async (entry = previewEntry.value) => {
   if (!entry || entry.type !== "file") return;
   if (!await fileStore.requestEditorLeave()) return;
   closePanels();
-  fileStore.openEditor({
-    path: entry.path,
-    name: entry.name,
-    size: entry.size ?? 0,
-    extension: entry.extension ?? "",
-    modified: entry.modified ?? ""
-  });
+  fileStore.openEditor(entryFileInfo(entry));
 }
 
 const editPreviewEntry = (entry: ExplorerEntry) => {

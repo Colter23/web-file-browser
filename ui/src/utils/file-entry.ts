@@ -1,13 +1,15 @@
-import type {ArchiveFormat} from "../class.ts";
+import type {ArchiveFormat, FileInfo} from "../class.ts";
 
 export type FileEntryKind = "folder" | "file";
 
 export type FileEntryLike = {
   type: FileEntryKind;
   name: string;
+  path?: string;
   modified?: string;
   size?: number;
   extension?: string;
+  file?: FileInfo;
 }
 
 export type EntryPreviewKind = "image" | "text" | "audio" | "video" | "unknown";
@@ -72,6 +74,14 @@ export const isEditableEntry = (entry: FileEntryLike | null | undefined, editabl
   if (!entry || entry.type !== "file") return false;
   return hasExtension(editableExtensions, normalizeEntryExtension(entry));
 }
+
+export const entryFileInfo = (entry: FileEntryLike): FileInfo => entry.file ?? {
+  path: entry.path ?? "",
+  name: entry.name,
+  size: entry.size ?? 0,
+  extension: entry.extension ?? "",
+  modified: entry.modified ?? ""
+};
 
 export const isArchiveEntry = (entry: FileEntryLike | null | undefined) => {
   if (!entry || entry.type !== "file") return false;
