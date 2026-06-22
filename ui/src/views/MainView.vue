@@ -31,6 +31,7 @@ import {useExplorerTabs} from "../composables/useExplorerTabs.ts";
 import {useExplorerPreview} from "../composables/useExplorerPreview.ts";
 import {useExplorerNavigation} from "../composables/useExplorerNavigation.ts";
 import {useExplorerViewMode} from "../composables/useExplorerViewMode.ts";
+import {shouldIgnoreNavigationShortcut, useExplorerShortcuts} from "../composables/useExplorerShortcuts.ts";
 import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
 import {isExtractableArchiveEntry} from "../utils/file-entry.ts";
@@ -474,93 +475,6 @@ const {
   upload: uploadToCurrentFolder
 });
 
-const shouldIgnoreNavigationShortcut = (target: EventTarget | null) => {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  return Boolean(target.closest("input, textarea, select, [contenteditable='true'], .ace_editor, .operation-panel, .delete-confirm-panel, .properties-panel"));
-}
-
-const shouldIgnoreActionShortcut = (target: EventTarget | null) => {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  return Boolean(target.closest("button, a, input, textarea, select, [contenteditable='true'], .ace_editor, .operation-panel, .delete-confirm-panel, .properties-panel, .context-menu, .task-panel"));
-}
-
-const shouldKeepEditorFindShortcut = (target: EventTarget | null) => {
-  if (fileStore.showEditor) return true;
-  if (!(target instanceof HTMLElement)) return false;
-  return Boolean(target.closest(".ace_editor, .operation-panel"));
-}
-
-const shouldIgnoreAddressShortcut = (target: EventTarget | null) => {
-  if (fileStore.showEditor) return true;
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  return Boolean(target.closest(".ace_editor, .operation-panel, .delete-confirm-panel, .properties-panel, .context-menu, .task-panel"));
-}
-
-const hasPageTextSelection = () => {
-  const selection = window.getSelection();
-  return Boolean(selection && !selection.isCollapsed && selection.toString().trim());
-}
-
-const isExplorerShortcutTarget = (target: EventTarget | null) => {
-  if (!(target instanceof HTMLElement)) return false;
-  return Boolean(target.closest(".explorer-viewport"));
-}
-
-const handleClipboardShortcut = (key: string, event: KeyboardEvent) => {
-  if (event.shiftKey || shouldIgnoreShellShortcut(event.target) || isExplorerShortcutTarget(event.target)) return false;
-  if ((key === "c" || key === "x") && hasPageTextSelection()) return false;
-  if (key === "c") {
-    event.preventDefault();
-    copySelected();
-    return true;
-  }
-  if (key === "x") {
-    event.preventDefault();
-    cutSelected();
-    return true;
-  }
-  if (key === "v") {
-    event.preventDefault();
-    void pasteSelected();
-    return true;
-  }
-  return false;
-}
-
-const handleSelectAllShortcut = (key: string, event: KeyboardEvent) => {
-  if (key !== "a" || event.shiftKey || shouldIgnoreShellShortcut(event.target) || isExplorerShortcutTarget(event.target)) return false;
-  if (hasPageTextSelection()) return false;
-  event.preventDefault();
-  explorerRef.value?.selectAllEntries();
-  return true;
-}
-
-const focusSearch = () => {
-  if (fileStore.showEditor) return;
-  searchInput.value?.focus();
-  searchInput.value?.select();
-}
-
-const focusBreadcrumb = () => {
-  if (fileStore.showEditor) return;
-  contentToolbarRef.value?.focusInput();
-}
-
-const togglePreviewFromShortcut = async () => {
-  if (previewPanelVisible.value) {
-    closePreview();
-    return true;
-  }
-  const previewed = await previewSelectedQuietly();
-  if (previewed) return true;
-  if (fileStore.showEditor) return false;
-  showEmptyPreviewPane();
-  return true;
-}
-
 const {
   currentViewModeMeta,
   currentViewModeLabel,
@@ -573,106 +487,39 @@ const {
   showNotice: showShellNotice
 });
 
-const shouldIgnoreShellShortcut = (target: EventTarget | null) => {
-  return fileStore.showEditor || shouldIgnoreNavigationShortcut(target);
-}
-
-const handleWindowKeyDown = (event: KeyboardEvent) => {
-  if (imageViewerVisible.value) return;
-  const key = event.key.toLowerCase();
-  const commandKey = event.ctrlKey || event.metaKey;
-  if (commandKey && event.shiftKey && !event.altKey && !shouldIgnoreShellShortcut(event.target)) {
-    if (applyViewShortcut(event.code)) {
-      event.preventDefault();
-      return;
-    }
-  }
-  if ((commandKey && !event.altKey && key === "l") || (event.altKey && !event.ctrlKey && !event.metaKey && key === "d")) {
-    if (shouldIgnoreAddressShortcut(event.target)) return;
-    event.preventDefault();
-    focusBreadcrumb();
-    return;
-  }
-  if (commandKey && !event.altKey && !event.shiftKey && (key === "f" || key === "e")) {
-    if (shouldKeepEditorFindShortcut(event.target)) return;
-    event.preventDefault();
-    focusSearch();
-    return;
-  }
-  if (commandKey && !event.altKey && !shouldIgnoreShellShortcut(event.target)) {
-    if (handleClipboardShortcut(key, event)) return;
-    if (handleSelectAllShortcut(key, event)) return;
-    const tabShortcutId = !event.shiftKey ? tabShortcutTargetId(event.code) : "";
-    if (tabShortcutId) {
-      event.preventDefault();
-      if (tabShortcutId !== fileStore.activeTabId) void switchTab(tabShortcutId);
-      return;
-    }
-    if (key === "t") {
-      event.preventDefault();
-      void (event.shiftKey ? reopenClosedTab() : openTab());
-      return;
-    }
-    if (key === "w") {
-      event.preventDefault();
-      void closeActiveTab();
-      return;
-    }
-    if (key === "tab") {
-      event.preventDefault();
-      void switchRelativeTab(event.shiftKey ? -1 : 1);
-      return;
-    }
-    if (key === "pageup" || key === "pagedown") {
-      event.preventDefault();
-      void switchRelativeTab(key === "pageup" ? -1 : 1);
-      return;
-    }
-    if (event.shiftKey && key === "n") {
-      event.preventDefault();
-      void createFolderFromShortcut();
-      return;
-    }
-    if (!event.shiftKey && key === "r") {
-      event.preventDefault();
-      void refreshCurrent(true);
-      return;
-    }
-  }
-  if (event.key === "F5" && !event.altKey && !event.ctrlKey && !event.metaKey && !shouldIgnoreShellShortcut(event.target)) {
-    event.preventDefault();
-    void refreshCurrent(true);
-    return;
-  }
-  if (event.key === "Backspace" && !event.altKey && !event.ctrlKey && !event.metaKey && !shouldIgnoreNavigationShortcut(event.target)) {
-    event.preventDefault();
-    handleBackspaceNavigation();
-    return;
-  }
-  if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "p" && !shouldIgnoreNavigationShortcut(event.target)) {
-    event.preventDefault();
-    void togglePreviewFromShortcut();
-    return;
-  }
-  if ((event.key === " " || event.code === "Space") && !event.altKey && !event.ctrlKey && !event.metaKey && !shouldIgnoreActionShortcut(event.target)) {
-    if (singleSelection.value?.type === "file") {
-      event.preventDefault();
-      void previewSelectedQuietly();
-    }
-    return;
-  }
-  if (!event.altKey || event.ctrlKey || event.metaKey || shouldIgnoreNavigationShortcut(event.target)) return;
-  if (event.key === "ArrowLeft") {
-    event.preventDefault();
-    void navigateBack();
-  } else if (event.key === "ArrowRight") {
-    event.preventDefault();
-    void navigateForward();
-  } else if (event.key === "ArrowUp") {
-    event.preventDefault();
-    void navigateUp();
-  }
-}
+const {
+  togglePreviewFromShortcut,
+  handleWindowKeyDown
+} = useExplorerShortcuts({
+  imageViewerVisible,
+  previewPanelVisible,
+  hasPreviewableSelection: () => singleSelection.value?.type === "file",
+  focusSearchInput: () => {
+    searchInput.value?.focus();
+    searchInput.value?.select();
+  },
+  focusBreadcrumbInput: () => contentToolbarRef.value?.focusInput(),
+  selectAllEntries: () => explorerRef.value?.selectAllEntries(),
+  applyViewShortcut,
+  tabShortcutTargetId,
+  switchTab,
+  openTab,
+  reopenClosedTab,
+  closeActiveTab,
+  switchRelativeTab,
+  createFolderFromShortcut,
+  refreshCurrent: keepSelection => refreshCurrent(keepSelection),
+  copySelected: () => copySelected(),
+  cutSelected: () => cutSelected(),
+  pasteSelected: () => pasteSelected(),
+  closePreview: () => closePreview(),
+  previewSelectedQuietly,
+  showEmptyPreviewPane,
+  handleBackspaceNavigation,
+  navigateBack,
+  navigateForward,
+  navigateUp
+});
 
 const closePreview = () => {
   closePanels();
