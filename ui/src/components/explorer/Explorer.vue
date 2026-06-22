@@ -210,7 +210,8 @@ const detailsGridStyle = computed(() => ({
   "--details-name-width": `${detailsColumnWidths.value.name}px`,
   "--details-modified-width": `${detailsColumnWidths.value.modified}px`,
   "--details-type-width": `${detailsColumnWidths.value.type}px`,
-  "--details-size-width": `${detailsColumnWidths.value.size}px`
+  "--details-size-width": `${detailsColumnWidths.value.size}px`,
+  "--details-grid-width": `${detailsColumnWidths.value.name + detailsColumnWidths.value.modified + detailsColumnWidths.value.type + detailsColumnWidths.value.size}px`
 }));
 
 const normalizeFolderData = (data: FolderData): FolderData => ({
@@ -1543,6 +1544,7 @@ const cycleIconSize = () => {
 const startDetailsColumnResize = (event: PointerEvent, key: DetailsColumnKey) => {
   event.preventDefault();
   event.stopPropagation();
+  if (event.currentTarget instanceof HTMLElement) event.currentTarget.setPointerCapture(event.pointerId);
   detailsColumnResize.key = key;
   detailsColumnResize.startX = event.clientX;
   detailsColumnResize.startWidth = detailsColumnWidths.value[key];
@@ -1913,7 +1915,7 @@ defineExpose({
 }
 
 .details .entry-surface {
-  @apply flex flex-col gap-0 p-1;
+  @apply flex w-max min-w-full flex-col gap-0 p-1;
 }
 
 .list .entry-surface {
@@ -1967,8 +1969,9 @@ defineExpose({
 
 .details .entry-item {
   @apply grid h-8 items-center px-3;
-  grid-template-columns: minmax(var(--details-name-width), 1fr) var(--details-modified-width) var(--details-type-width) var(--details-size-width);
-  min-width: calc(var(--details-name-width) + var(--details-modified-width) + var(--details-type-width) + var(--details-size-width) + 1.5rem);
+  grid-template-columns: var(--details-name-width) var(--details-modified-width) var(--details-type-width) var(--details-size-width);
+  width: calc(var(--details-grid-width) + 1.5rem);
+  min-width: calc(var(--details-grid-width) + 1.5rem);
 }
 
 .list .entry-item {

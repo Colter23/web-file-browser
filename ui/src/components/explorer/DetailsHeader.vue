@@ -54,9 +54,10 @@ const sortIndicator = (key: DirSortKey) => {
 @reference "tailwindcss";
 
 .details-header {
-  @apply sticky top-0 z-10 grid h-9 items-center border-b border-slate-200 bg-white px-4 text-sm text-slate-600;
-  grid-template-columns: minmax(var(--details-name-width), 1fr) var(--details-modified-width) var(--details-type-width) var(--details-size-width);
-  min-width: calc(var(--details-name-width) + var(--details-modified-width) + var(--details-type-width) + var(--details-size-width) + 2rem);
+  @apply sticky top-0 z-10 grid h-9 items-center border-b border-slate-200 bg-white px-3 text-sm text-slate-600;
+  grid-template-columns: var(--details-name-width) var(--details-modified-width) var(--details-type-width) var(--details-size-width);
+  width: calc(var(--details-grid-width) + 1.5rem);
+  min-width: calc(var(--details-grid-width) + 1.5rem);
 }
 
 .details-header > .header-cell {
@@ -84,12 +85,12 @@ const sortIndicator = (key: DirSortKey) => {
 }
 
 .column-resizer {
-  @apply absolute -right-1 top-0 z-20 h-full w-2 cursor-col-resize touch-none;
+  @apply absolute -right-1.5 top-0 z-20 h-full w-3 cursor-col-resize touch-none;
 }
 
 .column-resizer::after {
   content: "";
-  @apply absolute left-1 top-1/2 h-5 -translate-y-1/2 border-l border-slate-200;
+  @apply absolute left-1.5 top-1/2 h-5 -translate-y-1/2 border-l border-slate-200;
 }
 
 .column-resizer:hover::after {

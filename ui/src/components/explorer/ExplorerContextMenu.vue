@@ -141,45 +141,47 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
 </script>
 
 <template>
-  <div
-      ref="menuRef"
-      class="context-menu"
-      :style="{left: `${menuPosition.x}px`, top: `${menuPosition.y}px`}"
-      @keydown="handleKeyDown">
-    <template v-if="background">
-      <button @click="emit('create-file')">新建文件</button>
-      <button @click="emit('create-folder')">新建文件夹</button>
-      <div class="context-separator"></div>
-      <button :disabled="!canPaste" @click="emit('paste')">粘贴</button>
-      <button @click="emit('copy-path')">复制当前路径</button>
-      <div class="context-separator"></div>
-      <button :disabled="!hasEntries" @click="emit('select-all')">全选</button>
-      <button :disabled="!hasEntries" @click="emit('invert-selection')">反向选择</button>
-      <button :disabled="!hasSelection" @click="emit('clear-selection')">取消选择</button>
-    </template>
+  <Teleport to="body">
+    <div
+        ref="menuRef"
+        class="context-menu"
+        :style="{left: `${menuPosition.x}px`, top: `${menuPosition.y}px`}"
+        @keydown="handleKeyDown">
+      <template v-if="background">
+        <button @click="emit('create-file')">新建文件</button>
+        <button @click="emit('create-folder')">新建文件夹</button>
+        <div class="context-separator"></div>
+        <button :disabled="!canPaste" @click="emit('paste')">粘贴</button>
+        <button @click="emit('copy-path')">复制当前路径</button>
+        <div class="context-separator"></div>
+        <button :disabled="!hasEntries" @click="emit('select-all')">全选</button>
+        <button :disabled="!hasEntries" @click="emit('invert-selection')">反向选择</button>
+        <button :disabled="!hasSelection" @click="emit('clear-selection')">取消选择</button>
+      </template>
 
-    <template v-else>
-      <button @click="emit('open')">打开</button>
-      <button :disabled="!primaryEntry || primaryEntry.type !== 'folder'" @click="emit('open-new-tab')">在新标签页中打开</button>
-      <button :disabled="!canViewImage" @click="emit('view-image')">查看图片</button>
-      <button :disabled="!canEdit" @click="emit('edit')">编辑</button>
-      <button :disabled="!primaryEntry || primaryEntry.type !== 'file'" @click="emit('preview')">预览</button>
-      <div class="context-separator"></div>
-      <button :disabled="!selectionCount" @click="emit('cut')">{{ contextLabel("剪切", "剪切选中项") }}</button>
-      <button :disabled="!selectionCount" @click="emit('copy')">{{ contextLabel("复制", "复制选中项") }}</button>
-      <button :disabled="!selectionCount" @click="emit('copy-path')">{{ contextLabel("复制路径", "复制选中项路径") }}</button>
-      <button :disabled="!canPaste" @click="emit('paste')">粘贴</button>
-      <div class="context-separator"></div>
-      <button :disabled="!primaryEntry || primaryEntry.type !== 'file'" @click="emit('download')">下载</button>
-      <button :disabled="!selectionCount" @click="emit('archive')">{{ contextLabel("压缩", "压缩选中项") }}</button>
-      <button :disabled="!canExtract" @click="emit('extract')">解压</button>
-      <div class="context-separator"></div>
-      <button :disabled="!primaryEntry || isMultiSelect" @click="emit('rename')">重命名</button>
-      <button class="danger" :disabled="!primaryEntry" @click="emit('delete')">{{ contextLabel("删除", "删除选中项") }}</button>
-      <div class="context-separator"></div>
-      <button :disabled="!selectionCount" @click="emit('properties')">属性</button>
-    </template>
-  </div>
+      <template v-else>
+        <button @click="emit('open')">打开</button>
+        <button :disabled="!primaryEntry || primaryEntry.type !== 'folder'" @click="emit('open-new-tab')">在新标签页中打开</button>
+        <button :disabled="!canViewImage" @click="emit('view-image')">查看图片</button>
+        <button :disabled="!canEdit" @click="emit('edit')">编辑</button>
+        <button :disabled="!primaryEntry || primaryEntry.type !== 'file'" @click="emit('preview')">预览</button>
+        <div class="context-separator"></div>
+        <button :disabled="!selectionCount" @click="emit('cut')">{{ contextLabel("剪切", "剪切选中项") }}</button>
+        <button :disabled="!selectionCount" @click="emit('copy')">{{ contextLabel("复制", "复制选中项") }}</button>
+        <button :disabled="!selectionCount" @click="emit('copy-path')">{{ contextLabel("复制路径", "复制选中项路径") }}</button>
+        <button :disabled="!canPaste" @click="emit('paste')">粘贴</button>
+        <div class="context-separator"></div>
+        <button :disabled="!primaryEntry || primaryEntry.type !== 'file'" @click="emit('download')">下载</button>
+        <button :disabled="!selectionCount" @click="emit('archive')">{{ contextLabel("压缩", "压缩选中项") }}</button>
+        <button :disabled="!canExtract" @click="emit('extract')">解压</button>
+        <div class="context-separator"></div>
+        <button :disabled="!primaryEntry || isMultiSelect" @click="emit('rename')">重命名</button>
+        <button class="danger" :disabled="!primaryEntry" @click="emit('delete')">{{ contextLabel("删除", "删除选中项") }}</button>
+        <div class="context-separator"></div>
+        <button :disabled="!selectionCount" @click="emit('properties')">属性</button>
+      </template>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped lang="postcss">
