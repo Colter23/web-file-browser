@@ -105,6 +105,18 @@ export const useExplorerContextMenu = ({
     focusViewport();
   }
 
+  const runContextAction = (action: () => void, restoreFocus = false) => {
+    closeContextMenu();
+    action();
+    if (restoreFocus) focusViewport();
+  }
+
+  const runAsyncContextAction = async (action: () => MaybePromise, restoreFocus = false) => {
+    closeContextMenu();
+    await action();
+    if (restoreFocus) focusViewport();
+  }
+
   const openContextMenu = (event: MouseEvent, entry: ExplorerEntry) => {
     focusViewport();
     ensureEntrySelected(entry);
@@ -149,115 +161,124 @@ export const useExplorerContextMenu = ({
 
   const openEntryFromContext = async () => {
     const entry = primaryContextEntry.value;
-    closeContextMenu();
-    if (entry) await openEntry(entry);
+    await runAsyncContextAction(async () => {
+      if (entry) await openEntry(entry);
+    }, Boolean(entry && (entry.type === "folder" || !isImageFile(entry) && !canEditEntry(entry))));
   }
 
   const openContextEntryInNewTab = () => {
     const entry = primaryContextEntry.value;
-    closeContextMenu();
-    if (entry) openNewTab(entry);
+    runContextAction(() => {
+      if (entry) openNewTab(entry);
+    });
   }
 
   const previewContextEntry = () => {
     const entry = primaryContextEntry.value;
-    closeContextMenu();
-    if (entry) previewEntry(entry);
+    runContextAction(() => {
+      if (entry) previewEntry(entry);
+    }, true);
   }
 
   const viewImageContextEntry = () => {
     const entry = primaryContextEntry.value;
-    closeContextMenu();
-    if (entry && isImageFile(entry)) openImageViewer({entry, entries: imageEntries.value});
+    runContextAction(() => {
+      if (entry && isImageFile(entry)) openImageViewer({entry, entries: imageEntries.value});
+    });
   }
 
   const editContextEntry = async () => {
     const entry = primaryContextEntry.value;
-    closeContextMenu();
-    if (entry) await editEntry(entry);
+    await runAsyncContextAction(async () => {
+      if (entry) await editEntry(entry);
+    });
   }
 
   const downloadContextEntry = () => {
     const entry = primaryContextEntry.value;
-    closeContextMenu();
-    if (entry) downloadEntry(entry);
+    runContextAction(() => {
+      if (entry) downloadEntry(entry);
+    }, true);
   }
 
   const copyPathContextEntries = () => {
     const paths = contextMenu.background ? [currentPath()] : contextEntries.value.map(entry => entry.path);
-    closeContextMenu();
-    if (paths.length) copyPath({paths});
+    runContextAction(() => {
+      if (paths.length) copyPath({paths});
+    }, true);
   }
 
   const copyContextEntries = () => {
     const entry = primaryContextEntry.value;
-    closeContextMenu();
-    if (entry) copyEntry(entry);
+    runContextAction(() => {
+      if (entry) copyEntry(entry);
+    }, true);
   }
 
   const cutContextEntries = () => {
     const entry = primaryContextEntry.value;
-    closeContextMenu();
-    if (entry) cutEntry(entry);
+    runContextAction(() => {
+      if (entry) cutEntry(entry);
+    }, true);
   }
 
   const pasteIntoCurrentFolder = () => {
-    closeContextMenu();
-    paste();
+    runContextAction(paste, true);
   }
 
   const createFileFromContext = () => {
-    closeContextMenu();
-    createFile();
+    runContextAction(createFile);
   }
 
   const createFolderFromContext = () => {
-    closeContextMenu();
-    createFolder();
+    runContextAction(createFolder);
   }
 
   const selectAllFromContext = () => {
-    closeContextMenu();
-    selectAllEntries();
+    runContextAction(selectAllEntries, true);
   }
 
   const clearSelectionFromContext = () => {
-    closeContextMenu();
-    clearCurrentSelection();
+    runContextAction(clearCurrentSelection, true);
   }
 
   const invertSelectionFromContext = () => {
-    closeContextMenu();
-    invertCurrentSelection();
+    runContextAction(invertCurrentSelection, true);
   }
 
   const archiveContextEntries = () => {
     const entry = primaryContextEntry.value;
-    closeContextMenu();
-    if (entry) archiveEntry(entry);
+    runContextAction(() => {
+      if (entry) archiveEntry(entry);
+    });
   }
 
   const extractContextEntry = () => {
     const entry = primaryContextEntry.value;
-    closeContextMenu();
-    if (entry) extractEntry(entry);
+    runContextAction(() => {
+      if (entry) extractEntry(entry);
+    });
   }
 
   const renameContextEntry = () => {
     const entry = primaryContextEntry.value;
-    if (entry) startRename(entry);
+    runContextAction(() => {
+      if (entry) startRename(entry);
+    });
   }
 
   const deleteContextEntries = () => {
     const entry = primaryContextEntry.value;
-    closeContextMenu();
-    if (entry) deleteEntry(entry);
+    runContextAction(() => {
+      if (entry) deleteEntry(entry);
+    });
   }
 
   const showContextProperties = () => {
     const selectedEntries = contextEntries.value;
-    closeContextMenu();
-    if (selectedEntries.length) showProperties(selectedEntries);
+    runContextAction(() => {
+      if (selectedEntries.length) showProperties(selectedEntries);
+    });
   }
 
   return {
