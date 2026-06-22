@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
+import {computed, defineAsyncComponent, nextTick, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import FileTree from "../components/FileTree.vue";
 import {useFileStore} from "../store";
@@ -35,6 +35,7 @@ import {useExplorerViewMode} from "../composables/useExplorerViewMode.ts";
 import {shouldIgnoreNavigationShortcut, useExplorerShortcuts} from "../composables/useExplorerShortcuts.ts";
 import {useFileTreeLoader} from "../composables/useFileTreeLoader.ts";
 import {useMainViewShellActions} from "../composables/useMainViewShellActions.ts";
+import {useMainViewLifecycle} from "../composables/useMainViewLifecycle.ts";
 import {usePanelFocusRestore} from "../composables/usePanelFocusRestore.ts";
 import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
@@ -275,38 +276,6 @@ const {treeData, loadRoot, handleLoad} = useFileTreeLoader({
   showError: showErrorNotice
 });
 
-onMounted(async () => {
-  fileStore.ensureActiveTab();
-  await loadRoot();
-  await syncActiveTabContext();
-  window.addEventListener("keydown", handleWindowKeyDown);
-  window.addEventListener("mousedown", handleHistoryMouseDown);
-  window.addEventListener("mouseup", handleHistoryMouseUp);
-  window.addEventListener("auxclick", handleHistoryAuxClick);
-  window.addEventListener("click", closeTabContextMenu);
-  window.addEventListener("scroll", closeTabContextMenu, true);
-  window.addEventListener("pointermove", handlePreviewPaneResizeMove);
-  window.addEventListener("pointerup", finishPreviewPaneResize);
-  window.addEventListener("pointercancel", finishPreviewPaneResize);
-  window.addEventListener("resize", handleWindowResize);
-})
-
-onBeforeUnmount(() => {
-  stopScrollPersistence();
-  stopShellNoticeTimer();
-  stopTaskPolling();
-  window.removeEventListener("keydown", handleWindowKeyDown);
-  window.removeEventListener("mousedown", handleHistoryMouseDown);
-  window.removeEventListener("mouseup", handleHistoryMouseUp);
-  window.removeEventListener("auxclick", handleHistoryAuxClick);
-  window.removeEventListener("click", closeTabContextMenu);
-  window.removeEventListener("scroll", closeTabContextMenu, true);
-  window.removeEventListener("pointermove", handlePreviewPaneResizeMove);
-  window.removeEventListener("pointerup", finishPreviewPaneResize);
-  window.removeEventListener("pointercancel", finishPreviewPaneResize);
-  window.removeEventListener("resize", handleWindowResize);
-})
-
 const {
   fileClipboardAction,
   operationPanel,
@@ -441,6 +410,25 @@ const {
   navigateBack,
   navigateForward,
   navigateUp
+});
+
+useMainViewLifecycle({
+  initialize: async () => {
+    fileStore.ensureActiveTab();
+    await loadRoot();
+    await syncActiveTabContext();
+  },
+  stopScrollPersistence,
+  stopShellNoticeTimer,
+  stopTaskPolling,
+  handleWindowKeyDown,
+  handleHistoryMouseDown,
+  handleHistoryMouseUp,
+  handleHistoryAuxClick,
+  closeTabContextMenu,
+  handlePreviewPaneResizeMove,
+  finishPreviewPaneResize,
+  handleWindowResize
 });
 
 const openPreviewInEditor = async (entry = previewEntry.value) => {
