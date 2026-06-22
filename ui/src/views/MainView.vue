@@ -30,6 +30,8 @@ import DeleteConfirmPanel from "../components/operations/DeleteConfirmPanel.vue"
 import PropertiesPanel from "../components/operations/PropertiesPanel.vue";
 import ContentToolbar from "../components/shell/ContentToolbar.vue";
 import CommandBar from "../components/shell/CommandBar.vue";
+import ShellNotice from "../components/shell/ShellNotice.vue";
+import UploadDropOverlay from "../components/shell/UploadDropOverlay.vue";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
 
@@ -380,13 +382,6 @@ const operationPanelNameLabel = computed(() => {
 const browserAreaStyle = computed(() => ({
   "--preview-pane-width": `${previewPaneWidth.value}px`
 }));
-
-const shellNoticeLabel = computed(() => ({
-  info: "提示",
-  success: "完成",
-  warning: "需要注意",
-  error: "操作失败"
-}[shellNotice.value.kind]));
 
 const errorMessage = (error: unknown, fallback: string) => {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -2039,25 +2034,16 @@ const signOut = async () => {
                 @open-new-tab="openEntryInNewTab"
                 @open-image-viewer="openImageViewer">
             </explorer>
-            <section v-if="shellNotice.visible" :class="['shell-notice', shellNotice.kind]" role="status" aria-live="polite">
-              <div class="shell-notice-mark" aria-hidden="true"></div>
-              <div class="shell-notice-body">
-                <strong>{{ shellNotice.title || shellNoticeLabel }}</strong>
-                <span>{{ shellNotice.message }}</span>
-              </div>
-              <button type="button" class="shell-notice-close" title="关闭提示" @click="closeShellNotice">
-                <icon icon="icon-close" />
-              </button>
-            </section>
-            <div v-if="uploadDropActive || uploadDropUploading" class="upload-drop-layer">
-              <div class="upload-drop-card">
-                <div class="upload-drop-icon">
-                  <icon icon="icon-upload" />
-                </div>
-                <strong>{{ uploadDropTitle }}</strong>
-                <span>{{ uploadDropSubtitle }}</span>
-              </div>
-            </div>
+            <shell-notice
+                v-if="shellNotice.visible"
+                :kind="shellNotice.kind"
+                :title="shellNotice.title"
+                :message="shellNotice.message"
+                @close="closeShellNotice" />
+            <upload-drop-overlay
+                v-if="uploadDropActive || uploadDropUploading"
+                :title="uploadDropTitle"
+                :subtitle="uploadDropSubtitle" />
             <operation-panel
                 :state="operationPanel"
                 @update:name="value => operationPanel.name = value"
@@ -2207,70 +2193,6 @@ const signOut = async () => {
 
 .browser-main.dropActive {
   @apply bg-blue-50/40;
-}
-
-.upload-drop-layer {
-  @apply pointer-events-none absolute inset-0 z-20 flex items-center justify-center border-2 border-dashed border-blue-400 bg-blue-50/55 p-6 backdrop-blur-[1px];
-}
-
-.upload-drop-card {
-  @apply flex min-w-72 flex-col items-center gap-2 rounded-lg border border-blue-200 bg-white px-8 py-6 text-center text-sm text-slate-500 shadow-2xl;
-}
-
-.upload-drop-card strong {
-  @apply text-base font-semibold text-slate-900;
-}
-
-.upload-drop-icon {
-  @apply flex h-12 w-12 items-center justify-center rounded-lg bg-blue-600 text-2xl text-white shadow-sm;
-}
-
-.shell-notice {
-  @apply absolute right-4 top-4 z-20 flex w-[min(24rem,calc(100%-2rem))] items-start gap-3 rounded-lg border bg-white/95 px-3 py-2 text-sm text-slate-700 shadow-xl backdrop-blur;
-}
-
-.shell-notice-mark {
-  @apply mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500 shadow-[0_0_0_3px_rgba(59,130,246,0.15)];
-}
-
-.shell-notice-body {
-  @apply flex min-w-0 grow flex-col gap-0.5;
-}
-
-.shell-notice-body strong {
-  @apply truncate text-sm font-semibold text-slate-900;
-}
-
-.shell-notice-body span {
-  @apply break-words text-xs leading-5 text-slate-600;
-}
-
-.shell-notice-close {
-  @apply -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700;
-}
-
-.shell-notice.success {
-  @apply border-emerald-100;
-}
-
-.shell-notice.success .shell-notice-mark {
-  @apply bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)];
-}
-
-.shell-notice.warning {
-  @apply border-amber-100;
-}
-
-.shell-notice.warning .shell-notice-mark {
-  @apply bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.16)];
-}
-
-.shell-notice.error {
-  @apply border-red-100;
-}
-
-.shell-notice.error .shell-notice-mark {
-  @apply bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.16)];
 }
 
 .preview-pane {

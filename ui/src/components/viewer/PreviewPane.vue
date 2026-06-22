@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed, onBeforeUnmount, ref, watch} from "vue";
 import type {FileInfo} from "../../class.ts";
+import {useImageZoomPan} from "../../composables/useImageZoomPan.ts";
 import {downloadUrl, getFile} from "../../network/api.ts";
 import Icon from "../Icon.vue";
 
@@ -48,20 +49,10 @@ const emit = defineEmits<{
 const previewLoading = ref(false);
 const previewText = ref("");
 const previewError = ref("");
-const previewImageFit = ref(true);
-const previewImageZoom = ref(100);
-const previewImageOffsetX = ref(0);
-const previewImageOffsetY = ref(0);
-const previewImageDragging = ref(false);
 const previewTextWrap = ref(true);
 const previewCopied = ref(false);
 let previewLoadVersion = 0;
 let previewCopyTimer: number | undefined;
-let previewImagePointerId: number | null = null;
-let previewImageDragStartX = 0;
-let previewImageDragStartY = 0;
-let previewImageDragOriginX = 0;
-let previewImageDragOriginY = 0;
 
 const normalizedExtension = computed(() => props.entry?.extension?.toLowerCase() ?? "");
 
@@ -102,15 +93,20 @@ const canEditPreview = computed(() => {
   return props.editableExtensions.includes(normalizedExtension.value);
 });
 
-const previewImageStyle = computed(() => ({
-  maxWidth: previewImageFit.value ? "100%" : "none",
-  maxHeight: previewImageFit.value ? "100%" : "none",
-  transform: previewImageFit.value ? "none" : `translate3d(${previewImageOffsetX.value}px, ${previewImageOffsetY.value}px, 0) scale(${previewImageZoom.value / 100})`,
-  transformOrigin: "center center"
-}));
-
-const previewZoomText = computed(() => previewImageFit.value ? "适应" : `${previewImageZoom.value}%`);
-const canPanPreviewImage = computed(() => previewKind.value === "image" && !previewImageFit.value);
+const {
+  fit: previewImageFit,
+  dragging: previewImageDragging,
+  imageStyle: previewImageStyle,
+  zoomText: previewZoomText,
+  canPan: canPanPreviewImage,
+  resetZoom: resetPreviewImageZoom,
+  releasePointer: releasePreviewImagePointer,
+  zoomImage: zoomPreviewImage,
+  handleWheel: handlePreviewImageWheel,
+  startPan: startPreviewImagePan,
+  movePan: movePreviewImagePan,
+  stopPan: stopPreviewImagePan
+} = useImageZoomPan({maxZoom: 300, canPan: () => previewKind.value === "image"});
 
 const previewMeta = computed(() => {
   const entry = props.entry;
@@ -143,21 +139,12 @@ const formatDate = (srcDate?: string) => {
   return date.toLocaleString("zh-CN", {hour12: false});
 }
 
-const resetPreviewImagePan = () => {
-  previewImageOffsetX.value = 0;
-  previewImageOffsetY.value = 0;
-  previewImageDragging.value = false;
-  previewImagePointerId = null;
-}
-
 const resetPreviewRuntime = () => {
   previewLoadVersion += 1;
   previewLoading.value = false;
   previewText.value = "";
   previewError.value = "";
-  previewImageFit.value = true;
-  previewImageZoom.value = 100;
-  resetPreviewImagePan();
+  resetPreviewImageZoom();
   previewCopied.value = false;
 }
 
@@ -205,50 +192,6 @@ const copyPreviewText = async () => {
   } catch {
     emit("notice", {kind: "error", title: "复制失败", message: "复制失败，请手动选择文本复制"});
   }
-}
-
-const zoomPreviewImage = (delta: number) => {
-  previewImageFit.value = false;
-  previewImageZoom.value = Math.min(300, Math.max(25, previewImageZoom.value + delta));
-}
-
-const handlePreviewImageWheel = (event: WheelEvent) => {
-  event.preventDefault();
-  zoomPreviewImage(event.deltaY < 0 ? 25 : -25);
-}
-
-const resetPreviewImageZoom = () => {
-  previewImageFit.value = true;
-  previewImageZoom.value = 100;
-  resetPreviewImagePan();
-}
-
-const startPreviewImagePan = (event: PointerEvent) => {
-  if (!canPanPreviewImage.value || event.button !== 0) return;
-  event.preventDefault();
-  const stage = event.currentTarget as HTMLElement;
-  previewImagePointerId = event.pointerId;
-  previewImageDragging.value = true;
-  previewImageDragStartX = event.clientX;
-  previewImageDragStartY = event.clientY;
-  previewImageDragOriginX = previewImageOffsetX.value;
-  previewImageDragOriginY = previewImageOffsetY.value;
-  stage.setPointerCapture?.(event.pointerId);
-}
-
-const movePreviewImagePan = (event: PointerEvent) => {
-  if (!previewImageDragging.value || previewImagePointerId !== event.pointerId) return;
-  event.preventDefault();
-  previewImageOffsetX.value = previewImageDragOriginX + event.clientX - previewImageDragStartX;
-  previewImageOffsetY.value = previewImageDragOriginY + event.clientY - previewImageDragStartY;
-}
-
-const stopPreviewImagePan = (event: PointerEvent) => {
-  if (previewImagePointerId !== event.pointerId) return;
-  const stage = event.currentTarget as HTMLElement;
-  stage.releasePointerCapture?.(event.pointerId);
-  previewImageDragging.value = false;
-  previewImagePointerId = null;
 }
 
 watch(() => [props.entry?.path, props.reloadKey], () => {
@@ -319,7 +262,7 @@ onBeforeUnmount(() => {
         @pointermove="movePreviewImagePan"
         @pointerup="stopPreviewImagePan"
         @pointercancel="stopPreviewImagePan"
-        @lostpointercapture="previewImageDragging = false"
+        @lostpointercapture="releasePreviewImagePointer"
         @wheel="handlePreviewImageWheel"
         @dblclick="openImagePreview">
       <img :src="downloadUrl(entry.path)" :alt="entry.name" :style="previewImageStyle">
