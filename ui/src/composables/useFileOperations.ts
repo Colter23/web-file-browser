@@ -4,14 +4,13 @@ import type {ExplorerEntry} from "../components/explorer/types.ts";
 import type {ShellNoticeKind} from "../components/shell/types.ts";
 import {useFileClipboardOperations} from "./useFileClipboardOperations.ts";
 import {useFileOperationPanels} from "./useFileOperationPanels.ts";
+import {useFileTransferOperations} from "./useFileTransferOperations.ts";
 import {
   createArchiveTask,
   createDeleteTask,
   createEntry,
   createExtractTask,
-  downloadFile,
-  moveEntry,
-  uploadFiles
+  moveEntry
 } from "../network/api.ts";
 import {archiveFormatExtension, archiveStem, isExtractableArchiveEntry} from "../utils/file-entry.ts";
 import {joinPath, parentPath} from "../utils/file-path.ts";
@@ -119,14 +118,17 @@ export const useFileOperations = ({
     return isExtractableArchiveEntry(entry);
   }
 
-  const runOperation = async (operation: () => Promise<void>) => {
-    try {
-      await operation();
-      await refreshCurrent();
-    } catch (error) {
-      showError(error, "操作失败");
-    }
-  }
+  const {
+    downloadEntry,
+    uploadChanged,
+    uploadToCurrentFolder
+  } = useFileTransferOperations({
+    currentFolder,
+    refreshCurrent,
+    showNotice,
+    showError,
+    setTaskMessage
+  });
 
   const showProperties = async (entries = selectedEntries()) => {
     if (!entries.length) {
@@ -217,21 +219,7 @@ export const useFileOperations = ({
   }
 
   const downloadSelected = async (entry = singleSelectedEntry()) => {
-    if (!entry || entry.type !== "file") {
-      showNotice("请选择一个文件", "warning");
-      return;
-    }
-    try {
-      const blob = await downloadFile(entry.path);
-      const url = window.URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = entry.name;
-      anchor.click();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      showError(error, "下载失败", "下载失败");
-    }
+    await downloadEntry(entry);
   }
 
   const archiveSelected = (entry = selectedEntry()) => {
@@ -303,23 +291,6 @@ export const useFileOperations = ({
       operationPanel.value.submitting = false;
       showError(error, "操作失败");
     }
-  }
-
-  const uploadChanged = async (event: Event) => {
-    const input = event.target as HTMLInputElement;
-    if (!input.files?.length) return;
-    const files = Array.from(input.files);
-    await uploadToCurrentFolder(files);
-    input.value = "";
-  }
-
-  const uploadToCurrentFolder = async (files: FileList | File[]) => {
-    const fileList = Array.from(files);
-    if (!fileList.length) return;
-    await runOperation(async () => {
-      await uploadFiles(currentFolder(), fileList);
-      setTaskMessage(`已上传 ${fileList.length} 个文件`);
-    });
   }
 
   return {
