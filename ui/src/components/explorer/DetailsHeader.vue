@@ -56,7 +56,10 @@ const resizeTitle = (label: string) => `拖拽调整${label}列宽，双击自�
 @reference "tailwindcss";
 
 .details-header {
-  @apply sticky top-0 z-10 grid h-9 items-center border-b border-slate-200 bg-white px-3 text-sm text-slate-600;
+  @apply sticky top-0 z-10 grid h-9 items-center border-b px-3 text-sm;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
+  color: var(--app-text-subtle);
   grid-template-columns: var(--details-name-width) var(--details-modified-width) var(--details-type-width) var(--details-size-width);
   width: calc(var(--details-grid-width) + 1.5rem);
   min-width: calc(var(--details-grid-width) + 1.5rem);
@@ -67,7 +70,8 @@ const resizeTitle = (label: string) => `拖拽调整${label}列宽，双击自�
 }
 
 .sort-button {
-  @apply relative flex h-full min-w-0 items-center justify-between gap-1 truncate px-2 text-left text-sm text-slate-600 disabled:pointer-events-none;
+  @apply relative flex h-full min-w-0 items-center justify-between gap-1 truncate px-2 text-left text-sm disabled:pointer-events-none;
+  color: var(--app-text-subtle);
 }
 
 .sort-button:hover:not(:disabled) {
@@ -98,7 +102,8 @@ const resizeTitle = (label: string) => `拖拽调整${label}列宽，双击自�
 
 .column-resizer::after {
   content: "";
-  @apply absolute left-1.5 top-1/2 h-5 -translate-y-1/2 border-l border-slate-200;
+  @apply absolute left-1.5 top-1/2 h-5 -translate-y-1/2 border-l;
+  border-color: var(--app-border-soft);
 }
 
 .column-resizer:hover::after {

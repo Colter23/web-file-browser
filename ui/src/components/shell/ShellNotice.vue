@@ -38,7 +38,11 @@ const shellNoticeLabel = computed(() => ({
 @reference "tailwindcss";
 
 .shell-notice {
-  @apply absolute right-4 top-4 z-20 flex w-[min(24rem,calc(100%-2rem))] items-start gap-3 rounded-lg border bg-white/95 px-3 py-2 text-sm text-slate-700 shadow-xl backdrop-blur;
+  @apply absolute right-4 top-4 z-20 flex w-[min(24rem,calc(100%-2rem))] items-start gap-3 rounded-lg border px-3 py-2 text-sm backdrop-blur;
+  border-color: var(--app-border-soft);
+  background: color-mix(in srgb, var(--app-panel-solid) 95%, transparent);
+  color: var(--app-text-muted);
+  box-shadow: var(--app-menu-shadow);
 }
 
 .shell-notice-mark {
@@ -52,15 +56,23 @@ const shellNoticeLabel = computed(() => ({
 }
 
 .shell-notice-body strong {
-  @apply truncate text-sm font-semibold text-slate-900;
+  @apply truncate text-sm font-semibold;
+  color: var(--app-text);
 }
 
 .shell-notice-body span {
-  @apply break-words text-xs leading-5 text-slate-600;
+  @apply break-words text-xs leading-5;
+  color: var(--app-text-muted);
 }
 
 .shell-notice-close {
-  @apply -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700;
+  @apply -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md;
+  color: var(--app-text-subtle);
+}
+
+.shell-notice-close:hover {
+  background: var(--app-control-hover);
+  color: var(--app-text-muted);
 }
 
 .shell-notice.success {

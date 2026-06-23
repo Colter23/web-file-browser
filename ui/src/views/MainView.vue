@@ -761,7 +761,9 @@ const signOut = async () => {
 @reference "tailwindcss";
 
 .main-shell {
-  @apply flex h-screen flex-col overflow-hidden bg-[#eef5fb] p-3 text-slate-900;
+  @apply flex h-screen flex-col overflow-hidden p-3;
+  background: var(--app-bg);
+  color: var(--app-text);
 }
 
 .top-strip {
@@ -773,12 +775,25 @@ const signOut = async () => {
 }
 
 .square-button {
-  @apply inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white bg-white/70 shadow-sm backdrop-blur hover:bg-white;
+  @apply inline-flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm backdrop-blur;
+  border-color: color-mix(in srgb, var(--app-border) 45%, transparent);
+  background: var(--app-control);
   color: var(--app-accent, #2563eb);
 }
 
+.square-button:hover {
+  background: var(--app-control-hover);
+}
+
 .task-top-button {
-  @apply inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-white bg-white/70 px-3 text-sm text-slate-700 shadow-sm backdrop-blur hover:bg-white;
+  @apply inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 text-sm shadow-sm backdrop-blur;
+  border-color: color-mix(in srgb, var(--app-border) 45%, transparent);
+  background: var(--app-control);
+  color: var(--app-text-muted);
+}
+
+.task-top-button:hover {
+  background: var(--app-control-hover);
 }
 
 .task-top-button.active {
@@ -788,12 +803,21 @@ const signOut = async () => {
 }
 
 .plain-button {
-  @apply h-10 rounded-lg border border-white bg-white/70 px-3 text-sm shadow-sm hover:bg-white;
+  @apply h-10 rounded-lg border px-3 text-sm shadow-sm;
+  border-color: color-mix(in srgb, var(--app-border) 45%, transparent);
+  background: var(--app-control);
+  color: var(--app-text-muted);
+}
+
+.plain-button:hover {
+  background: var(--app-control-hover);
 }
 
 .workspace {
-  @apply mt-3 flex min-h-0 grow flex-col overflow-hidden rounded-xl border border-[#d8e3ee] bg-white/90 shadow-sm backdrop-blur;
+  @apply mt-3 flex min-h-0 grow flex-col overflow-hidden rounded-xl border shadow-sm backdrop-blur;
   --sidebar-width: 17rem;
+  border-color: var(--app-border);
+  background: var(--app-panel);
 }
 
 .workspace-body {
@@ -806,12 +830,14 @@ const signOut = async () => {
 }
 
 .sidebar-resizer {
-  @apply relative z-20 h-full cursor-col-resize touch-none bg-[#f6f9fd] outline-none;
+  @apply relative z-20 h-full cursor-col-resize touch-none outline-none;
+  background: var(--app-bg-muted);
 }
 
 .sidebar-resizer::after {
   content: "";
-  @apply absolute top-2 bottom-2 left-1/2 w-px -translate-x-1/2 rounded-full bg-[#dbe6f1];
+  @apply absolute top-2 bottom-2 left-1/2 w-px -translate-x-1/2 rounded-full;
+  background: var(--app-divider);
 }
 
 .sidebar-resizer:hover::after,
@@ -821,7 +847,8 @@ const signOut = async () => {
 }
 
 .content-pane {
-  @apply relative flex min-h-0 flex-col overflow-hidden bg-white;
+  @apply relative flex min-h-0 flex-col overflow-hidden;
+  background: var(--app-panel-solid);
 }
 
 .browser-area {
@@ -846,7 +873,9 @@ const signOut = async () => {
 }
 
 .preview-pane {
-  @apply relative flex min-h-0 flex-col border-l border-slate-200 bg-white;
+  @apply relative flex min-h-0 flex-col border-l;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
 }
 
 .preview-resizer {

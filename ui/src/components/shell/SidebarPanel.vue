@@ -19,6 +19,7 @@ defineProps<{
 @reference "tailwindcss";
 
 .sidebar {
-  @apply flex min-h-0 flex-col overflow-hidden bg-[#f8fbff] px-2 py-2;
+  @apply flex min-h-0 flex-col overflow-hidden px-2 py-2;
+  background: var(--app-panel-muted);
 }
 </style>

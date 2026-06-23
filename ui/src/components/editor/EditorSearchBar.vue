@@ -90,7 +90,9 @@ const updateReplaceText = (event: Event) => {
 @reference "tailwindcss";
 
 .search-bar {
-  @apply relative z-20 flex shrink-0 items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm;
+  @apply relative z-20 flex shrink-0 items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-xs shadow-sm;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
 }
 
 .search-fields {
@@ -98,7 +100,14 @@ const updateReplaceText = (event: Event) => {
 }
 
 .search-input {
-  @apply h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none placeholder:text-slate-400;
+  @apply h-8 min-w-0 flex-1 rounded-md border px-2 text-sm outline-none;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text);
+}
+
+.search-input::placeholder {
+  color: var(--app-text-disabled);
 }
 
 .search-input:focus {
@@ -107,15 +116,23 @@ const updateReplaceText = (event: Event) => {
 }
 
 .replace-input {
-  @apply border-slate-300;
+  border-color: var(--app-border);
 }
 
 .search-actions {
-  @apply flex shrink-0 items-center gap-1 text-slate-600;
+  @apply flex shrink-0 items-center gap-1;
+  color: var(--app-text-muted);
 }
 
 .search-actions button {
-  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white;
+  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
+}
+
+.search-actions button:disabled {
+  background: var(--app-control-solid);
 }
 
 .search-actions button:hover:not(:disabled) {

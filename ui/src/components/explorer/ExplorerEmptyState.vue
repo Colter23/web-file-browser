@@ -26,15 +26,18 @@ const emit = defineEmits<{
 @reference "tailwindcss";
 
 .explorer-empty {
-  @apply flex h-48 flex-col items-center justify-center gap-1 text-center text-sm text-slate-500;
+  @apply flex h-48 flex-col items-center justify-center gap-1 text-center text-sm;
+  color: var(--app-text-subtle);
 }
 
 .explorer-empty small {
-  @apply max-w-md px-4 text-xs leading-5 text-slate-400;
+  @apply max-w-md px-4 text-xs leading-5;
+  color: var(--app-text-subtle);
 }
 
 .empty-action {
-  @apply mt-2 h-8 rounded-md border bg-white px-3 text-xs font-medium shadow-sm;
+  @apply mt-2 h-8 rounded-md border px-3 text-xs font-medium shadow-sm;
+  background: var(--app-control-solid);
   border-color: var(--app-accent-border, #bfdbfe);
   color: var(--app-accent, #2563eb);
 }

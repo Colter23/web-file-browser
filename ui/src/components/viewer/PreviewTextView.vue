@@ -102,11 +102,14 @@ onBeforeUnmount(resetPreviewRuntime);
 @reference "tailwindcss";
 
 .preview-body {
-  @apply min-h-0 grow overflow-auto text-sm text-slate-700;
+  @apply min-h-0 grow overflow-auto text-sm;
+  color: var(--app-text-muted);
 }
 
 .preview-body pre {
-  @apply min-h-full whitespace-pre-wrap break-words bg-white p-3 font-mono text-xs leading-5 text-slate-800;
+  @apply min-h-full whitespace-pre-wrap break-words p-3 font-mono text-xs leading-5;
+  background: var(--app-panel-solid);
+  color: var(--app-text);
 }
 
 .preview-body pre.nowrap {
@@ -114,7 +117,8 @@ onBeforeUnmount(resetPreviewRuntime);
 }
 
 .preview-placeholder {
-  @apply flex h-full min-h-48 flex-col items-center justify-center gap-3 text-center text-slate-500;
+  @apply flex h-full min-h-48 flex-col items-center justify-center gap-3 text-center;
+  color: var(--app-text-subtle);
 }
 
 .preview-placeholder.error {

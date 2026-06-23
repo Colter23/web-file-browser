@@ -26,7 +26,10 @@ defineProps<{
 @reference "tailwindcss";
 
 .editor-infobar {
-  @apply relative z-20 flex h-9 shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-3 text-xs text-slate-500 backdrop-blur;
+  @apply relative z-20 flex h-9 shrink-0 items-center justify-between gap-3 border-b px-3 text-xs backdrop-blur;
+  border-color: var(--app-border-soft);
+  background: color-mix(in srgb, var(--app-panel-muted) 82%, transparent);
+  color: var(--app-text-subtle);
 }
 
 .editor-info-left,
@@ -40,7 +43,9 @@ defineProps<{
 }
 
 .status-pill {
-  @apply shrink-0 rounded bg-slate-100 px-2 py-0.5 text-slate-600;
+  @apply shrink-0 rounded px-2 py-0.5;
+  background: var(--app-control);
+  color: var(--app-text-muted);
 }
 
 .status-pill.dirty {
@@ -53,6 +58,7 @@ defineProps<{
 }
 
 .status-pill.conflict {
-  @apply bg-red-50 text-red-600;
+  @apply text-red-600;
+  background: var(--app-danger-soft);
 }
 </style>

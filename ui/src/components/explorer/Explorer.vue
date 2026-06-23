@@ -710,11 +710,13 @@ defineExpose({
 @reference "tailwindcss";
 
 .explorer-shell {
-  @apply relative flex h-full min-h-0 flex-col overflow-hidden bg-white;
+  @apply relative flex h-full min-h-0 flex-col overflow-hidden;
+  background: var(--app-panel-solid);
 }
 
 .explorer-viewport {
-  @apply relative grow overflow-auto outline-none select-none bg-white;
+  @apply relative grow overflow-auto outline-none select-none;
+  background: var(--app-panel-solid);
 }
 
 .explorer-viewport:focus-visible {
@@ -771,7 +773,15 @@ defineExpose({
 }
 
 .load-more-button {
-  @apply h-8 rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-600 shadow-sm disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400;
+  @apply h-8 rounded-md border px-4 text-sm shadow-sm disabled:cursor-not-allowed;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-subtle);
+}
+
+.load-more-button:disabled {
+  background: var(--app-panel-muted);
+  color: var(--app-text-disabled);
 }
 
 .load-more-button:hover:not(:disabled) {
@@ -787,7 +797,8 @@ defineExpose({
 }
 
 .drag-hint {
-  @apply pointer-events-none sticky bottom-3 z-30 mx-auto mt-auto flex w-fit items-center rounded-md border bg-white px-3 py-1.5 text-xs font-medium shadow-lg;
+  @apply pointer-events-none sticky bottom-3 z-30 mx-auto mt-auto flex w-fit items-center rounded-md border px-3 py-1.5 text-xs font-medium shadow-lg;
+  background: var(--app-panel-solid);
   border-color: var(--app-accent-border, #bfdbfe);
   color: var(--app-accent, #2563eb);
 }

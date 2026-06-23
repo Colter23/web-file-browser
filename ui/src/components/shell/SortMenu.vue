@@ -180,7 +180,10 @@ onBeforeUnmount(() => {
 }
 
 .sort-button {
-  @apply inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700;
+  @apply inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border px-3 text-sm;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
 }
 
 .sort-button:hover {
@@ -195,23 +198,30 @@ onBeforeUnmount(() => {
 }
 
 .sort-caret {
-  @apply text-[0.65rem] text-slate-500;
+  @apply text-[0.65rem];
+  color: var(--app-text-subtle);
 }
 
 .sort-menu-panel {
-  @apply absolute right-0 top-[calc(100%+0.35rem)] z-50 w-72 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-xl;
+  @apply absolute right-0 top-[calc(100%+0.35rem)] z-50 w-72 overflow-hidden rounded-md border py-1;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
+  box-shadow: var(--app-menu-shadow);
 }
 
 .menu-group-title {
-  @apply px-3 py-1 text-[0.68rem] font-medium text-slate-400;
+  @apply px-3 py-1 text-[0.68rem] font-medium;
+  color: var(--app-text-subtle);
 }
 
 .menu-separator {
-  @apply my-1 h-px bg-slate-100;
+  @apply my-1 h-px;
+  background: var(--app-border-soft);
 }
 
 .sort-menu-item {
-  @apply grid w-full grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-3 px-3 py-2 text-left text-sm text-slate-700;
+  @apply grid w-full grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-3 px-3 py-2 text-left text-sm;
+  color: var(--app-text-muted);
 }
 
 .sort-menu-item:hover {
@@ -244,7 +254,8 @@ onBeforeUnmount(() => {
 }
 
 .sort-menu-copy small {
-  @apply truncate text-xs text-slate-500;
+  @apply truncate text-xs;
+  color: var(--app-text-subtle);
 }
 
 .sort-menu-item.active .sort-menu-copy small {

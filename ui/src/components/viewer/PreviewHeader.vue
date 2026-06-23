@@ -39,7 +39,9 @@ const emit = defineEmits<{
 @reference "tailwindcss";
 
 .preview-header {
-  @apply flex min-h-12 shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-3 text-sm font-medium;
+  @apply flex min-h-12 shrink-0 items-center justify-between gap-2 border-b px-3 text-sm font-medium;
+  border-color: var(--app-border-soft);
+  color: var(--app-text);
 }
 
 .preview-title-block {
@@ -51,7 +53,8 @@ const emit = defineEmits<{
 }
 
 .preview-subtitle {
-  @apply text-xs font-normal text-slate-500;
+  @apply text-xs font-normal;
+  color: var(--app-text-subtle);
 }
 
 .preview-actions {
@@ -59,7 +62,10 @@ const emit = defineEmits<{
 }
 
 .preview-header button {
-  @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 disabled:cursor-not-allowed disabled:opacity-40;
+  @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-40;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
 }
 
 .preview-header button:hover:not(:disabled) {

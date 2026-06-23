@@ -210,7 +210,10 @@ onBeforeUnmount(() => {
 }
 
 .view-button {
-  @apply inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700;
+  @apply inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border px-3 text-sm;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
 }
 
 .view-button:hover {
@@ -225,15 +228,20 @@ onBeforeUnmount(() => {
 }
 
 .view-caret {
-  @apply text-[0.65rem] text-slate-500;
+  @apply text-[0.65rem];
+  color: var(--app-text-subtle);
 }
 
 .view-menu-panel {
-  @apply absolute right-0 top-[calc(100%+0.35rem)] z-50 w-72 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-xl;
+  @apply absolute right-0 top-[calc(100%+0.35rem)] z-50 w-72 overflow-hidden rounded-md border py-1;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
+  box-shadow: var(--app-menu-shadow);
 }
 
 .view-menu-item {
-  @apply grid w-full grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left text-sm text-slate-700;
+  @apply grid w-full grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left text-sm;
+  color: var(--app-text-muted);
 }
 
 .view-menu-item:hover {
@@ -261,7 +269,8 @@ onBeforeUnmount(() => {
 }
 
 .view-menu-copy small {
-  @apply truncate text-xs text-slate-500;
+  @apply truncate text-xs;
+  color: var(--app-text-subtle);
 }
 
 .view-menu-item.active .view-menu-copy small {
@@ -269,6 +278,9 @@ onBeforeUnmount(() => {
 }
 
 .view-menu-item kbd {
-  @apply rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[0.68rem] font-normal text-slate-500;
+  @apply rounded border px-1.5 py-0.5 text-[0.68rem] font-normal;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-muted);
+  color: var(--app-text-subtle);
 }
 </style>

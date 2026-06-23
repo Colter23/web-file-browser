@@ -70,27 +70,36 @@ const submit = async () => {
 <style scoped lang="postcss">
 @reference "tailwindcss";
 .login-page {
-  @apply min-h-screen flex items-center justify-center bg-slate-100 px-4
+  @apply min-h-screen flex items-center justify-center px-4;
+  background: var(--app-bg);
 }
 
 .login-panel {
-  @apply w-full max-w-sm bg-white border border-slate-200 rounded-lg shadow-sm p-6 flex flex-col gap-5
+  @apply w-full max-w-sm border rounded-lg shadow-sm p-6 flex flex-col gap-5;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
 }
 
 h1 {
-  @apply text-2xl font-semibold text-slate-900
+  @apply text-2xl font-semibold;
+  color: var(--app-text);
 }
 
 p {
-  @apply mt-1 text-sm text-slate-500
+  @apply mt-1 text-sm;
+  color: var(--app-text-subtle);
 }
 
 .field {
-  @apply flex flex-col gap-2 text-sm text-slate-700
+  @apply flex flex-col gap-2 text-sm;
+  color: var(--app-text-muted);
 }
 
 .field input {
-  @apply h-10 rounded-md border border-slate-300 px-3 outline-none
+  @apply h-10 rounded-md border px-3 outline-none;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text);
 }
 
 .field input:focus {
@@ -99,12 +108,19 @@ p {
 }
 
 .message {
-  @apply rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700
+  @apply rounded-md border px-3 py-2 text-sm text-red-700;
+  border-color: color-mix(in srgb, #ef4444 36%, var(--app-border-soft));
+  background: var(--app-danger-soft);
 }
 
 .primary-button {
-  @apply h-10 rounded-md text-white font-medium disabled:bg-slate-300 disabled:cursor-not-allowed;
+  @apply h-10 rounded-md text-white font-medium disabled:cursor-not-allowed;
   background: var(--app-accent, #2563eb);
+}
+
+.primary-button:disabled {
+  background: var(--app-control);
+  color: var(--app-text-disabled);
 }
 
 .primary-button:hover:not(:disabled) {

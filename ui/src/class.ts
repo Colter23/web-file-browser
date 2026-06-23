@@ -34,6 +34,7 @@ export type ExplorerIconSize = "small" | "medium" | "large";
 export type AppIconStyle = "lucide" | "classic";
 export type FileIconPalette = "category" | "accent";
 export type AppAccentColor = "blue" | "teal" | "violet" | "rose" | "slate";
+export type AppColorMode = "system" | "light" | "dark";
 
 export interface ExplorerTab {
     id: string;

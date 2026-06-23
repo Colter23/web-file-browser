@@ -36,7 +36,10 @@ const emit = defineEmits<{
 @reference "tailwindcss";
 
 .editor-statusbar {
-  @apply relative z-20 flex h-7 shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white/90 px-3 text-xs text-slate-500 backdrop-blur;
+  @apply relative z-20 flex h-7 shrink-0 items-center justify-between gap-3 border-t px-3 text-xs backdrop-blur;
+  border-color: var(--app-border-soft);
+  background: color-mix(in srgb, var(--app-panel-solid) 90%, transparent);
+  color: var(--app-text-subtle);
 }
 
 .status-left,
@@ -54,10 +57,16 @@ const emit = defineEmits<{
 }
 
 .editor-message.conflict {
-  @apply bg-red-50 text-red-600;
+  @apply text-red-600;
+  background: var(--app-danger-soft);
 }
 
 .status-action {
-  @apply h-5 shrink-0 rounded border border-red-200 bg-white px-2 text-xs text-red-600 hover:bg-red-50;
+  @apply h-5 shrink-0 rounded border border-red-200 px-2 text-xs text-red-600;
+  background: var(--app-control-solid);
+}
+
+.status-action:hover {
+  background: var(--app-danger-soft);
 }
 </style>

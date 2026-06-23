@@ -93,19 +93,23 @@ defineExpose({
 @reference "tailwindcss";
 
 .properties-list {
-  @apply flex max-h-72 flex-col overflow-auto rounded-md border border-slate-100 bg-slate-50;
+  @apply flex max-h-72 flex-col overflow-auto rounded-md border;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-muted);
 }
 
 .properties-list div {
-  @apply grid min-h-9 grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 px-3 py-2 text-xs last:border-b-0;
+  @apply grid min-h-9 grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-3 border-b px-3 py-2 text-xs last:border-b-0;
+  border-color: var(--app-border-soft);
 }
 
 .properties-list span {
-  @apply text-slate-500;
+  color: var(--app-text-subtle);
 }
 
 .properties-list strong {
-  @apply min-w-0 truncate font-medium text-slate-800;
+  @apply min-w-0 truncate font-medium;
+  color: var(--app-text);
 }
 
 .operation-primary {

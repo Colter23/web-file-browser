@@ -113,7 +113,8 @@ const updateRenameDraft = (event: Event) => {
 @reference "tailwindcss";
 
 .entry-item {
-  @apply relative min-w-0 cursor-default rounded-md border border-transparent text-sm text-slate-800 outline-none;
+  @apply relative min-w-0 cursor-default rounded-md border border-transparent text-sm outline-none;
+  color: var(--app-text);
 }
 
 .entry-item:hover {
@@ -121,9 +122,9 @@ const updateRenameDraft = (event: Event) => {
 }
 
 .entry-item.selected {
-  @apply text-slate-950;
   border-color: var(--app-accent-border, #7aa7f8);
   background: var(--app-accent-selected, #cfe4ff);
+  color: var(--app-text);
 }
 
 .entry-item.focused {
@@ -188,7 +189,8 @@ const updateRenameDraft = (event: Event) => {
 }
 
 .entry-visual {
-  @apply inline-flex shrink-0 items-center justify-center overflow-hidden text-slate-700;
+  @apply inline-flex shrink-0 items-center justify-center overflow-hidden;
+  color: var(--app-text-muted);
 }
 
 .entry-item.view-details .entry-visual,
@@ -197,7 +199,8 @@ const updateRenameDraft = (event: Event) => {
 }
 
 .entry-item.view-icons .entry-visual {
-  @apply h-16 w-20 rounded border border-transparent bg-white text-[3rem];
+  @apply h-16 w-20 rounded border border-transparent text-[3rem];
+  background: var(--app-panel-solid);
 }
 
 .entry-item.view-icons.explorer-size-small .entry-visual {
@@ -209,12 +212,16 @@ const updateRenameDraft = (event: Event) => {
 }
 
 .entry-item.view-tiles .entry-visual {
-  @apply row-span-2 h-14 w-14 rounded border border-slate-200 bg-slate-50 text-[2rem];
+  @apply row-span-2 h-14 w-14 rounded border text-[2rem];
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-muted);
 }
 
 .entry-item.view-icons.image .entry-visual,
 .entry-item.view-tiles.image .entry-visual {
-  @apply border-slate-200 bg-slate-50 shadow-sm;
+  @apply shadow-sm;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-muted);
 }
 
 .entry-visual img {
@@ -243,7 +250,9 @@ const updateRenameDraft = (event: Event) => {
 }
 
 .entry-rename-input {
-  @apply h-6 min-w-0 rounded border bg-white px-1 text-sm text-slate-900 outline-none;
+  @apply h-6 min-w-0 rounded border px-1 text-sm outline-none;
+  background: var(--app-control-solid);
+  color: var(--app-text);
   border-color: var(--app-accent, #2563eb);
   box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
 }
@@ -267,7 +276,8 @@ const updateRenameDraft = (event: Event) => {
 .entry-type,
 .entry-size,
 .entry-tile-meta {
-  @apply truncate text-xs text-slate-500;
+  @apply truncate text-xs;
+  color: var(--app-text-subtle);
 }
 
 .entry-date,
@@ -285,7 +295,7 @@ const updateRenameDraft = (event: Event) => {
 .entry-item.selected .entry-type,
 .entry-item.selected .entry-size,
 .entry-item.selected .entry-tile-meta {
-  @apply text-slate-700;
+  color: var(--app-text-muted);
 }
 
 .entry-tile-meta {

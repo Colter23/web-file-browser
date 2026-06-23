@@ -56,15 +56,25 @@ const updateLineText = (event: Event) => {
 @reference "tailwindcss";
 
 .goto-bar {
-  @apply relative z-20 flex shrink-0 items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm;
+  @apply relative z-20 flex shrink-0 items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-xs shadow-sm;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
 }
 
 .goto-fields {
   @apply flex min-w-0 grow items-center gap-2;
+  color: var(--app-text-muted);
 }
 
 .goto-input {
-  @apply h-8 min-w-0 max-w-28 flex-1 rounded-md border border-slate-200 bg-white px-2 text-right text-sm tabular-nums text-slate-900 outline-none placeholder:text-slate-400;
+  @apply h-8 min-w-0 max-w-28 flex-1 rounded-md border px-2 text-right text-sm tabular-nums outline-none;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text);
+}
+
+.goto-input::placeholder {
+  color: var(--app-text-disabled);
 }
 
 .goto-input:focus {
@@ -73,11 +83,19 @@ const updateLineText = (event: Event) => {
 }
 
 .goto-actions {
-  @apply flex shrink-0 items-center gap-1 text-slate-600;
+  @apply flex shrink-0 items-center gap-1;
+  color: var(--app-text-muted);
 }
 
 .goto-actions button {
-  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white;
+  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
+}
+
+.goto-actions button:disabled {
+  background: var(--app-control-solid);
 }
 
 .goto-actions button:hover:not(:disabled) {
@@ -93,6 +111,7 @@ const updateLineText = (event: Event) => {
 }
 
 .goto-range {
-  @apply shrink-0 text-slate-400;
+  @apply shrink-0;
+  color: var(--app-text-disabled);
 }
 </style>

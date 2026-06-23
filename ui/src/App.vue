@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import {onBeforeUnmount, watchEffect} from "vue";
-import {useAppearanceStore} from "./store/appearance.ts";
+import {computed, onBeforeUnmount, onMounted, watch, watchEffect} from "vue";
+import {resolveSystemColorMode, useAppearanceStore} from "./store/appearance.ts";
 
 const appearanceStore = useAppearanceStore();
+const colorSchemeQuery = typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-color-scheme: dark)")
+    : null;
+const resolvedColorMode = computed(() => appearanceStore.resolvedColorMode);
+
+const syncSystemColorMode = () => {
+  appearanceStore.setSystemColorMode(resolveSystemColorMode());
+}
 
 watchEffect(() => {
   Object.entries(appearanceStore.cssVars).forEach(([key, value]) => {
@@ -10,10 +18,23 @@ watchEffect(() => {
   });
 });
 
+watch(resolvedColorMode, mode => {
+  document.documentElement.dataset.appTheme = mode;
+  document.documentElement.style.colorScheme = mode;
+}, {immediate: true});
+
+onMounted(() => {
+  syncSystemColorMode();
+  colorSchemeQuery?.addEventListener("change", syncSystemColorMode);
+});
+
 onBeforeUnmount(() => {
   Object.keys(appearanceStore.cssVars).forEach(key => {
     document.documentElement.style.removeProperty(key);
   });
+  document.documentElement.removeAttribute("data-app-theme");
+  document.documentElement.style.removeProperty("color-scheme");
+  colorSchemeQuery?.removeEventListener("change", syncSystemColorMode);
 });
 </script>
 

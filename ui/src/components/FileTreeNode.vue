@@ -108,8 +108,9 @@ const handleToggle = (event: MouseEvent) => {
 
 .tree-node {
   --tree-depth: 0;
-  @apply flex h-7 w-full min-w-max items-center rounded-sm border border-transparent pr-2 text-left text-slate-700 outline-none;
+  @apply flex h-7 w-full min-w-max items-center rounded-sm border border-transparent pr-2 text-left outline-none;
   padding-left: calc(var(--tree-depth) * 1rem + 0.125rem);
+  color: var(--app-text-muted);
 }
 
 .tree-node:hover {
@@ -123,13 +124,14 @@ const handleToggle = (event: MouseEvent) => {
 }
 
 .tree-node.active {
-  color: color-mix(in srgb, var(--app-accent, #2563eb) 62%, #0f172a);
+  color: color-mix(in srgb, var(--app-accent, #2563eb) 62%, var(--app-text));
   border-color: var(--app-accent-border, #bfdbfe);
   background: var(--app-accent-selected, #dceeff);
 }
 
 .tree-node.loading {
-  @apply cursor-wait text-slate-500;
+  @apply cursor-wait;
+  color: var(--app-text-subtle);
 }
 
 .node-spacer {
@@ -137,7 +139,13 @@ const handleToggle = (event: MouseEvent) => {
 }
 
 .fold-button {
-  @apply mr-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-slate-500 transition hover:bg-white/80 hover:text-slate-800 disabled:pointer-events-none disabled:opacity-40;
+  @apply mr-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm transition disabled:pointer-events-none disabled:opacity-40;
+  color: var(--app-text-subtle);
+}
+
+.fold-button:hover {
+  background: var(--app-control-hover);
+  color: var(--app-text);
 }
 
 .fold-button :deep(.icon) {

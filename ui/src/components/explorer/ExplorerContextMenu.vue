@@ -135,11 +135,23 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
 @reference "tailwindcss";
 
 .context-menu {
-  @apply fixed z-50 w-44 rounded-md border border-slate-200 bg-white py-1 text-sm shadow-xl;
+  @apply fixed z-50 w-44 rounded-md border py-1 text-sm;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
+  box-shadow: var(--app-menu-shadow);
 }
 
 .context-menu button {
-  @apply block h-8 w-full px-3 text-left text-slate-700 disabled:text-slate-300 disabled:hover:bg-white;
+  @apply block h-8 w-full px-3 text-left;
+  color: var(--app-text-muted);
+}
+
+.context-menu button:disabled {
+  color: var(--app-text-disabled);
+}
+
+.context-menu button:disabled:hover {
+  background: var(--app-panel-solid);
 }
 
 .context-menu button:hover:not(:disabled) {
@@ -154,10 +166,15 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
 }
 
 .context-separator {
-  @apply my-1 border-t border-slate-100;
+  @apply my-1 border-t;
+  border-color: var(--app-border-soft);
 }
 
 .context-menu .danger {
-  @apply text-red-600 hover:bg-red-50;
+  @apply text-red-600;
+}
+
+.context-menu .danger:hover:not(:disabled) {
+  background: var(--app-danger-soft);
 }
 </style>

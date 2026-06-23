@@ -129,7 +129,9 @@ const emit = defineEmits<{
 @reference "tailwindcss";
 
 .command-bar {
-  @apply relative z-30 flex h-11 shrink-0 items-center gap-2 overflow-visible border-b border-[#e3ebf5] bg-[#fbfdff] px-2.5;
+  @apply relative z-30 flex h-11 shrink-0 items-center gap-2 overflow-visible border-b px-2.5;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
 }
 
 .command-actions {
@@ -142,11 +144,18 @@ const emit = defineEmits<{
 }
 
 .command-button {
-  @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-sm text-slate-700 shadow-none hover:border-slate-200 hover:bg-white;
+  @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-sm shadow-none;
+  color: var(--app-text-muted);
+}
+
+.command-button:hover {
+  border-color: var(--app-border-soft);
+  background: var(--app-control-hover);
 }
 
 .command-button.active {
-  @apply border-slate-200 bg-white;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
 }
 
 .command-button.strong {
@@ -159,11 +168,16 @@ const emit = defineEmits<{
 }
 
 .command-button:disabled {
-  @apply cursor-not-allowed text-slate-300 hover:border-transparent hover:bg-transparent;
+  @apply cursor-not-allowed hover:border-transparent hover:bg-transparent;
+  color: var(--app-text-disabled);
 }
 
 .command-button.danger {
-  @apply text-red-600 hover:bg-red-50;
+  @apply text-red-600;
+}
+
+.command-button.danger:hover {
+  background: var(--app-danger-soft);
 }
 
 .command-button.danger:disabled {
@@ -171,11 +185,13 @@ const emit = defineEmits<{
 }
 
 .command-separator {
-  @apply mx-1 h-5 w-px shrink-0 bg-[#dbe6f1];
+  @apply mx-1 h-5 w-px shrink-0;
+  background: var(--app-divider);
 }
 
 .command-view-tools {
-  @apply flex shrink-0 items-center gap-1.5 border-l border-[#dbe6f1] pl-2.5;
+  @apply flex shrink-0 items-center gap-1.5 border-l pl-2.5;
+  border-color: var(--app-divider);
 }
 
 .command-view-tools :deep(.sort-button),
@@ -184,7 +200,10 @@ const emit = defineEmits<{
 }
 
 .view-button {
-  @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700;
+  @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border px-2.5 text-sm;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
 }
 
 .view-button:hover:not(:disabled) {
@@ -198,7 +217,12 @@ const emit = defineEmits<{
 }
 
 .view-button:disabled {
-  @apply cursor-not-allowed text-slate-300 hover:bg-white;
+  @apply cursor-not-allowed;
+  color: var(--app-text-disabled);
+}
+
+.view-button:disabled:hover {
+  background: var(--app-control-solid);
 }
 
 </style>

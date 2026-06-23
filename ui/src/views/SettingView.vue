@@ -5,6 +5,7 @@ import {PathMapping, RuntimeSettings} from "../class";
 import {changePassword, createMapping, deleteMapping, getMappings, getSettings, updateMapping} from "../network/api";
 import {
   accentColorOptions,
+  colorModeOptions,
   fileIconPaletteOptions,
   iconStyleOptions,
   useAppearanceStore
@@ -192,6 +193,19 @@ const savePassword = async () => {
         <h2>外观偏好</h2>
         <div class="preference-grid">
           <div class="preference-row">
+            <span>亮暗模式</span>
+            <div class="segmented-control" role="group" aria-label="亮暗模式">
+              <button
+                  v-for="option in colorModeOptions"
+                  :key="option.value"
+                  type="button"
+                  :class="{active: appearanceStore.colorMode === option.value}"
+                  @click="appearanceStore.setColorMode(option.value)">
+                {{ option.label }}
+              </button>
+            </div>
+          </div>
+          <div class="preference-row">
             <span>界面图标</span>
             <div class="segmented-control" role="group" aria-label="界面图标">
               <button
@@ -279,11 +293,15 @@ const savePassword = async () => {
 <style scoped lang="postcss">
 @reference "tailwindcss";
 .settings-page {
-  @apply min-h-screen bg-slate-100 text-slate-900
+  @apply min-h-screen;
+  background: var(--app-bg);
+  color: var(--app-text);
 }
 
 header {
-  @apply h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-between
+  @apply h-14 border-b px-4 flex items-center justify-between;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
 }
 
 h1 {
@@ -295,7 +313,9 @@ main {
 }
 
 .panel {
-  @apply bg-white border border-slate-200 rounded-lg p-4 flex flex-col gap-4
+  @apply border rounded-lg p-4 flex flex-col gap-4;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
 }
 
 h2 {
@@ -330,15 +350,23 @@ h2 {
 }
 
 .preference-row > span {
-  @apply text-sm font-medium text-slate-600;
+  @apply text-sm font-medium;
+  color: var(--app-text-subtle);
 }
 
 .segmented-control {
-  @apply inline-flex w-fit rounded-md border border-slate-200 bg-slate-100 p-0.5;
+  @apply inline-flex w-fit rounded-md border p-0.5;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-muted);
 }
 
 .segmented-control button {
-  @apply h-8 rounded px-3 text-sm font-medium text-slate-600 hover:bg-white;
+  @apply h-8 rounded px-3 text-sm font-medium;
+  color: var(--app-text-subtle);
+}
+
+.segmented-control button:hover {
+  background: var(--app-control-hover);
 }
 
 .segmented-control button.active {
@@ -351,7 +379,9 @@ h2 {
 }
 
 .color-swatch {
-  @apply h-7 w-7 rounded-full border-2 border-white shadow ring-1 ring-slate-300 transition;
+  @apply h-7 w-7 rounded-full border-2 shadow ring-1 transition;
+  border-color: var(--app-panel-solid);
+  --tw-ring-color: var(--app-border);
 }
 
 .color-swatch.active {
@@ -359,7 +389,10 @@ h2 {
 }
 
 input {
-  @apply h-9 min-w-0 rounded-md border border-slate-300 px-2 text-sm outline-none
+  @apply h-9 min-w-0 rounded-md border px-2 text-sm outline-none;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text);
 }
 
 input:focus {
@@ -368,7 +401,8 @@ input:focus {
 }
 
 .check-field {
-  @apply h-9 flex items-center gap-2 text-sm text-slate-700
+  @apply h-9 flex items-center gap-2 text-sm;
+  color: var(--app-text-muted);
 }
 
 .check-field input {
@@ -397,15 +431,28 @@ input:focus {
 
 .plain-button,
 .ghost-button {
-  @apply bg-slate-100 text-slate-700 hover:bg-slate-200
+  background: var(--app-panel-muted);
+  color: var(--app-text-muted);
+}
+
+.plain-button:hover,
+.ghost-button:hover {
+  background: var(--app-control-hover);
 }
 
 .danger-button {
-  @apply bg-red-50 text-red-700 hover:bg-red-100
+  @apply text-red-700;
+  background: var(--app-danger-soft);
+}
+
+.danger-button:hover {
+  background: color-mix(in srgb, #ef4444 16%, var(--app-panel-solid));
 }
 
 .empty {
-  @apply rounded-md border border-dashed border-slate-300 px-3 py-6 text-center text-sm text-slate-500
+  @apply rounded-md border border-dashed px-3 py-6 text-center text-sm;
+  border-color: var(--app-border-soft);
+  color: var(--app-text-subtle);
 }
 
 dl {
@@ -418,7 +465,7 @@ dl div {
 }
 
 dt {
-  @apply text-slate-500
+  color: var(--app-text-subtle);
 }
 
 dd {
@@ -426,11 +473,15 @@ dd {
 }
 
 .message {
-  @apply rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700
+  @apply rounded-md border px-3 py-2 text-sm text-red-700;
+  border-color: color-mix(in srgb, #ef4444 36%, var(--app-border-soft));
+  background: var(--app-danger-soft);
 }
 
 .message.success {
-  @apply border-emerald-200 bg-emerald-50 text-emerald-700
+  @apply text-emerald-700;
+  border-color: color-mix(in srgb, #10b981 38%, var(--app-border-soft));
+  background: color-mix(in srgb, #10b981 14%, var(--app-panel-solid));
 }
 
 @media (max-width: 900px) {

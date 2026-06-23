@@ -249,11 +249,13 @@ watch([() => props.currentPath, () => props.data], () => {
 @reference "tailwindcss";
 
 .file-tree {
-  @apply flex h-full w-full flex-col overflow-auto bg-transparent py-1 pr-1 select-none text-sm text-slate-700;
+  @apply flex h-full w-full flex-col overflow-auto bg-transparent py-1 pr-1 select-none text-sm;
+  color: var(--app-text-muted);
 }
 
 .tree-empty {
-  @apply flex h-20 items-center justify-center rounded-lg text-xs text-slate-400;
+  @apply flex h-20 items-center justify-center rounded-lg text-xs;
+  color: var(--app-text-disabled);
 }
 
 .file-tree::-webkit-scrollbar {
@@ -262,7 +264,8 @@ watch([() => props.currentPath, () => props.data], () => {
 }
 
 .file-tree::-webkit-scrollbar-thumb {
-  @apply rounded-full bg-slate-300;
+  @apply rounded-full;
+  background: var(--app-border);
 }
 
 .file-tree::-webkit-scrollbar-track {

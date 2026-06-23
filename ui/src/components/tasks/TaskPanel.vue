@@ -199,7 +199,9 @@ watch(() => props.cancelConfirm.visible, async visible => {
 @reference "tailwindcss";
 
 .task-panel {
-  @apply flex max-h-72 shrink-0 flex-col gap-2 overflow-hidden border-b border-slate-200 bg-white px-3 py-2;
+  @apply flex max-h-72 shrink-0 flex-col gap-2 overflow-hidden border-b px-3 py-2;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
 }
 
 .task-panel-header {
@@ -207,11 +209,13 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-panel-title {
-  @apply text-sm font-semibold text-slate-900;
+  @apply text-sm font-semibold;
+  color: var(--app-text);
 }
 
 .task-panel-message {
-  @apply truncate text-xs text-slate-500;
+  @apply truncate text-xs;
+  color: var(--app-text-subtle);
 }
 
 .task-panel-badges {
@@ -228,11 +232,13 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-badge.queued {
-  @apply bg-slate-200 text-slate-700;
+  background: var(--app-panel-muted);
+  color: var(--app-text-muted);
 }
 
 .task-badge.failed {
-  @apply bg-red-100 text-red-700;
+  @apply text-red-700;
+  background: var(--app-danger-soft);
 }
 
 .task-panel-actions {
@@ -240,7 +246,10 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-icon-button {
-  @apply inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-50;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
 }
 
 .task-icon-button:hover:not(:disabled) {
@@ -248,7 +257,9 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-empty {
-  @apply flex h-16 items-center justify-center rounded border border-dashed border-slate-200 text-sm text-slate-500;
+  @apply flex h-16 items-center justify-center rounded border border-dashed text-sm;
+  border-color: var(--app-border-soft);
+  color: var(--app-text-subtle);
 }
 
 .task-list {
@@ -256,7 +267,10 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-cancel-confirm {
-  @apply flex shrink-0 items-center justify-between gap-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 outline-none;
+  @apply flex shrink-0 items-center justify-between gap-3 rounded border px-3 py-2 text-sm outline-none;
+  border-color: color-mix(in srgb, #f59e0b 42%, var(--app-border-soft));
+  background: color-mix(in srgb, #f59e0b 14%, var(--app-panel-solid));
+  color: color-mix(in srgb, #f59e0b 76%, var(--app-text));
 }
 
 .task-cancel-confirm:focus-visible {
@@ -273,7 +287,8 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-cancel-confirm-main span {
-  @apply text-xs text-amber-700;
+  @apply text-xs;
+  color: color-mix(in srgb, #f59e0b 70%, var(--app-text-muted));
 }
 
 .task-cancel-error {
@@ -290,7 +305,13 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-cancel-secondary {
-  @apply border-amber-200 bg-white text-amber-800 hover:bg-amber-100;
+  border-color: color-mix(in srgb, #f59e0b 42%, var(--app-border-soft));
+  background: var(--app-control-solid);
+  color: color-mix(in srgb, #f59e0b 78%, var(--app-text));
+}
+
+.task-cancel-secondary:hover {
+  background: color-mix(in srgb, #f59e0b 16%, var(--app-panel-solid));
 }
 
 .task-cancel-primary {
@@ -298,7 +319,9 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-row {
-  @apply grid min-h-16 grid-cols-[minmax(9rem,1.1fr)_minmax(10rem,1.2fr)_minmax(14rem,1.5fr)_4rem] items-center gap-x-3 gap-y-2 rounded border border-slate-100 bg-slate-50 px-3 py-2 text-sm;
+  @apply grid min-h-16 grid-cols-[minmax(9rem,1.1fr)_minmax(10rem,1.2fr)_minmax(14rem,1.5fr)_4rem] items-center gap-x-3 gap-y-2 rounded border px-3 py-2 text-sm;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-muted);
 }
 
 .task-row-main {
@@ -306,11 +329,13 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-kind {
-  @apply shrink-0 font-medium text-slate-900;
+  @apply shrink-0 font-medium;
+  color: var(--app-text);
 }
 
 .task-id {
-  @apply truncate text-xs text-slate-500;
+  @apply truncate text-xs;
+  color: var(--app-text-subtle);
 }
 
 .task-state {
@@ -318,7 +343,8 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-state.queued {
-  @apply bg-slate-200 text-slate-700;
+  background: var(--app-panel-solid);
+  color: var(--app-text-muted);
 }
 
 .task-state.running {
@@ -331,7 +357,8 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-state.failed {
-  @apply bg-red-100 text-red-700;
+  @apply text-red-700;
+  background: var(--app-danger-soft);
 }
 
 .task-state.cancelled {
@@ -343,7 +370,8 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-progress-track {
-  @apply h-2 min-w-0 grow overflow-hidden rounded bg-slate-200;
+  @apply h-2 min-w-0 grow overflow-hidden rounded;
+  background: var(--app-border-soft);
 }
 
 .task-progress-track span {
@@ -352,15 +380,18 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-progress-text {
-  @apply w-10 shrink-0 text-right text-xs tabular-nums text-slate-600;
+  @apply w-10 shrink-0 text-right text-xs tabular-nums;
+  color: var(--app-text-muted);
 }
 
 .task-current {
-  @apply truncate text-xs text-slate-500;
+  @apply truncate text-xs;
+  color: var(--app-text-subtle);
 }
 
 .task-meta {
-  @apply flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600;
+  @apply flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs;
+  color: var(--app-text-muted);
 }
 
 .task-errors {
@@ -368,7 +399,9 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-error-list {
-  @apply col-span-3 flex min-w-0 flex-col gap-1 rounded border border-red-100 bg-red-50 px-2 py-1 text-xs text-red-700;
+  @apply col-span-3 flex min-w-0 flex-col gap-1 rounded border px-2 py-1 text-xs text-red-700;
+  border-color: color-mix(in srgb, #ef4444 30%, var(--app-border-soft));
+  background: var(--app-danger-soft);
 }
 
 .task-error-list div {
@@ -376,6 +409,22 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-cancel {
-  @apply h-8 rounded border border-slate-200 bg-white px-2 text-sm text-slate-700 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-white;
+  @apply h-8 rounded border px-2 text-sm disabled:cursor-not-allowed;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
+}
+
+.task-cancel:hover:not(:disabled) {
+  background: var(--app-danger-soft);
+  color: #dc2626;
+}
+
+.task-cancel:disabled {
+  color: var(--app-text-disabled);
+}
+
+.task-cancel:disabled:hover {
+  background: var(--app-control-solid);
 }
 </style>

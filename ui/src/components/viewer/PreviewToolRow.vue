@@ -19,7 +19,10 @@ defineProps<{
 @reference "tailwindcss";
 
 .preview-tool-row {
-  @apply flex h-9 shrink-0 items-center gap-2 border-b border-slate-100 bg-white px-3 text-xs text-slate-500;
+  @apply flex h-9 shrink-0 items-center gap-2 border-b px-3 text-xs;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
+  color: var(--app-text-subtle);
 }
 
 .preview-tool-actions {
@@ -27,11 +30,16 @@ defineProps<{
 }
 
 :slotted(button) {
-  @apply inline-flex h-6 items-center gap-1 rounded border border-transparent px-2 text-slate-600 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:border-transparent disabled:hover:bg-transparent;
+  @apply inline-flex h-6 items-center gap-1 rounded border border-transparent px-2 disabled:cursor-not-allowed disabled:hover:border-transparent disabled:hover:bg-transparent;
+  color: var(--app-text-muted);
+}
+
+:slotted(button:disabled) {
+  color: var(--app-text-disabled);
 }
 
 :slotted(button:hover:not(:disabled)) {
-  @apply border-slate-200;
+  border-color: var(--app-border-soft);
   background: var(--app-accent-hover, #eff6ff);
 }
 

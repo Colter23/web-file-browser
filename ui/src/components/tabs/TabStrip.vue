@@ -158,7 +158,9 @@ const emit = defineEmits<{
 @reference "tailwindcss";
 
 .tab-strip {
-  @apply flex h-full min-w-0 grow items-center gap-2 overflow-hidden rounded-xl border border-[#d8e3ee] bg-white/80 p-1 shadow-sm backdrop-blur;
+  @apply flex h-full min-w-0 grow items-center gap-2 overflow-hidden rounded-xl border p-1 shadow-sm backdrop-blur;
+  border-color: var(--app-border);
+  background: var(--app-panel);
 }
 
 .tab-scroll {
@@ -171,7 +173,14 @@ const emit = defineEmits<{
 }
 
 .tab-button {
-  @apply relative inline-flex h-9 min-w-32 max-w-52 shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 shadow-sm hover:bg-slate-50;
+  @apply relative inline-flex h-9 min-w-32 max-w-52 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm shadow-sm;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text);
+}
+
+.tab-button:hover {
+  background: var(--app-control-hover);
 }
 
 .tab-button.active {
@@ -224,7 +233,10 @@ const emit = defineEmits<{
 }
 
 .tab-add {
-  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm;
+  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border shadow-sm;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
 }
 
 .tab-add:hover {
@@ -232,11 +244,23 @@ const emit = defineEmits<{
 }
 
 .tab-context-menu {
-  @apply fixed z-50 w-46 rounded-md border border-slate-200 bg-white py-1 text-sm shadow-xl;
+  @apply fixed z-50 w-46 rounded-md border py-1 text-sm;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
+  box-shadow: var(--app-menu-shadow);
 }
 
 .tab-context-menu button {
-  @apply block h-8 w-full px-3 text-left text-slate-700 disabled:text-slate-300 disabled:hover:bg-white;
+  @apply block h-8 w-full px-3 text-left;
+  color: var(--app-text-muted);
+}
+
+.tab-context-menu button:disabled {
+  color: var(--app-text-disabled);
+}
+
+.tab-context-menu button:disabled:hover {
+  background: var(--app-panel-solid);
 }
 
 .tab-context-menu button:hover:not(:disabled) {
@@ -251,6 +275,7 @@ const emit = defineEmits<{
 }
 
 .tab-context-separator {
-  @apply my-1 border-t border-slate-100;
+  @apply my-1 border-t;
+  border-color: var(--app-border-soft);
 }
 </style>

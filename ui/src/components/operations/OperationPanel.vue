@@ -107,11 +107,20 @@ defineExpose({
 @reference "tailwindcss";
 
 .operation-field {
-  @apply flex flex-col gap-1.5 text-xs font-medium text-slate-500;
+  @apply flex flex-col gap-1.5 text-xs font-medium;
+  color: var(--app-text-subtle);
 }
 
 .operation-field input {
-  @apply h-9 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 outline-none disabled:bg-slate-50 disabled:text-slate-400;
+  @apply h-9 rounded-md border px-3 text-sm font-normal outline-none disabled:cursor-not-allowed;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text);
+}
+
+.operation-field input:disabled {
+  background: var(--app-control);
+  color: var(--app-text-disabled);
 }
 
 .operation-field input:focus {
@@ -120,11 +129,19 @@ defineExpose({
 }
 
 .operation-segmented {
-  @apply inline-flex w-fit overflow-hidden rounded-md border border-slate-200 bg-slate-50;
+  @apply inline-flex w-fit overflow-hidden rounded-md border;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-muted);
 }
 
 .operation-segmented button {
-  @apply h-8 border-r border-slate-200 px-3 text-xs font-semibold text-slate-600 last:border-r-0 hover:bg-white;
+  @apply h-8 border-r px-3 text-xs font-semibold last:border-r-0;
+  border-color: var(--app-border-soft);
+  color: var(--app-text-muted);
+}
+
+.operation-segmented button:hover {
+  background: var(--app-control-hover);
 }
 
 .operation-segmented button.active {
@@ -149,7 +166,14 @@ defineExpose({
 }
 
 .operation-secondary {
-  @apply border border-slate-200 bg-white text-slate-700 hover:bg-slate-50;
+  @apply border;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
+}
+
+.operation-secondary:hover:not(:disabled) {
+  background: var(--app-control-hover);
 }
 
 .operation-primary {

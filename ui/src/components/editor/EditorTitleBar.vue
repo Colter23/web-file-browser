@@ -67,7 +67,9 @@ const emit = defineEmits<{
 @reference "tailwindcss";
 
 .editor-titlebar {
-  @apply relative z-20 flex h-12 shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-3 backdrop-blur;
+  @apply relative z-20 flex h-12 shrink-0 items-center justify-between gap-3 border-b px-3 backdrop-blur;
+  border-color: var(--app-border-soft);
+  background: color-mix(in srgb, var(--app-panel-solid) 90%, transparent);
 }
 
 .editor-file-head {
@@ -88,7 +90,8 @@ const emit = defineEmits<{
 }
 
 .file-title {
-  @apply min-w-0 truncate text-sm font-semibold text-slate-900;
+  @apply min-w-0 truncate text-sm font-semibold;
+  color: var(--app-text);
 }
 
 .dirty-dot {
@@ -96,7 +99,8 @@ const emit = defineEmits<{
 }
 
 .file-path {
-  @apply max-w-[42rem] truncate text-xs text-slate-500;
+  @apply max-w-[42rem] truncate text-xs;
+  color: var(--app-text-subtle);
 }
 
 .editor-actions {
@@ -106,7 +110,16 @@ const emit = defineEmits<{
 .menu-button,
 .icon-button,
 .save-button {
-  @apply inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white text-xs text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-white;
+  @apply inline-flex h-8 items-center justify-center rounded-md border text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-45;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
+}
+
+.menu-button:disabled,
+.icon-button:disabled,
+.save-button:disabled {
+  background: var(--app-control-solid);
 }
 
 .menu-button:hover:not(:disabled),
@@ -135,9 +148,15 @@ const emit = defineEmits<{
 }
 
 .save-button {
-  @apply gap-1.5 px-3 font-medium text-white disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400;
+  @apply gap-1.5 px-3 font-medium text-white;
   border-color: var(--app-accent, #2563eb);
   background: var(--app-accent, #2563eb);
+}
+
+.save-button:disabled {
+  border-color: var(--app-border-soft);
+  background: var(--app-control);
+  color: var(--app-text-disabled);
 }
 
 .save-button:hover:not(:disabled) {
@@ -145,6 +164,10 @@ const emit = defineEmits<{
 }
 
 .close-button {
-  @apply hover:border-red-200 hover:bg-red-50;
+  @apply hover:border-red-200;
+}
+
+.close-button:hover:not(:disabled) {
+  background: var(--app-danger-soft);
 }
 </style>

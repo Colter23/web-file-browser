@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: light;
   --app-accent: #2563eb;
   --app-accent-soft: #eff6ff;
   --app-accent-border: #bfdbfe;
@@ -8,8 +9,53 @@
   --app-accent-selected: color-mix(in srgb, var(--app-accent) 18%, white);
   --app-accent-ring: color-mix(in srgb, var(--app-accent) 24%, transparent);
   --app-accent-tint: color-mix(in srgb, var(--app-accent) 10%, transparent);
+  --app-bg: #eef5fb;
+  --app-bg-muted: #f6f9fd;
+  --app-panel: rgba(255, 255, 255, 0.9);
+  --app-panel-solid: #ffffff;
+  --app-panel-muted: #f8fbff;
+  --app-control: rgba(255, 255, 255, 0.78);
+  --app-control-solid: #ffffff;
+  --app-control-hover: #ffffff;
+  --app-border: #d8e3ee;
+  --app-border-soft: #e3ebf5;
+  --app-divider: #dbe6f1;
+  --app-text: #0f172a;
+  --app-text-muted: #475569;
+  --app-text-subtle: #64748b;
+  --app-text-disabled: #cbd5e1;
+  --app-danger-soft: #fef2f2;
+  --app-menu-shadow: 0 18px 44px rgba(15, 23, 42, 0.16);
+}
+
+html[data-app-theme="dark"] {
+  color-scheme: dark;
+  --app-bg: #0b1220;
+  --app-bg-muted: #111827;
+  --app-panel: rgba(17, 24, 39, 0.9);
+  --app-panel-solid: #111827;
+  --app-panel-muted: #162033;
+  --app-control: rgba(30, 41, 59, 0.72);
+  --app-control-solid: #1e293b;
+  --app-control-hover: #263449;
+  --app-border: #2c3a4f;
+  --app-border-soft: #253246;
+  --app-divider: #324258;
+  --app-text: #e5e7eb;
+  --app-text-muted: #cbd5e1;
+  --app-text-subtle: #94a3b8;
+  --app-text-disabled: #64748b;
+  --app-danger-soft: rgba(127, 29, 29, 0.22);
+  --app-menu-shadow: 0 22px 48px rgba(0, 0, 0, 0.44);
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
 }
 
 body {
-  background: color-mix(in srgb, var(--app-accent-soft) 42%, #f1f5f9);
+  background: color-mix(in srgb, var(--app-accent-soft) 26%, var(--app-bg));
+  color: var(--app-text);
 }

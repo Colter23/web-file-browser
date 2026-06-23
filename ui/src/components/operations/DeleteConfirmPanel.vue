@@ -71,11 +71,14 @@ defineExpose({
 @reference "tailwindcss";
 
 .delete-confirm-list {
-  @apply flex max-h-40 flex-col gap-1 overflow-auto rounded-md border border-slate-100 bg-slate-50 p-2;
+  @apply flex max-h-40 flex-col gap-1 overflow-auto rounded-md border p-2;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-muted);
 }
 
 .delete-confirm-list div {
-  @apply flex min-h-7 min-w-0 items-center gap-2 rounded px-2 text-xs text-slate-600;
+  @apply flex min-h-7 min-w-0 items-center gap-2 rounded px-2 text-xs;
+  color: var(--app-text-muted);
 }
 
 .delete-confirm-list span {
@@ -83,11 +86,13 @@ defineExpose({
 }
 
 .delete-confirm-more {
-  @apply text-slate-400;
+  color: var(--app-text-disabled);
 }
 
 .delete-confirm-error {
-  @apply rounded-md border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600;
+  @apply rounded-md border px-3 py-2 text-xs text-red-600;
+  border-color: color-mix(in srgb, #ef4444 30%, var(--app-border-soft));
+  background: var(--app-danger-soft);
 }
 
 .operation-secondary,
@@ -96,7 +101,14 @@ defineExpose({
 }
 
 .operation-secondary {
-  @apply border border-slate-200 bg-white text-slate-700 hover:bg-slate-50;
+  @apply border;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
+}
+
+.operation-secondary:hover:not(:disabled) {
+  background: var(--app-control-hover);
 }
 
 .delete-confirm-primary {

@@ -93,7 +93,10 @@ const updateWrap = (event: Event) => {
 }
 
 .editor-menu {
-  @apply mt-2 flex max-h-80 min-w-44 flex-col gap-1 overflow-auto rounded-md border border-slate-200 bg-white p-1 text-sm shadow-2xl;
+  @apply mt-2 flex max-h-80 min-w-44 flex-col gap-1 overflow-auto rounded-md border p-1 text-sm shadow-2xl;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
+  box-shadow: var(--app-menu-shadow);
 }
 
 .language-menu {
@@ -109,11 +112,13 @@ const updateWrap = (event: Event) => {
 }
 
 .editor-menu p {
-  @apply px-2 pt-1 text-xs font-medium text-slate-400;
+  @apply px-2 pt-1 text-xs font-medium;
+  color: var(--app-text-subtle);
 }
 
 .editor-menu button {
-  @apply flex h-8 items-center gap-2 rounded px-2 text-left text-slate-700;
+  @apply flex h-8 items-center gap-2 rounded px-2 text-left;
+  color: var(--app-text-muted);
 }
 
 .editor-menu button:hover {
@@ -130,11 +135,15 @@ const updateWrap = (event: Event) => {
 }
 
 .editor-menu label {
-  @apply flex items-center justify-between gap-3 text-sm text-slate-600;
+  @apply flex items-center justify-between gap-3 text-sm;
+  color: var(--app-text-muted);
 }
 
 .editor-menu input[type="number"] {
-  @apply h-8 w-20 rounded border border-slate-200 bg-white px-2 text-right text-slate-900 outline-none;
+  @apply h-8 w-20 rounded border px-2 text-right outline-none;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text);
 }
 
 .editor-menu input[type="number"]:focus {

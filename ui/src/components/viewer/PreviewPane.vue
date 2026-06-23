@@ -88,12 +88,13 @@ const downloadPreview = () => {
 @reference "tailwindcss";
 
 .preview-body {
-  @apply min-h-0 grow overflow-auto text-sm text-slate-700;
+  @apply min-h-0 grow overflow-auto text-sm;
+  color: var(--app-text-muted);
 }
 
 .preview-body.audio,
 .preview-body.video {
-  @apply bg-slate-50;
+  background: var(--app-panel-muted);
 }
 
 .preview-body audio,
@@ -102,7 +103,8 @@ const downloadPreview = () => {
 }
 
 .preview-placeholder {
-  @apply flex h-full min-h-48 flex-col items-center justify-center gap-3 text-center text-slate-500;
+  @apply flex h-full min-h-48 flex-col items-center justify-center gap-3 text-center;
+  color: var(--app-text-subtle);
 }
 
 .preview-placeholder.error {
@@ -110,15 +112,19 @@ const downloadPreview = () => {
 }
 
 .preview-placeholder.muted {
-  @apply text-slate-400;
+  color: var(--app-text-disabled);
 }
 
 .preview-placeholder small {
-  @apply max-w-56 px-4 text-xs leading-5 text-slate-400;
+  @apply max-w-56 px-4 text-xs leading-5;
+  color: var(--app-text-disabled);
 }
 
 .preview-placeholder button {
-  @apply rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700;
+  @apply rounded-md border px-3 py-1.5 text-sm;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
 }
 
 .preview-placeholder button:hover {

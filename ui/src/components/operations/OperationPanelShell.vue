@@ -67,19 +67,24 @@ defineExpose({
 @reference "tailwindcss";
 
 .operation-shell {
-  @apply absolute left-1/2 top-6 z-30 flex -translate-x-1/2 flex-col gap-3 rounded-lg border bg-white p-4 text-sm text-slate-700 shadow-2xl outline-none;
+  @apply absolute left-1/2 top-6 z-30 flex -translate-x-1/2 flex-col gap-3 rounded-lg border p-4 text-sm shadow-2xl outline-none;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
+  color: var(--app-text-muted);
+  box-shadow: var(--app-menu-shadow);
 }
 
 .operation-shell.width-operation {
-  @apply w-[min(28rem,calc(100%-2rem))] border-slate-200;
+  @apply w-[min(28rem,calc(100%-2rem))];
 }
 
 .operation-shell.width-delete {
-  @apply w-[min(30rem,calc(100%-2rem))] border-red-100;
+  @apply w-[min(30rem,calc(100%-2rem))];
+  border-color: color-mix(in srgb, #ef4444 28%, var(--app-border-soft));
 }
 
 .operation-shell.width-properties {
-  @apply w-[min(32rem,calc(100%-2rem))] border-slate-200;
+  @apply w-[min(32rem,calc(100%-2rem))];
 }
 
 .operation-shell-header {
@@ -96,11 +101,13 @@ defineExpose({
 }
 
 .operation-shell-icon.red {
-  @apply bg-red-50 text-red-600;
+  @apply text-red-600;
+  background: var(--app-danger-soft);
 }
 
 .operation-shell-icon.neutral {
-  @apply bg-slate-100 text-slate-600;
+  background: var(--app-control);
+  color: var(--app-text-muted);
 }
 
 .operation-shell-title {
@@ -108,15 +115,23 @@ defineExpose({
 }
 
 .operation-shell-title strong {
-  @apply truncate text-base font-semibold text-slate-900;
+  @apply truncate text-base font-semibold;
+  color: var(--app-text);
 }
 
 .operation-shell-title span {
-  @apply truncate text-xs leading-5 text-slate-500;
+  @apply truncate text-xs leading-5;
+  color: var(--app-text-subtle);
 }
 
 .operation-shell-close {
-  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100;
+  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-md;
+  color: var(--app-text-subtle);
+}
+
+.operation-shell-close:hover {
+  background: var(--app-control-hover);
+  color: var(--app-text);
 }
 
 .operation-shell-actions {

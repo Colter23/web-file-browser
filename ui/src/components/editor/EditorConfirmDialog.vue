@@ -50,11 +50,15 @@ watch(() => props.visible, async visible => {
 @reference "tailwindcss";
 
 .editor-confirm-mask {
-  @apply absolute inset-2 z-20 flex items-center justify-center rounded-md bg-slate-900/15 px-4 backdrop-blur-sm;
+  @apply absolute inset-2 z-20 flex items-center justify-center rounded-md px-4 backdrop-blur-sm;
+  background: color-mix(in srgb, var(--app-bg) 26%, transparent);
 }
 
 .editor-confirm {
-  @apply grid w-full max-w-lg grid-cols-[2rem_1fr] gap-3 rounded-md border border-slate-200 bg-white p-4 text-slate-700 shadow-2xl outline-none;
+  @apply grid w-full max-w-lg grid-cols-[2rem_1fr] gap-3 rounded-md border p-4 shadow-2xl outline-none;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
+  color: var(--app-text-muted);
 }
 
 .editor-confirm:focus-visible {
@@ -71,11 +75,13 @@ watch(() => props.visible, async visible => {
 }
 
 .confirm-content h3 {
-  @apply text-sm font-semibold text-slate-900;
+  @apply text-sm font-semibold;
+  color: var(--app-text);
 }
 
 .confirm-content p {
-  @apply mt-1 text-xs leading-5 text-slate-500;
+  @apply mt-1 text-xs leading-5;
+  color: var(--app-text-subtle);
 }
 
 .confirm-actions {
@@ -99,10 +105,21 @@ watch(() => props.visible, async visible => {
 }
 
 .confirm-secondary {
-  @apply border-slate-200 bg-white text-slate-700 hover:bg-slate-50;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
+}
+
+.confirm-secondary:hover:not(:disabled) {
+  background: var(--app-control-hover);
 }
 
 .confirm-danger {
-  @apply border-red-200 bg-white text-red-600 hover:bg-red-50;
+  @apply border-red-200 text-red-600;
+  background: var(--app-control-solid);
+}
+
+.confirm-danger:hover:not(:disabled) {
+  background: var(--app-danger-soft);
 }
 </style>

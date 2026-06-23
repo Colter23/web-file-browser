@@ -355,19 +355,26 @@ onBeforeUnmount(() => {
 @reference "tailwindcss";
 
 .editor-shell {
-  @apply relative flex h-full min-h-0 flex-col overflow-hidden bg-[#f7fbff] text-slate-900;
+  @apply relative flex h-full min-h-0 flex-col overflow-hidden;
+  background: var(--app-panel-muted);
+  color: var(--app-text);
 }
 
 .editor-main {
-  @apply relative flex min-h-0 grow flex-col gap-2 bg-[#f7fbff] p-2;
+  @apply relative flex min-h-0 grow flex-col gap-2 p-2;
+  background: var(--app-panel-muted);
 }
 
 .editor-frame {
-  @apply min-h-0 grow overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm;
+  @apply min-h-0 grow overflow-hidden rounded-md border shadow-sm;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
 }
 
 .editor-overlay {
-  @apply absolute inset-2 z-10 flex items-center justify-center rounded-md bg-white/85 text-sm text-slate-500 backdrop-blur-sm;
+  @apply absolute inset-2 z-10 flex items-center justify-center rounded-md text-sm backdrop-blur-sm;
+  background: color-mix(in srgb, var(--app-panel-solid) 86%, transparent);
+  color: var(--app-text-subtle);
 }
 
 .editor-overlay.error {
@@ -375,7 +382,10 @@ onBeforeUnmount(() => {
 }
 
 .editor-overlay button {
-  @apply rounded-md border border-slate-200 bg-white px-3 py-1.5 text-slate-700;
+  @apply rounded-md border px-3 py-1.5;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
 }
 
 .editor-overlay button:hover {

@@ -69,11 +69,12 @@ onBeforeUnmount(releasePreviewImagePointer);
 @reference "tailwindcss";
 
 .preview-body {
-  @apply min-h-0 grow overflow-auto text-sm text-slate-700;
+  @apply min-h-0 grow overflow-auto text-sm;
+  color: var(--app-text-muted);
 }
 
 .preview-body.image {
-  @apply bg-slate-50;
+  background: var(--app-panel-muted);
 }
 
 .image-stage {

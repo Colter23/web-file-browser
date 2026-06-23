@@ -79,11 +79,19 @@ defineExpose({
 @reference "tailwindcss";
 
 .path-row {
-  @apply flex h-12 shrink-0 items-center gap-2 border-b border-[#d8e3ee] bg-[#f8fbff] px-3;
+  @apply flex h-12 shrink-0 items-center gap-2 border-b px-3;
+  border-color: var(--app-border);
+  background: var(--app-panel-muted);
 }
 
 .nav-button {
-  @apply inline-flex items-center justify-center rounded-md border border-transparent bg-transparent text-slate-700 hover:border-slate-200 hover:bg-white;
+  @apply inline-flex items-center justify-center rounded-md border border-transparent bg-transparent;
+  color: var(--app-text-muted);
+}
+
+.nav-button:hover {
+  border-color: var(--app-border-soft);
+  background: var(--app-control-hover);
 }
 
 .nav-button {
@@ -91,11 +99,15 @@ defineExpose({
 }
 
 .nav-button:disabled {
-  @apply cursor-not-allowed text-slate-300 hover:border-transparent hover:bg-transparent;
+  @apply cursor-not-allowed hover:border-transparent hover:bg-transparent;
+  color: var(--app-text-disabled);
 }
 
 .search-box {
-  @apply flex h-9 w-72 max-w-[30vw] shrink-0 items-center gap-2 rounded-md border border-[#d7e1ec] bg-white px-3 text-slate-500 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.55)];
+  @apply flex h-9 w-72 max-w-[30vw] shrink-0 items-center gap-2 rounded-md border px-3 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)];
+  border-color: var(--app-border);
+  background: var(--app-control-solid);
+  color: var(--app-text-subtle);
 }
 
 .search-box.active {
@@ -106,10 +118,21 @@ defineExpose({
 }
 
 .search-box input {
-  @apply min-w-0 grow bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400;
+  @apply min-w-0 grow bg-transparent text-sm outline-none;
+  color: var(--app-text-muted);
+}
+
+.search-box input::placeholder {
+  color: var(--app-text-subtle);
 }
 
 .search-box button {
-  @apply -mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700;
+  @apply -mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md;
+  color: var(--app-text-subtle);
+}
+
+.search-box button:hover {
+  background: var(--app-control-hover);
+  color: var(--app-text-muted);
 }
 </style>
