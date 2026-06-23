@@ -36,7 +36,7 @@ import {shouldIgnoreNavigationShortcut, useExplorerShortcuts} from "../composabl
 import {useFileTreeLoader} from "../composables/useFileTreeLoader.ts";
 import {useMainViewShellActions} from "../composables/useMainViewShellActions.ts";
 import {useMainViewLifecycle} from "../composables/useMainViewLifecycle.ts";
-import {usePanelFocusRestore} from "../composables/usePanelFocusRestore.ts";
+import {useMainViewPanelClosers} from "../composables/useMainViewPanelClosers.ts";
 import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
 import {entryFileInfo, isExtractableArchiveEntry} from "../utils/file-entry.ts";
@@ -442,34 +442,29 @@ const editPreviewEntry = (entry: ExplorerEntry) => {
   void openPreviewInEditor(entry);
 }
 
-const {closeAndFocusExplorer} = usePanelFocusRestore({
+const {
+  closeTaskPanelAndFocus,
+  closeOperationPanelAndFocus,
+  closeDeleteConfirmAndFocus,
+  closePropertiesPanelAndFocus,
+  closePreviewAndFocus,
+  closeImageViewerAndFocus
+} = useMainViewPanelClosers({
   editorVisible: () => fileStore.showEditor,
-  focusExplorer
+  focusExplorer,
+  taskPanelVisible,
+  operationPanel,
+  deleteConfirm,
+  propertiesPanel,
+  previewPanelVisible,
+  imageViewerVisible,
+  closeTaskPanel,
+  closeOperationPanel,
+  closeDeleteConfirm,
+  closePropertiesPanel,
+  closePreview,
+  closeImageViewer
 });
-
-const closeTaskPanelAndFocus = async () => {
-  await closeAndFocusExplorer(() => taskPanelVisible.value, closeTaskPanel);
-}
-
-const closeOperationPanelAndFocus = async () => {
-  await closeAndFocusExplorer(() => operationPanel.value.visible, closeOperationPanel);
-}
-
-const closeDeleteConfirmAndFocus = async () => {
-  await closeAndFocusExplorer(() => deleteConfirm.value.visible, closeDeleteConfirm);
-}
-
-const closePropertiesPanelAndFocus = async () => {
-  await closeAndFocusExplorer(() => propertiesPanel.value.visible, closePropertiesPanel);
-}
-
-const closePreviewAndFocus = async () => {
-  await closeAndFocusExplorer(() => previewPanelVisible.value, closePreview);
-}
-
-const closeImageViewerAndFocus = async () => {
-  await closeAndFocusExplorer(() => imageViewerVisible.value, closeImageViewer);
-}
 
 const openSettings = async () => {
   if (!await fileStore.requestEditorLeave()) return;
