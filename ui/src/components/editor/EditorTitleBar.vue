@@ -39,25 +39,25 @@ const emit = defineEmits<{
 
     <div class="editor-actions">
       <button class="menu-button" :class="{active: activeMenu === 'language'}" @click.stop="emit('toggle-menu', 'language')">
-        <icon icon="file.text" color="#475569" />
+        <icon icon="file.text" />
         <span>语言：{{ selectedModeName }}</span>
       </button>
       <button class="menu-button" :class="{active: activeMenu === 'theme'}" @click.stop="emit('toggle-menu', 'theme')">
-        <icon icon="action.settings" color="#475569" />
+        <icon icon="action.settings" />
         <span>主题：{{ selectedThemeName }}</span>
       </button>
       <button class="icon-button" :class="{active: activeMenu === 'settings'}" title="编辑设置" @click.stop="emit('toggle-menu', 'settings')">
-        <icon icon="action.settings" color="#475569" />
+        <icon icon="action.settings" />
       </button>
       <button class="icon-button" :disabled="loading" title="重新载入" @click.stop="emit('reload')">
-        <icon icon="action.refresh" color="#475569" />
+        <icon icon="action.refresh" />
       </button>
       <button class="save-button" :disabled="!canSave" title="保存 (Ctrl+S)" @click.stop="emit('save')">
         <icon icon="action.save" :color="canSave ? '#ffffff' : '#94a3b8'" />
         <span>{{ saving ? "保存中" : "保存" }}</span>
       </button>
       <button class="icon-button close-button" title="关闭 (Esc)" @click.stop="emit('close')">
-        <icon icon="action.close" color="#475569" />
+        <icon icon="action.close" />
       </button>
     </div>
   </header>
@@ -75,7 +75,8 @@ const emit = defineEmits<{
 }
 
 .file-mark {
-  @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-600 shadow-sm;
+  @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md shadow-sm;
+  background: var(--app-accent, #2563eb);
 }
 
 .file-title-block {
@@ -105,7 +106,13 @@ const emit = defineEmits<{
 .menu-button,
 .icon-button,
 .save-button {
-  @apply inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white text-xs text-slate-700 shadow-sm hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-white;
+  @apply inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white text-xs text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-white;
+}
+
+.menu-button:hover:not(:disabled),
+.icon-button:hover:not(:disabled),
+.save-button:hover:not(:disabled) {
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 .menu-button {
@@ -122,11 +129,19 @@ const emit = defineEmits<{
 
 .menu-button.active,
 .icon-button.active {
-  @apply border-blue-300 bg-blue-50 text-blue-700;
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
 }
 
 .save-button {
-  @apply gap-1.5 border-blue-600 bg-blue-600 px-3 font-medium text-white hover:bg-blue-700 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400;
+  @apply gap-1.5 px-3 font-medium text-white disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400;
+  border-color: var(--app-accent, #2563eb);
+  background: var(--app-accent, #2563eb);
+}
+
+.save-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 88%, black);
 }
 
 .close-button {

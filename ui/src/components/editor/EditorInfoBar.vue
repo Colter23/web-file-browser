@@ -48,7 +48,8 @@ defineProps<{
 }
 
 .status-pill.saving {
-  @apply bg-blue-100 text-blue-700;
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
 }
 
 .status-pill.conflict {

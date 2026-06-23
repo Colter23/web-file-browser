@@ -375,7 +375,11 @@ onBeforeUnmount(() => {
 }
 
 .editor-overlay button {
-  @apply rounded-md border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:bg-blue-50;
+  @apply rounded-md border border-slate-200 bg-white px-3 py-1.5 text-slate-700;
+}
+
+.editor-overlay button:hover {
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 </style>

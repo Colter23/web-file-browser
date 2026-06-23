@@ -44,7 +44,7 @@ const updateWrap = (event: Event) => {
           :key="mode.key"
           :class="{active: currentMode === mode.key}"
           @click="emit('change-mode', mode.key)">
-        <icon icon="file.code" :color="currentMode === mode.key ? '#ffffff' : '#475569'" />
+        <icon icon="file.code" />
         <span>{{ mode.name }}</span>
       </button>
     </div>
@@ -113,11 +113,20 @@ const updateWrap = (event: Event) => {
 }
 
 .editor-menu button {
-  @apply flex h-8 items-center gap-2 rounded px-2 text-left text-slate-700 hover:bg-blue-50;
+  @apply flex h-8 items-center gap-2 rounded px-2 text-left text-slate-700;
+}
+
+.editor-menu button:hover {
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 .editor-menu button.active {
-  @apply bg-blue-600 text-white hover:bg-blue-600;
+  @apply text-white;
+  background: var(--app-accent, #2563eb);
+}
+
+.editor-menu button.active:hover {
+  background: var(--app-accent, #2563eb);
 }
 
 .editor-menu label {
@@ -125,7 +134,12 @@ const updateWrap = (event: Event) => {
 }
 
 .editor-menu input[type="number"] {
-  @apply h-8 w-20 rounded border border-slate-200 bg-white px-2 text-right text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100;
+  @apply h-8 w-20 rounded border border-slate-200 bg-white px-2 text-right text-slate-900 outline-none;
+}
+
+.editor-menu input[type="number"]:focus {
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.2));
 }
 
 .check-row {
@@ -133,6 +147,7 @@ const updateWrap = (event: Event) => {
 }
 
 .check-row input {
-  @apply h-4 w-4 accent-blue-600;
+  @apply h-4 w-4;
+  accent-color: var(--app-accent, #2563eb);
 }
 </style>

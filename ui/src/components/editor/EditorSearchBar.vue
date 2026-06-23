@@ -98,7 +98,12 @@ const updateReplaceText = (event: Event) => {
 }
 
 .search-input {
-  @apply h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100;
+  @apply h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none placeholder:text-slate-400;
+}
+
+.search-input:focus {
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.2));
 }
 
 .replace-input {
@@ -110,11 +115,17 @@ const updateReplaceText = (event: Event) => {
 }
 
 .search-actions button {
-  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white;
+  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white;
+}
+
+.search-actions button:hover:not(:disabled) {
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 .search-actions button.active {
-  @apply border-blue-300 bg-blue-50 text-blue-700;
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
 }
 
 .search-actions .text-tool {

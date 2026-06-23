@@ -64,7 +64,12 @@ const updateLineText = (event: Event) => {
 }
 
 .goto-input {
-  @apply h-8 min-w-0 max-w-28 flex-1 rounded-md border border-slate-200 bg-white px-2 text-right text-sm tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100;
+  @apply h-8 min-w-0 max-w-28 flex-1 rounded-md border border-slate-200 bg-white px-2 text-right text-sm tabular-nums text-slate-900 outline-none placeholder:text-slate-400;
+}
+
+.goto-input:focus {
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.2));
 }
 
 .goto-actions {
@@ -72,7 +77,11 @@ const updateLineText = (event: Event) => {
 }
 
 .goto-actions button {
-  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white;
+  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white;
+}
+
+.goto-actions button:hover:not(:disabled) {
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 .goto-actions .text-tool {

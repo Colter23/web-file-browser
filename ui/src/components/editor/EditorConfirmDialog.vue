@@ -31,7 +31,7 @@ watch(() => props.visible, async visible => {
   <div v-if="visible" class="editor-confirm-mask" @click.stop>
     <section ref="confirmRef" class="editor-confirm" tabindex="-1" @keydown.esc.prevent.stop="emit('cancel')">
       <div class="confirm-icon">
-        <icon icon="action.edit" color="#2563eb" />
+        <icon icon="action.edit" color="var(--app-accent, #2563eb)" />
       </div>
       <div class="confirm-content">
         <h3>{{ title }}</h3>
@@ -58,11 +58,12 @@ watch(() => props.visible, async visible => {
 }
 
 .editor-confirm:focus-visible {
-  @apply ring-2 ring-inset ring-blue-300;
+  box-shadow: inset 0 0 0 2px var(--app-accent-border, #bfdbfe);
 }
 
 .confirm-icon {
-  @apply flex h-8 w-8 items-center justify-center rounded-md bg-blue-50;
+  @apply flex h-8 w-8 items-center justify-center rounded-md;
+  background: var(--app-accent-soft, #eff6ff);
 }
 
 .confirm-content {
@@ -88,7 +89,13 @@ watch(() => props.visible, async visible => {
 }
 
 .confirm-primary {
-  @apply border-blue-600 bg-blue-600 text-white hover:bg-blue-700;
+  @apply text-white;
+  border-color: var(--app-accent, #2563eb);
+  background: var(--app-accent, #2563eb);
+}
+
+.confirm-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 88%, black);
 }
 
 .confirm-secondary {
