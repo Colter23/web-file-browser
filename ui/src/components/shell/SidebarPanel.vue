@@ -6,6 +6,7 @@ import Icon from "../Icon.vue";
 defineProps<{
   treeData: FileTreeData[];
   loadData: LoadData;
+  currentPath: string;
 }>();
 
 const emit = defineEmits<{
@@ -29,7 +30,7 @@ const emit = defineEmits<{
         <icon icon="icon-folder-add-fill" />
       </button>
     </div>
-    <file-tree :data="treeData" :load-data="loadData" />
+    <file-tree :data="treeData" :load-data="loadData" :current-path="currentPath" />
   </aside>
 </template>
 

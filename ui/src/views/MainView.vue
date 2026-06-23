@@ -543,6 +543,7 @@ const signOut = async () => {
       <sidebar-panel
           :tree-data="treeData"
           :load-data="handleLoad"
+          :current-path="fileStore.currentPath"
           @upload="uploadInput?.click()"
           @create-file="openCreatePanel('file')"
           @create-folder="openCreatePanel('folder')" />

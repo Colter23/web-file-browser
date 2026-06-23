@@ -1,28 +1,59 @@
 import {ref} from "vue";
-import type {FileTreeData, FolderData} from "../class.ts";
+import type {FileTreeData, FolderData, FolderQueryParams} from "../class.ts";
 import {useFileStore} from "../store";
 
 type FileTreeLoaderOptions = {
-  getFolderData: (path: string) => Promise<FolderData>;
+  getFolderData: (path: string, params?: FolderQueryParams) => Promise<FolderData>;
   navigateToPath: (path: string, options?: {skipEditorLeave?: boolean; focusExplorer?: boolean}) => Promise<boolean>;
   showError: (error: unknown, fallback: string, title?: string) => void;
 }
+
+const treeQuery: FolderQueryParams = {
+  detail: "basic",
+  sort: "name",
+  order: "asc",
+  type: "folder"
+};
+
+const folderDataToTreeNodes = (data: FolderData): FileTreeData[] => {
+  return (data.folder ?? []).map(folder => ({
+    path: folder.path,
+    name: folder.name,
+    isFile: false
+  }));
+}
+
+const rootTreeNode = (children: FileTreeData[] = []): FileTreeData => ({
+  path: "/",
+  name: "主页",
+  isFile: false,
+  children
+});
 
 export const useFileTreeLoader = ({getFolderData, navigateToPath, showError}: FileTreeLoaderOptions) => {
   const fileStore = useFileStore();
   const treeData = ref<FileTreeData[]>([]);
 
   const loadRoot = async () => {
-    const data = await getFolderData("/");
-    treeData.value = fileStore.saveAndConvertFolderData(data);
+    const data = await getFolderData("/", treeQuery);
+    fileStore.saveFolderData(data);
+    treeData.value = [rootTreeNode(folderDataToTreeNodes(data))];
   }
 
-  const handleLoad = async (node: FileTreeData) => {
-    if (!await fileStore.requestEditorLeave()) return false;
+  const handleLoad = async (node: FileTreeData, options: {navigate?: boolean} = {}) => {
+    if (node.isFile) return false;
+    if (options.navigate !== false && !await fileStore.requestEditorLeave()) return false;
     try {
-      const data = await getFolderData(node.path);
-      node.children = fileStore.saveAndConvertFolderData(data);
-      await navigateToPath(data.path, {skipEditorLeave: true});
+      let loadedPath = node.path;
+      if (node.children === undefined) {
+        const data = await getFolderData(node.path, treeQuery);
+        fileStore.saveFolderData(data);
+        node.children = folderDataToTreeNodes(data);
+        loadedPath = data.path || node.path;
+      }
+      if (options.navigate !== false) {
+        await navigateToPath(loadedPath, {skipEditorLeave: true});
+      }
       return true;
     } catch (error) {
       showError(error, "加载目录失败");

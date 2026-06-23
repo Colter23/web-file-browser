@@ -68,7 +68,7 @@ export interface FileInfo {
 }
 
 
-export type LoadData = (node: FileTreeData) => Promise<boolean>
+export type LoadData = (node: FileTreeData, options?: {navigate?: boolean}) => Promise<boolean>
 export interface FileTreeData {
     path: string;
     name: string;
