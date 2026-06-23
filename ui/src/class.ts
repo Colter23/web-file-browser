@@ -72,7 +72,7 @@ export interface FileInfo {
 }
 
 
-export type LoadData = (node: FileTreeData, options?: {navigate?: boolean; focusExplorer?: boolean}) => Promise<boolean>
+export type LoadData = (node: FileTreeData, options?: {navigate?: boolean; focusExplorer?: boolean; refresh?: boolean}) => Promise<boolean>
 export interface FileTreeData {
     path: string;
     name: string;

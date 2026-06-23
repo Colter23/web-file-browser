@@ -22,7 +22,7 @@ import CommandBar from "../components/shell/CommandBar.vue";
 import ShellNotice from "../components/shell/ShellNotice.vue";
 import SidebarPanel from "../components/shell/SidebarPanel.vue";
 import UploadDropOverlay from "../components/shell/UploadDropOverlay.vue";
-import type {DirSortKey, DirSortOrder} from "../class.ts";
+import type {DirSortKey, DirSortOrder, FileTreeData} from "../class.ts";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import {usePreviewPaneResize} from "../composables/usePreviewPaneResize.ts";
 import {useSidebarResize} from "../composables/useSidebarResize.ts";
@@ -470,17 +470,23 @@ const openPreviewInEditor = async (entry = previewEntry.value) => {
   fileStore.openEditor(entryFileInfo(entry));
 }
 
+const treeNodeToFolderEntry = (node: Pick<FileTreeData, "path" | "name">): ExplorerEntry => ({
+  type: "folder",
+  path: node.path,
+  name: node.name,
+  modified: ""
+});
+
 const dropEntriesToTreeFolder = ({entries, target, action}: {entries: ExplorerEntry[]; target: {path: string; name: string}; action: "copy" | "move"}) => {
   void dropEntriesToFolder({
     entries,
     action,
-    target: {
-      type: "folder",
-      path: target.path,
-      name: target.name,
-      modified: ""
-    }
+    target: treeNodeToFolderEntry(target)
   });
+}
+
+const openTreeFolderInNewTab = (node: FileTreeData) => {
+  void openEntryInNewTab(treeNodeToFolderEntry(node));
 }
 
 const editPreviewEntry = (entry: ExplorerEntry) => {
@@ -593,7 +599,9 @@ const signOut = async () => {
           :tree-data="treeData"
           :load-data="handleLoad"
           :current-path="fileStore.currentPath"
-          @drop-entries="dropEntriesToTreeFolder" />
+          @drop-entries="dropEntriesToTreeFolder"
+          @open-new-tab="openTreeFolderInNewTab"
+          @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)" />
 
       <div
           class="sidebar-resizer"

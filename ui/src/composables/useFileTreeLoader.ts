@@ -40,12 +40,12 @@ export const useFileTreeLoader = ({getFolderData, navigateToPath, showError}: Fi
     treeData.value = [rootTreeNode(folderDataToTreeNodes(data))];
   }
 
-  const handleLoad = async (node: FileTreeData, options: {navigate?: boolean; focusExplorer?: boolean} = {}) => {
+  const handleLoad = async (node: FileTreeData, options: {navigate?: boolean; focusExplorer?: boolean; refresh?: boolean} = {}) => {
     if (node.isFile) return false;
     if (options.navigate !== false && !await fileStore.requestEditorLeave()) return false;
     try {
       let loadedPath = node.path;
-      if (node.children === undefined) {
+      if (options.refresh || node.children === undefined) {
         const data = await getFolderData(node.path, treeQuery);
         fileStore.saveFolderData(data);
         node.children = folderDataToTreeNodes(data);

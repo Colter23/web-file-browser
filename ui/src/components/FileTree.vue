@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed, nextTick, ref, watch} from "vue";
 import FileTreeNode from "./FileTreeNode.vue";
+import FileTreeContextMenu from "./FileTreeContextMenu.vue";
 import type {FileTreeData, LoadData} from "../class.ts";
 import type {ExplorerEntry} from "./explorer/types.ts";
 import {isSameOrDescendantPath, normalizePathText} from "../utils/file-path.ts";
@@ -18,6 +19,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "drop-entries", payload: {entries: ExplorerEntry[]; target: FileTreeData; action: "copy" | "move"}): void;
+  (e: "open-new-tab", node: FileTreeData): void;
+  (e: "notice", payload: {message: string; kind?: "info" | "success" | "warning" | "error"; title?: string}): void;
 }>();
 
 const expandedPaths = ref<Set<string>>(new Set(["/"]));
@@ -25,6 +28,7 @@ const loadingPaths = ref<Set<string>>(new Set());
 const focusedPath = ref("/");
 const treeRef = ref<HTMLElement | null>(null);
 const dropTargetPath = ref("");
+const contextMenu = ref<{visible: boolean; x: number; y: number; path: string}>({visible: false, x: 0, y: 0, path: ""});
 const activePath = computed(() => normalizePathText(props.currentPath || "/"));
 let syncToken = 0;
 let dropExpandTimer = 0;
@@ -68,6 +72,12 @@ const currentFocusedPath = computed(() => {
   if (visibleNodes.value.some(item => item.path === activePath.value)) return activePath.value;
   return visibleNodes.value[0]?.path ?? "/";
 });
+
+const contextNode = computed(() => contextMenu.value.visible ? findNodeByPath(props.data, contextMenu.value.path) : null);
+const contextNodePath = computed(() => normalizePathText(contextNode.value?.path ?? "/"));
+const contextNodeExpanded = computed(() => isExpanded(contextNodePath.value));
+const contextNodeLoading = computed(() => isLoading(contextNodePath.value));
+const contextNodeHasChildren = computed(() => Boolean(contextNode.value?.children?.length));
 
 const ancestorPaths = (path: string) => {
   const normalized = normalizePathText(path);
@@ -155,6 +165,78 @@ const navigateNode = async (node: FileTreeData) => {
     if (loaded) setExpanded(path, true);
   } finally {
     setLoading(path, false);
+  }
+}
+
+const closeContextMenu = () => {
+  contextMenu.value.visible = false;
+}
+
+const openContextMenu = async (node: FileTreeData, event: MouseEvent) => {
+  event.preventDefault();
+  event.stopPropagation();
+  await focusPath(node.path);
+  contextMenu.value = {
+    visible: true,
+    x: event.clientX,
+    y: event.clientY,
+    path: normalizePathText(node.path)
+  };
+}
+
+const refreshNode = async (node: FileTreeData) => {
+  if (node.isFile || isLoading(node.path)) return;
+  const path = normalizePathText(node.path);
+  closeContextMenu();
+  setLoading(path, true);
+  try {
+    const loaded = await props.loadData(node, {navigate: false, refresh: true});
+    if (loaded) {
+      setExpanded(path, true);
+      await revealPath(path);
+    }
+  } finally {
+    setLoading(path, false);
+  }
+}
+
+const openContextNode = async () => {
+  const node = contextNode.value;
+  if (!node) return;
+  closeContextMenu();
+  await navigateNode(node);
+}
+
+const openContextNodeInNewTab = () => {
+  const node = contextNode.value;
+  if (!node) return;
+  closeContextMenu();
+  emit("open-new-tab", node);
+}
+
+const refreshContextNode = async () => {
+  const node = contextNode.value;
+  if (!node) return;
+  await refreshNode(node);
+}
+
+const toggleContextNode = async () => {
+  const node = contextNode.value;
+  if (!node) return;
+  closeContextMenu();
+  await toggleNode(node);
+  await revealPath(node.path);
+}
+
+const copyContextNodePath = async () => {
+  const node = contextNode.value;
+  if (!node) return;
+  closeContextMenu();
+  try {
+    await navigator.clipboard.writeText(normalizePathText(node.path));
+    emit("notice", {message: "已复制路径", kind: "success", title: "路径已复制"});
+  } catch {
+    emit("notice", {message: "浏览器未允许写入剪贴板，请手动复制路径。", kind: "error", title: "复制路径失败"});
   }
 }
 
@@ -298,6 +380,12 @@ const handleNodeKeyDown = async (node: FileTreeData, event: KeyboardEvent) => {
 }
 
 const handleTreeKeyDown = (event: KeyboardEvent) => {
+  if (contextMenu.value.visible && event.key === "Escape") {
+    event.preventDefault();
+    closeContextMenu();
+    return;
+  }
+
   const row = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>(".tree-node") : null;
   const path = row?.dataset.treePath ?? currentFocusedPath.value;
   const node = findNodeByPath(props.data, path);
@@ -341,11 +429,28 @@ watch([() => props.currentPath, () => props.data], () => {
           @toggle="toggleNode"
           @navigate="navigateNode"
           @node-focus="handleNodeFocus"
+          @node-context-menu="openContextMenu"
           @node-drag-over="handleNodeDragOver"
           @node-drag-leave="handleNodeDragLeave"
           @node-drop="handleNodeDrop" />
     </template>
     <div v-else class="tree-empty">暂无目录</div>
+
+    <file-tree-context-menu
+        v-if="contextMenu.visible && contextNode"
+        :x="contextMenu.x"
+        :y="contextMenu.y"
+        :node="contextNode"
+        :expanded="contextNodeExpanded"
+        :loading="contextNodeLoading"
+        :has-children="contextNodeHasChildren"
+        @close="closeContextMenu"
+        @escape="closeContextMenu"
+        @open="openContextNode"
+        @open-new-tab="openContextNodeInNewTab"
+        @refresh="refreshContextNode"
+        @toggle="toggleContextNode"
+        @copy-path="copyContextNodePath" />
   </div>
 </template>
 

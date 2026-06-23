@@ -11,6 +11,8 @@ defineProps<{
 
 defineEmits<{
   (e: "drop-entries", payload: {entries: ExplorerEntry[]; target: FileTreeData; action: "copy" | "move"}): void;
+  (e: "open-new-tab", node: FileTreeData): void;
+  (e: "notice", payload: {message: string; kind?: "info" | "success" | "warning" | "error"; title?: string}): void;
 }>();
 </script>
 
@@ -20,7 +22,9 @@ defineEmits<{
         :data="treeData"
         :load-data="loadData"
         :current-path="currentPath"
-        @drop-entries="payload => $emit('drop-entries', payload)" />
+        @drop-entries="payload => $emit('drop-entries', payload)"
+        @open-new-tab="node => $emit('open-new-tab', node)"
+        @notice="payload => $emit('notice', payload)" />
   </aside>
 </template>
 

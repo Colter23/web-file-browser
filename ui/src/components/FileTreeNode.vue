@@ -22,6 +22,7 @@ const emit = defineEmits<{
   (e: "toggle", node: FileTreeData): void;
   (e: "navigate", node: FileTreeData): void;
   (e: "node-focus", node: FileTreeData): void;
+  (e: "node-context-menu", node: FileTreeData, event: MouseEvent): void;
   (e: "node-drag-over", node: FileTreeData, event: DragEvent): void;
   (e: "node-drag-leave", node: FileTreeData, event: DragEvent): void;
   (e: "node-drop", node: FileTreeData, event: DragEvent): void;
@@ -65,6 +66,7 @@ const handleToggle = (event: MouseEvent) => {
         :title="data.path"
         @click="handleRowClick"
         @focus="emit('node-focus', data)"
+        @contextmenu.prevent.stop="emit('node-context-menu', data, $event)"
         @dragover="emit('node-drag-over', data, $event)"
         @dragleave="emit('node-drag-leave', data, $event)"
         @drop="emit('node-drop', data, $event)">
@@ -104,6 +106,7 @@ const handleToggle = (event: MouseEvent) => {
           @toggle="node => emit('toggle', node)"
           @navigate="node => emit('navigate', node)"
           @node-focus="node => emit('node-focus', node)"
+          @node-context-menu="(node, event) => emit('node-context-menu', node, event)"
           @node-drag-over="(node, event) => emit('node-drag-over', node, event)"
           @node-drag-leave="(node, event) => emit('node-drag-leave', node, event)"
           @node-drop="(node, event) => emit('node-drop', node, event)" />
