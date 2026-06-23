@@ -111,7 +111,12 @@ defineExpose({
 }
 
 .operation-field input {
-  @apply h-9 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400;
+  @apply h-9 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 outline-none disabled:bg-slate-50 disabled:text-slate-400;
+}
+
+.operation-field input:focus {
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.2));
 }
 
 .operation-segmented {
@@ -123,11 +128,19 @@ defineExpose({
 }
 
 .operation-segmented button.active {
-  @apply bg-blue-600 text-white hover:bg-blue-600;
+  @apply text-white;
+  background: var(--app-accent, #2563eb);
+}
+
+.operation-segmented button.active:hover {
+  background: var(--app-accent, #2563eb);
 }
 
 .operation-hint {
-  @apply rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700;
+  @apply rounded-md px-3 py-2 text-xs;
+  border: 1px solid var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
 }
 
 .operation-secondary,
@@ -140,6 +153,11 @@ defineExpose({
 }
 
 .operation-primary {
-  @apply bg-blue-600 text-white hover:bg-blue-700;
+  @apply text-white;
+  background: var(--app-accent, #2563eb);
+}
+
+.operation-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 88%, black);
 }
 </style>

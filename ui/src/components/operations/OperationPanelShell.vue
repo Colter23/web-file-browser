@@ -91,7 +91,8 @@ defineExpose({
 }
 
 .operation-shell-icon.blue {
-  @apply bg-blue-50 text-blue-600;
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
 }
 
 .operation-shell-icon.red {
