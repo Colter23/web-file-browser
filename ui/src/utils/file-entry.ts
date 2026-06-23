@@ -195,15 +195,6 @@ export const fileEntryIconKind = (entry: FileEntryLike, editableExtensions: read
 
 export const fileEntryIconName = (entry: FileEntryLike, editableExtensions: readonly string[] = []) => `file.${fileEntryIconKind(entry, editableExtensions)}`;
 
-export const fileEntryIcon = (entry: FileEntryLike, editableExtensions: readonly string[] = []) => {
-  const kind = fileEntryIconKind(entry, editableExtensions);
-  if (kind === "folder") return "icon-folder-fill";
-  if (kind === "archive") return "icon-file-zip-fill";
-  if (kind === "image") return "icon-file-image-fill";
-  if (["text", "code", "config", "markup"].includes(kind)) return "icon-file-common-filling";
-  return "icon-file-fill";
-}
-
 export const formatEntryDate = (srcDate?: string) => {
   if (!srcDate) return "-";
   const date = new Date(srcDate);
