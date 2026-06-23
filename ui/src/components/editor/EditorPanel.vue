@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
-import Icon from "../Icon.vue";
+import {computed, nextTick, onBeforeUnmount, onMounted, ref} from "vue";
 import CodeEditor from "./CodeEditor.vue";
 import editorConfig from "../../assets/editor-config.json";
 import {useFileStore} from "../../store";
@@ -10,6 +9,7 @@ import {useEditorSearch} from "../../composables/useEditorSearch.ts";
 import {useEditorStatusText} from "../../composables/useEditorStatusText.ts";
 import type {CodeEditorExpose, EditorMenuName} from "./types.ts";
 import EditorGotoBar from "./EditorGotoBar.vue";
+import EditorConfirmDialog from "./EditorConfirmDialog.vue";
 import EditorInfoBar from "./EditorInfoBar.vue";
 import EditorMenuLayer from "./EditorMenuLayer.vue";
 import EditorSearchBar from "./EditorSearchBar.vue";
@@ -18,7 +18,6 @@ import EditorTitleBar from "./EditorTitleBar.vue";
 
 const fileStore = useFileStore();
 const editorRef = ref<CodeEditorExpose | null>(null);
-const confirmRef = ref<HTMLElement | null>(null);
 const activeMenu = ref<EditorMenuName>("");
 const {
   currentTheme,
@@ -220,12 +219,6 @@ const handleKeyDown = (event: KeyboardEvent) => {
   }
 }
 
-watch(pendingAction, async action => {
-  if (!action) return;
-  await nextTick();
-  confirmRef.value?.focus();
-});
-
 onMounted(() => {
   window.addEventListener("keydown", handleKeyDown);
   window.addEventListener("beforeunload", handleBeforeUnload);
@@ -332,22 +325,17 @@ onBeforeUnmount(() => {
         <span>{{ errorText }}</span>
         <button @click="reload">重试</button>
       </div>
-      <div v-if="pendingAction" class="editor-confirm-mask" @click.stop>
-        <section ref="confirmRef" class="editor-confirm" tabindex="-1" @keydown.esc.prevent.stop="cancelPendingAction">
-          <div class="confirm-icon">
-            <icon icon="icon-edit-filling" color="#2563eb" />
-          </div>
-          <div class="confirm-content">
-            <h3>{{ confirmTitle }}</h3>
-            <p>{{ confirmDescription }}</p>
-          </div>
-          <div class="confirm-actions">
-            <button class="confirm-secondary" :disabled="pendingBusy" @click="cancelPendingAction">取消</button>
-            <button class="confirm-danger" :disabled="pendingBusy" @click="discardPendingAction">{{ confirmDiscardText }}</button>
-            <button class="confirm-primary" :disabled="!canSave || pendingBusy" @click="savePendingAction">{{ confirmSaveText }}</button>
-          </div>
-        </section>
-      </div>
+      <editor-confirm-dialog
+          :visible="Boolean(pendingAction)"
+          :title="confirmTitle"
+          :description="confirmDescription"
+          :save-text="confirmSaveText"
+          :discard-text="confirmDiscardText"
+          :can-save="canSave"
+          :busy="pendingBusy"
+          @cancel="cancelPendingAction"
+          @discard="discardPendingAction"
+          @save="savePendingAction" />
     </main>
 
     <editor-status-bar
@@ -388,56 +376,6 @@ onBeforeUnmount(() => {
 
 .editor-overlay button {
   @apply rounded-md border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:bg-blue-50;
-}
-
-.editor-confirm-mask {
-  @apply absolute inset-2 z-20 flex items-center justify-center rounded-md bg-slate-900/15 px-4 backdrop-blur-sm;
-}
-
-.editor-confirm {
-  @apply grid w-full max-w-lg grid-cols-[2rem_1fr] gap-3 rounded-md border border-slate-200 bg-white p-4 text-slate-700 shadow-2xl outline-none;
-}
-
-.editor-confirm:focus-visible {
-  @apply ring-2 ring-inset ring-blue-300;
-}
-
-.confirm-icon {
-  @apply flex h-8 w-8 items-center justify-center rounded-md bg-blue-50;
-}
-
-.confirm-content {
-  @apply min-w-0;
-}
-
-.confirm-content h3 {
-  @apply text-sm font-semibold text-slate-900;
-}
-
-.confirm-content p {
-  @apply mt-1 text-xs leading-5 text-slate-500;
-}
-
-.confirm-actions {
-  @apply col-span-2 mt-1 flex justify-end gap-2;
-}
-
-.confirm-primary,
-.confirm-secondary,
-.confirm-danger {
-  @apply h-8 rounded-md border px-3 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50;
-}
-
-.confirm-primary {
-  @apply border-blue-600 bg-blue-600 text-white hover:bg-blue-700;
-}
-
-.confirm-secondary {
-  @apply border-slate-200 bg-white text-slate-700 hover:bg-slate-50;
-}
-
-.confirm-danger {
-  @apply border-red-200 bg-white text-red-600 hover:bg-red-50;
 }
 
 </style>
