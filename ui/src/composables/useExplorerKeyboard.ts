@@ -1,4 +1,5 @@
 import type {ExplorerEntry} from "../components/explorer/types.ts";
+import type {ExplorerFocusMoveMode} from "./useExplorerSelection.ts";
 
 type MaybePromise<T = unknown> = T | Promise<T>;
 
@@ -32,7 +33,7 @@ type ExplorerKeyboardOptions = {
   deleteEntry: (entry: ExplorerEntry) => void;
   startRename: (entry: ExplorerEntry | null) => void;
   handleTypeahead: (event: KeyboardEvent) => boolean;
-  moveFocus: (key: string, extend: boolean, preserveSelection?: boolean) => void;
+  moveFocus: (key: string, mode?: ExplorerFocusMoveMode) => void;
   applyViewShortcut?: (code: string) => boolean;
 }
 
@@ -238,7 +239,12 @@ export const useExplorerKeyboard = ({
     if (!navigationKeys.has(event.key)) return false;
     event.preventDefault();
     closeContextMenu();
-    moveFocus(event.key, event.shiftKey, (event.ctrlKey || event.metaKey) && !event.shiftKey);
+    const mode: ExplorerFocusMoveMode = event.shiftKey
+        ? "extendSelection"
+        : event.ctrlKey || event.metaKey
+          ? "moveFocusOnly"
+          : "replaceSelection";
+    moveFocus(event.key, mode);
     return true;
   }
 

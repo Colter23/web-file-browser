@@ -8,6 +8,8 @@ export type ExplorerSelectionSnapshot = {
   anchorPath: string;
 }
 
+export type ExplorerFocusMoveMode = "replaceSelection" | "extendSelection" | "moveFocusOnly";
+
 type ExplorerSelectionOptions = {
   entries: ComputedRef<ExplorerEntry[]>;
   itemRefs: Map<string, HTMLElement>;
@@ -175,7 +177,7 @@ export const useExplorerSelection = ({
     return true;
   }
 
-  const moveFocus = (key: string, extend: boolean, preserveSelection = false) => {
+  const moveFocus = (key: string, mode: ExplorerFocusMoveMode = "replaceSelection") => {
     if (!entries.value.length) return;
     const current = focusedPath.value ? indexOfPath(focusedPath.value) : -1;
     const columns = currentColumns();
@@ -193,9 +195,9 @@ export const useExplorerSelection = ({
     if (key === "End") nextIndex = entries.value.length - 1;
     const entry = entries.value[nextIndex];
     if (!entry) return;
-    if (preserveSelection) {
+    if (mode === "moveFocusOnly") {
       setSelection(selectedPaths.value, entry.path);
-    } else if (extend) {
+    } else if (mode === "extendSelection") {
       selectRange(entry.path, false);
     } else {
       setSelection([entry.path], entry.path);
