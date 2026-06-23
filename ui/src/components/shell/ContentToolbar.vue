@@ -1,11 +1,8 @@
 <script setup lang="ts">
+import type {ComponentPublicInstance} from "vue";
 import {ref} from "vue";
 import Breadcrumb from "../Breadcrumb.vue";
 import Icon from "../Icon.vue";
-import type {DirSortKey, DirSortOrder, ExplorerIconSize, ExplorerViewMode} from "../../class";
-import type {ExplorerViewModeSelection} from "../../composables/useExplorerViewMode.ts";
-import SortMenu from "./SortMenu.vue";
-import ViewModeMenu from "./ViewModeMenu.vue";
 
 type BreadcrumbExpose = {
   focusInput: () => void;
@@ -20,15 +17,9 @@ defineProps<{
   navigateBackTitle: string;
   navigateForwardTitle: string;
   navigateUpTitle: string;
-  viewModeIcon: string;
-  viewModeLabel: string;
-  viewModeButtonTitle: string;
-  viewMode: ExplorerViewMode;
-  iconSize: ExplorerIconSize;
-  sortKey: DirSortKey;
-  sortOrder: DirSortOrder;
-  previewPanelVisible: boolean;
-  canTogglePreviewPane: boolean;
+  searchText: string;
+  isFiltering: boolean;
+  setSearchInputRef: (element: Element | ComponentPublicInstance | null) => void;
 }>();
 
 const emit = defineEmits<{
@@ -37,10 +28,10 @@ const emit = defineEmits<{
   (e: "navigate-up"): void;
   (e: "refresh"): void;
   (e: "breadcrumb-navigate", path: string, complete?: NavigateComplete): void;
-  (e: "select-view-mode", selection: ExplorerViewModeSelection): void;
-  (e: "set-sort-key", key: DirSortKey): void;
-  (e: "set-sort-order", order: DirSortOrder): void;
-  (e: "toggle-preview"): void;
+  (e: "update:search-text", value: string): void;
+  (e: "search-enter"): void;
+  (e: "search-escape"): void;
+  (e: "clear-search"): void;
 }>();
 
 const breadcrumbRef = ref<BreadcrumbExpose | null>(null);
@@ -65,27 +56,22 @@ defineExpose({
       <icon icon="icon-refresh" size="large" />
     </button>
     <breadcrumb ref="breadcrumbRef" @navigate="(path, complete) => emit('breadcrumb-navigate', path, complete)"></breadcrumb>
-    <sort-menu
-        :sort-key="sortKey"
-        :sort-order="sortOrder"
-        @set-sort-key="key => emit('set-sort-key', key)"
-        @set-sort-order="order => emit('set-sort-order', order)" />
-    <view-mode-menu
-        :icon="viewModeIcon"
-        :label="viewModeLabel"
-        :title="viewModeButtonTitle"
-        :view-mode="viewMode"
-        :icon-size="iconSize"
-        @select="selection => emit('select-view-mode', selection)" />
-    <button
-        class="view-button"
-        :class="{active: previewPanelVisible}"
-        :disabled="!canTogglePreviewPane"
-        title="预览窗格 (Alt+P)"
-        @click="emit('toggle-preview')">
-      <icon icon="icon-file-image-fill" />
-      <span>{{ previewPanelVisible ? "关闭预览" : "预览窗格" }}</span>
-    </button>
+    <label class="search-box" :class="{active: isFiltering}">
+      <input
+          :ref="setSearchInputRef"
+          :value="searchText"
+          type="search"
+          placeholder="搜索当前文件夹"
+          aria-label="搜索当前文件夹"
+          title="搜索当前文件夹 (Ctrl+F / Ctrl+E)"
+          @input="emit('update:search-text', ($event.target as HTMLInputElement).value)"
+          @keydown.enter.prevent="emit('search-enter')"
+          @keydown.escape.prevent="emit('search-escape')">
+      <button v-if="isFiltering" type="button" title="清除筛选" @click.prevent="emit('clear-search')">
+        <icon icon="icon-close" />
+      </button>
+      <icon v-else icon="icon-fenxiang" />
+    </label>
   </div>
 </template>
 
@@ -96,8 +82,7 @@ defineExpose({
   @apply flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white/70 px-3;
 }
 
-.nav-button,
-.view-button {
+.nav-button {
   @apply inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-blue-50;
 }
 
@@ -109,15 +94,19 @@ defineExpose({
   @apply cursor-not-allowed text-slate-300 hover:bg-white;
 }
 
-.view-button {
-  @apply h-10 shrink-0 gap-2 px-3 text-sm;
+.search-box {
+  @apply flex h-10 w-72 max-w-[30vw] shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-slate-500;
 }
 
-.view-button.active {
-  @apply border-blue-200 bg-blue-50 text-blue-700;
+.search-box.active {
+  @apply border-blue-200 bg-blue-50 text-blue-700 ring-2 ring-blue-100;
 }
 
-.view-button:disabled {
-  @apply cursor-not-allowed text-slate-300 hover:bg-white;
+.search-box input {
+  @apply min-w-0 grow bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400;
+}
+
+.search-box button {
+  @apply -mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700;
 }
 </style>

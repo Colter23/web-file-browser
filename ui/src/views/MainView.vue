@@ -154,6 +154,10 @@ const {
   focusSearchInput
 } = useExplorerSearchBox({focusExplorer});
 
+const updateSearchText = (value: string) => {
+  searchText.value = value;
+}
+
 const {
   shouldPersistSelection,
   persistSelectedPaths,
@@ -539,21 +543,6 @@ const signOut = async () => {
           @close-right-tabs="closeRightTabsFromMenu"
           @close-context-menu="closeTabContextMenu" />
       <div class="top-actions">
-        <label class="search-box" :class="{active: isFiltering}">
-          <input
-              :ref="setSearchInputRef"
-              v-model="searchText"
-              type="search"
-              placeholder="搜索当前文件夹"
-              aria-label="搜索当前文件夹"
-              title="搜索当前文件夹 (Ctrl+F / Ctrl+E)"
-              @keydown.enter.prevent="focusExplorer"
-              @keydown.escape.prevent="handleSearchEscape">
-          <button v-if="isFiltering" type="button" title="清除筛选" @click.prevent="() => clearSearch()">
-            <icon icon="icon-close" />
-          </button>
-          <icon v-else icon="icon-fenxiang" />
-        </label>
         <button class="square-button" title="设置" @click="openSettings">
           <icon icon="icon-setting" size="large" />
         </button>
@@ -566,13 +555,32 @@ const signOut = async () => {
     </header>
 
     <main class="workspace" :class="{resizingSidebar: sidebarResizing}" :style="workspaceStyle">
+      <content-toolbar
+          ref="contentToolbarRef"
+          :can-navigate-back="canNavigateBack"
+          :can-navigate-forward="canNavigateForward"
+          :can-navigate-up="canNavigateUp"
+          :navigate-back-title="navigateBackTitle"
+          :navigate-forward-title="navigateForwardTitle"
+          :navigate-up-title="navigateUpTitle"
+          :search-text="searchText"
+          :is-filtering="isFiltering"
+          :set-search-input-ref="setSearchInputRef"
+          @navigate-back="navigateBack"
+          @navigate-forward="navigateForward"
+          @navigate-up="navigateUp"
+          @refresh="refreshCurrent(true)"
+          @breadcrumb-navigate="handleBreadcrumbNavigate"
+          @update:search-text="updateSearchText"
+          @search-enter="focusExplorer"
+          @search-escape="handleSearchEscape"
+          @clear-search="() => clearSearch()" />
+
+      <div class="workspace-body">
       <sidebar-panel
           :tree-data="treeData"
           :load-data="handleLoad"
-          :current-path="fileStore.currentPath"
-          @upload="uploadInput?.click()"
-          @create-file="openCreatePanel('file')"
-          @create-folder="openCreatePanel('folder')" />
+          :current-path="fileStore.currentPath" />
 
       <div
           class="sidebar-resizer"
@@ -589,33 +597,6 @@ const signOut = async () => {
       </div>
 
       <section class="content-pane">
-        <content-toolbar
-            ref="contentToolbarRef"
-            :can-navigate-back="canNavigateBack"
-            :can-navigate-forward="canNavigateForward"
-            :can-navigate-up="canNavigateUp"
-            :navigate-back-title="navigateBackTitle"
-            :navigate-forward-title="navigateForwardTitle"
-            :navigate-up-title="navigateUpTitle"
-            :view-mode-icon="currentViewModeMeta.icon"
-            :view-mode-label="currentViewModeLabel"
-            :view-mode-button-title="viewModeButtonTitle"
-            :view-mode="fileStore.viewMode"
-            :icon-size="fileStore.iconSize"
-            :sort-key="fileStore.sortKey"
-            :sort-order="fileStore.sortOrder"
-            :preview-panel-visible="previewPanelVisible"
-            :can-toggle-preview-pane="canTogglePreviewPane"
-            @navigate-back="navigateBack"
-            @navigate-forward="navigateForward"
-            @navigate-up="navigateUp"
-            @refresh="refreshCurrent(true)"
-            @breadcrumb-navigate="handleBreadcrumbNavigate"
-            @select-view-mode="selectViewMode"
-            @set-sort-key="key => explorerRef?.setSortKey(key)"
-            @set-sort-order="order => explorerRef?.setSortOrder(order)"
-            @toggle-preview="togglePreviewFromShortcut" />
-
         <command-bar
             :has-selection="hasSelection"
             :can-paste-selection="canPasteSelection"
@@ -626,6 +607,16 @@ const signOut = async () => {
             :can-rename-selection="canRenameSelection"
             :can-delete-selection="canDeleteSelection"
             :selection-status-text="selectionStatusText"
+            :view-mode-icon="currentViewModeMeta.icon"
+            :view-mode-label="currentViewModeLabel"
+            :view-mode-button-title="viewModeButtonTitle"
+            :view-mode="fileStore.viewMode"
+            :icon-size="fileStore.iconSize"
+            :sort-key="fileStore.sortKey"
+            :sort-order="fileStore.sortOrder"
+            :preview-panel-visible="previewPanelVisible"
+            :can-toggle-preview-pane="canTogglePreviewPane"
+            @upload="uploadInput?.click()"
             @create-file="openCreatePanel('file')"
             @create-folder="openCreatePanel('folder')"
             @cut="cutSelected()"
@@ -636,7 +627,11 @@ const signOut = async () => {
             @archive="archiveSelected()"
             @extract="extractSelected()"
             @rename="startRenameSelected"
-            @delete="deleteSelected()" />
+            @delete="deleteSelected()"
+            @select-view-mode="selectViewMode"
+            @set-sort-key="key => explorerRef?.setSortKey(key)"
+            @set-sort-order="order => explorerRef?.setSortOrder(order)"
+            @toggle-preview="togglePreviewFromShortcut" />
         <input ref="uploadInput" class="hidden" type="file" multiple @change="uploadChanged">
 
         <task-panel
@@ -759,6 +754,7 @@ const signOut = async () => {
             @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)">
         </image-viewer>
       </section>
+      </div>
     </main>
   </div>
 </template>
@@ -778,22 +774,6 @@ const signOut = async () => {
   @apply flex h-full shrink-0 items-center gap-3;
 }
 
-.search-box {
-  @apply flex h-10 w-72 items-center gap-2 rounded-xl border border-white bg-white/70 px-3 shadow-sm backdrop-blur;
-}
-
-.search-box.active {
-  @apply border-blue-200 bg-white text-blue-700 ring-2 ring-blue-100;
-}
-
-.search-box input {
-  @apply min-w-0 grow bg-transparent text-sm outline-none placeholder:text-slate-400;
-}
-
-.search-box button {
-  @apply -mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700;
-}
-
 .square-button {
   @apply inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white bg-white/70 text-blue-600 shadow-sm backdrop-blur hover:bg-white;
 }
@@ -811,8 +791,12 @@ const signOut = async () => {
 }
 
 .workspace {
-  @apply mt-3 grid min-h-0 grow gap-0;
+  @apply mt-3 flex min-h-0 grow flex-col overflow-hidden rounded-xl border border-slate-200 bg-white/75 shadow-sm backdrop-blur;
   --sidebar-width: 17rem;
+}
+
+.workspace-body {
+  @apply grid min-h-0 grow gap-0;
   grid-template-columns: var(--sidebar-width) 0.75rem minmax(0, 1fr);
 }
 
@@ -836,7 +820,7 @@ const signOut = async () => {
 }
 
 .content-pane {
-  @apply relative flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white/80 shadow-sm backdrop-blur;
+  @apply relative flex min-h-0 flex-col overflow-hidden bg-white/80;
 }
 
 .browser-area {
