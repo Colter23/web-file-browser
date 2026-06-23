@@ -342,6 +342,7 @@ const handleViewportScroll = () => {
 
 const {
   viewMode,
+  viewModeClass,
   sortKey,
   sortOrder,
   sortOptions,
@@ -593,7 +594,7 @@ defineExpose({
     <div
         ref="viewportRef"
         class="explorer-viewport"
-        :class="[viewMode, itemSizeClass, {dropCurrent: dragState.overCurrentFolder}]"
+        :class="[viewModeClass, itemSizeClass, {dropCurrent: dragState.overCurrentFolder}]"
         role="listbox"
         aria-label="文件列表"
         aria-multiselectable="true"
@@ -636,6 +637,7 @@ defineExpose({
             :entry="entry"
             :entry-id="entryDomId(entry.path)"
             :view-mode="viewMode"
+            :icon-size="fileStore.iconSize"
             :grid-style="detailsGridStyle"
             :selected="isSelected(entry.path)"
             :focused="focusedPath === entry.path"
@@ -745,7 +747,7 @@ defineExpose({
   @apply bg-blue-50/25 ring-2 ring-inset ring-blue-400;
 }
 
-.explorer-viewport.details {
+.explorer-viewport.view-details {
   @apply min-w-0;
 }
 
@@ -753,28 +755,28 @@ defineExpose({
   @apply min-h-full p-2;
 }
 
-.details .entry-surface {
+.explorer-viewport.view-details .entry-surface {
   @apply flex w-max min-w-full flex-col gap-0 p-1;
 }
 
-.list .entry-surface {
+.explorer-viewport.view-list .entry-surface {
   @apply grid auto-rows-[2rem] grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-x-3 gap-y-1 p-2;
 }
 
-.icons .entry-surface {
+.explorer-viewport.view-icons .entry-surface {
   @apply grid content-start gap-2 p-3;
   grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
 }
 
-.icons.large .entry-surface {
+.explorer-viewport.view-icons.explorer-size-large .entry-surface {
   grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
 }
 
-.icons.small .entry-surface {
+.explorer-viewport.view-icons.explorer-size-small .entry-surface {
   grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
 }
 
-.tiles .entry-surface {
+.explorer-viewport.view-tiles .entry-surface {
   @apply grid content-start grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-2 p-3;
 }
 
@@ -782,9 +784,9 @@ defineExpose({
   @apply flex justify-center px-3 py-4;
 }
 
-.list .load-more-row,
-.icons .load-more-row,
-.tiles .load-more-row {
+.explorer-viewport.view-list .load-more-row,
+.explorer-viewport.view-icons .load-more-row,
+.explorer-viewport.view-tiles .load-more-row {
   grid-column: 1 / -1;
 }
 

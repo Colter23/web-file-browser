@@ -41,12 +41,13 @@ export const useExplorerPresentation = ({
   const fileStore = useFileStore();
 
   const viewMode = computed(() => fileStore.viewMode);
+  const viewModeClass = computed(() => `view-${fileStore.viewMode}`);
   const sortKey = computed(() => fileStore.sortKey);
   const sortOrder = computed(() => fileStore.sortOrder);
   const itemSizeClass = computed(() => ({
-    small: fileStore.iconSize === "small",
-    medium: fileStore.iconSize === "medium",
-    large: fileStore.iconSize === "large"
+    "explorer-size-small": fileStore.iconSize === "small",
+    "explorer-size-medium": fileStore.iconSize === "medium",
+    "explorer-size-large": fileStore.iconSize === "large"
   }));
   const iconSizeText = computed(() => iconSizeLabel[fileStore.iconSize]);
   const sortText = computed(() => {
@@ -87,6 +88,7 @@ export const useExplorerPresentation = ({
     sortKey,
     sortOrder,
     sortOptions,
+    viewModeClass,
     itemSizeClass,
     iconSizeText,
     sortText,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type {ComponentPublicInstance} from "vue";
-import type {ExplorerViewMode} from "../../class.ts";
+import type {ExplorerIconSize, ExplorerViewMode} from "../../class.ts";
 import type {ExplorerEntry} from "./types.ts";
 import Icon from "../Icon.vue";
 
@@ -8,6 +8,7 @@ defineProps<{
   entry: ExplorerEntry;
   entryId: string;
   viewMode: ExplorerViewMode;
+  iconSize: ExplorerIconSize;
   gridStyle?: Record<string, string>;
   selected: boolean;
   focused: boolean;
@@ -54,7 +55,7 @@ const updateRenameDraft = (event: Event) => {
   <article
       :id="entryId"
       class="entry-item"
-      :class="{selected, focused, image, dimmed, dragging, dropTarget}"
+      :class="[`view-${viewMode}`, `explorer-size-${iconSize}`, {selected, focused, image, dimmed, dragging, dropTarget}]"
       :style="viewMode === 'details' ? gridStyle : undefined"
       :title="entry.name"
       role="option"
@@ -137,30 +138,30 @@ const updateRenameDraft = (event: Event) => {
   @apply border-blue-500 bg-blue-50 ring-2 ring-inset ring-blue-400;
 }
 
-:global(.details) .entry-item {
+.entry-item.view-details {
   @apply grid h-8 items-center px-3;
   grid-template-columns: var(--details-name-width) var(--details-modified-width) var(--details-type-width) var(--details-size-width);
   width: calc(var(--details-grid-width) + 1.5rem);
   min-width: calc(var(--details-grid-width) + 1.5rem);
 }
 
-:global(.list) .entry-item {
+.entry-item.view-list {
   @apply flex h-8 items-center gap-2 px-2;
 }
 
-:global(.icons) .entry-item {
+.entry-item.view-icons {
   @apply flex h-32 flex-col items-center justify-start gap-2 p-2 text-center;
 }
 
-:global(.icons.small) .entry-item {
+.entry-item.view-icons.explorer-size-small {
   @apply h-24;
 }
 
-:global(.icons.large) .entry-item {
+.entry-item.view-icons.explorer-size-large {
   @apply h-40;
 }
 
-:global(.tiles) .entry-item {
+.entry-item.view-tiles {
   @apply grid min-h-20 grid-cols-[3.5rem_minmax(0,1fr)] grid-rows-[auto_auto] items-center gap-x-3 gap-y-1 p-2;
 }
 
@@ -168,15 +169,15 @@ const updateRenameDraft = (event: Event) => {
   @apply flex min-w-0 items-center gap-2;
 }
 
-:global(.details) .entry-name-cell {
+.entry-item.view-details .entry-name-cell {
   @apply min-w-0 px-2;
 }
 
-:global(.icons) .entry-name-cell {
+.entry-item.view-icons .entry-name-cell {
   @apply flex-col justify-start gap-2 text-center;
 }
 
-:global(.tiles) .entry-name-cell {
+.entry-item.view-tiles .entry-name-cell {
   @apply contents;
 }
 
@@ -184,29 +185,29 @@ const updateRenameDraft = (event: Event) => {
   @apply inline-flex shrink-0 items-center justify-center overflow-hidden text-slate-700;
 }
 
-:global(.details) .entry-visual,
-:global(.list) .entry-visual {
+.entry-item.view-details .entry-visual,
+.entry-item.view-list .entry-visual {
   @apply h-5 w-5 text-[1.15rem];
 }
 
-:global(.icons) .entry-visual {
+.entry-item.view-icons .entry-visual {
   @apply h-16 w-20 rounded border border-transparent bg-white text-[3rem];
 }
 
-:global(.icons.small) .entry-visual {
+.entry-item.view-icons.explorer-size-small .entry-visual {
   @apply h-11 w-14 text-[2.25rem];
 }
 
-:global(.icons.large) .entry-visual {
+.entry-item.view-icons.explorer-size-large .entry-visual {
   @apply h-24 w-32 text-[4.25rem];
 }
 
-:global(.tiles) .entry-visual {
+.entry-item.view-tiles .entry-visual {
   @apply row-span-2 h-14 w-14 rounded border border-slate-200 bg-slate-50 text-[2rem];
 }
 
-:global(.icons) .entry-item.image .entry-visual,
-:global(.tiles) .entry-item.image .entry-visual {
+.entry-item.view-icons.image .entry-visual,
+.entry-item.view-tiles.image .entry-visual {
   @apply border-slate-200 bg-slate-50 shadow-sm;
 }
 
@@ -214,8 +215,8 @@ const updateRenameDraft = (event: Event) => {
   @apply h-full w-full rounded object-cover;
 }
 
-:global(.details) .entry-visual img,
-:global(.list) .entry-visual img {
+.entry-item.view-details .entry-visual img,
+.entry-item.view-list .entry-visual img {
   @apply rounded-sm;
 }
 
@@ -223,33 +224,33 @@ const updateRenameDraft = (event: Event) => {
   @apply flex min-w-0 items-center gap-2;
 }
 
-:global(.icons) .entry-main {
+.entry-item.view-icons .entry-main {
   @apply flex-col gap-0;
 }
 
-:global(.tiles) .entry-main {
+.entry-item.view-tiles .entry-main {
   @apply flex-col items-start gap-0 self-end;
 }
 
 .entry-name {
-  @apply min-w-0 truncate;
+  @apply block w-full min-w-0 max-w-full truncate;
 }
 
 .entry-rename-input {
   @apply h-6 min-w-0 rounded border border-blue-500 bg-white px-1 text-sm text-slate-900 outline-none ring-2 ring-blue-200;
 }
 
-:global(.details) .entry-rename-input,
-:global(.list) .entry-rename-input,
-:global(.tiles) .entry-rename-input {
+.entry-item.view-details .entry-rename-input,
+.entry-item.view-list .entry-rename-input,
+.entry-item.view-tiles .entry-rename-input {
   @apply w-full;
 }
 
-:global(.icons) .entry-rename-input {
+.entry-item.view-icons .entry-rename-input {
   @apply w-full text-center;
 }
 
-:global(.icons) .entry-name {
+.entry-item.view-icons .entry-name {
   @apply line-clamp-2 whitespace-normal break-all;
 }
 
