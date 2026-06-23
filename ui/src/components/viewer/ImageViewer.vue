@@ -2,11 +2,11 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import {useImageZoomPan} from "../../composables/useImageZoomPan.ts";
-import {downloadUrl} from "../../network/api.ts";
 import type {ShellNoticePayload} from "../shell/types.ts";
 import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
 import {readBooleanStorage, writeBooleanStorage} from "../../utils/safe-storage.ts";
 import ImageViewerFilmstrip from "./ImageViewerFilmstrip.vue";
+import ImageViewerStage from "./ImageViewerStage.vue";
 import ImageViewerToolbar from "./ImageViewerToolbar.vue";
 
 const props = defineProps<{
@@ -301,27 +301,24 @@ onBeforeUnmount(() => {
           @toggle-filmstrip="toggleFilmstrip"
           @download="downloadCurrent"
           @close="close" />
-      <div
-          class="image-viewer-stage"
-          :class="{fit, panning: canPan, dragging}"
+      <image-viewer-stage
+          :entry="currentEntry"
+          :loading="loading"
+          :error="error"
+          :fit="fit"
+          :can-pan="canPan"
+          :dragging="dragging"
           :title="stageTitle"
-          @pointerdown="startPan"
-          @pointermove="movePan"
-          @pointerup="stopPan"
-          @pointercancel="stopPan"
-          @lostpointercapture="releasePointer"
+          :image-style="imageStyle"
+          @pointer-down="startPan"
+          @pointer-move="movePan"
+          @pointer-up="stopPan"
+          @pointer-cancel="stopPan"
+          @lost-pointer-capture="releasePointer"
           @wheel="handleWheel"
-          @dblclick="toggleZoomMode">
-        <div v-if="loading" class="image-viewer-status">正在加载图片...</div>
-        <div v-if="error" class="image-viewer-status error">{{ error }}</div>
-        <img
-            :key="currentEntry.path"
-            :src="downloadUrl(currentEntry.path)"
-            :alt="currentEntry.name"
-            :style="imageStyle"
-            @load="handleLoad"
-            @error="handleError">
-      </div>
+          @toggle-zoom="toggleZoomMode"
+          @load="handleLoad"
+          @error="handleError" />
       <image-viewer-filmstrip
           v-if="canShowFilmstrip"
           :items="filmstripEntries"
@@ -343,29 +340,4 @@ onBeforeUnmount(() => {
   @apply fixed inset-0 z-50 rounded-none;
 }
 
-.image-viewer-stage {
-  @apply relative flex min-h-0 grow touch-none select-none items-center justify-center overflow-hidden bg-transparent p-5;
-}
-
-.image-viewer-status {
-  @apply absolute rounded-md border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 shadow-xl backdrop-blur;
-}
-
-.image-viewer-status.error {
-  @apply border-red-300/30 bg-red-950/70 text-red-100;
-}
-
-.image-viewer-stage.panning {
-  @apply cursor-grab;
-}
-
-.image-viewer-stage.dragging {
-  @apply cursor-grabbing;
-}
-
-.image-viewer-stage img {
-  @apply max-h-full max-w-full select-none rounded object-contain shadow-2xl;
-  user-select: none;
-  -webkit-user-drag: none;
-}
 </style>
