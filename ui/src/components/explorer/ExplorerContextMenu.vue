@@ -2,6 +2,7 @@
 import {computed, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ExplorerEntry} from "./types.ts";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
+import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
 import {useViewportMenuPosition} from "../../composables/useViewportMenuPosition.ts";
 
 const props = defineProps<{
@@ -65,21 +66,18 @@ const refreshMenu = async () => {
   await focusFirstMenuButton();
 }
 
-const closeOnOutsidePointerDown = (event: PointerEvent) => {
-  const menu = menuRef.value;
-  if (menu && event.target instanceof Node && menu.contains(event.target)) return;
-  emit("close");
-}
+useOutsidePointerDown({
+  refs: [menuRef],
+  onOutsidePointerDown: () => emit("close")
+});
 
 onMounted(() => {
   void refreshMenu();
   window.addEventListener("resize", refreshMenu);
-  document.addEventListener("pointerdown", closeOnOutsidePointerDown, true);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", refreshMenu);
-  document.removeEventListener("pointerdown", closeOnOutsidePointerDown, true);
 });
 
 watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props.selectionCount] as const, () => {

@@ -4,6 +4,7 @@ import type {ExplorerTab} from "../../class";
 import type {TabContextMenuState, TabDropPlacement} from "./types.ts";
 import Icon from "../Icon.vue";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
+import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
 import {useViewportMenuPosition} from "../../composables/useViewportMenuPosition.ts";
 
 const props = defineProps<{
@@ -58,6 +59,12 @@ const refreshContextMenu = async () => {
   await placeContextMenu({x: props.contextMenu.x, y: props.contextMenu.y});
   await focusFirstMenuButton();
 }
+
+useOutsidePointerDown({
+  refs: [contextMenuRef],
+  enabled: () => props.contextMenu.visible,
+  onOutsidePointerDown: () => emit("close-context-menu")
+});
 
 watch(() => [props.activeTabId, props.tabs.length] as const, () => {
   void revealActiveTab();

@@ -3,6 +3,7 @@ import {nextTick, onBeforeUnmount, onMounted, ref} from "vue";
 import type {ExplorerIconSize, ExplorerViewMode} from "../../class";
 import type {ExplorerViewModeSelection} from "../../composables/useExplorerViewMode.ts";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
+import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
 import Icon from "../Icon.vue";
 
 type ViewModeOption = {
@@ -146,24 +147,21 @@ const handleButtonKeyDown = (event: KeyboardEvent) => {
   else void focusActiveOption();
 }
 
-const handleDocumentPointerDown = (event: PointerEvent) => {
-  if (!open.value) return;
-  const target = event.target;
-  if (target instanceof Node && viewMenuRef.value?.contains(target)) return;
-  close();
-}
+useOutsidePointerDown({
+  refs: [viewMenuRef],
+  enabled: () => open.value,
+  onOutsidePointerDown: close
+});
 
 const handleDocumentKeyDown = (event: KeyboardEvent) => {
   if (event.key === "Escape") close();
 }
 
 onMounted(() => {
-  window.addEventListener("pointerdown", handleDocumentPointerDown);
   window.addEventListener("keydown", handleDocumentKeyDown);
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener("pointerdown", handleDocumentPointerDown);
   window.removeEventListener("keydown", handleDocumentKeyDown);
 });
 </script>
