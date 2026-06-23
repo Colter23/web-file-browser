@@ -10,6 +10,8 @@ type MainViewLifecycleOptions = {
   handleHistoryMouseUp: (event: MouseEvent) => void;
   handleHistoryAuxClick: (event: MouseEvent) => void;
   closeTabContextMenu: () => void;
+  handleSidebarResizeMove: (event: PointerEvent) => void;
+  finishSidebarResize: () => void;
   handlePreviewPaneResizeMove: (event: PointerEvent) => void;
   finishPreviewPaneResize: () => void;
   handleWindowResize: () => void;
@@ -25,6 +27,8 @@ export const useMainViewLifecycle = ({
   handleHistoryMouseUp,
   handleHistoryAuxClick,
   closeTabContextMenu,
+  handleSidebarResizeMove,
+  finishSidebarResize,
   handlePreviewPaneResizeMove,
   finishPreviewPaneResize,
   handleWindowResize
@@ -50,8 +54,11 @@ export const useMainViewLifecycle = ({
     listen("auxclick", handleHistoryAuxClick);
     listen("click", closeTabContextMenu);
     listen("scroll", closeTabContextMenu, true);
+    listen("pointermove", handleSidebarResizeMove);
     listen("pointermove", handlePreviewPaneResizeMove);
+    listen("pointerup", finishSidebarResize);
     listen("pointerup", finishPreviewPaneResize);
+    listen("pointercancel", finishSidebarResize);
     listen("pointercancel", finishPreviewPaneResize);
     listen("resize", handleWindowResize);
   });

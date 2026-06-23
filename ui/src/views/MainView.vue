@@ -24,6 +24,7 @@ import SidebarPanel from "../components/shell/SidebarPanel.vue";
 import UploadDropOverlay from "../components/shell/UploadDropOverlay.vue";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import {usePreviewPaneResize} from "../composables/usePreviewPaneResize.ts";
+import {useSidebarResize} from "../composables/useSidebarResize.ts";
 import {useShellNotice} from "../composables/useShellNotice.ts";
 import {useFileOperations} from "../composables/useFileOperations.ts";
 import {useExplorerTabs} from "../composables/useExplorerTabs.ts";
@@ -70,6 +71,19 @@ type FocusablePanelExpose = {
 const router = useRouter();
 const fileStore = useFileStore();
 const {
+  width: sidebarWidth,
+  resizing: sidebarResizing,
+  minWidth: sidebarMinWidth,
+  maxWidth: sidebarMaxWidth,
+  workspaceStyle,
+  startResize: startSidebarResize,
+  handleResizeMove: handleSidebarResizeMove,
+  finishResize: finishSidebarResize,
+  resetWidth: resetSidebarWidth,
+  handleWindowResize: handleSidebarWindowResize,
+  handleResizeKeyDown: handleSidebarResizeKeyDown
+} = useSidebarResize();
+const {
   width: previewPaneWidth,
   resizing: previewPaneResizing,
   minWidth: previewPaneMinWidth,
@@ -79,7 +93,7 @@ const {
   handleResizeMove: handlePreviewPaneResizeMove,
   finishResize: finishPreviewPaneResize,
   resetWidth: resetPreviewPaneWidth,
-  handleWindowResize,
+  handleWindowResize: handlePreviewPaneWindowResize,
   handleResizeKeyDown: handlePreviewPaneResizeKeyDown
 } = usePreviewPaneResize();
 const {
@@ -433,9 +447,14 @@ useMainViewLifecycle({
   handleHistoryMouseUp,
   handleHistoryAuxClick,
   closeTabContextMenu,
+  handleSidebarResizeMove,
+  finishSidebarResize,
   handlePreviewPaneResizeMove,
   finishPreviewPaneResize,
-  handleWindowResize
+  handleWindowResize: () => {
+    handleSidebarWindowResize();
+    handlePreviewPaneWindowResize();
+  }
 });
 
 const openPreviewInEditor = async (entry = previewEntry.value) => {
@@ -539,7 +558,7 @@ const signOut = async () => {
       </div>
     </header>
 
-    <main class="workspace">
+    <main class="workspace" :class="{resizingSidebar: sidebarResizing}" :style="workspaceStyle">
       <sidebar-panel
           :tree-data="treeData"
           :load-data="handleLoad"
@@ -547,6 +566,20 @@ const signOut = async () => {
           @upload="uploadInput?.click()"
           @create-file="openCreatePanel('file')"
           @create-folder="openCreatePanel('folder')" />
+
+      <div
+          class="sidebar-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          :aria-valuemin="sidebarMinWidth"
+          :aria-valuemax="sidebarMaxWidth"
+          :aria-valuenow="sidebarWidth"
+          tabindex="0"
+          title="拖动调整文件树宽度，双击恢复默认"
+          @pointerdown="startSidebarResize"
+          @keydown="handleSidebarResizeKeyDown"
+          @dblclick="resetSidebarWidth">
+      </div>
 
       <section class="content-pane">
         <content-toolbar
@@ -762,7 +795,28 @@ const signOut = async () => {
 }
 
 .workspace {
-  @apply mt-3 grid min-h-0 grow grid-cols-[17rem_minmax(0,1fr)] gap-3;
+  @apply mt-3 grid min-h-0 grow gap-0;
+  --sidebar-width: 17rem;
+  grid-template-columns: var(--sidebar-width) 0.75rem minmax(0, 1fr);
+}
+
+.workspace.resizingSidebar {
+  @apply cursor-col-resize select-none;
+}
+
+.sidebar-resizer {
+  @apply relative z-20 h-full cursor-col-resize touch-none outline-none;
+}
+
+.sidebar-resizer::after {
+  content: "";
+  @apply absolute top-2 bottom-2 left-1/2 w-px -translate-x-1/2 rounded-full bg-transparent;
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer:focus-visible::after,
+.workspace.resizingSidebar .sidebar-resizer::after {
+  @apply bg-blue-500;
 }
 
 .content-pane {
