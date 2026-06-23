@@ -359,7 +359,12 @@ h2 {
 }
 
 input {
-  @apply h-9 min-w-0 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-blue-500
+  @apply h-9 min-w-0 rounded-md border border-slate-300 px-2 text-sm outline-none
+}
+
+input:focus {
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.2));
 }
 
 .check-field {
@@ -382,7 +387,12 @@ input {
 }
 
 .primary-button {
-  @apply bg-blue-600 text-white hover:bg-blue-700
+  @apply text-white;
+  background: var(--app-accent, #2563eb);
+}
+
+.primary-button:hover {
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 88%, black);
 }
 
 .plain-button,

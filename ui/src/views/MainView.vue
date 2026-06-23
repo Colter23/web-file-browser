@@ -773,7 +773,8 @@ const signOut = async () => {
 }
 
 .square-button {
-  @apply inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white bg-white/70 text-blue-600 shadow-sm backdrop-blur hover:bg-white;
+  @apply inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white bg-white/70 shadow-sm backdrop-blur hover:bg-white;
+  color: var(--app-accent, #2563eb);
 }
 
 .task-top-button {
@@ -781,7 +782,9 @@ const signOut = async () => {
 }
 
 .task-top-button.active {
-  @apply border-blue-200 bg-blue-50 text-blue-700;
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
 }
 
 .plain-button {
@@ -814,7 +817,7 @@ const signOut = async () => {
 .sidebar-resizer:hover::after,
 .sidebar-resizer:focus-visible::after,
 .workspace.resizingSidebar .sidebar-resizer::after {
-  @apply bg-blue-500;
+  background: var(--app-accent, #2563eb);
 }
 
 .content-pane {
@@ -839,7 +842,7 @@ const signOut = async () => {
 }
 
 .browser-main.dropActive {
-  @apply bg-blue-50/40;
+  background: color-mix(in srgb, var(--app-accent-soft, #eff6ff) 42%, transparent);
 }
 
 .preview-pane {
@@ -857,7 +860,7 @@ const signOut = async () => {
 
 .preview-resizer:hover::after,
 .browser-area.resizingPreview .preview-resizer::after {
-  @apply bg-blue-500;
+  background: var(--app-accent, #2563eb);
 }
 
 </style>

@@ -58,7 +58,11 @@ export const useAppearanceStore = defineStore("appearance", {
       return {
         "--app-accent": theme.color,
         "--app-accent-soft": theme.soft,
-        "--app-accent-border": theme.border
+        "--app-accent-border": theme.border,
+        "--app-accent-hover": `color-mix(in srgb, ${theme.color} 8%, white)`,
+        "--app-accent-selected": `color-mix(in srgb, ${theme.color} 18%, white)`,
+        "--app-accent-ring": `color-mix(in srgb, ${theme.color} 24%, transparent)`,
+        "--app-accent-tint": `color-mix(in srgb, ${theme.color} 10%, transparent)`
       };
     }
   },

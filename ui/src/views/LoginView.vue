@@ -90,7 +90,12 @@ p {
 }
 
 .field input {
-  @apply h-10 rounded-md border border-slate-300 px-3 outline-none focus:border-blue-500
+  @apply h-10 rounded-md border border-slate-300 px-3 outline-none
+}
+
+.field input:focus {
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.2));
 }
 
 .message {
@@ -98,6 +103,11 @@ p {
 }
 
 .primary-button {
-  @apply h-10 rounded-md bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed
+  @apply h-10 rounded-md text-white font-medium disabled:bg-slate-300 disabled:cursor-not-allowed;
+  background: var(--app-accent, #2563eb);
+}
+
+.primary-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 88%, black);
 }
 </style>

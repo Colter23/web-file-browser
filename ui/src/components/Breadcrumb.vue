@@ -144,7 +144,11 @@ onBeforeUnmount(() => {
 }
 
 .path-item {
-  @apply inline-flex h-7 cursor-pointer items-center rounded-sm text-nowrap truncate text-sm hover:bg-blue-50;
+  @apply inline-flex h-7 cursor-pointer items-center rounded-sm text-nowrap truncate text-sm;
+}
+
+.path-item:hover {
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 .separator {
