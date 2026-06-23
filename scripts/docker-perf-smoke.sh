@@ -199,7 +199,7 @@ verify_large_directory() {
   body=$(curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/file/files/large-dir?detail=basic&limit=${DIR_PAGE_LIMIT}&offset=0")
   count=$(printf '%s' "${body}" | json_query '.file | length')
   has_more=$(printf '%s' "${body}" | json_query '.hasMore')
-  printf '%s' "${body}" | jq -e 'has("folderTotal") | not and has("fileTotal") | not' >/dev/null \
+  printf '%s' "${body}" | jq -e 'has("folderTotal") == false and has("fileTotal") == false' >/dev/null \
     || fail "默认目录分页不应返回总数"
 
   local expected_count=${DIR_ENTRIES}
