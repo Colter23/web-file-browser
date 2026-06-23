@@ -554,6 +554,10 @@ const signOut = async () => {
         <button class="square-button" title="设置" @click="openSettings">
           <icon icon="icon-setting" size="large" />
         </button>
+        <button :class="['task-top-button', {active: taskPanelVisible}]" title="后台任务" @click="toggleTaskPanel">
+          <icon icon="icon-file-common-filling" />
+          <span>{{ taskButtonText }}</span>
+        </button>
         <button class="plain-button" @click="signOut">退出</button>
       </div>
     </header>
@@ -615,8 +619,6 @@ const signOut = async () => {
             :can-rename-selection="canRenameSelection"
             :can-delete-selection="canDeleteSelection"
             :selection-status-text="selectionStatusText"
-            :task-panel-visible="taskPanelVisible"
-            :task-button-text="taskButtonText"
             @create-file="openCreatePanel('file')"
             @create-folder="openCreatePanel('folder')"
             @cut="cutSelected()"
@@ -627,8 +629,7 @@ const signOut = async () => {
             @archive="archiveSelected()"
             @extract="extractSelected()"
             @rename="startRenameSelected"
-            @delete="deleteSelected()"
-            @toggle-tasks="toggleTaskPanel" />
+            @delete="deleteSelected()" />
         <input ref="uploadInput" class="hidden" type="file" multiple @change="uploadChanged">
 
         <task-panel
@@ -788,6 +789,14 @@ const signOut = async () => {
 
 .square-button {
   @apply inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white bg-white/70 text-blue-600 shadow-sm backdrop-blur hover:bg-white;
+}
+
+.task-top-button {
+  @apply inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-white bg-white/70 px-3 text-sm text-slate-700 shadow-sm backdrop-blur hover:bg-white;
+}
+
+.task-top-button.active {
+  @apply border-blue-200 bg-blue-50 text-blue-700;
 }
 
 .plain-button {

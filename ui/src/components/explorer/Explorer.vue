@@ -348,14 +348,11 @@ const {
   sortOrder,
   sortOptions,
   itemSizeClass,
-  iconSizeText,
   sortText,
   nextSortOrder,
   changeSort,
   changeSortOrder,
-  setViewMode,
   handleViewportWheel,
-  cycleIconSize
 } = useExplorerPresentation({
   loading,
   markStale,
@@ -584,13 +581,9 @@ defineExpose({
         :sort-key="sortKey"
         :sort-order="sortOrder"
         :next-sort-order="nextSortOrder"
-        :view-mode="viewMode"
-        :icon-size-text="iconSizeText"
         :loading="loading"
         @change-sort="changeSort"
-        @change-sort-order="changeSortOrder"
-        @set-view-mode="setViewMode"
-        @cycle-icon-size="cycleIconSize" />
+        @change-sort-order="changeSortOrder" />
 
     <div
         ref="viewportRef"

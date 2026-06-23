@@ -11,8 +11,6 @@ defineProps<{
   canRenameSelection: boolean;
   canDeleteSelection: boolean;
   selectionStatusText: string;
-  taskPanelVisible: boolean;
-  taskButtonText: string;
 }>();
 
 const emit = defineEmits<{
@@ -27,7 +25,6 @@ const emit = defineEmits<{
   (e: "extract"): void;
   (e: "rename"): void;
   (e: "delete"): void;
-  (e: "toggle-tasks"): void;
 }>();
 </script>
 
@@ -80,10 +77,6 @@ const emit = defineEmits<{
       <span>删除</span>
     </button>
     <span class="command-status" :title="`${selectionStatusText} · Ctrl+A 全选`">{{ selectionStatusText }}</span>
-    <button :class="['command-button', {active: taskPanelVisible}]" @click="emit('toggle-tasks')">
-      <icon icon="icon-file-common-filling" />
-      <span>{{ taskButtonText }}</span>
-    </button>
   </div>
 </template>
 

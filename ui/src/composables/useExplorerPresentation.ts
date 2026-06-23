@@ -22,12 +22,6 @@ const sortOptions: {key: DirSortKey; label: string}[] = [
   {key: "size", label: "大小"}
 ];
 
-const iconSizeLabel = {
-  small: "小图标",
-  medium: "中图标",
-  large: "大图标"
-};
-
 export const useExplorerPresentation = ({
   loading,
   markStale,
@@ -49,7 +43,6 @@ export const useExplorerPresentation = ({
     "explorer-size-medium": fileStore.iconSize === "medium",
     "explorer-size-large": fileStore.iconSize === "large"
   }));
-  const iconSizeText = computed(() => iconSizeLabel[fileStore.iconSize]);
   const sortText = computed(() => {
     const keyText = sortOptions.find(option => option.key === fileStore.sortKey)?.label ?? "名称";
     const orderText = fileStore.sortOrder === "asc" ? "升序" : "降序";
@@ -74,9 +67,7 @@ export const useExplorerPresentation = ({
   }
 
   const {
-    setViewMode,
     handleViewportWheel,
-    cycleIconSize
   } = useExplorerViewDensity({
     focusViewport,
     observePendingThumbnails,
@@ -90,13 +81,10 @@ export const useExplorerPresentation = ({
     sortOptions,
     viewModeClass,
     itemSizeClass,
-    iconSizeText,
     sortText,
     nextSortOrder,
     changeSort,
     changeSortOrder,
-    setViewMode,
     handleViewportWheel,
-    cycleIconSize
   };
 }
