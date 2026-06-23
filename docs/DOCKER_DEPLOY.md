@@ -123,6 +123,8 @@ bash scripts/docker-perf-smoke.sh
 
 运行脚本需要宿主机安装 Docker Compose v2、`curl`、`jq`、`cmp` 和 `dd`。脚本会创建较多临时文件并读写随机数据，建议在 Linux Docker 宿主机本地磁盘上运行，不要在 Windows Docker Desktop 的 Windows 路径挂载上判断最终性能。
 
+当前默认参数已经在真实 Linux Docker 环境通过：1 万项目录创建和分页、64 MiB 上传下载、Range、编辑保护、16 MiB tar.gz 压缩解压、回收站恢复和指标接口均已覆盖。
+
 ## 已验证的 Linux Docker 问题
 
 真实 Linux Docker 冒烟已经通过，并修复过以下部署问题：
@@ -131,6 +133,7 @@ bash scripts/docker-perf-smoke.sh
 - 运行镜像不再安装 `curl`，健康检查改为应用二进制 `web-file-browser --healthcheck`，减少镜像构建耗时和运行依赖。
 - 运行镜像直接使用数字 UID/GID，不在构建阶段创建固定用户或用户组，避免宿主机传入 `0:0` 时因为 GID 已存在导致构建失败。
 - 回收站恢复已兼容跨挂载点移动；当 `rename` 因跨设备失败时，会回退为复制后清理，适配 `/app/data/trash` 和 `/mnt/files` 分属不同 Docker bind mount 的场景。
+- 大文件 multipart 上传已关闭框架默认 body limit，继续由 `WEB_FILE_BROWSER_MAX_UPLOAD_BYTES` 控制项目级上传上限，避免 64 MiB 流式上传被提前拦截为 `400`。
 
 ## 卷和目录
 

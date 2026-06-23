@@ -2,7 +2,7 @@
 
 网页本地文件浏览器。后端使用 Rust，前端在 `ui` 目录中使用 Vue。
 
-项目边界和后续开发取舍见 [docs/PROJECT_BOUNDARY.md](docs/PROJECT_BOUNDARY.md)，长期路线图见 [docs/ROADMAP.md](docs/ROADMAP.md)，可执行任务清单见 [docs/TASK_BACKLOG.md](docs/TASK_BACKLOG.md)，API 错误码见 [docs/API_ERRORS.md](docs/API_ERRORS.md)，Linux Docker 部署见 [docs/DOCKER_DEPLOY.md](docs/DOCKER_DEPLOY.md)。
+项目边界和后续开发取舍见 [docs/PROJECT_BOUNDARY.md](docs/PROJECT_BOUNDARY.md)，长期路线图见 [docs/ROADMAP.md](docs/ROADMAP.md)，可执行任务清单见 [docs/TASK_BACKLOG.md](docs/TASK_BACKLOG.md)，后端 API 契约见 [docs/API_CONTRACT.md](docs/API_CONTRACT.md)，API 错误码见 [docs/API_ERRORS.md](docs/API_ERRORS.md)，Linux Docker 部署见 [docs/DOCKER_DEPLOY.md](docs/DOCKER_DEPLOY.md)。
 
 当前仍处于开发期，模型或接口设计不合理时优先破坏式重构，不为旧接口形状长期保留适配层。项目注释、文档、日志、错误提示、前端提示性文本和管理界面文案默认使用中文；后续改动触及旧英文注释或提示文案时也应同步中文化。
 
@@ -82,7 +82,7 @@ docker compose up -d --build
 
 首次启动前请修改 `.env` 中的 `WEB_FILE_BROWSER_ADMIN_PASSWORD`。默认数据卷是 `./data:/app/data`，业务文件示例目录是 `./files:/mnt/files`。
 在 Linux Docker 环境中可以运行 `scripts/docker-smoke.sh` 做自动冒烟验证。脚本会使用 `.smoke/docker` 临时目录，覆盖前端静态托管、登录、挂载、编辑保存、下载、上传、zip/tar.gz 压缩和解压、删除/恢复和指标接口；默认端口为 `18080`，运行结束后会清理容器和临时数据。
-需要验证更接近真实规模的目录和传输场景时，可以运行 `scripts/docker-perf-smoke.sh`。脚本默认创建 1 万个目录项、上传下载 64 MiB 文件，并验证 Range、在线编辑保护、tar.gz 压缩解压、回收站恢复和指标接口；默认端口为 `18081`。
+需要验证更接近真实规模的目录和传输场景时，可以运行 `scripts/docker-perf-smoke.sh`。脚本默认创建 1 万个目录项、上传下载 64 MiB 文件，并验证 Range、在线编辑保护、tar.gz 压缩解压、回收站恢复和指标接口；默认端口为 `18081`。该脚本已在真实 Linux Docker 环境按默认参数通过。
 
 ## 后端结构
 

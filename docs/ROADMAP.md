@@ -255,7 +255,7 @@
 - 增加性能冒烟脚本。
   - 覆盖 1 万项目录分页、按需总数、大文件上传下载、Range、压缩解压、回收站恢复和指标接口。
   - 使用 `.smoke/perf` 临时目录，不复用开发数据。
-  - 已新增脚本；后续需要在真实 Linux Docker 环境按默认参数执行，并根据结果决定是否继续优化。
+  - 已在真实 Linux Docker 环境按默认参数执行通过，并据此修复大文件 multipart 上传被框架默认 body limit 拦截的问题。
 
 验证：
 
@@ -264,7 +264,7 @@
 - 挂载测试目录可浏览、上传、编辑、删除和恢复。
 - 挂载目录只读或不可写时返回明确错误。
 - `scripts/docker-smoke.sh` 在真实 Linux Docker 环境执行通过。
-- `scripts/docker-perf-smoke.sh` 后续需要在真实 Linux Docker 环境按默认参数执行通过。
+- `scripts/docker-perf-smoke.sh` 在真实 Linux Docker 环境按默认参数执行通过。
 
 ## 第六阶段：可观测性和打磨
 
@@ -290,6 +290,9 @@
   - 前端可展示更清楚的提示。
   - 已新增 `docs/API_ERRORS.md`，记录稳定 code、典型场景和前端处理建议。
   - 已补充 `src/error.rs` 错误响应 code/status 单元测试。
+- 整理后端 API 契约。
+  - 面向前端协作者记录请求字段、响应字段、关键响应头、错误码和默认行为。
+  - 已新增 `docs/API_CONTRACT.md`。
 - 增加聚焦 API 冒烟测试。
   - 测试保持小而快。
   - 使用临时映射和临时数据。
@@ -319,10 +322,10 @@
 
 当前推荐下一批实现：
 
-1. 在真实 Linux Docker 环境执行 `scripts/docker-perf-smoke.sh`，验证 1 万项目录、64 MiB 上传下载、Range、压缩解压和回收站恢复。
-2. 根据性能冒烟结果继续优化目录分页、传输限流、任务进度或压缩解压吞吐。
-3. 继续收敛运维接口、错误码测试和部署文档。
-4. 整理后端 API 契约文档，方便前端协作者按稳定接口对接。
+1. 根据 `docs/API_CONTRACT.md` 协助前端对接文件管理、后台任务、回收站和搜索接口。
+2. 根据真实前端接入反馈，小步收敛不顺手的 API 模型、错误提示和状态字段。
+3. 为 Docker 性能冒烟脚本补充耗时摘要或可选更大参数，但不把它扩展成复杂压测系统。
+4. 继续维护错误码测试、部署文档和性能边界。
 
 最近完成：
 
@@ -344,7 +347,8 @@
 - 默认 CORS：默认同源，跨域必须显式配置可信来源，且不支持 `*`。
 - Docker 部署材料：已新增 Dockerfile、`.dockerignore`、Compose 示例、`env.example` 和 Linux Docker 部署文档。
 - Docker 功能冒烟：`scripts/docker-smoke.sh` 已在真实 Linux Docker 环境通过，覆盖前端静态托管、登录、挂载、编辑保存、下载、上传、zip/tar.gz 压缩和解压、删除/恢复和指标接口；已修正由真实环境暴露的 Yarn 构建、健康检查依赖、UID/GID 和跨挂载恢复问题。
-- Docker 性能冒烟：已新增 `scripts/docker-perf-smoke.sh`，默认覆盖 1 万项目录、64 MiB 上传下载、Range、编辑保护、tar.gz 压缩解压、回收站恢复和指标接口。
+- Docker 性能冒烟：`scripts/docker-perf-smoke.sh` 已在真实 Linux Docker 环境按默认参数通过，覆盖 1 万项目录、64 MiB 上传下载、Range、编辑保护、tar.gz 压缩解压、回收站恢复和指标接口；已修正由性能冒烟暴露的大文件 multipart 上传默认 body limit 问题。
+- API 契约文档：已新增 `docs/API_CONTRACT.md`，面向前端协作者汇总认证、挂载、元数据、内容、上传下载、后台任务、回收站、搜索、设置、健康检查和指标接口。
 - 压缩/解压后台任务：已新增 `POST /api/tasks/archive` 和 `POST /api/tasks/extract`，支持 `tar.gz`、`tgz`、`zip`，并接入路径安全和可选解压上限。
 - 压缩/解压大文件验证：zip 和 tar.gz API 冒烟已使用超过单块缓冲区的文件验证任务字节进度和解压内容一致。
 - 压缩/解压前端入口：主界面工具栏和右键菜单已能创建后台压缩/解压任务。

@@ -52,7 +52,7 @@
    - UID/GID、权限、只读挂载、数据卷、环境变量、备份和迁移文档已新增。
    - Docker 冒烟脚本 `scripts/docker-smoke.sh` 已新增。
    - `scripts/docker-smoke.sh` 已在真实 Linux Docker 环境通过，并据此修正前端构建、健康检查依赖、UID/GID 和跨挂载回收站恢复问题。
-   - 性能冒烟脚本 `scripts/docker-perf-smoke.sh` 已新增，用于验证 1 万项目录、大文件流式传输、Range、压缩解压和回收站恢复。
+   - 性能冒烟脚本 `scripts/docker-perf-smoke.sh` 已新增，并已在真实 Linux Docker 环境按默认参数通过，用于验证 1 万项目录、大文件流式传输、Range、压缩解压和回收站恢复。
 
 5. 单管理员维护能力。
    - 登录后修改管理员密码 API 已完成基础实现。
@@ -124,6 +124,7 @@
    - 稳定错误码、典型场景和前端处理建议已写入 `docs/API_ERRORS.md`。
    - `src/error.rs` 已补充错误 code 与 HTTP 状态的单元测试。
    - 新增或调整错误 code 时，需要同步更新文档和测试。
+   - 后端 API 契约已写入 `docs/API_CONTRACT.md`，供前端协作者按稳定请求字段、响应字段、错误码和默认行为对接。
 
 ## 保持简单或不做
 
@@ -140,10 +141,10 @@
 
 ## 推荐下一批任务
 
-1. 在真实 Linux Docker 环境执行 `scripts/docker-perf-smoke.sh`，用默认参数验证 1 万项目录、64 MiB 上传下载、Range、压缩解压和回收站恢复。
-2. 根据性能冒烟结果决定是否继续优化目录分页、传输限流、后台任务进度或压缩解压吞吐。
-3. 继续收敛运维接口、错误码测试和部署文档。
-4. 整理一份后端 API 契约文档，方便前端协作者按稳定接口对接。
+1. 根据 `docs/API_CONTRACT.md` 继续协助前端对接文件管理、任务、回收站和搜索接口。
+2. 根据真实前端接入结果，小步修正不顺手的 API 模型或错误提示；开发期允许破坏式收敛。
+3. 为 Docker 性能冒烟脚本补充耗时摘要或可选更大参数，但不把它变成复杂压测系统。
+4. 继续收敛运维接口、错误码测试和部署文档。
 
 ## 最近推进
 
@@ -165,8 +166,10 @@
 - 默认 CORS 已收紧：默认同源，跨域必须显式配置可信来源，且不支持 `*`。
 - Docker 部署材料已新增：Dockerfile、`.dockerignore`、Compose 示例、`env.example` 和 Linux Docker 部署文档。
 - Docker 功能冒烟已在真实 Linux Docker 环境通过：`scripts/docker-smoke.sh` 使用 `.smoke/docker` 临时目录，覆盖前端静态托管、登录、挂载、编辑保存、下载、上传、zip/tar.gz 压缩和解压、删除/恢复和指标接口。
-- Docker 性能冒烟脚本已新增：`scripts/docker-perf-smoke.sh` 默认验证 1 万项目录分页、按需总数、64 MiB 上传下载、Range、大文件编辑保护、16 MiB tar.gz 压缩解压、回收站恢复和指标接口。
+- Docker 性能冒烟脚本已新增并在真实 Linux Docker 环境按默认参数通过：`scripts/docker-perf-smoke.sh` 默认验证 1 万项目录分页、按需总数、64 MiB 上传下载、Range、大文件编辑保护、16 MiB tar.gz 压缩解压、回收站恢复和指标接口。
 - Linux Docker 冒烟踩坑已固化到部署文档：Yarn 4 构建需提前复制 `.yarnrc.yml`，运行镜像不再安装 `curl`，UID/GID 直接用数字用户，跨挂载回收站恢复使用复制后清理兜底。
+- 大文件 multipart 上传已关闭框架默认 body limit，避免流式上传在进入业务层前被默认限制拦截；实际上限继续由 `WEB_FILE_BROWSER_MAX_UPLOAD_BYTES` 控制。
+- 后端 API 契约文档已新增：`docs/API_CONTRACT.md` 汇总认证、挂载、元数据、内容、上传下载、后台任务、回收站、搜索、设置、健康检查和指标接口，方便前端协作者对接。
 - 压缩/解压后台任务已完成基础实现：`tar.gz`、`tgz`、`zip` 按块读写，输出先写临时路径，完成后移动到最终路径，解压会拒绝越界路径和不支持条目。
 - 压缩/解压大文件 API 冒烟已补充：zip 和 tar.gz 都使用超过单块缓冲区的文件验证任务字节进度和解压后内容一致。
 - 主界面已补充压缩/解压最小入口：工具栏和右键菜单可创建后台任务，任务完成后刷新目录查看结果。
