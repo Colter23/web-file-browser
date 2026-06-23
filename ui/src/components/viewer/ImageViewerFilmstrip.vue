@@ -3,6 +3,7 @@ import {nextTick, onBeforeUnmount, onMounted, watch} from "vue";
 import type {ComponentPublicInstance} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import {downloadUrl} from "../../network/api.ts";
+import {scrollHorizontallyWithWheel} from "../../utils/wheel.ts";
 
 const props = defineProps<{
   items: {entry: ExplorerEntry; index: number}[];
@@ -43,7 +44,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="image-viewer-filmstrip" aria-label="图片列表">
+  <div class="image-viewer-filmstrip" aria-label="图片列表" @wheel="scrollHorizontallyWithWheel">
     <button
         v-for="item in items"
         :key="item.entry.path"

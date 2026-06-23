@@ -2,6 +2,7 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import Icon from "./Icon.vue";
 import {useFileStore} from "../store";
+import {scrollHorizontallyWithWheel} from "../utils/wheel.ts";
 
 const fileStore = useFileStore();
 type NavigateComplete = (navigated: boolean) => void;
@@ -17,13 +18,6 @@ const pathBox = ref<HTMLElement | null>(null);
 const input = ref<HTMLElement | null>(null);
 const pathInput = ref<HTMLInputElement | null>(null);
 const isInput = ref(false);
-
-const handlePathBoxWheel = (event: WheelEvent) => {
-  const pathBoxEl = pathBox.value;
-  if (!pathBoxEl) return;
-  event.preventDefault();
-  pathBoxEl.scrollLeft += event.deltaY || event.deltaX;
-}
 
 const scrollPathBoxToEnd = async () => {
   await nextTick();
@@ -41,7 +35,7 @@ watch(() => fileStore.currentPath, (path: string) => {
 onMounted(() => {
   const pathBoxEl = pathBox.value;
   if (pathBoxEl == null) return;
-  pathBoxEl.addEventListener("wheel", handlePathBoxWheel, {passive: false});
+  pathBoxEl.addEventListener("wheel", scrollHorizontallyWithWheel, {passive: false});
   void scrollPathBoxToEnd();
 });
 
@@ -107,7 +101,7 @@ defineExpose({
 
 onBeforeUnmount(() => {
   cleanupInputListeners();
-  pathBox.value?.removeEventListener("wheel", handlePathBoxWheel);
+  pathBox.value?.removeEventListener("wheel", scrollHorizontallyWithWheel);
 });
 </script>
 

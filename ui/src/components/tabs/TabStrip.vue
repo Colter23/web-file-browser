@@ -6,6 +6,7 @@ import Icon from "../Icon.vue";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
 import {useViewportMenuPosition} from "../../composables/useViewportMenuPosition.ts";
+import {scrollHorizontallyWithWheel} from "../../utils/wheel.ts";
 
 const props = defineProps<{
   tabs: ExplorerTab[];
@@ -36,15 +37,6 @@ const setTabButtonRef = (tabId: string, element: unknown) => {
 const revealActiveTab = async () => {
   await nextTick();
   tabButtonRefs.get(props.activeTabId)?.scrollIntoView({block: "nearest", inline: "nearest"});
-}
-
-const handleTabWheel = (event: WheelEvent) => {
-  const target = event.currentTarget;
-  if (!(target instanceof HTMLElement)) return;
-  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-  if (!delta || target.scrollWidth <= target.clientWidth) return;
-  event.preventDefault();
-  target.scrollLeft += delta;
 }
 
 const {
@@ -108,7 +100,7 @@ const emit = defineEmits<{
 
 <template>
   <nav class="tab-strip" aria-label="目录标签">
-    <div class="tab-scroll" @wheel="handleTabWheel">
+    <div class="tab-scroll" @wheel="scrollHorizontallyWithWheel">
       <button
           v-for="tab in tabs"
           :key="tab.id"
