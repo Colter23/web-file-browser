@@ -249,7 +249,7 @@ watch([() => props.currentPath, () => props.data], () => {
 @reference "tailwindcss";
 
 .file-tree {
-  @apply flex h-full w-full flex-col overflow-auto rounded-lg bg-white/35 p-1 select-none text-sm text-slate-700;
+  @apply flex h-full w-full flex-col overflow-auto bg-transparent py-1 pr-1 select-none text-sm text-slate-700;
 }
 
 .tree-empty {

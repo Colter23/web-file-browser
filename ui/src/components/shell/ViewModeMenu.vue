@@ -210,7 +210,7 @@ onBeforeUnmount(() => {
 }
 
 .view-button {
-  @apply inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:bg-blue-50;
+  @apply inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:border-blue-200 hover:bg-blue-50;
 }
 
 .view-button.active {
@@ -222,7 +222,7 @@ onBeforeUnmount(() => {
 }
 
 .view-menu-panel {
-  @apply absolute right-0 top-[calc(100%+0.35rem)] z-30 w-72 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-xl;
+  @apply absolute right-0 top-[calc(100%+0.35rem)] z-50 w-72 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-xl;
 }
 
 .view-menu-item {

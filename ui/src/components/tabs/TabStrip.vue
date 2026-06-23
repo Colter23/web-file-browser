@@ -158,25 +158,16 @@ const emit = defineEmits<{
 @reference "tailwindcss";
 
 .tab-strip {
-  @apply flex min-w-0 grow items-center gap-2 overflow-hidden rounded-xl border border-white bg-white/70 p-1 shadow-sm backdrop-blur;
+  @apply flex h-full min-w-0 grow items-center gap-2 overflow-hidden rounded-xl border border-[#d8e3ee] bg-white/80 p-1 shadow-sm backdrop-blur;
 }
 
 .tab-scroll {
-  @apply flex min-w-0 grow items-center gap-2 overflow-x-auto overflow-y-hidden;
-  scrollbar-width: thin;
-  scrollbar-color: rgb(203 213 225) transparent;
+  @apply flex h-full min-w-0 grow items-center gap-2 overflow-x-auto overflow-y-hidden;
+  scrollbar-width: none;
 }
 
 .tab-scroll::-webkit-scrollbar {
-  height: 0.45rem;
-}
-
-.tab-scroll::-webkit-scrollbar-track {
-  @apply bg-transparent;
-}
-
-.tab-scroll::-webkit-scrollbar-thumb {
-  @apply rounded-full bg-slate-300;
+  display: none;
 }
 
 .tab-button {
@@ -229,7 +220,7 @@ const emit = defineEmits<{
 }
 
 .tab-add {
-  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-slate-700 shadow-sm hover:bg-blue-50;
+  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-blue-50;
 }
 
 .tab-context-menu {

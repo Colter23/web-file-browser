@@ -136,7 +136,7 @@ onBeforeUnmount(() => {
 @reference "tailwindcss";
 
 .path-card {
-  @apply flex h-10 min-w-48 grow shrink items-center gap-1 rounded-lg border border-slate-200 bg-white;
+  @apply flex h-9 min-w-48 grow shrink items-center gap-1 rounded-md border border-[#d7e1ec] bg-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.55)];
 }
 
 .path-box {
@@ -144,7 +144,7 @@ onBeforeUnmount(() => {
 }
 
 .path-item {
-  @apply inline-flex h-7 cursor-pointer items-center rounded text-nowrap truncate text-sm hover:bg-blue-50;
+  @apply inline-flex h-7 cursor-pointer items-center rounded-sm text-nowrap truncate text-sm hover:bg-blue-50;
 }
 
 .separator {

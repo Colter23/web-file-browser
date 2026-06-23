@@ -343,8 +343,7 @@ const {
   canArchiveSelection,
   canDeleteSelection,
   canExtractSelection,
-  canPasteSelection,
-  selectionStatusText
+  canPasteSelection
 } = useMainViewSelectionCommands({
   singleSelection,
   selectedCount,
@@ -606,7 +605,6 @@ const signOut = async () => {
             :can-extract-selection="canExtractSelection"
             :can-rename-selection="canRenameSelection"
             :can-delete-selection="canDeleteSelection"
-            :selection-status-text="selectionStatusText"
             :view-mode-icon="currentViewModeMeta.icon"
             :view-mode-label="currentViewModeLabel"
             :view-mode-button-title="viewModeButtonTitle"
@@ -791,13 +789,13 @@ const signOut = async () => {
 }
 
 .workspace {
-  @apply mt-3 flex min-h-0 grow flex-col overflow-hidden rounded-xl border border-slate-200 bg-white/75 shadow-sm backdrop-blur;
+  @apply mt-3 flex min-h-0 grow flex-col overflow-hidden rounded-xl border border-[#d8e3ee] bg-white/90 shadow-sm backdrop-blur;
   --sidebar-width: 17rem;
 }
 
 .workspace-body {
   @apply grid min-h-0 grow gap-0;
-  grid-template-columns: var(--sidebar-width) 0.75rem minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) 0.375rem minmax(0, 1fr);
 }
 
 .workspace.resizingSidebar {
@@ -805,12 +803,12 @@ const signOut = async () => {
 }
 
 .sidebar-resizer {
-  @apply relative z-20 h-full cursor-col-resize touch-none outline-none;
+  @apply relative z-20 h-full cursor-col-resize touch-none bg-[#f6f9fd] outline-none;
 }
 
 .sidebar-resizer::after {
   content: "";
-  @apply absolute top-2 bottom-2 left-1/2 w-px -translate-x-1/2 rounded-full bg-transparent;
+  @apply absolute top-2 bottom-2 left-1/2 w-px -translate-x-1/2 rounded-full bg-[#dbe6f1];
 }
 
 .sidebar-resizer:hover::after,
@@ -820,7 +818,7 @@ const signOut = async () => {
 }
 
 .content-pane {
-  @apply relative flex min-h-0 flex-col overflow-hidden bg-white/80;
+  @apply relative flex min-h-0 flex-col overflow-hidden bg-white;
 }
 
 .browser-area {

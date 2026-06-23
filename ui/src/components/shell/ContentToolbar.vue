@@ -79,23 +79,23 @@ defineExpose({
 @reference "tailwindcss";
 
 .path-row {
-  @apply flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white/70 px-3;
+  @apply flex h-12 shrink-0 items-center gap-2 border-b border-[#d8e3ee] bg-[#f8fbff] px-3;
 }
 
 .nav-button {
-  @apply inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-blue-50;
+  @apply inline-flex items-center justify-center rounded-md border border-transparent bg-transparent text-slate-700 hover:border-slate-200 hover:bg-white;
 }
 
 .nav-button {
-  @apply h-10 w-10 shrink-0;
+  @apply h-9 w-9 shrink-0;
 }
 
 .nav-button:disabled {
-  @apply cursor-not-allowed text-slate-300 hover:bg-white;
+  @apply cursor-not-allowed text-slate-300 hover:border-transparent hover:bg-transparent;
 }
 
 .search-box {
-  @apply flex h-10 w-72 max-w-[30vw] shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-slate-500;
+  @apply flex h-9 w-72 max-w-[30vw] shrink-0 items-center gap-2 rounded-md border border-[#d7e1ec] bg-white px-3 text-slate-500 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.55)];
 }
 
 .search-box.active {

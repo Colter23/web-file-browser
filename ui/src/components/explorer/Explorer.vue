@@ -735,6 +735,7 @@ defineExpose({
 
 .explorer-viewport.view-details .entry-surface {
   @apply flex w-max min-w-full flex-col gap-0 p-1;
+  min-height: calc(100% - var(--details-header-height, 2.25rem));
 }
 
 .explorer-viewport.view-list .entry-surface {

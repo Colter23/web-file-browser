@@ -14,7 +14,6 @@ defineProps<{
   canExtractSelection: boolean;
   canRenameSelection: boolean;
   canDeleteSelection: boolean;
-  selectionStatusText: string;
   viewModeIcon: string;
   viewModeLabel: string;
   viewModeButtonTitle: string;
@@ -123,7 +122,6 @@ const emit = defineEmits<{
         <span>{{ previewPanelVisible ? "关闭预览" : "预览窗格" }}</span>
       </button>
     </div>
-    <span class="command-status" :title="`${selectionStatusText} · Ctrl+A 全选`">{{ selectionStatusText }}</span>
   </div>
 </template>
 
@@ -131,11 +129,11 @@ const emit = defineEmits<{
 @reference "tailwindcss";
 
 .command-bar {
-  @apply flex h-11 shrink-0 items-center gap-3 overflow-hidden border-b border-slate-200 bg-slate-50/70 px-3;
+  @apply relative z-30 flex h-11 shrink-0 items-center gap-2 overflow-visible border-b border-[#e3ebf5] bg-[#fbfdff] px-2.5;
 }
 
 .command-actions {
-  @apply flex h-full min-w-0 grow items-center gap-1 overflow-x-auto overflow-y-hidden;
+  @apply flex h-full min-w-0 grow items-center gap-0.5 overflow-x-auto overflow-y-hidden;
   scrollbar-width: none;
 }
 
@@ -144,7 +142,7 @@ const emit = defineEmits<{
 }
 
 .command-button {
-  @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-transparent bg-transparent px-2.5 text-sm text-slate-700 shadow-none hover:border-slate-200 hover:bg-white;
+  @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-sm text-slate-700 shadow-none hover:border-slate-200 hover:bg-white;
 }
 
 .command-button.active {
@@ -168,11 +166,11 @@ const emit = defineEmits<{
 }
 
 .command-separator {
-  @apply mx-1 h-5 w-px shrink-0 bg-slate-200;
+  @apply mx-1 h-5 w-px shrink-0 bg-[#dbe6f1];
 }
 
 .command-view-tools {
-  @apply flex shrink-0 items-center gap-2 border-l border-slate-200 pl-3;
+  @apply flex shrink-0 items-center gap-1.5 border-l border-[#dbe6f1] pl-2.5;
 }
 
 .command-view-tools :deep(.sort-button),
@@ -181,7 +179,7 @@ const emit = defineEmits<{
 }
 
 .view-button {
-  @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-700 hover:bg-blue-50;
+  @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 hover:bg-blue-50;
 }
 
 .view-button.active {
@@ -192,7 +190,4 @@ const emit = defineEmits<{
   @apply cursor-not-allowed text-slate-300 hover:bg-white;
 }
 
-.command-status {
-  @apply min-w-28 shrink-0 truncate pl-2 text-right text-xs text-slate-500;
-}
 </style>
