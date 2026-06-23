@@ -65,6 +65,13 @@ export const useExplorerSelection = ({
     applySelectionState([], "", "");
   }
 
+  const clearSelectionKeepingFocus = () => {
+    const retainedFocus = focusedPath.value && entryByPath(focusedPath.value)
+        ? focusedPath.value
+        : selectedPaths.value[selectedPaths.value.length - 1] ?? "";
+    applySelectionState([], retainedFocus, retainedFocus);
+  }
+
   const commitSelectionAnchor = () => {
     if (focusedPath.value) anchorPath.value = focusedPath.value;
   }
@@ -165,7 +172,7 @@ export const useExplorerSelection = ({
 
   const clearCurrentSelection = () => {
     if (!selectedPaths.value.length) return false;
-    clearSelection();
+    clearSelectionKeepingFocus();
     return true;
   }
 
@@ -256,6 +263,7 @@ export const useExplorerSelection = ({
     indexOfPath,
     setSelection,
     clearSelection,
+    clearSelectionKeepingFocus,
     commitSelectionAnchor,
     scrollEntryIntoView,
     ensureFocusAnchor,

@@ -21,7 +21,7 @@ type ExplorerMarqueeSelectionOptions = {
   viewportRef: Ref<HTMLElement | null>;
   isRenaming: () => boolean;
   focusViewport: () => void;
-  clearSelection: () => void;
+  clearSelectionKeepingFocus: () => void;
   setSelection: (paths: string[], focusPath?: string, keepAnchor?: boolean) => void;
   commitSelectionAnchor: () => void;
   closeContextMenu: () => void;
@@ -34,7 +34,7 @@ export const useExplorerMarqueeSelection = ({
   viewportRef,
   isRenaming,
   focusViewport,
-  clearSelection,
+  clearSelectionKeepingFocus,
   setSelection,
   commitSelectionAnchor,
   closeContextMenu
@@ -97,7 +97,7 @@ export const useExplorerMarqueeSelection = ({
     tracking = true;
     focusViewport();
     if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
-      clearSelection();
+      clearSelectionKeepingFocus();
     }
     selectionBox.active = false;
     selectionBox.additive = Boolean(event.ctrlKey || event.metaKey);

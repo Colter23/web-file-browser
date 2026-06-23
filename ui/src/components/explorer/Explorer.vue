@@ -145,6 +145,7 @@ const {
   indexOfPath,
   setSelection,
   clearSelection,
+  clearSelectionKeepingFocus,
   commitSelectionAnchor,
   ensureFocusAnchor,
   selectRange,
@@ -240,7 +241,7 @@ const {
   viewportRef,
   isRenaming: () => Boolean(renamingPath.value),
   focusViewport,
-  clearSelection,
+  clearSelectionKeepingFocus,
   setSelection,
   commitSelectionAnchor,
   closeContextMenu
@@ -410,7 +411,7 @@ const selectPathForRename = async (path: string) => {
 const activateViewport = () => {
   closeContextMenu();
   focusViewport();
-  ensureFocusAnchor();
+  clearSelectionKeepingFocus();
 }
 
 const primarySelected = () => firstSelectedEntry();
@@ -500,7 +501,7 @@ const {handleKeyDown} = useExplorerKeyboard({
   commitRename,
   closeContextMenu,
   resetSelectionBox,
-  clearSelection,
+  clearSelectionKeepingFocus,
   openKeyboardContextMenu,
   showProperties: entries => emit("properties", entries),
   toggleFocusedSelection,

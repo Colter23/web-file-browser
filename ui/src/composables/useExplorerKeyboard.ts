@@ -16,7 +16,7 @@ type ExplorerKeyboardOptions = {
   commitRename: () => MaybePromise;
   closeContextMenu: () => void;
   resetSelectionBox: () => void;
-  clearSelection: () => void;
+  clearSelectionKeepingFocus: () => void;
   openKeyboardContextMenu: () => void;
   showProperties: (entries: ExplorerEntry[]) => void;
   toggleFocusedSelection: () => void;
@@ -54,7 +54,7 @@ export const useExplorerKeyboard = ({
   commitRename,
   closeContextMenu,
   resetSelectionBox,
-  clearSelection,
+  clearSelectionKeepingFocus,
   openKeyboardContextMenu,
   showProperties,
   toggleFocusedSelection,
@@ -101,7 +101,7 @@ export const useExplorerKeyboard = ({
       resetSelectionBox();
       return true;
     }
-    clearSelection();
+    clearSelectionKeepingFocus();
     return true;
   }
 
