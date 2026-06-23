@@ -223,7 +223,8 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-badge.running {
-  @apply bg-blue-100 text-blue-700;
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
 }
 
 .task-badge.queued {
@@ -239,7 +240,11 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-icon-button {
-  @apply inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.task-icon-button:hover:not(:disabled) {
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 .task-empty {
@@ -317,7 +322,8 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-state.running {
-  @apply bg-blue-100 text-blue-700;
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
 }
 
 .task-state.completed {
@@ -341,7 +347,8 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-progress-track span {
-  @apply block h-full rounded bg-blue-500;
+  @apply block h-full rounded;
+  background: var(--app-accent, #2563eb);
 }
 
 .task-progress-text {
