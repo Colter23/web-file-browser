@@ -414,6 +414,7 @@ const selectPathForRename = async (path: string) => {
 }
 
 const activateViewport = () => {
+  closeContextMenu();
   focusViewport();
   ensureFocusAnchor();
 }
