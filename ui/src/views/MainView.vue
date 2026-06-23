@@ -37,9 +37,10 @@ import {useFileTreeLoader} from "../composables/useFileTreeLoader.ts";
 import {useMainViewShellActions} from "../composables/useMainViewShellActions.ts";
 import {useMainViewLifecycle} from "../composables/useMainViewLifecycle.ts";
 import {useMainViewPanelClosers} from "../composables/useMainViewPanelClosers.ts";
+import {useMainViewSelectionCommands} from "../composables/useMainViewSelectionCommands.ts";
 import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
-import {entryFileInfo, isExtractableArchiveEntry} from "../utils/file-entry.ts";
+import {entryFileInfo} from "../utils/file-entry.ts";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
 
@@ -183,19 +184,6 @@ const {
   showNotice: showShellNotice
 });
 
-const canDownloadSelection = computed(() => singleSelection.value?.type === "file");
-const canPreviewSelection = computed(() => singleSelection.value?.type === "file");
-const canTogglePreviewPane = computed(() => !fileStore.showEditor);
-const canRenameSelection = computed(() => Boolean(singleSelection.value));
-const canArchiveSelection = computed(() => hasSelection.value);
-const canDeleteSelection = computed(() => hasSelection.value);
-const canExtractSelection = computed(() => isExtractableArchiveEntry(singleSelection.value));
-const canPasteSelection = computed(() => hasClipboard.value);
-const selectionStatusText = computed(() => {
-  const selectionText = hasSelection.value ? `已选择 ${selectedCount.value} 项` : "未选择项目";
-  return `${selectionText} · ${clipboardText.value}`;
-});
-
 let closePanelsHandler = () => {};
 let closeOperationShellPanelsHandler = () => {};
 let closePreviewHandler = () => {};
@@ -324,6 +312,25 @@ const {
   focusOperationPanel: () => operationPanelRef.value?.focus(),
   focusDeleteConfirm: () => deleteConfirmRef.value?.focus(),
   focusPropertiesPanel: () => propertiesPanelRef.value?.focus()
+});
+
+const {
+  canDownloadSelection,
+  canPreviewSelection,
+  canTogglePreviewPane,
+  canRenameSelection,
+  canArchiveSelection,
+  canDeleteSelection,
+  canExtractSelection,
+  canPasteSelection,
+  selectionStatusText
+} = useMainViewSelectionCommands({
+  singleSelection,
+  selectedCount,
+  hasSelection,
+  hasClipboard,
+  clipboardText,
+  editorVisible: () => fileStore.showEditor
 });
 
 const shellActions = useMainViewShellActions({
