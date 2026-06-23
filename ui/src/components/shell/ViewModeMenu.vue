@@ -40,7 +40,7 @@ const viewModeOptions: ViewModeOption[] = [
     iconSize: "small",
     label: "详细信息",
     description: "显示日期、类型和大小",
-    icon: "icon-view-list",
+    icon: "view.details",
     shortcut: "Ctrl+Shift+6"
   },
   {
@@ -49,7 +49,7 @@ const viewModeOptions: ViewModeOption[] = [
     iconSize: "small",
     label: "列表",
     description: "紧凑排列，快速扫描",
-    icon: "icon-listview",
+    icon: "view.list",
     shortcut: "Ctrl+Shift+5"
   },
   {
@@ -58,7 +58,7 @@ const viewModeOptions: ViewModeOption[] = [
     iconSize: "medium",
     label: "平铺",
     description: "图标与文件信息并列",
-    icon: "icon-file-common-filling",
+    icon: "view.tiles",
     shortcut: "Ctrl+Shift+7"
   },
   {
@@ -67,7 +67,7 @@ const viewModeOptions: ViewModeOption[] = [
     iconSize: "large",
     label: "大图标",
     description: "适合浏览图片和媒体",
-    icon: "icon-viewgrid",
+    icon: "view.icons",
     shortcut: "Ctrl+Shift+1/2"
   },
   {
@@ -76,7 +76,7 @@ const viewModeOptions: ViewModeOption[] = [
     iconSize: "medium",
     label: "中图标",
     description: "兼顾预览和密度",
-    icon: "icon-viewgrid",
+    icon: "view.icons",
     shortcut: "Ctrl+Shift+3"
   },
   {
@@ -85,7 +85,7 @@ const viewModeOptions: ViewModeOption[] = [
     iconSize: "small",
     label: "小图标",
     description: "更多项目同屏展示",
-    icon: "icon-viewgrid",
+    icon: "view.icons",
     shortcut: "Ctrl+Shift+4"
   }
 ];
@@ -179,7 +179,7 @@ onBeforeUnmount(() => {
         @keydown="handleButtonKeyDown">
       <icon :icon="icon" />
       <span>{{ label }}</span>
-      <icon icon="icon-unfold" class="view-caret" />
+      <icon icon="action.down" class="view-caret" />
     </button>
     <div v-if="open" ref="viewMenuPanelRef" class="view-menu-panel" role="menu" aria-label="查看模式" @keydown="handleMenuKeyDown">
       <button

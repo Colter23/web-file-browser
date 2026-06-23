@@ -543,10 +543,10 @@ const signOut = async () => {
           @close-context-menu="closeTabContextMenu" />
       <div class="top-actions">
         <button class="square-button" title="设置" @click="openSettings">
-          <icon icon="icon-setting" size="large" />
+          <icon icon="action.settings" size="large" />
         </button>
         <button :class="['task-top-button', {active: taskPanelVisible}]" title="后台任务" @click="toggleTaskPanel">
-          <icon icon="icon-file-common-filling" />
+          <icon icon="view.details" />
           <span>{{ taskButtonText }}</span>
         </button>
         <button class="plain-button" @click="signOut">退出</button>

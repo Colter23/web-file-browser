@@ -46,7 +46,7 @@ const updateLineText = (event: Event) => {
       <span v-if="status" class="goto-status">{{ status }}</span>
       <button class="text-tool" title="跳转到行" :disabled="!canGotoLine" @click="emit('submit')">跳转</button>
       <button title="关闭跳转" @click="emit('close')">
-        <icon icon="icon-close" />
+        <icon icon="action.close" />
       </button>
     </div>
   </div>

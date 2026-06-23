@@ -53,7 +53,7 @@ defineExpose({
         <span>{{ subtitle }}</span>
       </div>
       <button type="button" class="operation-shell-close" title="关闭" @click="emit('close')">
-        <icon icon="icon-close" />
+        <icon icon="action.close" />
       </button>
     </div>
     <slot />

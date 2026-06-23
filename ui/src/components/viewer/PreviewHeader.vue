@@ -23,13 +23,13 @@ const emit = defineEmits<{
     </div>
     <div class="preview-actions">
       <button v-if="canEdit" title="编辑" @click="emit('edit')">
-        <icon icon="icon-edit-filling" />
+        <icon icon="action.edit" />
       </button>
       <button title="下载" :disabled="!canDownload" @click="emit('download')">
-        <icon icon="icon-download" />
+        <icon icon="action.download" />
       </button>
       <button title="关闭预览" @click="emit('close')">
-        <icon icon="icon-close" />
+        <icon icon="action.close" />
       </button>
     </div>
   </div>

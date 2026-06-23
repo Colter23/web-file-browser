@@ -134,10 +134,10 @@ watch(() => props.cancelConfirm.visible, async visible => {
       </div>
       <div class="task-panel-actions">
         <button class="task-icon-button" :disabled="loading" title="刷新任务" @click="emit('refresh')">
-          <icon icon="icon-refresh" size="normal" />
+          <icon icon="action.refresh" size="normal" />
         </button>
         <button class="task-icon-button" title="关闭任务面板" @click="emit('close')">
-          <icon icon="icon-close" size="normal" />
+          <icon icon="action.close" size="normal" />
         </button>
       </div>
     </div>

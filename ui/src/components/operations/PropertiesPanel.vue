@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
-import {entryMetaRows, fileEntryIcon, formatEntrySize} from "../../utils/file-entry.ts";
+import {entryMetaRows, fileEntryIconName, formatEntrySize} from "../../utils/file-entry.ts";
 import OperationPanelShell from "./OperationPanelShell.vue";
 
 type OperationPanelShellExpose = {
@@ -30,8 +30,8 @@ const title = computed(() => singleEntry.value?.name ?? `${props.entries.length}
 const subtitle = computed(() => singleEntry.value ? "项目属性" : "选中项目属性");
 const panelIcon = computed(() => {
   const entry = singleEntry.value;
-  if (!entry) return "icon-file-common-filling";
-  return fileEntryIcon(entry);
+  if (!entry) return "view.details";
+  return fileEntryIconName(entry);
 });
 const sizeText = computed(() => {
   if (singleEntry.value) return singleEntry.value.type === "file" ? formatEntrySize(singleEntry.value.size, "0 B") : "-";

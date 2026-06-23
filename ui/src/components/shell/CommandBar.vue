@@ -49,53 +49,53 @@ const emit = defineEmits<{
   <div class="command-bar">
     <div class="command-actions" aria-label="文件操作">
       <button class="command-button strong" title="上传" @click="emit('upload')">
-        <icon icon="icon-upload" />
+        <icon icon="action.upload" />
         <span>上传</span>
       </button>
       <button class="command-button" @click="emit('create-file')">
-        <icon icon="icon-file-add-fill" />
+        <icon icon="action.new-file" />
         <span>新建文件</span>
       </button>
       <button class="command-button" title="新建文件夹 (Ctrl+Shift+N)" @click="emit('create-folder')">
-        <icon icon="icon-folder-add-fill" />
+        <icon icon="action.new-folder" />
         <span>新建文件夹</span>
       </button>
       <span class="command-separator"></span>
       <button class="command-button" :disabled="!hasSelection" title="剪切 (Ctrl+X)" @click="emit('cut')">
-        <icon icon="icon-scissors" />
+        <icon icon="action.cut" />
         <span>剪切</span>
       </button>
       <button class="command-button" :disabled="!hasSelection" title="复制 (Ctrl+C)" @click="emit('copy')">
-        <icon icon="icon-copy" />
+        <icon icon="action.copy" />
         <span>复制</span>
       </button>
       <button class="command-button" :disabled="!canPasteSelection" title="粘贴 (Ctrl+V)" @click="emit('paste')">
-        <icon icon="icon-paste" />
+        <icon icon="action.paste" />
         <span>粘贴</span>
       </button>
       <span class="command-separator"></span>
       <button class="command-button" :disabled="!canDownloadSelection" @click="emit('download')">
-        <icon icon="icon-download" />
+        <icon icon="action.download" />
         <span>下载</span>
       </button>
       <button class="command-button" :disabled="!canPreviewSelection" title="预览 (Space / Ctrl+Enter)" @click="emit('preview')">
-        <icon icon="icon-file-image-fill" />
+        <icon icon="action.preview" />
         <span>预览</span>
       </button>
       <button class="command-button" :disabled="!canArchiveSelection" @click="emit('archive')">
-        <icon icon="icon-file-zip-fill" />
+        <icon icon="action.archive" />
         <span>压缩</span>
       </button>
       <button class="command-button" :disabled="!canExtractSelection" @click="emit('extract')">
-        <icon icon="icon-file-zip" />
+        <icon icon="action.extract" />
         <span>解压</span>
       </button>
       <button class="command-button" :disabled="!canRenameSelection" @click="emit('rename')">
-        <icon icon="icon-rename" />
+        <icon icon="action.rename" />
         <span>重命名</span>
       </button>
       <button class="command-button danger" :disabled="!canDeleteSelection" @click="emit('delete')">
-        <icon icon="icon-delete-fill" />
+        <icon icon="action.delete" />
         <span>删除</span>
       </button>
     </div>
@@ -118,7 +118,7 @@ const emit = defineEmits<{
           :disabled="!canTogglePreviewPane"
           title="预览窗格 (Alt+P)"
           @click="emit('toggle-preview')">
-        <icon icon="icon-file-image-fill" />
+        <icon icon="view.preview-pane" />
         <span>{{ previewPanelVisible ? "关闭预览" : "预览窗格" }}</span>
       </button>
     </div>

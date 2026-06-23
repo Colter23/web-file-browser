@@ -44,7 +44,7 @@ onBeforeUnmount(releasePreviewImagePointer);
     <button @click="zoomPreviewImage(-25)">-</button>
     <button @click="zoomPreviewImage(25)">+</button>
     <button title="打开图片查看" @click="openImagePreview">
-      <icon icon="icon-unfold" color="currentColor" />
+      <icon icon="action.fullscreen" color="currentColor" />
       <span>打开查看</span>
     </button>
     <template #status>{{ previewZoomText }}</template>

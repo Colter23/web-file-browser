@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type {ComponentPublicInstance} from "vue";
 import type {ExplorerIconSize, ExplorerViewMode} from "../../class.ts";
+import type {FileEntryIconKind} from "../../utils/file-entry.ts";
 import type {ExplorerEntry} from "./types.ts";
-import Icon from "../Icon.vue";
+import FileTypeIcon from "../FileTypeIcon.vue";
 
 defineProps<{
   entry: ExplorerEntry;
@@ -21,7 +22,7 @@ defineProps<{
   renameSubmitting: boolean;
   thumbnailVisible: boolean;
   thumbnailSrc: string;
-  icon: string;
+  iconKind: FileEntryIconKind;
   typeText: string;
   modifiedText: string;
   sizeText: string;
@@ -81,7 +82,7 @@ const updateRenameDraft = (event: Event) => {
             loading="lazy"
             decoding="async"
             @error="emit('thumbnail-error')">
-        <icon v-else :icon="icon" />
+        <file-type-icon v-else :kind="iconKind" />
       </div>
       <div class="entry-main">
         <input

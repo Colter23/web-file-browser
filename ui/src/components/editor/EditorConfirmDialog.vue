@@ -31,7 +31,7 @@ watch(() => props.visible, async visible => {
   <div v-if="visible" class="editor-confirm-mask" @click.stop>
     <section ref="confirmRef" class="editor-confirm" tabindex="-1" @keydown.esc.prevent.stop="emit('cancel')">
       <div class="confirm-icon">
-        <icon icon="icon-edit-filling" color="#2563eb" />
+        <icon icon="action.edit" color="#2563eb" />
       </div>
       <div class="confirm-content">
         <h3>{{ title }}</h3>

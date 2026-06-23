@@ -18,7 +18,7 @@ import {useExplorerTypeahead} from "../../composables/useExplorerTypeahead.ts";
 import {useExplorerItemRefs, useExplorerViewport} from "../../composables/useExplorerViewport.ts";
 import {
   entryTypeText,
-  fileEntryIcon,
+  fileEntryIconKind,
   formatEntryDate as formatDate,
   formatEntrySize as formatSize,
   isExtractableArchiveEntry as canExtract,
@@ -376,8 +376,8 @@ watch(thumbnailActive, async iconLike => {
 
 watch(() => props.filterText, resetTypeahead);
 
-const fileIcon = (entry: ExplorerEntry) => {
-  return fileEntryIcon(entry, fileStore.extensions);
+const fileIconKind = (entry: ExplorerEntry) => {
+  return fileEntryIconKind(entry, fileStore.extensions);
 }
 
 const isDimmed = (entry: ExplorerEntry) => props.dimmedPaths.includes(entry.path);
@@ -628,7 +628,7 @@ defineExpose({
             :rename-submitting="renameSubmitting"
             :thumbnail-visible="shouldLoadThumbnail(entry)"
             :thumbnail-src="thumbnailUrl(entry)"
-            :icon="fileIcon(entry)"
+            :icon-kind="fileIconKind(entry)"
             :type-text="entryTypeText(entry)"
             :modified-text="formatDate(entry.modified)"
             :size-text="formatSize(entry.size)"

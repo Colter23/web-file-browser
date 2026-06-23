@@ -130,9 +130,9 @@ onBeforeUnmount(() => {
         :aria-expanded="open"
         @click="toggle"
         @keydown="handleButtonKeyDown">
-      <icon icon="icon-view-list" />
+      <icon icon="view.details" />
       <span>{{ activeSortLabel }} {{ activeOrderLabel }}</span>
-      <icon icon="icon-unfold" class="sort-caret" />
+      <icon icon="action.down" class="sort-caret" />
     </button>
     <div v-if="open" ref="sortMenuPanelRef" class="sort-menu-panel" role="menu" aria-label="排序方式" @keydown="handleMenuKeyDown">
       <p class="menu-group-title">排序方式</p>

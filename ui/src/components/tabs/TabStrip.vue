@@ -122,15 +122,15 @@ const emit = defineEmits<{
           @dragleave="emit('tab-drag-leave', $event, tab.id)"
           @drop="emit('tab-drop', $event, tab.id)"
           @dragend="emit('tab-drag-end')">
-        <icon icon="icon-folder-fill" />
+        <icon icon="file.folder" />
         <span>{{ tab.title }}</span>
         <span class="tab-close" title="关闭标签页 (Ctrl+W)" @click="emit('close-tab', $event, tab.id)">
-          <icon icon="icon-close" size="small" />
+          <icon icon="action.close" size="small" />
         </span>
       </button>
     </div>
     <button class="tab-add" title="新建标签页 (Ctrl+T)" @click="emit('new-tab')">
-      <icon icon="icon-add" />
+      <icon icon="action.add" />
     </button>
   </nav>
 

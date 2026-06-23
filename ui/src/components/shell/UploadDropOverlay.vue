@@ -11,7 +11,7 @@ defineProps<{
   <div class="upload-drop-layer">
     <div class="upload-drop-card">
       <div class="upload-drop-icon">
-        <icon icon="icon-upload" />
+        <icon icon="action.upload" />
       </div>
       <strong>{{ title }}</strong>
       <span>{{ subtitle }}</span>

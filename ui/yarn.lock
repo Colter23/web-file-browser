@@ -1778,6 +1778,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"lucide-vue-next@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "lucide-vue-next@npm:1.0.0"
+  peerDependencies:
+    vue: ">=3.0.1"
+  checksum: 10c0/28f6a7d83e5d06db34006214f1ee3fe2c67ba0ca58f6e8af0d9032c495bb419f5c632b2db66e10ba90a6376e9f8aa913bc2e56be7c3aa06089d6ad2a472d93aa
+  languageName: node
+  linkType: hard
+
 "magic-string-ast@npm:^1.0.2":
   version: 1.0.3
   resolution: "magic-string-ast@npm:1.0.3"
@@ -2678,6 +2687,7 @@ __metadata:
     ace-builds: "npm:^1.44.0"
     autoprefixer: "npm:^10.5.0"
     axios: "npm:^1.17.0"
+    lucide-vue-next: "npm:^1.0.0"
     pinia: "npm:^3.0.4"
     postcss: "npm:^8.5.15"
     tailwindcss: "npm:^4.3.0"

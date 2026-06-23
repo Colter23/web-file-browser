@@ -44,7 +44,7 @@ const updateWrap = (event: Event) => {
           :key="mode.key"
           :class="{active: currentMode === mode.key}"
           @click="emit('change-mode', mode.key)">
-        <icon icon="icon-file" :color="currentMode === mode.key ? '#ffffff' : '#475569'" />
+        <icon icon="file.code" :color="currentMode === mode.key ? '#ffffff' : '#475569'" />
         <span>{{ mode.name }}</span>
       </button>
     </div>

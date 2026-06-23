@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, ref} from "vue";
-import Icon from "../Icon.vue";
+import FileTypeIcon from "../FileTypeIcon.vue";
 import OperationPanelShell from "./OperationPanelShell.vue";
 import type {DeleteConfirmState} from "./types.ts";
 
@@ -43,14 +43,14 @@ defineExpose({
       ref="panelRef"
       width="delete"
       variant="red"
-      icon="icon-delete-fill"
+      icon="action.delete"
       :title="title"
       :subtitle="message"
       :tabindex="-1"
       @close="emit('close')">
     <div class="delete-confirm-list">
       <div v-for="item in visibleItems" :key="item.path" :title="item.path">
-        <icon :icon="item.type === 'folder' ? 'icon-folder-fill' : 'icon-file-fill'" />
+        <file-type-icon :kind="item.type === 'folder' ? 'folder' : 'file'" />
         <span>{{ item.name }}</span>
       </div>
       <div v-if="extraCount" class="delete-confirm-more">

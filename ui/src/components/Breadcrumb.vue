@@ -109,10 +109,10 @@ onBeforeUnmount(() => {
   <div class="path-card" title="地址栏 (Ctrl+L / Alt+D)">
     <div class="flex items-center gap-1 pl-2">
       <div class="path-item px-1" title="主页" @click="changePath(-1)">
-        <icon icon="icon-homefill" size="large" />
+        <icon icon="file.home" size="large" />
       </div>
       <div v-if="pathList.length" class="separator">
-        <icon icon="icon-unfold" class="-rotate-90" />
+        <icon icon="action.next" />
       </div>
     </div>
     <div ref="pathBox" class="path-box" :class="isInput ? 'hidden' : 'flex'">
@@ -121,7 +121,7 @@ onBeforeUnmount(() => {
           <span>{{ pathItem }}</span>
         </div>
         <div v-if="index !== pathList.length - 1" class="separator">
-          <icon icon="icon-unfold" class="-rotate-90" />
+          <icon icon="action.next" />
         </div>
       </div>
     </div>

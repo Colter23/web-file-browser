@@ -44,14 +44,15 @@ const nameLabel = computed(() => {
 const panelIcon = computed(() => {
   switch (props.state.kind) {
     case "createFile":
-      return "icon-file-add-fill";
+      return "action.new-file";
     case "createFolder":
-      return "icon-folder-add-fill";
+      return "action.new-folder";
     case "archive":
+      return "action.archive";
     case "extract":
-      return "icon-file-zip-fill";
+      return "action.extract";
     default:
-      return "icon-file-common-filling";
+      return "file.text";
   }
 });
 

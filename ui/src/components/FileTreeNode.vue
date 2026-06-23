@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Icon from "./Icon.vue";
+import FileTypeIcon from "./FileTypeIcon.vue";
 import {computed} from "vue";
 import type {FileTreeData, LoadData} from "../class.ts";
 import {normalizePathText} from "../utils/file-path.ts";
@@ -28,7 +29,7 @@ const focused = computed(() => normalizedPath.value === normalizePathText(props.
 const expanded = computed(() => props.expandedPaths.has(normalizedPath.value));
 const loading = computed(() => props.loadingPaths.has(normalizedPath.value));
 const hasChildren = computed(() => Boolean(props.data.children?.length));
-const nodeIcon = computed(() => normalizedPath.value === "/" ? "icon-home-fill" : expanded.value ? "icon-folder-open-fill" : "icon-folder-fill");
+const nodeIcon = computed(() => normalizedPath.value === "/" ? "file.home" : "file.folder");
 const nodeStyle = computed(() => ({"--tree-depth": props.deep}));
 
 const handleRowClick = (event: MouseEvent) => {
@@ -70,11 +71,12 @@ const handleToggle = (event: MouseEvent) => {
           title="展开或折叠"
           @pointerdown.prevent
           @click.stop="handleToggle">
-        <icon v-if="loading" icon="icon-refresh" size="0.8rem" />
-        <icon v-else icon="icon-unfold" size="0.72rem" />
+        <icon v-if="loading" icon="action.refresh" size="0.8rem" />
+        <icon v-else icon="action.down" size="0.72rem" />
       </button>
       <span class="node-icon" aria-hidden="true">
-        <icon :icon="nodeIcon" size="1.05rem" />
+        <icon v-if="normalizedPath === '/'" :icon="nodeIcon" size="1.05rem" />
+        <file-type-icon v-else kind="folder" :open="expanded" size="1.05rem" />
       </span>
       <span class="node-name">{{ data.name }}</span>
     </div>

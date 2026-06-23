@@ -29,7 +29,7 @@ const shellNoticeLabel = computed(() => ({
       <span>{{ message }}</span>
     </div>
     <button type="button" class="shell-notice-close" title="关闭提示" @click="emit('close')">
-      <icon icon="icon-close" />
+      <icon icon="action.close" />
     </button>
   </section>
 </template>

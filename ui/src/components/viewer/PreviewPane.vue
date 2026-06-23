@@ -35,7 +35,7 @@ const previewTitleText = computed(() => props.entry?.name ?? "预览窗格");
 const previewSubtitleText = computed(() => props.entry ? previewTypeText.value : "选择一个文件");
 const emptyTitleText = computed(() => props.emptyTitle || "选择一个文件以预览");
 const emptySubtitleText = computed(() => props.emptySubtitle || "");
-const emptyIconName = computed(() => props.emptyIcon || "icon-file-fill");
+const emptyIconName = computed(() => props.emptyIcon || "file.file");
 
 const canEditPreview = computed(() => {
   return isEditableEntry(props.entry, props.editableExtensions);
@@ -77,7 +77,7 @@ const downloadPreview = () => {
     <audio v-else-if="entry && previewKind === 'audio'" :src="downloadUrl(entry.path)" controls></audio>
     <video v-else-if="entry && previewKind === 'video'" :src="downloadUrl(entry.path)" controls></video>
     <div v-else class="preview-placeholder">
-      <icon icon="icon-file-fill" size="3rem" />
+      <icon icon="file.file" size="3rem" />
       <span>暂不支持预览此类型</span>
       <button @click="downloadPreview">下载文件</button>
     </div>

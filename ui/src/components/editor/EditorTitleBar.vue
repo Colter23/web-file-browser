@@ -26,7 +26,7 @@ const emit = defineEmits<{
   <header class="editor-titlebar" @click.stop>
     <div class="editor-file-head">
       <div class="file-mark">
-        <icon icon="icon-edit-filling" color="#ffffff" />
+        <icon icon="action.edit" color="#ffffff" />
       </div>
       <div class="file-title-block">
         <div class="file-title-line">
@@ -39,25 +39,25 @@ const emit = defineEmits<{
 
     <div class="editor-actions">
       <button class="menu-button" :class="{active: activeMenu === 'language'}" @click.stop="emit('toggle-menu', 'language')">
-        <icon icon="icon-file-common-filling" color="#475569" />
+        <icon icon="file.text" color="#475569" />
         <span>语言：{{ selectedModeName }}</span>
       </button>
       <button class="menu-button" :class="{active: activeMenu === 'theme'}" @click.stop="emit('toggle-menu', 'theme')">
-        <icon icon="icon-setting" color="#475569" />
+        <icon icon="action.settings" color="#475569" />
         <span>主题：{{ selectedThemeName }}</span>
       </button>
       <button class="icon-button" :class="{active: activeMenu === 'settings'}" title="编辑设置" @click.stop="emit('toggle-menu', 'settings')">
-        <icon icon="icon-setting" color="#475569" />
+        <icon icon="action.settings" color="#475569" />
       </button>
       <button class="icon-button" :disabled="loading" title="重新载入" @click.stop="emit('reload')">
-        <icon icon="icon-refresh" color="#475569" />
+        <icon icon="action.refresh" color="#475569" />
       </button>
       <button class="save-button" :disabled="!canSave" title="保存 (Ctrl+S)" @click.stop="emit('save')">
-        <icon icon="icon-save-fill" :color="canSave ? '#ffffff' : '#94a3b8'" />
+        <icon icon="action.save" :color="canSave ? '#ffffff' : '#94a3b8'" />
         <span>{{ saving ? "保存中" : "保存" }}</span>
       </button>
       <button class="icon-button close-button" title="关闭 (Esc)" @click.stop="emit('close')">
-        <icon icon="icon-close" color="#475569" />
+        <icon icon="action.close" color="#475569" />
       </button>
     </div>
   </header>

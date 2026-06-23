@@ -66,13 +66,13 @@ const updateReplaceText = (event: Event) => {
     <div class="search-actions">
       <span v-if="searchStatusText" class="search-status">{{ searchStatusText }}</span>
       <button title="上一个 (Shift+Enter)" :disabled="!canFind" @click="emit('search', true)">
-        <icon icon="icon-back_android" class="rotate-90" />
+        <icon icon="action.up" />
       </button>
       <button title="下一个 (Enter)" :disabled="!canFind" @click="emit('search', false)">
-        <icon icon="icon-back_android" class="-rotate-90" />
+        <icon icon="action.down" />
       </button>
       <button v-if="!replaceVisible" title="显示替换 (Ctrl+H)" @click="emit('show-replace')">
-        <icon icon="icon-renamebox" />
+        <icon icon="action.rename" />
       </button>
       <button v-if="replaceVisible" class="text-tool" title="替换当前" :disabled="!canReplace" @click="emit('replace-current')">替换</button>
       <button v-if="replaceVisible" class="text-tool" title="全部替换" :disabled="!canReplace" @click="emit('replace-all')">全部</button>
@@ -80,7 +80,7 @@ const updateReplaceText = (event: Event) => {
       <button class="text-tool" :class="{active: wholeWord}" title="全词匹配" @click="emit('toggle-option', 'word')">W</button>
       <button class="text-tool" :class="{active: regex}" title="正则表达式" @click="emit('toggle-option', 'regex')">.*</button>
       <button title="关闭查找" @click="emit('close')">
-        <icon icon="icon-close" />
+        <icon icon="action.close" />
       </button>
     </div>
   </div>

@@ -46,10 +46,10 @@ const filmstripTitle = computed(() => props.showFilmstrip ? "隐藏缩略图 (T)
     </div>
     <div class="image-viewer-actions">
       <button title="上一张 (←)" :disabled="!canShowPrevious" @click="emit('previous')">
-        <icon icon="icon-back_android" color="currentColor" />
+        <icon icon="action.previous" color="currentColor" />
       </button>
       <button title="下一张 (→)" :disabled="!canShowNext" @click="emit('next')">
-        <icon icon="icon-back_android" color="currentColor" class="rotate-180" />
+        <icon icon="action.next" color="currentColor" />
       </button>
       <button class="text-action" :class="{active: fit}" title="适应窗口 (0)" @click="emit('reset-zoom')">适应</button>
       <button class="text-action" :class="{active: actualSizeActive}" title="原始大小 (1)" @click="emit('actual-size')">1:1</button>
@@ -57,19 +57,19 @@ const filmstripTitle = computed(() => props.showFilmstrip ? "隐藏缩略图 (T)
       <span>{{ zoomText }}</span>
       <button title="放大 (+)" :disabled="!canZoomIn" @click="emit('zoom', zoomStep)">+</button>
       <button :title="pageFullscreenTitle" :class="{active: pageFullscreen}" @click="emit('toggle-page-fullscreen')">
-        <icon icon="icon-renamebox" color="currentColor" />
+        <icon icon="action.fullscreen" color="currentColor" />
       </button>
       <button :title="browserFullscreenTitle" :class="{active: browserFullscreen}" @click="emit('toggle-browser-fullscreen')">
-        <icon icon="icon-unfold" color="currentColor" />
+        <icon icon="action.exit-fullscreen" color="currentColor" />
       </button>
       <button :title="filmstripTitle" :class="{active: showFilmstrip}" :disabled="imageCount <= 1" @click="emit('toggle-filmstrip')">
-        <icon icon="icon-viewgrid" color="currentColor" />
+        <icon icon="view.grid" color="currentColor" />
       </button>
       <button title="下载" @click="emit('download')">
-        <icon icon="icon-download" color="currentColor" />
+        <icon icon="action.download" color="currentColor" />
       </button>
       <button title="关闭" @click="emit('close')">
-        <icon icon="icon-close" color="currentColor" />
+        <icon icon="action.close" color="currentColor" />
       </button>
     </div>
   </div>

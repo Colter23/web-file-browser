@@ -15,6 +15,29 @@ export type FileEntryLike = {
 
 export type EntryPreviewKind = "image" | "text" | "audio" | "video" | "unknown";
 
+export type FileEntryIconKind =
+  | "folder"
+  | "folder-open"
+  | "image"
+  | "text"
+  | "code"
+  | "config"
+  | "archive"
+  | "audio"
+  | "video"
+  | "pdf"
+  | "spreadsheet"
+  | "document"
+  | "presentation"
+  | "executable"
+  | "shortcut"
+  | "database"
+  | "font"
+  | "package"
+  | "markup"
+  | "unknown"
+  | "file";
+
 export type FileEntryMetaRow = {
   label: string;
   value: string;
@@ -34,6 +57,16 @@ export const textLikeFileExtensions = ["txt", "log", "md", "json", "yaml", "yml"
 export const audioFileExtensions = ["mp3", "wav", "ogg", "flac", "m4a", "aac"];
 export const videoFileExtensions = ["mp4", "webm", "mov", "mkv", "avi"];
 export const archiveFileExtensions = ["zip", "rar", "7z", "tar", "gz", "tgz"];
+export const codeFileExtensions = ["c", "cc", "cpp", "cs", "css", "go", "h", "hpp", "html", "java", "js", "jsx", "kt", "kts", "php", "py", "rs", "scss", "sh", "sql", "swift", "ts", "tsx", "vue"];
+export const configFileExtensions = ["conf", "config", "env", "ini", "properties", "toml", "yaml", "yml"];
+export const spreadsheetFileExtensions = ["csv", "ods", "xls", "xlsm", "xlsx"];
+export const documentFileExtensions = ["doc", "docx", "odt", "rtf"];
+export const presentationFileExtensions = ["odp", "ppt", "pptx"];
+export const executableFileExtensions = ["app", "bat", "cmd", "com", "exe", "msi", "ps1"];
+export const shortcutFileExtensions = ["lnk", "url", "webloc"];
+export const databaseFileExtensions = ["db", "mdb", "sqlite", "sqlite3"];
+export const fontFileExtensions = ["eot", "otf", "ttf", "woff", "woff2"];
+export const packageFileExtensions = ["apk", "deb", "dmg", "jar", "rpm"];
 
 const normalizedExtensionSet = (extensions: readonly string[]) => new Set(extensions.map(extension => extension.toLowerCase()));
 
@@ -42,10 +75,26 @@ const textLikeExtensionSet = normalizedExtensionSet(textLikeFileExtensions);
 const audioExtensionSet = normalizedExtensionSet(audioFileExtensions);
 const videoExtensionSet = normalizedExtensionSet(videoFileExtensions);
 const archiveExtensionSet = normalizedExtensionSet(archiveFileExtensions);
+const codeExtensionSet = normalizedExtensionSet(codeFileExtensions);
+const configExtensionSet = normalizedExtensionSet(configFileExtensions);
+const spreadsheetExtensionSet = normalizedExtensionSet(spreadsheetFileExtensions);
+const documentExtensionSet = normalizedExtensionSet(documentFileExtensions);
+const presentationExtensionSet = normalizedExtensionSet(presentationFileExtensions);
+const executableExtensionSet = normalizedExtensionSet(executableFileExtensions);
+const shortcutExtensionSet = normalizedExtensionSet(shortcutFileExtensions);
+const databaseExtensionSet = normalizedExtensionSet(databaseFileExtensions);
+const fontExtensionSet = normalizedExtensionSet(fontFileExtensions);
+const packageExtensionSet = normalizedExtensionSet(packageFileExtensions);
 
 const hasExtension = (extensions: readonly string[], extension: string) => extensions.some(item => item.toLowerCase() === extension);
 
-export const normalizeEntryExtension = (entry: FileEntryLike | null | undefined) => entry?.extension?.toLowerCase() ?? "";
+const extensionFromName = (name?: string) => {
+  if (!name || name.startsWith(".") && !name.slice(1).includes(".")) return "";
+  const dotIndex = name.lastIndexOf(".");
+  return dotIndex > 0 ? name.slice(dotIndex + 1).toLowerCase() : "";
+}
+
+export const normalizeEntryExtension = (entry: FileEntryLike | null | undefined) => entry?.extension?.toLowerCase() || extensionFromName(entry?.name);
 
 export const isImageEntry = (entry: FileEntryLike | null | undefined) => {
   if (!entry || entry.type !== "file") return false;
@@ -120,11 +169,38 @@ export const archiveStem = (name: string) => {
 
 export const archiveFormatExtension = (format: ArchiveFormat) => format === "tarGz" ? ".tar.gz" : ".zip";
 
+export const fileEntryIconKind = (entry: FileEntryLike, editableExtensions: readonly string[] = []): FileEntryIconKind => {
+  if (entry.type === "folder") return "folder";
+  if (isArchiveEntry(entry)) return "archive";
+  const extension = normalizeEntryExtension(entry);
+  const name = entry.name.toLowerCase();
+  if (imageExtensionSet.has(extension)) return "image";
+  if (audioExtensionSet.has(extension)) return "audio";
+  if (videoExtensionSet.has(extension)) return "video";
+  if (extension === "pdf") return "pdf";
+  if (spreadsheetExtensionSet.has(extension)) return "spreadsheet";
+  if (presentationExtensionSet.has(extension)) return "presentation";
+  if (documentExtensionSet.has(extension)) return "document";
+  if (shortcutExtensionSet.has(extension)) return "shortcut";
+  if (executableExtensionSet.has(extension)) return "executable";
+  if (databaseExtensionSet.has(extension)) return "database";
+  if (fontExtensionSet.has(extension)) return "font";
+  if (packageExtensionSet.has(extension)) return "package";
+  if (configExtensionSet.has(extension) || name.startsWith(".") && ["env", "gitignore", "npmrc", "yarnrc"].some(item => name.endsWith(item))) return "config";
+  if (extension === "json" || extension === "xml") return "markup";
+  if (codeExtensionSet.has(extension)) return "code";
+  if (isTextLikeEntry(entry, editableExtensions)) return "text";
+  return "file";
+}
+
+export const fileEntryIconName = (entry: FileEntryLike, editableExtensions: readonly string[] = []) => `file.${fileEntryIconKind(entry, editableExtensions)}`;
+
 export const fileEntryIcon = (entry: FileEntryLike, editableExtensions: readonly string[] = []) => {
-  if (entry.type === "folder") return "icon-folder-fill";
-  if (isArchiveEntry(entry)) return "icon-file-zip-fill";
-  if (isImageEntry(entry)) return "icon-file-image-fill";
-  if (isTextLikeEntry(entry, editableExtensions)) return "icon-file-common-filling";
+  const kind = fileEntryIconKind(entry, editableExtensions);
+  if (kind === "folder") return "icon-folder-fill";
+  if (kind === "archive") return "icon-file-zip-fill";
+  if (kind === "image") return "icon-file-image-fill";
+  if (["text", "code", "config", "markup"].includes(kind)) return "icon-file-common-filling";
   return "icon-file-fill";
 }
 

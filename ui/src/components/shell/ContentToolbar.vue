@@ -44,16 +44,16 @@ defineExpose({
 <template>
   <div class="path-row">
     <button class="nav-button" :disabled="!canNavigateBack" :title="navigateBackTitle" @click="emit('navigate-back')">
-      <icon icon="icon-back_android" size="large" />
+      <icon icon="action.previous" size="large" />
     </button>
     <button class="nav-button" :disabled="!canNavigateForward" :title="navigateForwardTitle" @click="emit('navigate-forward')">
-      <icon icon="icon-back_android" size="large" class="rotate-180" />
+      <icon icon="action.next" size="large" />
     </button>
     <button class="nav-button" :disabled="!canNavigateUp" :title="navigateUpTitle" @click="emit('navigate-up')">
-      <icon icon="icon-back_android" size="large" class="rotate-90" />
+      <icon icon="action.up" size="large" />
     </button>
     <button class="nav-button" title="刷新 (F5 / Ctrl+R)" @click="emit('refresh')">
-      <icon icon="icon-refresh" size="large" />
+      <icon icon="action.refresh" size="large" />
     </button>
     <breadcrumb ref="breadcrumbRef" @navigate="(path, complete) => emit('breadcrumb-navigate', path, complete)"></breadcrumb>
     <label class="search-box" :class="{active: isFiltering}">
@@ -68,9 +68,9 @@ defineExpose({
           @keydown.enter.prevent="emit('search-enter')"
           @keydown.escape.prevent="emit('search-escape')">
       <button v-if="isFiltering" type="button" title="清除筛选" @click.prevent="emit('clear-search')">
-        <icon icon="icon-close" />
+        <icon icon="action.close" />
       </button>
-      <icon v-else icon="icon-fenxiang" />
+      <icon v-else icon="action.search" />
     </label>
   </div>
 </template>

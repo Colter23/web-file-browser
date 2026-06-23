@@ -52,8 +52,8 @@ export const useExplorerPreview = ({
   });
 
   const previewEmptyIcon = computed(() => {
-    if (currentSelection.value.length === 1 && currentSelection.value[0]?.type === "folder") return "icon-folder-fill";
-    return currentSelection.value.length > 1 ? "icon-view-list" : "icon-file-fill";
+    if (currentSelection.value.length === 1 && currentSelection.value[0]?.type === "folder") return "file.folder";
+    return currentSelection.value.length > 1 ? "view.details" : "file.file";
   });
 
   const clearPreviewContent = () => {

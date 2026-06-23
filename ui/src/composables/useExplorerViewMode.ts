@@ -16,10 +16,10 @@ type ExplorerViewModeOptions = {
 }
 
 const viewModeMeta: Record<ExplorerViewMode, {label: string; icon: string}> = {
-  details: {label: "详细信息", icon: "icon-view-list"},
-  list: {label: "列表", icon: "icon-listview"},
-  icons: {label: "图标", icon: "icon-viewgrid"},
-  tiles: {label: "平铺", icon: "icon-file-common-filling"}
+  details: {label: "详细信息", icon: "view.details"},
+  list: {label: "列表", icon: "view.list"},
+  icons: {label: "图标", icon: "view.icons"},
+  tiles: {label: "平铺", icon: "view.tiles"}
 };
 
 const viewShortcutMap: Record<string, ExplorerViewModeSelection & {iconSize: ExplorerIconSize}> = {
