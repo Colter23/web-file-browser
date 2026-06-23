@@ -175,7 +175,9 @@ const emit = defineEmits<{
 }
 
 .tab-button.active {
-  @apply border-blue-600 bg-blue-600 text-white;
+  @apply text-white;
+  border-color: var(--app-accent, #2563eb);
+  background: var(--app-accent, #2563eb);
 }
 
 .tab-button.dragging {
@@ -184,18 +186,20 @@ const emit = defineEmits<{
 
 .tab-button.dropBefore,
 .tab-button.dropAfter {
-  @apply bg-blue-50 ring-2 ring-blue-200;
+  background: var(--app-accent-soft, #eff6ff);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.2));
 }
 
 .tab-button.active.dropBefore,
 .tab-button.active.dropAfter {
-  @apply bg-blue-600 ring-blue-200;
+  background: var(--app-accent, #2563eb);
 }
 
 .tab-button.dropBefore::before,
 .tab-button.dropAfter::after {
   content: "";
-  @apply absolute bottom-1 top-1 w-0.5 rounded-full bg-blue-500;
+  @apply absolute bottom-1 top-1 w-0.5 rounded-full;
+  background: var(--app-accent, #2563eb);
 }
 
 .tab-button.dropBefore::before {
@@ -220,7 +224,11 @@ const emit = defineEmits<{
 }
 
 .tab-add {
-  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-blue-50;
+  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm;
+}
+
+.tab-add:hover {
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 .tab-context-menu {
@@ -228,11 +236,18 @@ const emit = defineEmits<{
 }
 
 .tab-context-menu button {
-  @apply block h-8 w-full px-3 text-left text-slate-700 hover:bg-blue-50 disabled:text-slate-300 disabled:hover:bg-white;
+  @apply block h-8 w-full px-3 text-left text-slate-700 disabled:text-slate-300 disabled:hover:bg-white;
+}
+
+.tab-context-menu button:hover:not(:disabled) {
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 .tab-context-menu button:focus-visible {
-  @apply bg-blue-50 text-blue-700 outline-none ring-1 ring-inset ring-blue-300;
+  @apply outline-none;
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
+  box-shadow: inset 0 0 0 1px var(--app-accent-border, #bfdbfe);
 }
 
 .tab-context-separator {

@@ -180,11 +180,18 @@ onBeforeUnmount(() => {
 }
 
 .sort-button {
-  @apply inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:border-blue-200 hover:bg-blue-50;
+  @apply inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700;
+}
+
+.sort-button:hover {
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 .sort-button.active {
-  @apply border-blue-200 bg-blue-50 text-blue-700;
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
 }
 
 .sort-caret {
@@ -204,19 +211,28 @@ onBeforeUnmount(() => {
 }
 
 .sort-menu-item {
-  @apply grid w-full grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-3 px-3 py-2 text-left text-sm text-slate-700 hover:bg-blue-50;
+  @apply grid w-full grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-3 px-3 py-2 text-left text-sm text-slate-700;
+}
+
+.sort-menu-item:hover {
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 .sort-menu-item.active {
-  @apply bg-blue-50 text-blue-700;
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
 }
 
 .sort-menu-item:focus-visible {
-  @apply bg-blue-50 text-blue-700 outline-none ring-1 ring-inset ring-blue-300;
+  @apply outline-none;
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
+  box-shadow: inset 0 0 0 1px var(--app-accent-border, #bfdbfe);
 }
 
 .sort-check {
-  @apply text-center text-xs font-semibold text-blue-600;
+  @apply text-center text-xs font-semibold;
+  color: var(--app-accent, #2563eb);
 }
 
 .sort-menu-copy {
@@ -232,6 +248,6 @@ onBeforeUnmount(() => {
 }
 
 .sort-menu-item.active .sort-menu-copy small {
-  @apply text-blue-600;
+  color: var(--app-accent, #2563eb);
 }
 </style>

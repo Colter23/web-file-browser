@@ -99,7 +99,10 @@ defineExpose({
 }
 
 .search-box.active {
-  @apply border-blue-200 bg-blue-50 text-blue-700 ring-2 ring-blue-100;
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.2));
 }
 
 .search-box input {

@@ -210,11 +210,18 @@ onBeforeUnmount(() => {
 }
 
 .view-button {
-  @apply inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:border-blue-200 hover:bg-blue-50;
+  @apply inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700;
+}
+
+.view-button:hover {
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 .view-button.active {
-  @apply border-blue-200 bg-blue-50 text-blue-700;
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
 }
 
 .view-caret {
@@ -226,15 +233,23 @@ onBeforeUnmount(() => {
 }
 
 .view-menu-item {
-  @apply grid w-full grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left text-sm text-slate-700 hover:bg-blue-50;
+  @apply grid w-full grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left text-sm text-slate-700;
+}
+
+.view-menu-item:hover {
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 .view-menu-item.active {
-  @apply bg-blue-50 text-blue-700;
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
 }
 
 .view-menu-item:focus-visible {
-  @apply bg-blue-50 text-blue-700 outline-none ring-1 ring-inset ring-blue-300;
+  @apply outline-none;
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
+  box-shadow: inset 0 0 0 1px var(--app-accent-border, #bfdbfe);
 }
 
 .view-menu-copy {
@@ -250,7 +265,7 @@ onBeforeUnmount(() => {
 }
 
 .view-menu-item.active .view-menu-copy small {
-  @apply text-blue-600;
+  color: var(--app-accent, #2563eb);
 }
 
 .view-menu-item kbd {

@@ -117,15 +117,17 @@ const updateRenameDraft = (event: Event) => {
 }
 
 .entry-item:hover {
-  @apply bg-[#ebf3ff];
+  background: var(--app-accent-hover, #ebf3ff);
 }
 
 .entry-item.selected {
-  @apply border-[#7aa7f8] bg-[#cfe4ff] text-slate-950;
+  @apply text-slate-950;
+  border-color: var(--app-accent-border, #7aa7f8);
+  background: var(--app-accent-selected, #cfe4ff);
 }
 
 .entry-item.focused {
-  @apply ring-1 ring-inset ring-blue-600;
+  box-shadow: inset 0 0 0 1px var(--app-accent, #2563eb);
 }
 
 .entry-item.dimmed {
@@ -137,7 +139,9 @@ const updateRenameDraft = (event: Event) => {
 }
 
 .entry-item.dropTarget {
-  @apply border-blue-500 bg-blue-50 ring-2 ring-inset ring-blue-400;
+  border-color: var(--app-accent, #2563eb);
+  background: var(--app-accent-soft, #eff6ff);
+  box-shadow: inset 0 0 0 2px var(--app-accent-border, #bfdbfe);
 }
 
 .entry-item.view-details {
@@ -239,7 +243,9 @@ const updateRenameDraft = (event: Event) => {
 }
 
 .entry-rename-input {
-  @apply h-6 min-w-0 rounded border border-blue-500 bg-white px-1 text-sm text-slate-900 outline-none ring-2 ring-blue-200;
+  @apply h-6 min-w-0 rounded border bg-white px-1 text-sm text-slate-900 outline-none;
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
 }
 
 .entry-item.view-details .entry-rename-input,

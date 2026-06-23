@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+:root {
+  --app-accent: #2563eb;
+  --app-accent-soft: #eff6ff;
+  --app-accent-border: #bfdbfe;
+  --app-accent-hover: color-mix(in srgb, var(--app-accent) 8%, white);
+  --app-accent-selected: color-mix(in srgb, var(--app-accent) 18%, white);
+  --app-accent-ring: color-mix(in srgb, var(--app-accent) 24%, transparent);
+  --app-accent-tint: color-mix(in srgb, var(--app-accent) 10%, transparent);
+}
+
 body {
-  @apply bg-blue-100
+  background: color-mix(in srgb, var(--app-accent-soft) 42%, #f1f5f9);
 }

@@ -150,7 +150,12 @@ const emit = defineEmits<{
 }
 
 .command-button.strong {
-  @apply text-blue-700 hover:border-blue-200 hover:bg-blue-50;
+  color: var(--app-accent, #2563eb);
+}
+
+.command-button.strong:hover {
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-soft, #eff6ff);
 }
 
 .command-button:disabled {
@@ -179,11 +184,17 @@ const emit = defineEmits<{
 }
 
 .view-button {
-  @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 hover:bg-blue-50;
+  @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700;
+}
+
+.view-button:hover:not(:disabled) {
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 .view-button.active {
-  @apply border-blue-200 bg-blue-50 text-blue-700;
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
 }
 
 .view-button:disabled {

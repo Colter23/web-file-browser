@@ -108,16 +108,24 @@ const handleToggle = (event: MouseEvent) => {
 
 .tree-node {
   --tree-depth: 0;
-  @apply flex h-7 w-full min-w-max items-center rounded-sm border border-transparent pr-2 text-left text-slate-700 outline-none hover:bg-[#eaf4ff];
+  @apply flex h-7 w-full min-w-max items-center rounded-sm border border-transparent pr-2 text-left text-slate-700 outline-none;
   padding-left: calc(var(--tree-depth) * 1rem + 0.125rem);
 }
 
+.tree-node:hover {
+  background: var(--app-accent-hover, #eaf4ff);
+}
+
 .tree-node:focus-visible {
-  @apply border-blue-300 bg-blue-50 ring-2 ring-blue-100;
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-soft, #eff6ff);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.2));
 }
 
 .tree-node.active {
-  @apply border-[#c7ddf6] bg-[#dceeff] text-blue-950;
+  color: color-mix(in srgb, var(--app-accent, #2563eb) 62%, #0f172a);
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-selected, #dceeff);
 }
 
 .tree-node.loading {
@@ -154,7 +162,7 @@ const handleToggle = (event: MouseEvent) => {
 }
 
 .tree-node.active .node-icon {
-  @apply text-blue-600;
+  color: var(--app-accent, #2563eb);
 }
 
 .node-name {

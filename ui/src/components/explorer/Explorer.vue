@@ -718,11 +718,12 @@ defineExpose({
 }
 
 .explorer-viewport:focus-visible {
-  @apply ring-2 ring-inset ring-blue-500;
+  box-shadow: inset 0 0 0 2px var(--app-accent, #2563eb);
 }
 
 .explorer-viewport.dropCurrent {
-  @apply bg-blue-50/25 ring-2 ring-inset ring-blue-400;
+  background: var(--app-accent-tint, rgba(37, 99, 235, 0.1));
+  box-shadow: inset 0 0 0 2px var(--app-accent-border, #bfdbfe);
 }
 
 .explorer-viewport.view-details {
@@ -770,15 +771,25 @@ defineExpose({
 }
 
 .load-more-button {
-  @apply h-8 rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-600 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400;
+  @apply h-8 rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-600 shadow-sm disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400;
+}
+
+.load-more-button:hover:not(:disabled) {
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
 }
 
 .selection-box {
-  @apply pointer-events-none absolute z-20 border border-blue-500 bg-blue-500/15;
+  @apply pointer-events-none absolute z-20 border;
+  border-color: var(--app-accent, #2563eb);
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 16%, transparent);
 }
 
 .drag-hint {
-  @apply pointer-events-none sticky bottom-3 z-30 mx-auto mt-auto flex w-fit items-center rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 shadow-lg;
+  @apply pointer-events-none sticky bottom-3 z-30 mx-auto mt-auto flex w-fit items-center rounded-md border bg-white px-3 py-1.5 text-xs font-medium shadow-lg;
+  border-color: var(--app-accent-border, #bfdbfe);
+  color: var(--app-accent, #2563eb);
 }
 
 .drag-hint.copy {

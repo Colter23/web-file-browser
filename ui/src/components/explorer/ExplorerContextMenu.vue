@@ -139,11 +139,18 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
 }
 
 .context-menu button {
-  @apply block h-8 w-full px-3 text-left text-slate-700 hover:bg-blue-50 disabled:text-slate-300 disabled:hover:bg-white;
+  @apply block h-8 w-full px-3 text-left text-slate-700 disabled:text-slate-300 disabled:hover:bg-white;
+}
+
+.context-menu button:hover:not(:disabled) {
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 .context-menu button:focus-visible {
-  @apply bg-blue-50 text-blue-700 outline-none ring-1 ring-inset ring-blue-300;
+  @apply outline-none;
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
+  box-shadow: inset 0 0 0 1px var(--app-accent-border, #bfdbfe);
 }
 
 .context-separator {

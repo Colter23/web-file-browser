@@ -42,7 +42,9 @@ const shellNoticeLabel = computed(() => ({
 }
 
 .shell-notice-mark {
-  @apply mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500 shadow-[0_0_0_3px_rgba(59,130,246,0.15)];
+  @apply mt-1 h-2.5 w-2.5 shrink-0 rounded-full;
+  background: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(59, 130, 246, 0.15));
 }
 
 .shell-notice-body {

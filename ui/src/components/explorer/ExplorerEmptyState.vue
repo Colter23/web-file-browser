@@ -34,7 +34,14 @@ const emit = defineEmits<{
 }
 
 .empty-action {
-  @apply mt-2 h-8 rounded-md border border-blue-200 bg-white px-3 text-xs font-medium text-blue-700 shadow-sm hover:border-blue-300 hover:bg-blue-50;
+  @apply mt-2 h-8 rounded-md border bg-white px-3 text-xs font-medium shadow-sm;
+  border-color: var(--app-accent-border, #bfdbfe);
+  color: var(--app-accent, #2563eb);
+}
+
+.empty-action:hover {
+  background: var(--app-accent-soft, #eff6ff);
+  border-color: color-mix(in srgb, var(--app-accent, #2563eb) 34%, white);
 }
 
 .explorer-empty.error {
