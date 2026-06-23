@@ -4,6 +4,7 @@ import type {ExplorerEntry} from "../explorer/types.ts";
 import {useImageZoomPan} from "../../composables/useImageZoomPan.ts";
 import {downloadUrl} from "../../network/api.ts";
 import Icon from "../Icon.vue";
+import PreviewToolRow from "./PreviewToolRow.vue";
 
 const props = defineProps<{
   entry: ExplorerEntry;
@@ -38,16 +39,16 @@ onBeforeUnmount(releasePreviewImagePointer);
 </script>
 
 <template>
-  <div class="preview-tool-row">
+  <preview-tool-row>
     <button :class="{active: previewImageFit}" @click="resetPreviewImageZoom">适应</button>
     <button @click="zoomPreviewImage(-25)">-</button>
-    <span>{{ previewZoomText }}</span>
     <button @click="zoomPreviewImage(25)">+</button>
     <button title="打开图片查看" @click="openImagePreview">
       <icon icon="icon-unfold" color="currentColor" />
       <span>打开查看</span>
     </button>
-  </div>
+    <template #status>{{ previewZoomText }}</template>
+  </preview-tool-row>
   <div class="preview-body image">
     <div
         class="image-stage"
@@ -66,22 +67,6 @@ onBeforeUnmount(releasePreviewImagePointer);
 
 <style scoped lang="postcss">
 @reference "tailwindcss";
-
-.preview-tool-row {
-  @apply flex h-9 shrink-0 items-center gap-1 border-b border-slate-100 bg-white px-3 text-xs text-slate-500;
-}
-
-.preview-tool-row button {
-  @apply inline-flex h-6 items-center gap-1 rounded border border-transparent px-2 text-slate-600 hover:border-slate-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:border-transparent disabled:hover:bg-transparent;
-}
-
-.preview-tool-row button.active {
-  @apply border-blue-200 bg-blue-50 text-blue-700;
-}
-
-.preview-tool-row > span {
-  @apply ml-auto tabular-nums;
-}
 
 .preview-body {
   @apply min-h-0 grow overflow-auto text-sm text-slate-700;
