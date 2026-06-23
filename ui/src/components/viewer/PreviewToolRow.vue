@@ -27,11 +27,18 @@ defineProps<{
 }
 
 :slotted(button) {
-  @apply inline-flex h-6 items-center gap-1 rounded border border-transparent px-2 text-slate-600 hover:border-slate-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:border-transparent disabled:hover:bg-transparent;
+  @apply inline-flex h-6 items-center gap-1 rounded border border-transparent px-2 text-slate-600 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:border-transparent disabled:hover:bg-transparent;
+}
+
+:slotted(button:hover:not(:disabled)) {
+  @apply border-slate-200;
+  background: var(--app-accent-hover, #eff6ff);
 }
 
 :slotted(button.active) {
-  @apply border-blue-200 bg-blue-50 text-blue-700;
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
 }
 
 .preview-tool-status {

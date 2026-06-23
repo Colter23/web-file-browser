@@ -71,7 +71,10 @@ onBeforeUnmount(() => {
 }
 
 .image-viewer-thumb.active {
-  @apply border-blue-300 bg-blue-500/20 opacity-100 shadow-[0_0_0_2px_rgba(96,165,250,0.25)];
+  @apply opacity-100;
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 22%, transparent);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.25));
 }
 
 .image-viewer-thumb img {

@@ -59,6 +59,10 @@ const emit = defineEmits<{
 }
 
 .preview-header button {
-  @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40;
+  @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 disabled:cursor-not-allowed disabled:opacity-40;
+}
+
+.preview-header button:hover:not(:disabled) {
+  background: var(--app-accent-hover, #eff6ff);
 }
 </style>

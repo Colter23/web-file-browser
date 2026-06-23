@@ -107,7 +107,10 @@ const filmstripTitle = computed(() => props.showFilmstrip ? "隐藏缩略图 (T)
 }
 
 .image-viewer-actions button.active {
-  @apply border-blue-200/80 bg-blue-500/50 text-white shadow-[0_0_0_1px_rgba(191,219,254,0.22)];
+  @apply text-white;
+  border-color: color-mix(in srgb, var(--app-accent-border, #bfdbfe) 80%, transparent);
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 52%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-accent-border, #bfdbfe) 22%, transparent);
 }
 
 .image-viewer-actions button.text-action {

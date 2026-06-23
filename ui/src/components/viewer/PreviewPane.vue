@@ -118,6 +118,10 @@ const downloadPreview = () => {
 }
 
 .preview-placeholder button {
-  @apply rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-blue-50;
+  @apply rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700;
+}
+
+.preview-placeholder button:hover {
+  background: var(--app-accent-hover, #eff6ff);
 }
 </style>
