@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<{
   focusedPath: string;
   expandedPaths: Set<string>;
   loadingPaths: Set<string>;
+  dropTargetPath: string;
   loadData: LoadData;
 }>(), {
   deep: 0
@@ -21,6 +22,9 @@ const emit = defineEmits<{
   (e: "toggle", node: FileTreeData): void;
   (e: "navigate", node: FileTreeData): void;
   (e: "node-focus", node: FileTreeData): void;
+  (e: "node-drag-over", node: FileTreeData, event: DragEvent): void;
+  (e: "node-drag-leave", node: FileTreeData, event: DragEvent): void;
+  (e: "node-drop", node: FileTreeData, event: DragEvent): void;
 }>();
 
 const normalizedPath = computed(() => normalizePathText(props.data.path));
@@ -28,6 +32,7 @@ const active = computed(() => normalizedPath.value === normalizePathText(props.c
 const focused = computed(() => normalizedPath.value === normalizePathText(props.focusedPath || "/"));
 const expanded = computed(() => props.expandedPaths.has(normalizedPath.value));
 const loading = computed(() => props.loadingPaths.has(normalizedPath.value));
+const dropTarget = computed(() => Boolean(props.dropTargetPath) && normalizedPath.value === normalizePathText(props.dropTargetPath));
 const hasChildren = computed(() => Boolean(props.data.children?.length));
 const nodeIcon = computed(() => normalizedPath.value === "/" ? "file.home" : "file.folder");
 const nodeStyle = computed(() => ({"--tree-depth": props.deep}));
@@ -50,7 +55,7 @@ const handleToggle = (event: MouseEvent) => {
   <div class="tree-node-wrap" role="none">
     <div
         class="tree-node"
-        :class="{active, loading}"
+        :class="{active, loading, dropTarget}"
         :style="nodeStyle"
         role="treeitem"
         :tabindex="focused ? 0 : -1"
@@ -59,7 +64,10 @@ const handleToggle = (event: MouseEvent) => {
         :aria-expanded="expanded"
         :title="data.path"
         @click="handleRowClick"
-        @focus="emit('node-focus', data)">
+        @focus="emit('node-focus', data)"
+        @dragover="emit('node-drag-over', data, $event)"
+        @dragleave="emit('node-drag-leave', data, $event)"
+        @drop="emit('node-drop', data, $event)">
       <span class="node-spacer" aria-hidden="true"></span>
       <button
           type="button"
@@ -91,10 +99,14 @@ const handleToggle = (event: MouseEvent) => {
           :focused-path="focusedPath"
           :expanded-paths="expandedPaths"
           :loading-paths="loadingPaths"
+          :drop-target-path="dropTargetPath"
           :load-data="loadData"
           @toggle="node => emit('toggle', node)"
           @navigate="node => emit('navigate', node)"
-          @node-focus="node => emit('node-focus', node)" />
+          @node-focus="node => emit('node-focus', node)"
+          @node-drag-over="(node, event) => emit('node-drag-over', node, event)"
+          @node-drag-leave="(node, event) => emit('node-drag-leave', node, event)"
+          @node-drop="(node, event) => emit('node-drop', node, event)" />
     </div>
   </div>
 </template>
@@ -127,6 +139,13 @@ const handleToggle = (event: MouseEvent) => {
   color: color-mix(in srgb, var(--app-accent, #2563eb) 62%, var(--app-text));
   border-color: var(--app-accent-border, #bfdbfe);
   background: var(--app-accent-selected, #dceeff);
+}
+
+.tree-node.dropTarget {
+  color: var(--app-accent, #2563eb);
+  border-color: var(--app-accent, #2563eb);
+  background: var(--app-accent-soft, #eff6ff);
+  box-shadow: inset 0 0 0 1px var(--app-accent-border, #bfdbfe);
 }
 
 .tree-node.loading {

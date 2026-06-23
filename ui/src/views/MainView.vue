@@ -470,6 +470,19 @@ const openPreviewInEditor = async (entry = previewEntry.value) => {
   fileStore.openEditor(entryFileInfo(entry));
 }
 
+const dropEntriesToTreeFolder = ({entries, target, action}: {entries: ExplorerEntry[]; target: {path: string; name: string}; action: "copy" | "move"}) => {
+  void dropEntriesToFolder({
+    entries,
+    action,
+    target: {
+      type: "folder",
+      path: target.path,
+      name: target.name,
+      modified: ""
+    }
+  });
+}
+
 const editPreviewEntry = (entry: ExplorerEntry) => {
   void openPreviewInEditor(entry);
 }
@@ -579,7 +592,8 @@ const signOut = async () => {
       <sidebar-panel
           :tree-data="treeData"
           :load-data="handleLoad"
-          :current-path="fileStore.currentPath" />
+          :current-path="fileStore.currentPath"
+          @drop-entries="dropEntriesToTreeFolder" />
 
       <div
           class="sidebar-resizer"

@@ -1,6 +1,12 @@
 import {computed, reactive, ref} from "vue";
 import type {ComputedRef, Ref} from "vue";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
+import {
+  clearActiveInternalEntryDragEntries,
+  hasInternalEntryDragData,
+  setActiveInternalEntryDragEntries,
+  writeInternalEntryDragData
+} from "../utils/internal-entry-drag.ts";
 import {parentPath} from "../utils/file-path.ts";
 
 type DropAction = "copy" | "move";
@@ -89,6 +95,7 @@ export const useExplorerEntryDrag = ({
     }
     if (!isSelected(entry.path)) setSelection([entry.path], entry.path);
     draggingEntries.value = entriesToDrag;
+    setActiveInternalEntryDragEntries(entriesToDrag);
     dragState.active = true;
     dragState.overPath = "";
     dragState.overCurrentFolder = false;
@@ -98,7 +105,7 @@ export const useExplorerEntryDrag = ({
       event.dataTransfer.clearData();
       event.dataTransfer.effectAllowed = "copyMove";
       event.dataTransfer.dropEffect = dragState.copy ? "copy" : "move";
-      event.dataTransfer.setData("text/plain", entriesToDrag.map(item => item.path).join("\n"));
+      writeInternalEntryDragData(event.dataTransfer, entriesToDrag);
     }
   }
 
@@ -108,6 +115,7 @@ export const useExplorerEntryDrag = ({
     dragState.overPath = "";
     dragState.overCurrentFolder = false;
     dragState.copy = false;
+    clearActiveInternalEntryDragEntries();
   }
 
   const dragOverEntry = (event: DragEvent, entry: ExplorerEntry) => {
@@ -139,8 +147,7 @@ export const useExplorerEntryDrag = ({
   }
 
   const isInternalEntryDrag = (event: DragEvent) => {
-    const types = Array.from(event.dataTransfer?.types ?? []);
-    return dragState.active && types.includes("text/plain");
+    return dragState.active && hasInternalEntryDragData(event.dataTransfer);
   }
 
   const isEntryDragSurface = (target: EventTarget | null) => target instanceof HTMLElement && Boolean(target.closest(".entry-item"));

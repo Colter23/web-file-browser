@@ -2,7 +2,13 @@
 import {computed, nextTick, ref, watch} from "vue";
 import FileTreeNode from "./FileTreeNode.vue";
 import type {FileTreeData, LoadData} from "../class.ts";
-import {normalizePathText} from "../utils/file-path.ts";
+import type {ExplorerEntry} from "./explorer/types.ts";
+import {isSameOrDescendantPath, normalizePathText} from "../utils/file-path.ts";
+import {
+  getActiveInternalEntryDragEntries,
+  hasInternalEntryDragData,
+  readInternalEntryDragData
+} from "../utils/internal-entry-drag.ts";
 
 const props = defineProps<{
   data: FileTreeData[];
@@ -10,11 +16,19 @@ const props = defineProps<{
   currentPath: string;
 }>();
 
+const emit = defineEmits<{
+  (e: "drop-entries", payload: {entries: ExplorerEntry[]; target: FileTreeData; action: "copy" | "move"}): void;
+}>();
+
 const expandedPaths = ref<Set<string>>(new Set(["/"]));
 const loadingPaths = ref<Set<string>>(new Set());
 const focusedPath = ref("/");
+const treeRef = ref<HTMLElement | null>(null);
+const dropTargetPath = ref("");
 const activePath = computed(() => normalizePathText(props.currentPath || "/"));
 let syncToken = 0;
+let dropExpandTimer = 0;
+let dropExpandPath = "";
 
 type VisibleTreeNode = {
   node: FileTreeData;
@@ -79,13 +93,24 @@ const findNodeByPath = (nodes: FileTreeData[], path: string): FileTreeData | nul
   return null;
 }
 
+const rowElement = (path: string) => {
+  const normalized = normalizePathText(path);
+  return Array.from(treeRef.value?.querySelectorAll<HTMLElement>(".tree-node") ?? [])
+      .find(item => item.dataset.treePath === normalized) ?? null;
+}
+
+const revealPath = async (path: string, focus = false) => {
+  const normalized = normalizePathText(path);
+  await nextTick();
+  const row = rowElement(normalized);
+  row?.scrollIntoView({block: "nearest", inline: "nearest"});
+  if (focus) row?.focus();
+}
+
 const focusPath = async (path: string) => {
   const normalized = normalizePathText(path);
   focusedPath.value = normalized;
-  await nextTick();
-  const row = Array.from(document.querySelectorAll<HTMLElement>(".file-tree .tree-node"))
-      .find(item => item.dataset.treePath === normalized);
-  row?.focus();
+  await revealPath(normalized, true);
 }
 
 const focusByOffset = async (path: string, offset: number) => {
@@ -131,6 +156,80 @@ const navigateNode = async (node: FileTreeData) => {
   } finally {
     setLoading(path, false);
   }
+}
+
+const isCopyDrop = (event: DragEvent) => Boolean(event.ctrlKey || event.metaKey);
+
+const clearDropExpandTimer = () => {
+  if (!dropExpandTimer) return;
+  window.clearTimeout(dropExpandTimer);
+  dropExpandTimer = 0;
+  dropExpandPath = "";
+}
+
+const clearTreeDropTarget = () => {
+  dropTargetPath.value = "";
+  clearDropExpandTimer();
+}
+
+const canDropOnNode = (node: FileTreeData, entries: ExplorerEntry[]) => {
+  if (node.isFile || !entries.length) return false;
+  const targetPath = normalizePathText(node.path);
+  return !entries.some(entry => entry.type === "folder" && isSameOrDescendantPath(targetPath, entry.path));
+}
+
+const scheduleDropExpand = (node: FileTreeData) => {
+  const path = normalizePathText(node.path);
+  if (isExpanded(path) || isLoading(path)) return;
+  if (dropExpandTimer && dropExpandPath === path) return;
+  clearDropExpandTimer();
+  dropExpandPath = path;
+  dropExpandTimer = window.setTimeout(() => {
+    dropExpandTimer = 0;
+    dropExpandPath = "";
+    void expandNode(node);
+  }, 650);
+}
+
+const handleNodeDragOver = (node: FileTreeData, event: DragEvent) => {
+  if (!hasInternalEntryDragData(event.dataTransfer) || node.isFile) return;
+  const entries = getActiveInternalEntryDragEntries();
+  if (!canDropOnNode(node, entries)) {
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
+    clearTreeDropTarget();
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  dropTargetPath.value = normalizePathText(node.path);
+  scheduleDropExpand(node);
+  if (event.dataTransfer) event.dataTransfer.dropEffect = isCopyDrop(event) ? "copy" : "move";
+}
+
+const handleNodeDragLeave = (node: FileTreeData, event: DragEvent) => {
+  const path = normalizePathText(node.path);
+  if (dropTargetPath.value !== path) return;
+  const target = rowElement(path);
+  const related = event.relatedTarget;
+  if (related instanceof Node && target?.contains(related)) return;
+  clearTreeDropTarget();
+}
+
+const handleTreeDragLeave = (event: DragEvent) => {
+  const related = event.relatedTarget;
+  if (related instanceof Node && treeRef.value?.contains(related)) return;
+  clearTreeDropTarget();
+}
+
+const handleNodeDrop = (node: FileTreeData, event: DragEvent) => {
+  if (!hasInternalEntryDragData(event.dataTransfer)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const entries = readInternalEntryDragData(event.dataTransfer);
+  if (canDropOnNode(node, entries)) {
+    emit("drop-entries", {entries, target: node, action: isCopyDrop(event) ? "copy" : "move"});
+  }
+  clearTreeDropTarget();
 }
 
 const handleNodeFocus = (node: FileTreeData) => {
@@ -218,6 +317,7 @@ const syncCurrentPath = async () => {
     await nextTick();
   }
   if (token === syncToken) focusedPath.value = activePath.value;
+  if (token === syncToken) await revealPath(activePath.value);
 }
 
 watch([() => props.currentPath, () => props.data], () => {
@@ -226,7 +326,7 @@ watch([() => props.currentPath, () => props.data], () => {
 </script>
 
 <template>
-  <div class="file-tree" role="tree" aria-label="文件树" tabindex="-1" @keydown="handleTreeKeyDown">
+  <div ref="treeRef" class="file-tree" role="tree" aria-label="文件树" tabindex="-1" @keydown="handleTreeKeyDown" @dragleave="handleTreeDragLeave" @dragend="clearTreeDropTarget" @drop="clearTreeDropTarget">
     <template v-if="data.length">
       <file-tree-node
           v-for="file in data"
@@ -236,10 +336,14 @@ watch([() => props.currentPath, () => props.data], () => {
           :focused-path="currentFocusedPath"
           :expanded-paths="expandedPaths"
           :loading-paths="loadingPaths"
+          :drop-target-path="dropTargetPath"
           :load-data="loadData"
           @toggle="toggleNode"
           @navigate="navigateNode"
-          @node-focus="handleNodeFocus" />
+          @node-focus="handleNodeFocus"
+          @node-drag-over="handleNodeDragOver"
+          @node-drag-leave="handleNodeDragLeave"
+          @node-drop="handleNodeDrop" />
     </template>
     <div v-else class="tree-empty">暂无目录</div>
   </div>
