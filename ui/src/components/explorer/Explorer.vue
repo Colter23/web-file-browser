@@ -314,6 +314,7 @@ const {
   setSelection,
   focusViewport,
   closeContextMenu,
+  cancelMarqueeSelection: resetSelectionBox,
   dropEntries: (entries, target, action) => emit("drop-entries", {entries, target, action}),
   dropToCurrentFolder: (entries, action) => emit("drop-to-current-folder", {entries, action})
 });

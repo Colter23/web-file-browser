@@ -16,6 +16,7 @@ type ExplorerEntryDragOptions = {
   setSelection: (paths: string[], focusPath?: string, keepAnchor?: boolean) => void;
   focusViewport: () => void;
   closeContextMenu: () => void;
+  cancelMarqueeSelection: () => void;
   dropEntries: (entries: ExplorerEntry[], target: ExplorerEntry, action: DropAction) => void;
   dropToCurrentFolder: (entries: ExplorerEntry[], action: DropAction) => void;
 }
@@ -31,6 +32,7 @@ export const useExplorerEntryDrag = ({
   setSelection,
   focusViewport,
   closeContextMenu,
+  cancelMarqueeSelection,
   dropEntries,
   dropToCurrentFolder
 }: ExplorerEntryDragOptions) => {
@@ -67,18 +69,33 @@ export const useExplorerEntryDrag = ({
     return [entry];
   }
 
+  const cancelEntryDragStart = (event: DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "none";
+  }
+
   const beginEntryDrag = (event: DragEvent, entry: ExplorerEntry) => {
-    if (isRenaming(entry)) return;
+    if (isRenaming(entry)) {
+      cancelEntryDragStart(event);
+      return;
+    }
+    cancelMarqueeSelection();
     focusViewport();
     const entriesToDrag = selectedEntriesForDrag(entry);
-    if (!entriesToDrag.length) return;
+    if (!entriesToDrag.length) {
+      cancelEntryDragStart(event);
+      return;
+    }
     if (!isSelected(entry.path)) setSelection([entry.path], entry.path);
     draggingEntries.value = entriesToDrag;
     dragState.active = true;
     dragState.overPath = "";
+    dragState.overCurrentFolder = false;
     dragState.copy = isCopyAction(event);
     closeContextMenu();
     if (event.dataTransfer) {
+      event.dataTransfer.clearData();
       event.dataTransfer.effectAllowed = "copyMove";
       event.dataTransfer.dropEffect = dragState.copy ? "copy" : "move";
       event.dataTransfer.setData("text/plain", entriesToDrag.map(item => item.path).join("\n"));

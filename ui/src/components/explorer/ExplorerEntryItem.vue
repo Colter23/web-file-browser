@@ -61,7 +61,7 @@ const updateRenameDraft = (event: Event) => {
       role="option"
       :aria-selected="selected"
       :tabindex="focused ? 0 : -1"
-      draggable="true"
+      :draggable="!renaming"
       @click.stop="emit('select', $event)"
       @auxclick.stop="emit('aux-click', $event)"
       @dblclick.stop="emit('open')"
@@ -77,6 +77,7 @@ const updateRenameDraft = (event: Event) => {
             v-if="thumbnailVisible"
             :src="thumbnailSrc"
             :alt="entry.name"
+            draggable="false"
             loading="lazy"
             decoding="async"
             @error="emit('thumbnail-error')">
