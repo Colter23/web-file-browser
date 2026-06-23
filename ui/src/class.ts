@@ -31,6 +31,9 @@ export interface FolderQueryParams {
 
 export type ExplorerViewMode = "details" | "list" | "icons" | "tiles";
 export type ExplorerIconSize = "small" | "medium" | "large";
+export type AppIconStyle = "lucide" | "classic";
+export type FileIconPalette = "category" | "accent";
+export type AppAccentColor = "blue" | "teal" | "violet" | "rose" | "slate";
 
 export interface ExplorerTab {
     id: string;

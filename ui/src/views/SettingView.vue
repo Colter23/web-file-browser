@@ -3,8 +3,15 @@ import {onMounted, reactive, ref} from "vue";
 import {useRouter} from "vue-router";
 import {PathMapping, RuntimeSettings} from "../class";
 import {changePassword, createMapping, deleteMapping, getMappings, getSettings, updateMapping} from "../network/api";
+import {
+  accentColorOptions,
+  fileIconPaletteOptions,
+  iconStyleOptions,
+  useAppearanceStore
+} from "../store/appearance.ts";
 
 const router = useRouter();
+const appearanceStore = useAppearanceStore();
 const mappings = ref<PathMapping[]>([]);
 const settings = ref<RuntimeSettings | null>(null);
 const loading = ref(false);
@@ -181,6 +188,54 @@ const savePassword = async () => {
         </form>
       </section>
 
+      <section class="panel appearance-panel">
+        <h2>外观偏好</h2>
+        <div class="preference-grid">
+          <div class="preference-row">
+            <span>界面图标</span>
+            <div class="segmented-control" role="group" aria-label="界面图标">
+              <button
+                  v-for="option in iconStyleOptions"
+                  :key="option.value"
+                  type="button"
+                  :class="{active: appearanceStore.iconStyle === option.value}"
+                  @click="appearanceStore.setIconStyle(option.value)">
+                {{ option.label }}
+              </button>
+            </div>
+          </div>
+          <div class="preference-row">
+            <span>文件图标颜色</span>
+            <div class="segmented-control" role="group" aria-label="文件图标颜色">
+              <button
+                  v-for="option in fileIconPaletteOptions"
+                  :key="option.value"
+                  type="button"
+                  :class="{active: appearanceStore.fileIconPalette === option.value}"
+                  @click="appearanceStore.setFileIconPalette(option.value)">
+                {{ option.label }}
+              </button>
+            </div>
+          </div>
+          <div class="preference-row">
+            <span>主题色</span>
+            <div class="color-swatches" aria-label="主题色">
+              <button
+                  v-for="option in accentColorOptions"
+                  :key="option.value"
+                  type="button"
+                  class="color-swatch"
+                  :class="{active: appearanceStore.accentColor === option.value}"
+                  :title="option.label"
+                  :aria-label="option.label"
+                  :style="{backgroundColor: option.color}"
+                  @click="appearanceStore.setAccentColor(option.value)">
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="panel" v-if="settings">
         <h2>服务配置</h2>
         <dl>
@@ -265,6 +320,44 @@ h2 {
   grid-template-columns: repeat(3, minmax(0, 1fr)) 100px;
 }
 
+.preference-grid {
+  @apply grid gap-3;
+}
+
+.preference-row {
+  @apply grid items-center gap-3;
+  grid-template-columns: 9rem minmax(0, 1fr);
+}
+
+.preference-row > span {
+  @apply text-sm font-medium text-slate-600;
+}
+
+.segmented-control {
+  @apply inline-flex w-fit rounded-md border border-slate-200 bg-slate-100 p-0.5;
+}
+
+.segmented-control button {
+  @apply h-8 rounded px-3 text-sm font-medium text-slate-600 hover:bg-white;
+}
+
+.segmented-control button.active {
+  background: var(--app-accent, #2563eb);
+  @apply text-white shadow-sm;
+}
+
+.color-swatches {
+  @apply flex items-center gap-2;
+}
+
+.color-swatch {
+  @apply h-7 w-7 rounded-full border-2 border-white shadow ring-1 ring-slate-300 transition;
+}
+
+.color-swatch.active {
+  box-shadow: 0 0 0 3px var(--app-accent-soft, #eff6ff), 0 0 0 5px var(--app-accent-border, #bfdbfe);
+}
+
 input {
   @apply h-9 min-w-0 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-blue-500
 }
@@ -333,7 +426,8 @@ dd {
 @media (max-width: 900px) {
   .mapping-form,
   .mapping-row,
-  .password-form {
+  .password-form,
+  .preference-row {
     grid-template-columns: 1fr;
   }
 }

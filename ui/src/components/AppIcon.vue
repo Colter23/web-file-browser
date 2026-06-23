@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed} from "vue";
 import type {Component} from "vue";
+import {useAppearanceStore} from "../store/appearance.ts";
 import {
   Archive,
   ArchiveRestore,
@@ -71,6 +72,8 @@ const props = withDefaults(defineProps<{
   size: "normal",
   strokeWidth: 2
 });
+
+const appearanceStore = useAppearanceStore();
 
 const lucideIcons: Record<string, Component> = {
   "action.upload": Upload,
@@ -180,8 +183,63 @@ const lucideIcons: Record<string, Component> = {
   "icon-folder-open-fill": FolderOpen
 };
 
-const iconComponent = computed(() => lucideIcons[props.icon]);
-const symbolHref = computed(() => `#${props.icon}`);
+const classicSymbolIcons: Record<string, string> = {
+  "action.upload": "icon-upload",
+  "action.new-file": "icon-file-add-fill",
+  "action.new-folder": "icon-folder-add-fill",
+  "action.cut": "icon-contentcut",
+  "action.copy": "icon-copy",
+  "action.paste": "icon-paste",
+  "action.download": "icon-download",
+  "action.preview": "icon-fenxiang",
+  "action.rename": "icon-rename",
+  "action.delete": "icon-delete-fill",
+  "action.edit": "icon-edit-filling",
+  "action.save": "icon-save-fill",
+  "action.close": "icon-close",
+  "action.add": "icon-add",
+  "action.refresh": "icon-refresh",
+  "action.settings": "icon-setting",
+  "action.search": "icon-fenxiang",
+  "action.previous": "icon-back_android",
+  "action.down": "icon-unfold",
+  "action.tools": "icon-wrench",
+
+  "view.details": "icon-view-list",
+  "view.list": "icon-listview",
+  "view.icons": "icon-viewgrid",
+  "view.tiles": "icon-viewgrid",
+  "view.grid": "icon-viewgrid",
+
+  "file.home": "icon-home-fill",
+  "file.folder": "icon-folder-fill",
+  "file.folder-open": "icon-folder-open-fill",
+  "file.file": "icon-file-fill",
+  "file.image": "icon-file-image-fill",
+  "file.text": "icon-file-common-filling",
+  "file.code": "icon-file-common-filling",
+  "file.config": "icon-file-common-filling",
+  "file.archive": "icon-file-zip-fill",
+  "file.audio": "icon-file-fill",
+  "file.video": "icon-file-fill",
+  "file.pdf": "icon-file-common-filling",
+  "file.spreadsheet": "icon-file-common-filling",
+  "file.document": "icon-file-common-filling",
+  "file.presentation": "icon-file-common-filling",
+  "file.executable": "icon-file-fill",
+  "file.shortcut": "icon-file-fill",
+  "file.database": "icon-file-fill",
+  "file.font": "icon-file-fill",
+  "file.package": "icon-file-zip-fill",
+  "file.markup": "icon-file-common-filling",
+  "file.unknown": "icon-file-fill",
+  "file.generic": "icon-file-fill"
+};
+
+const classicSymbolName = computed(() => classicSymbolIcons[props.icon] ?? (props.icon.startsWith("icon-") ? props.icon : ""));
+const useClassicSymbol = computed(() => appearanceStore.iconStyle === "classic" && Boolean(classicSymbolName.value));
+const iconComponent = computed(() => useClassicSymbol.value ? undefined : lucideIcons[props.icon]);
+const symbolHref = computed(() => `#${classicSymbolName.value || props.icon}`);
 
 const normalizedSize = computed(() => {
   if (props.size === "large") return "1.5rem";
