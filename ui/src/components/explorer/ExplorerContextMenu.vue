@@ -19,6 +19,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  (e: "close"): void;
   (e: "escape"): void;
   (e: "open"): void;
   (e: "open-new-tab"): void;
@@ -64,13 +65,21 @@ const refreshMenu = async () => {
   await focusFirstMenuButton();
 }
 
+const closeOnOutsidePointerDown = (event: PointerEvent) => {
+  const menu = menuRef.value;
+  if (menu && event.target instanceof Node && menu.contains(event.target)) return;
+  emit("close");
+}
+
 onMounted(() => {
   void refreshMenu();
   window.addEventListener("resize", refreshMenu);
+  document.addEventListener("pointerdown", closeOnOutsidePointerDown, true);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", refreshMenu);
+  document.removeEventListener("pointerdown", closeOnOutsidePointerDown, true);
 });
 
 watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props.selectionCount] as const, () => {

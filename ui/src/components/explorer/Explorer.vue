@@ -700,6 +700,7 @@ defineExpose({
         :can-view-image="contextCanViewImage"
         :can-edit="contextCanEdit"
         :can-extract="contextCanExtract"
+        @close="closeContextMenu"
         @escape="closeContextMenuAndFocus"
         @open="openEntryFromContext"
         @open-new-tab="openContextEntryInNewTab"
