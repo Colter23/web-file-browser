@@ -8,6 +8,7 @@ const props = withDefaults(defineProps<{
   deep?: number;
   data: FileTreeData;
   currentPath: string;
+  focusedPath: string;
   expandedPaths: Set<string>;
   loadingPaths: Set<string>;
   loadData: LoadData;
@@ -18,17 +19,24 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   (e: "toggle", node: FileTreeData): void;
   (e: "navigate", node: FileTreeData): void;
+  (e: "node-focus", node: FileTreeData): void;
 }>();
 
 const normalizedPath = computed(() => normalizePathText(props.data.path));
 const active = computed(() => normalizedPath.value === normalizePathText(props.currentPath || "/"));
+const focused = computed(() => normalizedPath.value === normalizePathText(props.focusedPath || "/"));
 const expanded = computed(() => props.expandedPaths.has(normalizedPath.value));
 const loading = computed(() => props.loadingPaths.has(normalizedPath.value));
 const hasChildren = computed(() => Boolean(props.data.children?.length));
 const nodeIcon = computed(() => normalizedPath.value === "/" ? "icon-home-fill" : expanded.value ? "icon-folder-open-fill" : "icon-folder-fill");
 const nodeStyle = computed(() => ({"--tree-depth": props.deep}));
 
-const handleRowClick = () => emit("navigate", props.data);
+const handleRowClick = (event: MouseEvent) => {
+  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  target?.focus();
+  emit("node-focus", props.data);
+  emit("navigate", props.data);
+}
 const handleToggle = () => emit("toggle", props.data);
 </script>
 
@@ -39,13 +47,13 @@ const handleToggle = () => emit("toggle", props.data);
         :class="{active, loading}"
         :style="nodeStyle"
         role="treeitem"
-        tabindex="0"
+        :tabindex="focused ? 0 : -1"
+        :data-tree-path="normalizedPath"
         :aria-selected="active"
         :aria-expanded="expanded"
         :title="data.path"
         @click="handleRowClick"
-        @keydown.enter.prevent="handleRowClick"
-        @keydown.space.prevent="handleRowClick">
+        @focus="emit('node-focus', data)">
       <span class="node-spacer" aria-hidden="true"></span>
       <button
           type="button"
@@ -71,11 +79,13 @@ const handleToggle = () => emit("toggle", props.data);
           :deep="deep + 1"
           :data="file"
           :current-path="currentPath"
+          :focused-path="focusedPath"
           :expanded-paths="expandedPaths"
           :loading-paths="loadingPaths"
           :load-data="loadData"
           @toggle="node => emit('toggle', node)"
-          @navigate="node => emit('navigate', node)" />
+          @navigate="node => emit('navigate', node)"
+          @node-focus="node => emit('node-focus', node)" />
     </div>
   </div>
 </template>

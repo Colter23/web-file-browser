@@ -12,8 +12,15 @@ const props = defineProps<{
 
 const expandedPaths = ref<Set<string>>(new Set(["/"]));
 const loadingPaths = ref<Set<string>>(new Set());
+const focusedPath = ref("/");
 const activePath = computed(() => normalizePathText(props.currentPath || "/"));
 let syncToken = 0;
+
+type VisibleTreeNode = {
+  node: FileTreeData;
+  path: string;
+  parentPath: string | null;
+}
 
 const updatePathSet = (source: typeof expandedPaths, path: string, enabled: boolean) => {
   const normalized = normalizePathText(path);
@@ -27,6 +34,26 @@ const isExpanded = (path: string) => expandedPaths.value.has(normalizePathText(p
 const isLoading = (path: string) => loadingPaths.value.has(normalizePathText(path));
 const setExpanded = (path: string, expanded: boolean) => updatePathSet(expandedPaths, path, expanded);
 const setLoading = (path: string, loading: boolean) => updatePathSet(loadingPaths, path, loading);
+
+const visibleNodes = computed<VisibleTreeNode[]>(() => {
+  const nodes: VisibleTreeNode[] = [];
+  const walk = (items: FileTreeData[], parentPath: string | null) => {
+    items.forEach(item => {
+      const path = normalizePathText(item.path);
+      nodes.push({node: item, path, parentPath});
+      if (isExpanded(path) && item.children?.length) walk(item.children, path);
+    });
+  }
+  walk(props.data, null);
+  return nodes;
+});
+
+const currentFocusedPath = computed(() => {
+  const normalizedFocus = normalizePathText(focusedPath.value || activePath.value || "/");
+  if (visibleNodes.value.some(item => item.path === normalizedFocus)) return normalizedFocus;
+  if (visibleNodes.value.some(item => item.path === activePath.value)) return activePath.value;
+  return visibleNodes.value[0]?.path ?? "/";
+});
 
 const ancestorPaths = (path: string) => {
   const normalized = normalizePathText(path);
@@ -50,6 +77,23 @@ const findNodeByPath = (nodes: FileTreeData[], path: string): FileTreeData | nul
     if (child) return child;
   }
   return null;
+}
+
+const focusPath = async (path: string) => {
+  const normalized = normalizePathText(path);
+  focusedPath.value = normalized;
+  await nextTick();
+  const row = Array.from(document.querySelectorAll<HTMLElement>(".file-tree .tree-node"))
+      .find(item => item.dataset.treePath === normalized);
+  row?.focus();
+}
+
+const focusByOffset = async (path: string, offset: number) => {
+  const nodes = visibleNodes.value;
+  const index = nodes.findIndex(item => item.path === normalizePathText(path));
+  if (index < 0) return;
+  const next = nodes[Math.max(0, Math.min(nodes.length - 1, index + offset))];
+  if (next) await focusPath(next.path);
 }
 
 const expandNode = async (node: FileTreeData) => {
@@ -82,11 +126,83 @@ const navigateNode = async (node: FileTreeData) => {
   const path = normalizePathText(node.path);
   setLoading(path, true);
   try {
-    const loaded = await props.loadData(node, {navigate: true});
+    const loaded = await props.loadData(node, {navigate: true, focusExplorer: false});
     if (loaded) setExpanded(path, true);
   } finally {
     setLoading(path, false);
   }
+}
+
+const handleNodeFocus = (node: FileTreeData) => {
+  focusedPath.value = normalizePathText(node.path);
+}
+
+const handleNodeKeyDown = async (node: FileTreeData, event: KeyboardEvent) => {
+  const path = normalizePathText(node.path);
+  const item = visibleNodes.value.find(visibleNode => visibleNode.path === path);
+  if (!item) return;
+
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    await focusByOffset(path, 1);
+    return;
+  }
+
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    await focusByOffset(path, -1);
+    return;
+  }
+
+  if (event.key === "Home") {
+    event.preventDefault();
+    const first = visibleNodes.value[0];
+    if (first) await focusPath(first.path);
+    return;
+  }
+
+  if (event.key === "End") {
+    event.preventDefault();
+    const last = visibleNodes.value[visibleNodes.value.length - 1];
+    if (last) await focusPath(last.path);
+    return;
+  }
+
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    if (!isExpanded(path) || node.children === undefined) {
+      await expandNode(node);
+      await focusPath(path);
+      return;
+    }
+    const firstChild = node.children[0];
+    if (firstChild) await focusPath(firstChild.path);
+    return;
+  }
+
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    if (path !== "/" && isExpanded(path) && node.children !== undefined) {
+      setExpanded(path, false);
+      await focusPath(path);
+      return;
+    }
+    if (item.parentPath) await focusPath(item.parentPath);
+    return;
+  }
+
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    await navigateNode(node);
+    await focusPath(path);
+  }
+}
+
+const handleTreeKeyDown = (event: KeyboardEvent) => {
+  const row = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>(".tree-node") : null;
+  const path = row?.dataset.treePath ?? currentFocusedPath.value;
+  const node = findNodeByPath(props.data, path);
+  if (node) void handleNodeKeyDown(node, event);
 }
 
 const syncCurrentPath = async () => {
@@ -101,6 +217,7 @@ const syncCurrentPath = async () => {
     if (!expanded) return;
     await nextTick();
   }
+  if (token === syncToken) focusedPath.value = activePath.value;
 }
 
 watch([() => props.currentPath, () => props.data], () => {
@@ -109,18 +226,20 @@ watch([() => props.currentPath, () => props.data], () => {
 </script>
 
 <template>
-  <div class="file-tree" role="tree" aria-label="文件树">
+  <div class="file-tree" role="tree" aria-label="文件树" tabindex="-1" @keydown="handleTreeKeyDown">
     <template v-if="data.length">
       <file-tree-node
           v-for="file in data"
           :key="file.path"
           :data="file"
           :current-path="activePath"
+          :focused-path="currentFocusedPath"
           :expanded-paths="expandedPaths"
           :loading-paths="loadingPaths"
           :load-data="loadData"
           @toggle="toggleNode"
-          @navigate="navigateNode" />
+          @navigate="navigateNode"
+          @node-focus="handleNodeFocus" />
     </template>
     <div v-else class="tree-empty">暂无目录</div>
   </div>

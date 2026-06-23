@@ -40,7 +40,7 @@ export const useFileTreeLoader = ({getFolderData, navigateToPath, showError}: Fi
     treeData.value = [rootTreeNode(folderDataToTreeNodes(data))];
   }
 
-  const handleLoad = async (node: FileTreeData, options: {navigate?: boolean} = {}) => {
+  const handleLoad = async (node: FileTreeData, options: {navigate?: boolean; focusExplorer?: boolean} = {}) => {
     if (node.isFile) return false;
     if (options.navigate !== false && !await fileStore.requestEditorLeave()) return false;
     try {
@@ -52,7 +52,7 @@ export const useFileTreeLoader = ({getFolderData, navigateToPath, showError}: Fi
         loadedPath = data.path || node.path;
       }
       if (options.navigate !== false) {
-        await navigateToPath(loadedPath, {skipEditorLeave: true});
+        await navigateToPath(loadedPath, {skipEditorLeave: true, focusExplorer: options.focusExplorer ?? true});
       }
       return true;
     } catch (error) {
