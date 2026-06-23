@@ -16,12 +16,6 @@ type ExplorerPresentationOptions = {
   viewportHeight: () => number;
 }
 
-const sortOptions: {key: DirSortKey; label: string}[] = [
-  {key: "name", label: "名称"},
-  {key: "modified", label: "修改"},
-  {key: "size", label: "大小"}
-];
-
 export const useExplorerPresentation = ({
   loading,
   markStale,
@@ -43,12 +37,6 @@ export const useExplorerPresentation = ({
     "explorer-size-medium": fileStore.iconSize === "medium",
     "explorer-size-large": fileStore.iconSize === "large"
   }));
-  const sortText = computed(() => {
-    const keyText = sortOptions.find(option => option.key === fileStore.sortKey)?.label ?? "名称";
-    const orderText = fileStore.sortOrder === "asc" ? "升序" : "降序";
-    return `${keyText} ${orderText}`;
-  });
-  const nextSortOrder = computed<DirSortOrder>(() => fileStore.sortOrder === "asc" ? "desc" : "asc");
 
   const changeSort = async (key: DirSortKey) => {
     if (loading.value) return;
@@ -78,11 +66,8 @@ export const useExplorerPresentation = ({
     viewMode,
     sortKey,
     sortOrder,
-    sortOptions,
     viewModeClass,
     itemSizeClass,
-    sortText,
-    nextSortOrder,
     changeSort,
     changeSortOrder,
     handleViewportWheel,

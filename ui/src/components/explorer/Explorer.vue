@@ -26,7 +26,6 @@ import {
 } from "../../utils/file-entry.ts";
 import DetailsHeader from "./DetailsHeader.vue";
 import ExplorerContextMenu from "./ExplorerContextMenu.vue";
-import ExplorerCommandRow from "./ExplorerCommandRow.vue";
 import ExplorerEmptyState from "./ExplorerEmptyState.vue";
 import ExplorerStatusBar from "./ExplorerStatusBar.vue";
 import ExplorerEntryItem from "./ExplorerEntryItem.vue";
@@ -176,8 +175,6 @@ const {
   filterActive,
   emptyText,
   emptyHintText,
-  selectedCountText,
-  totalCountText,
   folderStatusText,
   selectedStatusText
 } = useExplorerStatusText({
@@ -346,10 +343,7 @@ const {
   viewModeClass,
   sortKey,
   sortOrder,
-  sortOptions,
   itemSizeClass,
-  sortText,
-  nextSortOrder,
   changeSort,
   changeSortOrder,
   handleViewportWheel,
@@ -565,6 +559,8 @@ defineExpose({
   selectAllEntries,
   clearCurrentSelection,
   invertCurrentSelection,
+  setSortKey: changeSort,
+  setSortOrder: changeSortOrder,
   focus: focusViewport,
   getScrollTop,
   setScrollTop
@@ -573,18 +569,6 @@ defineExpose({
 
 <template>
   <section class="explorer-shell">
-    <explorer-command-row
-        :total-count-text="totalCountText"
-        :selected-count-text="selectedCountText"
-        :sort-text="sortText"
-        :sort-options="sortOptions"
-        :sort-key="sortKey"
-        :sort-order="sortOrder"
-        :next-sort-order="nextSortOrder"
-        :loading="loading"
-        @change-sort="changeSort"
-        @change-sort-order="changeSortOrder" />
-
     <div
         ref="viewportRef"
         class="explorer-viewport"

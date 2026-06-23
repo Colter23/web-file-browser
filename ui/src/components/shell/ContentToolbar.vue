@@ -2,8 +2,9 @@
 import {ref} from "vue";
 import Breadcrumb from "../Breadcrumb.vue";
 import Icon from "../Icon.vue";
-import type {ExplorerIconSize, ExplorerViewMode} from "../../class";
+import type {DirSortKey, DirSortOrder, ExplorerIconSize, ExplorerViewMode} from "../../class";
 import type {ExplorerViewModeSelection} from "../../composables/useExplorerViewMode.ts";
+import SortMenu from "./SortMenu.vue";
 import ViewModeMenu from "./ViewModeMenu.vue";
 
 type BreadcrumbExpose = {
@@ -24,6 +25,8 @@ defineProps<{
   viewModeButtonTitle: string;
   viewMode: ExplorerViewMode;
   iconSize: ExplorerIconSize;
+  sortKey: DirSortKey;
+  sortOrder: DirSortOrder;
   previewPanelVisible: boolean;
   canTogglePreviewPane: boolean;
 }>();
@@ -35,6 +38,8 @@ const emit = defineEmits<{
   (e: "refresh"): void;
   (e: "breadcrumb-navigate", path: string, complete?: NavigateComplete): void;
   (e: "select-view-mode", selection: ExplorerViewModeSelection): void;
+  (e: "set-sort-key", key: DirSortKey): void;
+  (e: "set-sort-order", order: DirSortOrder): void;
   (e: "toggle-preview"): void;
 }>();
 
@@ -60,6 +65,11 @@ defineExpose({
       <icon icon="icon-refresh" size="large" />
     </button>
     <breadcrumb ref="breadcrumbRef" @navigate="(path, complete) => emit('breadcrumb-navigate', path, complete)"></breadcrumb>
+    <sort-menu
+        :sort-key="sortKey"
+        :sort-order="sortOrder"
+        @set-sort-key="key => emit('set-sort-key', key)"
+        @set-sort-order="order => emit('set-sort-order', order)" />
     <view-mode-menu
         :icon="viewModeIcon"
         :label="viewModeLabel"

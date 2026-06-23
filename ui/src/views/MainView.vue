@@ -22,6 +22,7 @@ import CommandBar from "../components/shell/CommandBar.vue";
 import ShellNotice from "../components/shell/ShellNotice.vue";
 import SidebarPanel from "../components/shell/SidebarPanel.vue";
 import UploadDropOverlay from "../components/shell/UploadDropOverlay.vue";
+import type {DirSortKey, DirSortOrder} from "../class.ts";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import {usePreviewPaneResize} from "../composables/usePreviewPaneResize.ts";
 import {useSidebarResize} from "../composables/useSidebarResize.ts";
@@ -54,6 +55,8 @@ type ExplorerExpose = {
   selectPaths: (paths: string[], scrollToSelection?: boolean) => Promise<boolean>;
   selectPathForRename: (path: string) => Promise<boolean>;
   selectAllEntries: () => boolean;
+  setSortKey: (key: DirSortKey) => Promise<void>;
+  setSortOrder: (order: DirSortOrder) => Promise<void>;
   focus: () => void;
   getImageEntries: () => ExplorerEntry[];
   getScrollTop: () => number;
@@ -599,6 +602,8 @@ const signOut = async () => {
             :view-mode-button-title="viewModeButtonTitle"
             :view-mode="fileStore.viewMode"
             :icon-size="fileStore.iconSize"
+            :sort-key="fileStore.sortKey"
+            :sort-order="fileStore.sortOrder"
             :preview-panel-visible="previewPanelVisible"
             :can-toggle-preview-pane="canTogglePreviewPane"
             @navigate-back="navigateBack"
@@ -607,6 +612,8 @@ const signOut = async () => {
             @refresh="refreshCurrent(true)"
             @breadcrumb-navigate="handleBreadcrumbNavigate"
             @select-view-mode="selectViewMode"
+            @set-sort-key="key => explorerRef?.setSortKey(key)"
+            @set-sort-order="order => explorerRef?.setSortOrder(order)"
             @toggle-preview="togglePreviewFromShortcut" />
 
         <command-bar
