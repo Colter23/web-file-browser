@@ -173,7 +173,7 @@ const emit = defineEmits<{
 }
 
 .command-button.danger {
-  @apply text-red-600;
+  color: var(--app-danger);
 }
 
 .command-button.danger:hover {
@@ -181,7 +181,8 @@ const emit = defineEmits<{
 }
 
 .command-button.danger:disabled {
-  @apply text-red-200 hover:bg-transparent;
+  @apply hover:bg-transparent;
+  color: color-mix(in srgb, var(--app-danger) 38%, var(--app-text-disabled));
 }
 
 .command-separator {

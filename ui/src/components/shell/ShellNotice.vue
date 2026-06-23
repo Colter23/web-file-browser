@@ -76,26 +76,29 @@ const shellNoticeLabel = computed(() => ({
 }
 
 .shell-notice.success {
-  @apply border-emerald-100;
+  border-color: var(--app-success-border);
 }
 
 .shell-notice.success .shell-notice-mark {
-  @apply bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)];
+  background: var(--app-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-success) 18%, transparent);
 }
 
 .shell-notice.warning {
-  @apply border-amber-100;
+  border-color: var(--app-warning-border);
 }
 
 .shell-notice.warning .shell-notice-mark {
-  @apply bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.16)];
+  background: var(--app-warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-warning) 20%, transparent);
 }
 
 .shell-notice.error {
-  @apply border-red-100;
+  border-color: var(--app-danger-border);
 }
 
 .shell-notice.error .shell-notice-mark {
-  @apply bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.16)];
+  background: var(--app-danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-danger) 20%, transparent);
 }
 </style>

@@ -49,7 +49,8 @@ defineProps<{
 }
 
 .status-pill.dirty {
-  @apply bg-amber-100 text-amber-700;
+  background: var(--app-warning-soft);
+  color: var(--app-warning-text);
 }
 
 .status-pill.saving {
@@ -58,7 +59,7 @@ defineProps<{
 }
 
 .status-pill.conflict {
-  @apply text-red-600;
   background: var(--app-danger-soft);
+  color: var(--app-danger);
 }
 </style>

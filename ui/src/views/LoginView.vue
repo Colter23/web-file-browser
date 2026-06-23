@@ -108,14 +108,16 @@ p {
 }
 
 .message {
-  @apply rounded-md border px-3 py-2 text-sm text-red-700;
-  border-color: color-mix(in srgb, #ef4444 36%, var(--app-border-soft));
+  @apply rounded-md border px-3 py-2 text-sm;
+  border-color: var(--app-danger-border);
   background: var(--app-danger-soft);
+  color: var(--app-danger-text);
 }
 
 .primary-button {
-  @apply h-10 rounded-md text-white font-medium disabled:cursor-not-allowed;
+  @apply h-10 rounded-md font-medium disabled:cursor-not-allowed;
   background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast);
 }
 
 .primary-button:disabled {
@@ -124,6 +126,6 @@ p {
 }
 
 .primary-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--app-accent, #2563eb) 88%, black);
+  background: var(--app-accent-strong);
 }
 </style>

@@ -150,6 +150,7 @@ const updateReplaceText = (event: Event) => {
 }
 
 .search-status {
-  @apply max-w-28 truncate px-1 text-amber-600;
+  @apply max-w-28 truncate px-1;
+  color: var(--app-warning-text);
 }
 </style>

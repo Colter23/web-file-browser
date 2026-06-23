@@ -184,9 +184,9 @@ const emit = defineEmits<{
 }
 
 .tab-button.active {
-  @apply text-white;
   border-color: var(--app-accent, #2563eb);
   background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast);
 }
 
 .tab-button.dragging {
@@ -221,7 +221,7 @@ const emit = defineEmits<{
 
 .tab-button.active.dropBefore::before,
 .tab-button.active.dropAfter::after {
-  @apply bg-white;
+  background: var(--app-accent-contrast);
 }
 
 .tab-button span:not(.tab-close) {

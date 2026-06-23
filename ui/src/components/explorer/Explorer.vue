@@ -804,6 +804,7 @@ defineExpose({
 }
 
 .drag-hint.copy {
-  @apply border-emerald-200 text-emerald-700;
+  border-color: var(--app-success-border);
+  color: var(--app-success-text);
 }
 </style>

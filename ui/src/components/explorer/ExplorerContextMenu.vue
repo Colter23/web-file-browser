@@ -171,7 +171,7 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
 }
 
 .context-menu .danger {
-  @apply text-red-600;
+  color: var(--app-danger);
 }
 
 .context-menu .danger:hover:not(:disabled) {

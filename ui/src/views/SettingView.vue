@@ -371,7 +371,8 @@ h2 {
 
 .segmented-control button.active {
   background: var(--app-accent, #2563eb);
-  @apply text-white shadow-sm;
+  @apply shadow-sm;
+  color: var(--app-accent-contrast);
 }
 
 .color-swatches {
@@ -421,12 +422,12 @@ input:focus {
 }
 
 .primary-button {
-  @apply text-white;
   background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast);
 }
 
 .primary-button:hover {
-  background: color-mix(in srgb, var(--app-accent, #2563eb) 88%, black);
+  background: var(--app-accent-strong);
 }
 
 .plain-button,
@@ -441,12 +442,12 @@ input:focus {
 }
 
 .danger-button {
-  @apply text-red-700;
   background: var(--app-danger-soft);
+  color: var(--app-danger-text);
 }
 
 .danger-button:hover {
-  background: color-mix(in srgb, #ef4444 16%, var(--app-panel-solid));
+  background: color-mix(in srgb, var(--app-danger) 16%, var(--app-panel-solid));
 }
 
 .empty {
@@ -473,15 +474,16 @@ dd {
 }
 
 .message {
-  @apply rounded-md border px-3 py-2 text-sm text-red-700;
-  border-color: color-mix(in srgb, #ef4444 36%, var(--app-border-soft));
+  @apply rounded-md border px-3 py-2 text-sm;
+  border-color: var(--app-danger-border);
   background: var(--app-danger-soft);
+  color: var(--app-danger-text);
 }
 
 .message.success {
-  @apply text-emerald-700;
-  border-color: color-mix(in srgb, #10b981 38%, var(--app-border-soft));
-  background: color-mix(in srgb, #10b981 14%, var(--app-panel-solid));
+  border-color: var(--app-success-border);
+  background: var(--app-success-soft);
+  color: var(--app-success-text);
 }
 
 @media (max-width: 900px) {

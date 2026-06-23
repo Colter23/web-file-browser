@@ -378,7 +378,8 @@ onBeforeUnmount(() => {
 }
 
 .editor-overlay.error {
-  @apply flex-col gap-3 text-red-600;
+  @apply flex-col gap-3;
+  color: var(--app-danger);
 }
 
 .editor-overlay button {

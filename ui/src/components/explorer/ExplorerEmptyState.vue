@@ -44,10 +44,10 @@ const emit = defineEmits<{
 
 .empty-action:hover {
   background: var(--app-accent-soft, #eff6ff);
-  border-color: color-mix(in srgb, var(--app-accent, #2563eb) 34%, white);
+  border-color: color-mix(in srgb, var(--app-accent, #2563eb) 34%, var(--app-panel-solid));
 }
 
 .explorer-empty.error {
-  @apply text-red-600;
+  color: var(--app-danger);
 }
 </style>

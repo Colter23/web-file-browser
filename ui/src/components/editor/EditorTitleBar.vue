@@ -26,7 +26,7 @@ const emit = defineEmits<{
   <header class="editor-titlebar" @click.stop>
     <div class="editor-file-head">
       <div class="file-mark">
-        <icon icon="action.edit" color="#ffffff" />
+        <icon icon="action.edit" color="var(--app-accent-contrast)" />
       </div>
       <div class="file-title-block">
         <div class="file-title-line">
@@ -53,7 +53,7 @@ const emit = defineEmits<{
         <icon icon="action.refresh" />
       </button>
       <button class="save-button" :disabled="!canSave" title="保存 (Ctrl+S)" @click.stop="emit('save')">
-        <icon icon="action.save" :color="canSave ? '#ffffff' : '#94a3b8'" />
+        <icon icon="action.save" :color="canSave ? 'var(--app-accent-contrast)' : 'var(--app-text-disabled)'" />
         <span>{{ saving ? "保存中" : "保存" }}</span>
       </button>
       <button class="icon-button close-button" title="关闭 (Esc)" @click.stop="emit('close')">
@@ -95,7 +95,8 @@ const emit = defineEmits<{
 }
 
 .dirty-dot {
-  @apply h-2 w-2 shrink-0 rounded-full bg-amber-400;
+  @apply h-2 w-2 shrink-0 rounded-full;
+  background: var(--app-warning);
 }
 
 .file-path {
@@ -148,9 +149,10 @@ const emit = defineEmits<{
 }
 
 .save-button {
-  @apply gap-1.5 px-3 font-medium text-white;
+  @apply gap-1.5 px-3 font-medium;
   border-color: var(--app-accent, #2563eb);
   background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast);
 }
 
 .save-button:disabled {
@@ -160,11 +162,15 @@ const emit = defineEmits<{
 }
 
 .save-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--app-accent, #2563eb) 88%, black);
+  background: var(--app-accent-strong);
 }
 
 .close-button {
-  @apply hover:border-red-200;
+  border-color: transparent;
+}
+
+.close-button:hover:not(:disabled) {
+  border-color: var(--app-danger-border);
 }
 
 .close-button:hover:not(:disabled) {

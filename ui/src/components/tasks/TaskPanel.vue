@@ -237,8 +237,8 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-badge.failed {
-  @apply text-red-700;
   background: var(--app-danger-soft);
+  color: var(--app-danger-text);
 }
 
 .task-panel-actions {
@@ -268,13 +268,14 @@ watch(() => props.cancelConfirm.visible, async visible => {
 
 .task-cancel-confirm {
   @apply flex shrink-0 items-center justify-between gap-3 rounded border px-3 py-2 text-sm outline-none;
-  border-color: color-mix(in srgb, #f59e0b 42%, var(--app-border-soft));
-  background: color-mix(in srgb, #f59e0b 14%, var(--app-panel-solid));
-  color: color-mix(in srgb, #f59e0b 76%, var(--app-text));
+  border-color: var(--app-warning-border);
+  background: var(--app-warning-soft);
+  color: var(--app-warning-text);
 }
 
 .task-cancel-confirm:focus-visible {
-  @apply ring-2 ring-inset ring-amber-300;
+  @apply ring-2 ring-inset;
+  --tw-ring-color: var(--app-warning-ring);
 }
 
 .task-cancel-confirm-main {
@@ -288,11 +289,11 @@ watch(() => props.cancelConfirm.visible, async visible => {
 
 .task-cancel-confirm-main span {
   @apply text-xs;
-  color: color-mix(in srgb, #f59e0b 70%, var(--app-text-muted));
+  color: var(--app-warning-text);
 }
 
 .task-cancel-error {
-  @apply text-red-600;
+  color: var(--app-danger);
 }
 
 .task-cancel-actions {
@@ -305,17 +306,23 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-cancel-secondary {
-  border-color: color-mix(in srgb, #f59e0b 42%, var(--app-border-soft));
+  border-color: var(--app-warning-border);
   background: var(--app-control-solid);
-  color: color-mix(in srgb, #f59e0b 78%, var(--app-text));
+  color: var(--app-warning-text);
 }
 
 .task-cancel-secondary:hover {
-  background: color-mix(in srgb, #f59e0b 16%, var(--app-panel-solid));
+  background: var(--app-warning-soft);
 }
 
 .task-cancel-primary {
-  @apply border-amber-600 bg-amber-600 text-white hover:bg-amber-700;
+  border-color: var(--app-warning);
+  background: var(--app-warning);
+  color: var(--app-warning-contrast);
+}
+
+.task-cancel-primary:hover:not(:disabled) {
+  background: var(--app-warning-strong);
 }
 
 .task-row {
@@ -353,16 +360,18 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-state.completed {
-  @apply bg-emerald-100 text-emerald-700;
+  background: var(--app-success-soft);
+  color: var(--app-success-text);
 }
 
 .task-state.failed {
-  @apply text-red-700;
   background: var(--app-danger-soft);
+  color: var(--app-danger-text);
 }
 
 .task-state.cancelled {
-  @apply bg-amber-100 text-amber-700;
+  background: var(--app-warning-soft);
+  color: var(--app-warning-text);
 }
 
 .task-progress {
@@ -395,13 +404,14 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-errors {
-  @apply text-red-600;
+  color: var(--app-danger);
 }
 
 .task-error-list {
-  @apply col-span-3 flex min-w-0 flex-col gap-1 rounded border px-2 py-1 text-xs text-red-700;
-  border-color: color-mix(in srgb, #ef4444 30%, var(--app-border-soft));
+  @apply col-span-3 flex min-w-0 flex-col gap-1 rounded border px-2 py-1 text-xs;
+  border-color: var(--app-danger-border);
   background: var(--app-danger-soft);
+  color: var(--app-danger-text);
 }
 
 .task-error-list div {
@@ -417,7 +427,7 @@ watch(() => props.cancelConfirm.visible, async visible => {
 
 .task-cancel:hover:not(:disabled) {
   background: var(--app-danger-soft);
-  color: #dc2626;
+  color: var(--app-danger);
 }
 
 .task-cancel:disabled {

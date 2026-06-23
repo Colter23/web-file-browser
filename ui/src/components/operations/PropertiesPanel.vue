@@ -113,11 +113,12 @@ defineExpose({
 }
 
 .operation-primary {
-  @apply h-9 rounded-md px-4 text-sm font-medium text-white;
+  @apply h-9 rounded-md px-4 text-sm font-medium;
   background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast);
 }
 
 .operation-primary:hover {
-  background: color-mix(in srgb, var(--app-accent, #2563eb) 88%, black);
+  background: var(--app-accent-strong);
 }
 </style>

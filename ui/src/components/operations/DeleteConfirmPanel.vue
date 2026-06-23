@@ -90,9 +90,10 @@ defineExpose({
 }
 
 .delete-confirm-error {
-  @apply rounded-md border px-3 py-2 text-xs text-red-600;
-  border-color: color-mix(in srgb, #ef4444 30%, var(--app-border-soft));
+  @apply rounded-md border px-3 py-2 text-xs;
+  border-color: var(--app-danger-border);
   background: var(--app-danger-soft);
+  color: var(--app-danger);
 }
 
 .operation-secondary,
@@ -112,6 +113,11 @@ defineExpose({
 }
 
 .delete-confirm-primary {
-  @apply bg-red-600 text-white hover:bg-red-700;
+  background: var(--app-danger);
+  color: var(--app-danger-contrast);
+}
+
+.delete-confirm-primary:hover:not(:disabled) {
+  background: var(--app-danger-strong);
 }
 </style>

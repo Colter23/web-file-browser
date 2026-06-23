@@ -145,8 +145,8 @@ defineExpose({
 }
 
 .operation-segmented button.active {
-  @apply text-white;
   background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast);
 }
 
 .operation-segmented button.active:hover {
@@ -177,11 +177,11 @@ defineExpose({
 }
 
 .operation-primary {
-  @apply text-white;
   background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast);
 }
 
 .operation-primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--app-accent, #2563eb) 88%, black);
+  background: var(--app-accent-strong);
 }
 </style>

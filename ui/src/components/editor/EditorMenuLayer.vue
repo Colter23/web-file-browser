@@ -126,8 +126,8 @@ const updateWrap = (event: Event) => {
 }
 
 .editor-menu button.active {
-  @apply text-white;
   background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast);
 }
 
 .editor-menu button.active:hover {

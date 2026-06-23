@@ -107,7 +107,8 @@ const updateLineText = (event: Event) => {
 }
 
 .goto-status {
-  @apply max-w-28 truncate px-1 text-amber-600;
+  @apply max-w-28 truncate px-1;
+  color: var(--app-warning-text);
 }
 
 .goto-range {

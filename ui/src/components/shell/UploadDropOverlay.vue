@@ -41,7 +41,8 @@ defineProps<{
 }
 
 .upload-drop-icon {
-  @apply flex h-12 w-12 items-center justify-center rounded-lg text-2xl text-white shadow-sm;
+  @apply flex h-12 w-12 items-center justify-center rounded-lg text-2xl shadow-sm;
   background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast);
 }
 </style>

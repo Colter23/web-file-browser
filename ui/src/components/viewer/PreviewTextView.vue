@@ -122,6 +122,6 @@ onBeforeUnmount(resetPreviewRuntime);
 }
 
 .preview-placeholder.error {
-  @apply text-red-600;
+  color: var(--app-danger);
 }
 </style>

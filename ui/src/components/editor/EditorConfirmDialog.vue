@@ -95,13 +95,13 @@ watch(() => props.visible, async visible => {
 }
 
 .confirm-primary {
-  @apply text-white;
   border-color: var(--app-accent, #2563eb);
   background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast);
 }
 
 .confirm-primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--app-accent, #2563eb) 88%, black);
+  background: var(--app-accent-strong);
 }
 
 .confirm-secondary {
@@ -115,8 +115,9 @@ watch(() => props.visible, async visible => {
 }
 
 .confirm-danger {
-  @apply border-red-200 text-red-600;
+  border-color: var(--app-danger-border);
   background: var(--app-control-solid);
+  color: var(--app-danger);
 }
 
 .confirm-danger:hover:not(:disabled) {

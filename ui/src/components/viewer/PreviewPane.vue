@@ -108,7 +108,7 @@ const downloadPreview = () => {
 }
 
 .preview-placeholder.error {
-  @apply text-red-600;
+  color: var(--app-danger);
 }
 
 .preview-placeholder.muted {

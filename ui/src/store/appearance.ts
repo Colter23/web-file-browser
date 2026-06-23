@@ -21,12 +21,12 @@ export const fileIconPaletteOptions: {value: FileIconPalette; label: string}[] =
   {value: "accent", label: "主题色"}
 ];
 
-export const accentColorOptions: {value: AppAccentColor; label: string; color: string; soft: string; border: string}[] = [
-  {value: "blue", label: "蓝色", color: "#2563eb", soft: "#eff6ff", border: "#bfdbfe"},
-  {value: "teal", label: "青绿", color: "#0f766e", soft: "#f0fdfa", border: "#99f6e4"},
-  {value: "violet", label: "紫色", color: "#7c3aed", soft: "#f5f3ff", border: "#ddd6fe"},
-  {value: "rose", label: "玫红", color: "#e11d48", soft: "#fff1f2", border: "#fecdd3"},
-  {value: "slate", label: "灰蓝", color: "#475569", soft: "#f8fafc", border: "#cbd5e1"}
+export const accentColorOptions: {value: AppAccentColor; label: string; color: string; contrast: string; soft: string; border: string}[] = [
+  {value: "blue", label: "蓝色", color: "#2563eb", contrast: "#ffffff", soft: "#eff6ff", border: "#bfdbfe"},
+  {value: "teal", label: "青绿", color: "#0f766e", contrast: "#ffffff", soft: "#f0fdfa", border: "#99f6e4"},
+  {value: "violet", label: "紫色", color: "#7c3aed", contrast: "#ffffff", soft: "#f5f3ff", border: "#ddd6fe"},
+  {value: "rose", label: "玫红", color: "#e11d48", contrast: "#ffffff", soft: "#fff1f2", border: "#fecdd3"},
+  {value: "slate", label: "灰蓝", color: "#475569", contrast: "#ffffff", soft: "#f8fafc", border: "#cbd5e1"}
 ];
 
 export const colorModeOptions: {value: AppColorMode; label: string}[] = [
@@ -81,10 +81,12 @@ export const useAppearanceStore = defineStore("appearance", {
       const dark = this.resolvedColorMode === "dark";
       return {
         "--app-accent": theme.color,
+        "--app-accent-contrast": theme.contrast,
         "--app-accent-soft": dark ? `color-mix(in srgb, ${theme.color} 24%, #111827)` : theme.soft,
         "--app-accent-border": dark ? `color-mix(in srgb, ${theme.color} 46%, #334155)` : theme.border,
         "--app-accent-hover": dark ? `color-mix(in srgb, ${theme.color} 16%, #1e293b)` : `color-mix(in srgb, ${theme.color} 8%, white)`,
         "--app-accent-selected": dark ? `color-mix(in srgb, ${theme.color} 28%, #172033)` : `color-mix(in srgb, ${theme.color} 18%, white)`,
+        "--app-accent-strong": `color-mix(in srgb, ${theme.color} 88%, black)`,
         "--app-accent-ring": `color-mix(in srgb, ${theme.color} ${dark ? 34 : 24}%, transparent)`,
         "--app-accent-tint": `color-mix(in srgb, ${theme.color} ${dark ? 16 : 10}%, transparent)`
       };

@@ -166,7 +166,8 @@ const handleToggle = (event: MouseEvent) => {
 }
 
 .node-icon {
-  @apply mr-1.5 inline-flex h-5 w-5 shrink-0 items-center justify-center text-amber-500;
+  @apply mr-1.5 inline-flex h-5 w-5 shrink-0 items-center justify-center;
+  color: color-mix(in srgb, var(--app-warning) 88%, var(--app-text-muted));
 }
 
 .tree-node.active .node-icon {

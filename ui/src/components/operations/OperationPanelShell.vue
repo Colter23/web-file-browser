@@ -80,7 +80,7 @@ defineExpose({
 
 .operation-shell.width-delete {
   @apply w-[min(30rem,calc(100%-2rem))];
-  border-color: color-mix(in srgb, #ef4444 28%, var(--app-border-soft));
+  border-color: var(--app-danger-border);
 }
 
 .operation-shell.width-properties {
@@ -101,8 +101,8 @@ defineExpose({
 }
 
 .operation-shell-icon.red {
-  @apply text-red-600;
   background: var(--app-danger-soft);
+  color: var(--app-danger);
 }
 
 .operation-shell-icon.neutral {

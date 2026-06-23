@@ -53,17 +53,20 @@ const emit = defineEmits<{
 }
 
 .editor-message {
-  @apply truncate rounded px-2 py-0.5 text-red-600;
+  @apply truncate rounded px-2 py-0.5;
+  color: var(--app-danger);
 }
 
 .editor-message.conflict {
-  @apply text-red-600;
   background: var(--app-danger-soft);
+  color: var(--app-danger);
 }
 
 .status-action {
-  @apply h-5 shrink-0 rounded border border-red-200 px-2 text-xs text-red-600;
+  @apply h-5 shrink-0 rounded border px-2 text-xs;
+  border-color: var(--app-danger-border);
   background: var(--app-control-solid);
+  color: var(--app-danger);
 }
 
 .status-action:hover {
