@@ -17,21 +17,17 @@ export const useFileTreeLoader = ({getFolderData, navigateToPath, showError}: Fi
     treeData.value = fileStore.saveAndConvertFolderData(data);
   }
 
-  const handleLoad = (node: FileTreeData) => {
-    return new Promise<void>(async resolve => {
-      if (!await fileStore.requestEditorLeave()) {
-        resolve();
-        return;
-      }
-      try {
-        const data = await getFolderData(node.path);
-        node.children = fileStore.saveAndConvertFolderData(data);
-        await navigateToPath(data.path, {skipEditorLeave: true});
-      } catch (error) {
-        showError(error, "加载目录失败");
-      }
-      resolve();
-    });
+  const handleLoad = async (node: FileTreeData) => {
+    if (!await fileStore.requestEditorLeave()) return false;
+    try {
+      const data = await getFolderData(node.path);
+      node.children = fileStore.saveAndConvertFolderData(data);
+      await navigateToPath(data.path, {skipEditorLeave: true});
+      return true;
+    } catch (error) {
+      showError(error, "加载目录失败");
+      return false;
+    }
   }
 
   return {

@@ -1,22 +1,18 @@
 <script setup lang="ts">
-
 import FileTreeNode from "./FileTreeNode.vue";
-import {FileTreeData, LoadData} from "../class.ts";
-import { PropType } from 'vue';
+import type {FileTreeData, LoadData} from "../class.ts";
 
-
-const props = defineProps({
-  data: Object as PropType<FileTreeData[]>,
-  loadData: Function as PropType<LoadData>,
-});
-
+defineProps<{
+  data: FileTreeData[];
+  loadData: LoadData;
+}>();
 
 </script>
 
 <template>
-<div class="file-tree">
-  <file-tree-node v-for="file in props.data" :data="file" :load-data="loadData"></file-tree-node>
-</div>
+  <div class="file-tree">
+    <file-tree-node v-for="file in data" :key="file.path" :data="file" :load-data="loadData" />
+  </div>
 </template>
 
 <style scoped lang="postcss">

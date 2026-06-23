@@ -68,7 +68,7 @@ export interface FileInfo {
 }
 
 
-export type LoadData = (node: FileTreeData) => Promise<unknown>
+export type LoadData = (node: FileTreeData) => Promise<boolean>
 export interface FileTreeData {
     path: string;
     name: string;

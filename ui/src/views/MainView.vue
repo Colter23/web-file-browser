@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {computed, defineAsyncComponent, nextTick, ref, watch} from "vue";
 import {useRouter} from "vue-router";
-import FileTree from "../components/FileTree.vue";
 import {useFileStore} from "../store";
 import {
   cancelTask,
@@ -21,6 +20,7 @@ import PropertiesPanel from "../components/operations/PropertiesPanel.vue";
 import ContentToolbar from "../components/shell/ContentToolbar.vue";
 import CommandBar from "../components/shell/CommandBar.vue";
 import ShellNotice from "../components/shell/ShellNotice.vue";
+import SidebarPanel from "../components/shell/SidebarPanel.vue";
 import UploadDropOverlay from "../components/shell/UploadDropOverlay.vue";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import {usePreviewPaneResize} from "../composables/usePreviewPaneResize.ts";
@@ -533,21 +533,12 @@ const signOut = async () => {
     </header>
 
     <main class="workspace">
-      <aside class="sidebar">
-        <div class="quick-toolbar">
-          <button class="primary-tool" title="上传" @click="uploadInput?.click()">
-            <icon icon="icon-upload" size="large" />
-            <span>上传</span>
-          </button>
-          <button class="icon-tool" title="新建文件" @click="openCreatePanel('file')">
-            <icon icon="icon-file-add-fill" />
-          </button>
-          <button class="icon-tool" title="新建文件夹 (Ctrl+Shift+N)" @click="openCreatePanel('folder')">
-            <icon icon="icon-folder-add-fill" />
-          </button>
-        </div>
-        <file-tree :data="treeData" :load-data="handleLoad"></file-tree>
-      </aside>
+      <sidebar-panel
+          :tree-data="treeData"
+          :load-data="handleLoad"
+          @upload="uploadInput?.click()"
+          @create-file="openCreatePanel('file')"
+          @create-folder="openCreatePanel('folder')" />
 
       <section class="content-pane">
         <content-toolbar
@@ -764,27 +755,6 @@ const signOut = async () => {
 
 .workspace {
   @apply mt-3 grid min-h-0 grow grid-cols-[17rem_minmax(0,1fr)] gap-3;
-}
-
-.sidebar {
-  @apply flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white/65 p-2 shadow-sm backdrop-blur;
-}
-
-.quick-toolbar {
-  @apply mb-2 grid h-11 shrink-0 grid-cols-[1fr_2.25rem_2.25rem] gap-2;
-}
-
-.primary-tool,
-.icon-tool {
-  @apply inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-blue-50;
-}
-
-.primary-tool {
-  @apply gap-2 bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700;
-}
-
-.icon-tool {
-  @apply h-full w-full;
 }
 
 .content-pane {
