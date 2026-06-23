@@ -110,6 +110,7 @@ LARGE_DOWNLOAD_FILE="${SMOKE_ROOT}/large-download.bin"
 RANGE_EXPECTED_FILE="${SMOKE_ROOT}/range-expected.bin"
 RANGE_DOWNLOAD_FILE="${SMOKE_ROOT}/range-download.bin"
 EDIT_ERROR_FILE="${SMOKE_ROOT}/edit-error.json"
+UPLOAD_ERROR_FILE="${SMOKE_ROOT}/upload-error.json"
 ARCHIVE_SOURCE_FILE="${SMOKE_ROOT}/files/archive-source.bin"
 ARCHIVE_DOWNLOAD_FILE="${SMOKE_ROOT}/archive-download.bin"
 LARGE_DIR="${SMOKE_ROOT}/files/large-dir"
@@ -223,10 +224,17 @@ verify_large_directory() {
 
 verify_large_transfer() {
   write_mebibytes /dev/urandom "${LARGE_SOURCE_FILE}" "${LARGE_FILE_MB}"
-  curl -fsS \
+  local status
+  status=$(curl -sS \
+    -o "${UPLOAD_ERROR_FILE}" \
+    -w "%{http_code}" \
     -b "${COOKIE_JAR}" \
     -F "file=@${LARGE_SOURCE_FILE};filename=large-upload.bin" \
-    "${BASE_URL}/api/upload/files?conflictPolicy=reject" >/dev/null
+    "${BASE_URL}/api/upload/files?conflictPolicy=reject")
+  if [[ "${status}" != "201" ]]; then
+    cat "${UPLOAD_ERROR_FILE}" >&2 || true
+    fail "大文件上传返回码不符合预期: ${status}"
+  fi
 
   curl -fsS \
     -b "${COOKIE_JAR}" \
@@ -242,7 +250,6 @@ verify_large_transfer() {
     -o "${RANGE_DOWNLOAD_FILE}"
   cmp "${RANGE_EXPECTED_FILE}" "${RANGE_DOWNLOAD_FILE}"
 
-  local status
   status=$(curl -sS \
     -o "${EDIT_ERROR_FILE}" \
     -w "%{http_code}" \

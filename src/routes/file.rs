@@ -1,3 +1,4 @@
+use axum::extract::DefaultBodyLimit;
 use axum::{
     Json, Router,
     body::Body,
@@ -192,9 +193,18 @@ pub fn file_routes() -> Router<Arc<AppState>> {
             "/download/{*path}",
             get(download_file).head(head_download_file),
         )
-        .route("/upload", post(upload_root_file))
-        .route("/upload/", post(upload_root_file))
-        .route("/upload/{*path}", post(upload_file))
+        .route(
+            "/upload",
+            post(upload_root_file).layer(DefaultBodyLimit::disable()),
+        )
+        .route(
+            "/upload/",
+            post(upload_root_file).layer(DefaultBodyLimit::disable()),
+        )
+        .route(
+            "/upload/{*path}",
+            post(upload_file).layer(DefaultBodyLimit::disable()),
+        )
 }
 
 async fn get_root_metadata(

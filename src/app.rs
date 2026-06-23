@@ -888,6 +888,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn multipart_upload_over_axum_default_limit_streams_through_api() {
+        let (root, app) = test_app_with_config("large-multipart-upload-api", |config| {
+            config.max_upload_bytes = Some(4 * 1024 * 1024);
+        })
+        .await;
+        let files_dir = root.path().join("files");
+        tokio::fs::create_dir_all(&files_dir).await.unwrap();
+
+        let cookie = login_cookie(&app).await;
+        create_mapping(&app, &cookie, "/docs", &files_dir, true).await;
+
+        let body = vec![b'a'; 3 * 1024 * 1024];
+        let response = app
+            .clone()
+            .oneshot(multipart_upload_request_bytes(
+                "/api/upload/docs",
+                &cookie,
+                "large.bin",
+                &body,
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(
+            json_body(response).await["files"][0]["path"],
+            "/docs/large.bin"
+        );
+        let metadata = tokio::fs::metadata(files_dir.join("large.bin"))
+            .await
+            .unwrap();
+        assert_eq!(metadata.len(), body.len() as u64);
+    }
+
+    #[tokio::test]
     async fn directory_api_omits_totals_until_requested() {
         let (root, app) = test_app("directory-total-api").await;
         let files_dir = root.path().join("files");
@@ -3257,14 +3292,26 @@ mod tests {
         file_name: &str,
         content: &str,
     ) -> Request<Body> {
+        multipart_upload_request_bytes(uri, cookie, file_name, content.as_bytes())
+    }
+
+    fn multipart_upload_request_bytes(
+        uri: &str,
+        cookie: &str,
+        file_name: &str,
+        content: &[u8],
+    ) -> Request<Body> {
         let boundary = "web-file-browser-test-boundary";
-        let body = format!(
+        let header = format!(
             "--{boundary}\r\n\
              Content-Disposition: form-data; name=\"file\"; filename=\"{file_name}\"\r\n\
-             Content-Type: text/plain\r\n\r\n\
-             {content}\r\n\
-             --{boundary}--\r\n"
+             Content-Type: application/octet-stream\r\n\r\n"
         );
+        let footer = format!("\r\n--{boundary}--\r\n");
+        let mut body = Vec::with_capacity(header.len() + content.len() + footer.len());
+        body.extend_from_slice(header.as_bytes());
+        body.extend_from_slice(content);
+        body.extend_from_slice(footer.as_bytes());
         Request::builder()
             .method(Method::POST)
             .uri(uri)
