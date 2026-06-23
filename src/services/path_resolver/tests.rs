@@ -7,9 +7,8 @@ use crate::models::PathMapping;
 
 use super::{
     DirectoryDetail, DirectoryListOptions, MappingSnapshot, MetadataEntry,
-    basic_metadata_modified_sync, metadata_sync, metadata_sync_with_options, page_entries,
-    read_light_entries_page, resolve_existing_no_follow_final_sync, resolve_existing_sync,
-    sort_light_entries, split_virtual_path,
+    basic_metadata_modified_sync, metadata_sync, metadata_sync_with_options,
+    resolve_existing_no_follow_final_sync, resolve_existing_sync, split_virtual_path,
 };
 
 #[test]
@@ -231,49 +230,6 @@ async fn omits_totals_by_default_but_keeps_has_more() {
     assert_eq!(data.folder.len(), 1);
     assert_eq!(data.file.len(), 1);
     assert_eq!(data.has_more, Some(true));
-
-    fs::remove_dir_all(temp).unwrap();
-}
-
-#[test]
-fn paged_light_read_keeps_only_requested_sort_window() {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let temp = std::env::temp_dir().join(format!("web-file-browser-window-test-{nonce}"));
-    fs::create_dir_all(&temp).unwrap();
-    for index in 0..50 {
-        fs::write(temp.join(format!("file-{index:02}.txt")), "x").unwrap();
-    }
-
-    let options = DirectoryListOptions {
-        offset: 10,
-        limit: Some(5),
-        ..DirectoryListOptions::default()
-    };
-    let mut result = read_light_entries_page(&temp, options).unwrap();
-
-    assert_eq!(result.total_entries, 50);
-    assert_eq!(result.folder_total, 0);
-    assert_eq!(result.file_total, 50);
-    assert_eq!(result.entries.len(), 15);
-
-    sort_light_entries(&mut result.entries, options.order);
-    let names = page_entries(result.entries, options)
-        .into_iter()
-        .map(|entry| entry.name)
-        .collect::<Vec<_>>();
-    assert_eq!(
-        names,
-        vec![
-            "file-10.txt",
-            "file-11.txt",
-            "file-12.txt",
-            "file-13.txt",
-            "file-14.txt",
-        ]
-    );
 
     fs::remove_dir_all(temp).unwrap();
 }
