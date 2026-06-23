@@ -37,7 +37,12 @@ const handleRowClick = (event: MouseEvent) => {
   emit("node-focus", props.data);
   emit("navigate", props.data);
 }
-const handleToggle = () => emit("toggle", props.data);
+const handleToggle = (event: MouseEvent) => {
+  const row = event.currentTarget instanceof HTMLElement ? event.currentTarget.closest<HTMLElement>(".tree-node") : null;
+  row?.focus();
+  emit("node-focus", props.data);
+  emit("toggle", props.data);
+}
 </script>
 
 <template>
@@ -60,8 +65,10 @@ const handleToggle = () => emit("toggle", props.data);
           class="fold-button"
           :class="{expanded, placeholder: normalizedPath === '/' && !hasChildren}"
           :disabled="loading || (normalizedPath === '/' && !hasChildren)"
+          tabindex="-1"
+          aria-hidden="true"
           title="展开或折叠"
-          aria-label="展开或折叠"
+          @pointerdown.prevent
           @click.stop="handleToggle">
         <icon v-if="loading" icon="icon-refresh" size="0.8rem" />
         <icon v-else icon="icon-unfold" size="0.72rem" />
