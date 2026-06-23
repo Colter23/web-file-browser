@@ -1,246 +1,35 @@
-import type {Component} from "vue";
-import {
-  Archive,
-  ArchiveRestore,
-  Box,
-  Braces,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  ClipboardPaste,
-  Columns3,
-  Copy,
-  Download,
-  Eye,
-  File,
-  FileArchive,
-  FileBox,
-  FileChartColumn,
-  FileCode,
-  FileCog,
-  FileImage,
-  FileMusic,
-  FilePlus,
-  FileQuestionMark,
-  FileSpreadsheet,
-  FileText,
-  FileType,
-  Folder,
-  FolderOpen,
-  FolderPlus,
-  Grid2X2,
-  House,
-  Image,
-  LayoutGrid,
-  List,
-  Lock,
-  Maximize2,
-  Minimize2,
-  PanelRight,
-  PanelRightClose,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Rows3,
-  Save,
-  Scissors,
-  Search,
-  Settings,
-  Share2,
-  SquarePen,
-  Terminal,
-  Trash2,
-  Upload,
-  User,
-  Video,
-  Wrench,
-  X
-} from "lucide-vue-next";
+import type {AppIconStyle} from "../class.ts";
+import type {AppIconDefinition, AppIconPack} from "./icon-packs/types.ts";
 
-const lucideIcons: Record<string, Component> = {
-  "action.upload": Upload,
-  "action.new-file": FilePlus,
-  "action.new-folder": FolderPlus,
-  "action.cut": Scissors,
-  "action.copy": Copy,
-  "action.paste": ClipboardPaste,
-  "action.download": Download,
-  "action.preview": Eye,
-  "action.archive": Archive,
-  "action.extract": ArchiveRestore,
-  "action.rename": Pencil,
-  "action.delete": Trash2,
-  "action.edit": SquarePen,
-  "action.save": Save,
-  "action.close": X,
-  "action.add": Plus,
-  "action.refresh": RefreshCw,
-  "action.settings": Settings,
-  "action.search": Search,
-  "action.share": Share2,
-  "action.fullscreen": Maximize2,
-  "action.exit-fullscreen": Minimize2,
-  "action.previous": ChevronLeft,
-  "action.next": ChevronRight,
-  "action.up": ChevronUp,
-  "action.down": ChevronDown,
-  "action.tools": Wrench,
+const fallbackIconStyle: AppIconStyle = "lucide";
 
-  "view.details": List,
-  "view.list": Rows3,
-  "view.icons": LayoutGrid,
-  "view.tiles": Columns3,
-  "view.grid": Grid2X2,
-  "view.preview-pane": PanelRight,
-  "view.preview-pane-close": PanelRightClose,
-  "view.image": Image,
-
-  "file.home": House,
-  "file.folder": Folder,
-  "file.folder-open": FolderOpen,
-  "file.file": File,
-  "file.image": FileImage,
-  "file.text": FileText,
-  "file.code": FileCode,
-  "file.config": FileCog,
-  "file.archive": FileArchive,
-  "file.audio": FileMusic,
-  "file.video": Video,
-  "file.pdf": FileText,
-  "file.spreadsheet": FileSpreadsheet,
-  "file.document": FileText,
-  "file.presentation": FileChartColumn,
-  "file.executable": Terminal,
-  "file.shortcut": Share2,
-  "file.database": FileBox,
-  "file.font": FileType,
-  "file.package": Box,
-  "file.markup": Braces,
-  "file.unknown": FileQuestionMark,
-  "file.generic": File,
-
-  "icon-upload": Upload,
-  "icon-file-add-fill": FilePlus,
-  "icon-folder-add-fill": FolderPlus,
-  "icon-scissors": Scissors,
-  "icon-contentcut": Scissors,
-  "icon-copy": Copy,
-  "icon-copy1": Copy,
-  "icon-paste": ClipboardPaste,
-  "icon-download": Download,
-  "icon-download1": Download,
-  "icon-download2": Download,
-  "icon-download2f": Download,
-  "icon-edit-filling": SquarePen,
-  "icon-rename": Pencil,
-  "icon-bx-rename": Pencil,
-  "icon-renamebox": SquarePen,
-  "icon-delete": Trash2,
-  "icon-delete1": Trash2,
-  "icon-delete-fill": Trash2,
-  "icon-setting": Settings,
-  "icon-setting-filling": Settings,
-  "icon-wrench": Wrench,
-  "icon-password": Lock,
-  "icon-user-fill": User,
-  "icon-save-fill": Save,
-  "icon-close": X,
-  "icon-add": Plus,
-  "icon-refresh": RefreshCw,
-  "icon-back_android": ChevronLeft,
-  "icon-unfold": ChevronDown,
-  "icon-fenxiang": Search,
-  "icon-viewgrid": LayoutGrid,
-  "icon-view-list": List,
-  "icon-listview": Rows3,
-  "icon-homefill": House,
-  "icon-home-fill": House,
-  "icon-file": File,
-  "icon-file-fill": File,
-  "icon-file-common-filling": FileText,
-  "icon-file-image-fill": FileImage,
-  "icon-file-zip": FileArchive,
-  "icon-file-zip-fill": FileArchive,
-  "icon-folder": Folder,
-  "icon-folder-fill": Folder,
-  "icon-folder-open-fill": FolderOpen
+const iconPackLoaders: Record<AppIconStyle, () => Promise<AppIconPack>> = {
+  lucide: async () => (await import("./icon-packs/lucide-pack.ts")).lucideIconPack,
+  classic: async () => (await import("./icon-packs/classic-pack.ts")).classicIconPack
 };
 
-const classicSymbolIcons: Record<string, string> = {
-  "action.upload": "icon-upload",
-  "action.new-file": "icon-file-add-fill",
-  "action.new-folder": "icon-folder-add-fill",
-  "action.cut": "icon-contentcut",
-  "action.copy": "icon-copy",
-  "action.paste": "icon-paste",
-  "action.download": "icon-download",
-  "action.archive": "icon-file-zip-fill",
-  "action.extract": "icon-download2",
-  "action.preview": "icon-fenxiang",
-  "action.rename": "icon-rename",
-  "action.delete": "icon-delete-fill",
-  "action.edit": "icon-edit-filling",
-  "action.save": "icon-save-fill",
-  "action.close": "icon-close",
-  "action.add": "icon-add",
-  "action.refresh": "icon-refresh",
-  "action.settings": "icon-setting",
-  "action.search": "icon-fenxiang",
-  "action.share": "icon-fenxiang",
-  "action.fullscreen": "icon-viewgrid",
-  "action.exit-fullscreen": "icon-viewgrid",
-  "action.previous": "icon-back_android",
-  "action.next": "icon-back_android",
-  "action.up": "icon-back_android",
-  "action.down": "icon-unfold",
-  "action.tools": "icon-wrench",
+const iconPackPromises: Partial<Record<AppIconStyle, Promise<AppIconPack>>> = {};
 
-  "view.details": "icon-view-list",
-  "view.list": "icon-listview",
-  "view.icons": "icon-viewgrid",
-  "view.tiles": "icon-viewgrid",
-  "view.grid": "icon-viewgrid",
-  "view.preview-pane": "icon-view-list",
-  "view.preview-pane-close": "icon-view-list",
-  "view.image": "icon-file-image-fill",
-
-  "file.home": "icon-home-fill",
-  "file.folder": "icon-folder-fill",
-  "file.folder-open": "icon-folder-open-fill",
-  "file.file": "icon-file-fill",
-  "file.image": "icon-file-image-fill",
-  "file.text": "icon-file-common-filling",
-  "file.code": "icon-file-common-filling",
-  "file.config": "icon-file-common-filling",
-  "file.archive": "icon-file-zip-fill",
-  "file.audio": "icon-file-fill",
-  "file.video": "icon-file-fill",
-  "file.pdf": "icon-file-common-filling",
-  "file.spreadsheet": "icon-file-common-filling",
-  "file.document": "icon-file-common-filling",
-  "file.presentation": "icon-file-common-filling",
-  "file.executable": "icon-file-fill",
-  "file.shortcut": "icon-file-fill",
-  "file.database": "icon-file-fill",
-  "file.font": "icon-file-fill",
-  "file.package": "icon-file-zip-fill",
-  "file.markup": "icon-file-common-filling",
-  "file.unknown": "icon-file-fill",
-  "file.generic": "icon-file-fill"
+const loadIconPack = (style: AppIconStyle) => {
+  iconPackPromises[style] ??= iconPackLoaders[style]();
+  return iconPackPromises[style];
 };
 
-const classicSymbolTransforms: Record<string, string> = {
-  "action.next": "rotate(180deg)",
-  "action.up": "rotate(90deg)",
-  "action.exit-fullscreen": "scale(0.82)",
-  "view.preview-pane-close": "scaleX(-1)"
+export const resolveAppIcon = async (style: AppIconStyle, icon: string): Promise<AppIconDefinition | undefined> => {
+  const preferredPack = await loadIconPack(style);
+  const preferredIcon = preferredPack.resolve(icon);
+  if (preferredIcon) return preferredIcon;
+
+  if (style !== fallbackIconStyle) {
+    const fallbackPack = await loadIconPack(fallbackIconStyle);
+    const fallbackIcon = fallbackPack.resolve(icon);
+    if (fallbackIcon) return fallbackIcon;
+  }
+
+  if (style !== "classic") {
+    const classicPack = await loadIconPack("classic");
+    return classicPack.resolve(icon);
+  }
+
+  return undefined;
 };
-
-export const resolveLucideIcon = (icon: string): Component | undefined => lucideIcons[icon];
-
-export const resolveClassicSymbolName = (icon: string) => {
-  return classicSymbolIcons[icon] ?? (icon.startsWith("icon-") ? icon : "");
-}
-
-export const resolveClassicSymbolTransform = (icon: string): string | undefined => classicSymbolTransforms[icon];

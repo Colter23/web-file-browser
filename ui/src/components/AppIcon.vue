@@ -1,11 +1,8 @@
 <script setup lang="ts">
-import {computed} from "vue";
+import {computed, shallowRef, watch} from "vue";
 import {useAppearanceStore} from "../store/appearance.ts";
-import {
-  resolveClassicSymbolName,
-  resolveClassicSymbolTransform,
-  resolveLucideIcon
-} from "./icon-registry.ts";
+import {resolveAppIcon} from "./icon-registry.ts";
+import type {AppIconDefinition} from "./icon-packs/types.ts";
 
 type IconSize = string | "large" | "small" | "normal";
 
@@ -21,11 +18,22 @@ const props = withDefaults(defineProps<{
 });
 
 const appearanceStore = useAppearanceStore();
+const resolvedIcon = shallowRef<AppIconDefinition>();
+let resolveRunId = 0;
 
-const classicSymbolName = computed(() => resolveClassicSymbolName(props.icon));
-const useClassicSymbol = computed(() => appearanceStore.iconStyle === "classic" && Boolean(classicSymbolName.value));
-const iconComponent = computed(() => useClassicSymbol.value ? undefined : resolveLucideIcon(props.icon));
-const symbolHref = computed(() => `#${classicSymbolName.value || props.icon}`);
+watch(
+    () => [appearanceStore.iconStyle, props.icon] as const,
+    async ([style, icon]) => {
+      const runId = ++resolveRunId;
+      const nextIcon = await resolveAppIcon(style, icon);
+      if (runId === resolveRunId) resolvedIcon.value = nextIcon;
+    },
+    {immediate: true}
+);
+
+const iconComponent = computed(() => resolvedIcon.value?.kind === "component" ? resolvedIcon.value.component : undefined);
+const symbolHref = computed(() => resolvedIcon.value?.kind === "symbol" ? `#${resolvedIcon.value.symbol}` : "");
+const iconClass = computed(() => resolvedIcon.value?.className);
 
 const normalizedSize = computed(() => {
   if (props.size === "large") return "1.5rem";
@@ -39,7 +47,7 @@ const iconStyle = computed(() => ({
   width: normalizedSize.value,
   height: normalizedSize.value,
   color: props.color,
-  transform: useClassicSymbol.value ? resolveClassicSymbolTransform(props.icon) : undefined
+  transform: resolvedIcon.value?.transform
 }));
 </script>
 
@@ -47,13 +55,15 @@ const iconStyle = computed(() => ({
   <component
       :is="iconComponent"
       v-if="iconComponent"
-      class="app-icon app-icon-lucide"
+      class="app-icon"
+      :class="iconClass"
       aria-hidden="true"
       :style="iconStyle"
       :stroke-width="strokeWidth" />
-  <svg v-else class="app-icon app-icon-symbol" aria-hidden="true" :style="iconStyle">
+  <svg v-else-if="symbolHref" class="app-icon" :class="iconClass" aria-hidden="true" :style="iconStyle">
     <use :href="symbolHref" :xlink:href="symbolHref" />
   </svg>
+  <span v-else class="app-icon app-icon-missing" aria-hidden="true" :style="iconStyle" />
 </template>
 
 <style scoped>

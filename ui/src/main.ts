@@ -5,7 +5,6 @@ import {createPinia} from "pinia";
 import editorConfig from "./assets/editor-config.json"
 
 import "./style.css"
-import "./assets/iconfont.js"
 import {useFileStore} from "./store";
 
 
