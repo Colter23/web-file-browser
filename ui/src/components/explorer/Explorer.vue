@@ -308,6 +308,7 @@ const {
   selectedEntries,
   itemRefs,
   viewportRef,
+  currentFolder: () => fileStore.currentPath || "/",
   isSelected,
   isRenaming,
   setSelection,

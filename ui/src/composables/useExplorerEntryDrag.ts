@@ -1,6 +1,7 @@
 import {computed, reactive, ref} from "vue";
 import type {ComputedRef, Ref} from "vue";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
+import {parentPath} from "../utils/file-path.ts";
 
 type DropAction = "copy" | "move";
 
@@ -9,6 +10,7 @@ type ExplorerEntryDragOptions = {
   selectedEntries: ComputedRef<ExplorerEntry[]>;
   itemRefs: Map<string, HTMLElement>;
   viewportRef: Ref<HTMLElement | null>;
+  currentFolder: () => string;
   isSelected: (path: string) => boolean;
   isRenaming: (entry: ExplorerEntry) => boolean;
   setSelection: (paths: string[], focusPath?: string, keepAnchor?: boolean) => void;
@@ -23,6 +25,7 @@ export const useExplorerEntryDrag = ({
   selectedEntries,
   itemRefs,
   viewportRef,
+  currentFolder,
   isSelected,
   isRenaming,
   setSelection,
@@ -46,8 +49,15 @@ export const useExplorerEntryDrag = ({
     return !draggingEntries.value.some(item => item.path === entry.path || entry.path.startsWith(`${item.path}/`));
   }
 
+  const canDropOnCurrentFolder = (action: DropAction) => {
+    if (!draggingEntries.value.length) return false;
+    if (action === "copy") return true;
+    const folder = currentFolder();
+    return draggingEntries.value.some(entry => parentPath(entry.path) !== folder);
+  }
+
   const dragHintText = computed(() => {
-    if (!dragState.active || !draggingEntries.value.length) return "";
+    if (!dragState.active || !draggingEntries.value.length || !dragState.overPath && !dragState.overCurrentFolder) return "";
     const actionText = dragState.copy ? "复制" : "移动";
     return `${actionText} ${draggingEntries.value.length} 项`;
   });
@@ -124,11 +134,18 @@ export const useExplorerEntryDrag = ({
       dragState.overCurrentFolder = false;
       return;
     }
+    const action = isCopyAction(event) ? "copy" : "move";
+    if (!canDropOnCurrentFolder(action)) {
+      dragState.overPath = "";
+      dragState.overCurrentFolder = false;
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     dragState.overPath = "";
     dragState.overCurrentFolder = true;
-    dragState.copy = isCopyAction(event);
+    dragState.copy = action === "copy";
     if (event.dataTransfer) event.dataTransfer.dropEffect = dragState.copy ? "copy" : "move";
   }
 
@@ -142,10 +159,14 @@ export const useExplorerEntryDrag = ({
   const dropOnCurrentFolder = (event: DragEvent) => {
     if (!isInternalEntryDrag(event) || !dragState.overCurrentFolder) return;
     if (isEntryDragSurface(event.target)) return;
+    const action = isCopyAction(event) ? "copy" : "move";
+    if (!canDropOnCurrentFolder(action)) {
+      resetEntryDrag();
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     const entriesToDrop = draggingEntries.value;
-    const action = isCopyAction(event) ? "copy" : "move";
     resetEntryDrag();
     dropToCurrentFolder(entriesToDrop, action);
   }
