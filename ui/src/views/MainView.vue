@@ -47,7 +47,7 @@ import {entryFileInfo} from "../utils/file-entry.ts";
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
 
 type ExplorerExpose = {
-  refresh: (path?: string) => Promise<boolean>;
+  refresh: (path?: string, options?: {forceRefresh?: boolean}) => Promise<boolean>;
   getSelectedEntry: () => ExplorerEntry | null;
   getSelectedEntries: () => ExplorerEntry[];
   startRename: () => void;
@@ -189,6 +189,7 @@ const {
   previewEmptyIcon,
   clearPreviewContent,
   closePreviewPanel,
+  resetImageViewer,
   closeImageViewer,
   setImageViewerEntry,
   openImageViewer,
@@ -206,10 +207,12 @@ const {
 });
 
 let closePanelsHandler = () => {};
+let closeTransientPanelsHandler = () => {};
 let closeOperationShellPanelsHandler = () => {};
 let closePreviewHandler = () => {};
 let refreshCurrentHandler = async (_keepSelection = false) => {};
 const closePanels = () => closePanelsHandler();
+const closeTransientPanels = () => closeTransientPanelsHandler();
 const closeOperationShellPanels = () => closeOperationShellPanelsHandler();
 const closePreview = () => closePreviewHandler();
 const refreshCurrent = (keepSelection = false) => refreshCurrentHandler(keepSelection);
@@ -235,7 +238,7 @@ const {
   activeTab,
   refreshExplorer: async path => await explorerRef.value?.refresh(path) ?? false,
   focusExplorer,
-  closePanels,
+  closeTransientPanels,
   syncActiveTabContext,
   persistCurrentExplorerScrollTop,
   shouldIgnoreNavigationShortcut: target => shouldIgnoreNavigationShortcut(target)
@@ -272,8 +275,7 @@ const {
   dropTab,
   finishTabDrag
 } = useExplorerTabs({
-  currentFolder,
-  closePanels,
+  closeTransientPanels,
   syncActiveTabContext,
   persistCurrentExplorerScrollTop,
   showNotice: showShellNotice
@@ -359,11 +361,12 @@ const shellActions = useMainViewShellActions({
   editorVisible: () => fileStore.showEditor,
   currentFolder,
   loadRoot,
-  refreshExplorer: path => explorerRef.value?.refresh(path) ?? Promise.resolve(false),
+  refreshExplorer: (path, options) => explorerRef.value?.refresh(path, options) ?? Promise.resolve(false),
   selectPaths: paths => explorerRef.value?.selectPaths(paths) ?? Promise.resolve(false),
   clearPersistedSelection: () => fileStore.setActiveTabSelectedPaths([]),
   closePreviewPanel,
   clearPreviewContent,
+  resetImageViewer,
   closeImageViewer,
   hideOperationPanel: () => operationPanel.value.visible = false,
   resetOperationPanel,
@@ -373,6 +376,7 @@ const shellActions = useMainViewShellActions({
 });
 
 closePanelsHandler = shellActions.closePanels;
+closeTransientPanelsHandler = shellActions.closeTransientPanels;
 closeOperationShellPanelsHandler = shellActions.closeOperationShellPanels;
 closePreviewHandler = shellActions.closePreview;
 refreshCurrentHandler = shellActions.refreshCurrent;

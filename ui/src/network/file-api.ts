@@ -9,6 +9,10 @@ import {
 } from "../class";
 import config from "../config";
 
+export type FolderRequestOptions = {
+    forceRefresh?: boolean;
+}
+
 const encodeVirtualPath = (path: string = ""): string => {
     return path
         .split("/")
@@ -22,8 +26,19 @@ const pathUrl = (base: string, path: string = ""): string => {
     return encoded ? `${base}/${encoded}` : base
 }
 
-export const getFolderData = async (path: string = "", params: FolderQueryParams = {}): Promise<FolderData> => {
-    return (await network.get(pathUrl("/api/file", path), {params})).data
+export const getFolderData = async (path: string = "", params: FolderQueryParams = {}, options: FolderRequestOptions = {}): Promise<FolderData> => {
+    const requestParams = options.forceRefresh
+        ? {...params, _: `${Date.now()}-${Math.random().toString(16).slice(2)}`}
+        : params;
+    return (await network.get(pathUrl("/api/file", path), {
+        params: requestParams,
+        headers: options.forceRefresh
+            ? {
+                "Cache-Control": "no-cache, no-store, max-age=0",
+                "Pragma": "no-cache"
+            }
+            : undefined
+    })).data
 }
 
 export const getFile = async (path: string = ""): Promise<FileContentResponse> => {

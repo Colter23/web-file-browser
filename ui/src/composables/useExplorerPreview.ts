@@ -164,6 +164,7 @@ export const useExplorerPreview = ({
     previewEmptySubtitle,
     previewEmptyIcon,
     clearPreviewContent,
+    resetImageViewer: resetImageViewerState,
     closePreviewPanel,
     closeImageViewer,
     setImageViewerEntry,

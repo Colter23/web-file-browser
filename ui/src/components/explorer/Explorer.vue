@@ -56,6 +56,10 @@ type CopyPathPayload = {
   paths: string[];
 }
 
+type ExplorerRefreshOptions = {
+  forceRefresh?: boolean;
+}
+
 const emit = defineEmits<{
   (e: "rename", payload: RenamePayload): void;
   (e: "delete", entry: ExplorerEntry): void;
@@ -320,7 +324,7 @@ const {
   dropToCurrentFolder: (entries, action) => emit("drop-to-current-folder", {entries, action})
 });
 
-const loadFolder = async (path: string = fileStore.currentPath || "/") => {
+const loadFolder = async (path: string = fileStore.currentPath || "/", options: ExplorerRefreshOptions = {}) => {
   return loadFolderData(path, {
     resetBeforeLoad: () => {
       resetRename();
@@ -329,7 +333,8 @@ const loadFolder = async (path: string = fileStore.currentPath || "/") => {
       clearThumbnailState();
     },
     clearSelection,
-    afterRender: observePendingThumbnails
+    afterRender: observePendingThumbnails,
+    forceRefresh: options.forceRefresh
   });
 }
 
@@ -362,7 +367,7 @@ const {
   viewportHeight
 });
 
-watch(() => [fileStore.activeTabId, fileStore.currentPath] as const, async ([, path]) => {
+watch(() => [fileStore.activeTabId, fileStore.currentPath, fileStore.viewMode] as const, async ([, path]) => {
   if (!path || fileStore.showEditor) return;
   if (isLoadedFor(path)) return;
   await loadFolder(path);

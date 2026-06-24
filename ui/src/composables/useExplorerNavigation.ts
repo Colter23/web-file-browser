@@ -15,7 +15,7 @@ type ExplorerNavigationOptions = {
   activeTab: ComputedRef<ExplorerTab | undefined>;
   refreshExplorer: (path: string) => Promise<boolean>;
   focusExplorer: () => Promise<void>;
-  closePanels: () => void;
+  closeTransientPanels: () => void;
   syncActiveTabContext: () => Promise<void>;
   persistCurrentExplorerScrollTop: () => void;
   shouldIgnoreNavigationShortcut: (target: EventTarget | null) => boolean;
@@ -25,7 +25,7 @@ export const useExplorerNavigation = ({
   activeTab,
   refreshExplorer,
   focusExplorer,
-  closePanels,
+  closeTransientPanels,
   syncActiveTabContext,
   persistCurrentExplorerScrollTop,
   shouldIgnoreNavigationShortcut
@@ -48,7 +48,7 @@ export const useExplorerNavigation = ({
   const navigateUpTitle = computed(() => navigateUpTarget.value ? `返回上级 ${navigateUpTarget.value} (Alt+↑)` : "返回上级 (Alt+↑)");
 
   const finishPathNavigation = async (path: string, focusAfterNavigation = true) => {
-    closePanels();
+    closeTransientPanels();
     const loaded = await refreshExplorer(path);
     if (!loaded) {
       if (focusAfterNavigation) await focusExplorer();

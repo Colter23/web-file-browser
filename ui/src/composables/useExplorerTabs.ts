@@ -5,16 +5,14 @@ import type {TabContextMenuState, TabDropPlacement} from "../components/tabs/typ
 import {useFileStore} from "../store";
 
 type ExplorerTabsOptions = {
-  currentFolder: () => string;
-  closePanels: () => void;
+  closeTransientPanels: () => void;
   syncActiveTabContext: () => Promise<void>;
   persistCurrentExplorerScrollTop: () => void;
   showNotice: (message: string, kind?: ShellNoticeKind, title?: string, timeoutMs?: number) => void;
 }
 
 export const useExplorerTabs = ({
-  currentFolder,
-  closePanels,
+  closeTransientPanels,
   syncActiveTabContext,
   persistCurrentExplorerScrollTop,
   showNotice
@@ -51,8 +49,8 @@ export const useExplorerTabs = ({
     if (!await fileStore.requestEditorLeave()) return;
     persistCurrentExplorerScrollTop();
     closeTabContextMenu();
-    fileStore.openTab(currentFolder());
-    closePanels();
+    fileStore.openTab();
+    closeTransientPanels();
     await syncActiveTabContext();
   }
 
@@ -62,7 +60,7 @@ export const useExplorerTabs = ({
     persistCurrentExplorerScrollTop();
     closeTabContextMenu();
     fileStore.openPathInNewTab(entry.path);
-    closePanels();
+    closeTransientPanels();
     await syncActiveTabContext();
   }
 
@@ -71,7 +69,7 @@ export const useExplorerTabs = ({
     if (tabId !== fileStore.activeTabId && !await fileStore.requestEditorLeave()) return;
     if (tabId !== fileStore.activeTabId) persistCurrentExplorerScrollTop();
     fileStore.switchTab(tabId);
-    closePanels();
+    closeTransientPanels();
     await syncActiveTabContext();
   }
 
@@ -102,7 +100,7 @@ export const useExplorerTabs = ({
     if (wasActive) persistCurrentExplorerScrollTop();
     fileStore.closeTab(tabId);
     if (wasActive) {
-      closePanels();
+      closeTransientPanels();
       await syncActiveTabContext();
     }
     return true;
@@ -113,7 +111,7 @@ export const useExplorerTabs = ({
     if (!await fileStore.requestEditorLeave()) return false;
     persistCurrentExplorerScrollTop();
     fileStore.closeTab(fileStore.activeTabId);
-    closePanels();
+    closeTransientPanels();
     await syncActiveTabContext();
     return true;
   }
@@ -138,7 +136,7 @@ export const useExplorerTabs = ({
     persistCurrentExplorerScrollTop();
     closeTabContextMenu();
     fileStore.duplicateTab(tabId);
-    closePanels();
+    closeTransientPanels();
     await syncActiveTabContext();
   }
 
@@ -155,7 +153,7 @@ export const useExplorerTabs = ({
     closeTabContextMenu();
     const tab = fileStore.reopenClosedTab();
     if (!tab) return false;
-    closePanels();
+    closeTransientPanels();
     await syncActiveTabContext();
     showNotice(`已重新打开：${tab.title}`, "info", "标签页", 1600);
     return true;
@@ -169,7 +167,7 @@ export const useExplorerTabs = ({
     closeTabContextMenu();
     fileStore.closeOtherTabs(tabId);
     if (changesActiveTab) {
-      closePanels();
+      closeTransientPanels();
       await syncActiveTabContext();
     }
   }
@@ -182,7 +180,7 @@ export const useExplorerTabs = ({
     closeTabContextMenu();
     fileStore.closeTabsToRight(tabId);
     if (closesActiveTab) {
-      closePanels();
+      closeTransientPanels();
       await syncActiveTabContext();
     }
   }

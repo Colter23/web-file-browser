@@ -128,10 +128,10 @@ const emit = defineEmits<{
           <icon icon="action.close" size="small" />
         </span>
       </button>
+      <button class="tab-add" title="新建标签页 (Ctrl+T)" @click="emit('new-tab')">
+        <icon icon="action.add" />
+      </button>
     </div>
-    <button class="tab-add" title="新建标签页 (Ctrl+T)" @click="emit('new-tab')">
-      <icon icon="action.add" />
-    </button>
   </nav>
 
   <div
@@ -166,6 +166,7 @@ const emit = defineEmits<{
 .tab-scroll {
   @apply flex h-full min-w-0 grow items-center gap-2 overflow-x-auto overflow-y-hidden;
   scrollbar-width: none;
+  scrollbar-gutter: stable;
 }
 
 .tab-scroll::-webkit-scrollbar {
@@ -244,10 +245,11 @@ const emit = defineEmits<{
 }
 
 .tab-add {
-  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border shadow-sm;
+  @apply sticky right-0 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border shadow-sm;
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);
   color: var(--app-text-muted);
+  z-index: 2;
 }
 
 .tab-add:hover {

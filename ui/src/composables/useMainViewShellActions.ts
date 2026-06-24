@@ -7,11 +7,12 @@ type MainViewShellActionsOptions = {
   editorVisible: () => boolean;
   currentFolder: () => string;
   loadRoot: () => Promise<unknown>;
-  refreshExplorer: (path: string) => Promise<unknown>;
+  refreshExplorer: (path: string, options?: {forceRefresh?: boolean}) => Promise<unknown>;
   selectPaths: (paths: string[]) => Promise<boolean | undefined>;
   clearPersistedSelection: () => void;
   closePreviewPanel: () => void;
   clearPreviewContent: () => void;
+  resetImageViewer: () => void;
   closeImageViewer: () => void;
   hideOperationPanel: () => void;
   resetOperationPanel: () => void;
@@ -31,6 +32,7 @@ export const useMainViewShellActions = ({
   clearPersistedSelection,
   closePreviewPanel,
   clearPreviewContent,
+  resetImageViewer,
   closeImageViewer,
   hideOperationPanel,
   resetOperationPanel,
@@ -40,6 +42,15 @@ export const useMainViewShellActions = ({
 }: MainViewShellActionsOptions) => {
   const closePanels = () => {
     closePreviewPanel();
+    hideOperationPanel();
+    resetDeleteConfirm();
+    closePropertiesPanel();
+    resetTaskCancelConfirm();
+    resetImageViewer();
+  }
+
+  const closeTransientPanels = () => {
+    clearPreviewContent();
     hideOperationPanel();
     resetDeleteConfirm();
     closePropertiesPanel();
@@ -61,7 +72,7 @@ export const useMainViewShellActions = ({
     resetOperationPanel();
     resetDeleteConfirm();
     resetTaskCancelConfirm();
-    closeImageViewer();
+    resetImageViewer();
   }
 
   const refreshCurrent = async (keepSelection = false) => {
@@ -74,7 +85,7 @@ export const useMainViewShellActions = ({
     }
     const path = currentFolder();
     if (path === "/") await loadRoot();
-    await refreshExplorer(path);
+    await refreshExplorer(path, {forceRefresh: true});
     if (!selectedPaths.length) return;
     const restored = await selectPaths(selectedPaths);
     if (!restored) clearPersistedSelection();
@@ -82,6 +93,7 @@ export const useMainViewShellActions = ({
 
   return {
     closePanels,
+    closeTransientPanels,
     closeOperationShellPanels,
     closePreview,
     refreshCurrent

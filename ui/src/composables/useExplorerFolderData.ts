@@ -1,6 +1,6 @@
 import {computed, nextTick, ref} from "vue";
 import type {Ref} from "vue";
-import type {DirSortKey, FolderData, FolderQueryParams} from "../class.ts";
+import type {DirDetail, DirSortKey, FolderData, FolderQueryParams} from "../class.ts";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import {getFolderData} from "../network/file-api.ts";
 import {useFileStore} from "../store";
@@ -9,6 +9,10 @@ type FolderLoadLifecycle = {
   resetBeforeLoad?: () => void;
   clearSelection?: () => void;
   afterRender?: () => void;
+}
+
+type FolderLoadOptions = FolderLoadLifecycle & {
+  forceRefresh?: boolean;
 }
 
 type ExplorerFolderDataOptions = {
@@ -63,6 +67,10 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
   ]);
 
   const filterKeyword = computed(() => filterText().trim());
+  const currentDetail = computed<DirDetail>(() => {
+    const viewNeedsMetadata = fileStore.viewMode === "details" || fileStore.viewMode === "tiles";
+    return fileStore.sortKey !== "name" || viewNeedsMetadata ? "full" : "basic";
+  });
 
   const entries = computed<ExplorerEntry[]>(() => {
     const keyword = filterKeyword.value.toLowerCase();
@@ -70,16 +78,15 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
     return allEntries.value.filter(entry => entry.name.toLowerCase().includes(keyword));
   });
 
-  const folderRequestSignature = (path: string = fileStore.currentPath || "/") => {
-    return `${path}|${fileStore.sortKey}|${fileStore.sortOrder}`;
+  const folderRequestSignature = (path: string = fileStore.currentPath || "/", detail: DirDetail = currentDetail.value) => {
+    return `${path}|${fileStore.sortKey}|${fileStore.sortOrder}|${detail}`;
   }
 
   const folderQuery = (offset = 0): FolderQueryParams => {
-    const needsFullDetail = fileStore.sortKey !== "name";
     return {
       offset,
       limit: pageSize,
-      detail: needsFullDetail ? "full" as const : "basic" as const,
+      detail: currentDetail.value,
       sort: fileStore.sortKey as DirSortKey,
       order: fileStore.sortOrder
     };
@@ -89,13 +96,13 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
     window.requestAnimationFrame(() => maybeLoadMoreOnScroll(lifecycle));
   }
 
-  const loadFolder = async (path: string = fileStore.currentPath || "/", lifecycle: FolderLoadLifecycle = {}) => {
+  const loadFolder = async (path: string = fileStore.currentPath || "/", lifecycle: FolderLoadOptions = {}) => {
     loading.value = true;
     message.value = "";
     let loaded = false;
     lifecycle.resetBeforeLoad?.();
     try {
-      const data = normalizeFolderData(await getFolderData(path, folderQuery()));
+      const data = normalizeFolderData(await getFolderData(path, folderQuery(), {forceRefresh: lifecycle.forceRefresh}));
       fileStore.saveFolderData(data);
       folderData.value = data;
       loadedSignature.value = folderRequestSignature(data.path || path);
@@ -146,7 +153,10 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
     if (distanceToBottom <= autoLoadMoreDistance) void loadMore(lifecycle);
   }
 
-  const isLoadedFor = (path: string) => loadedSignature.value === folderRequestSignature(path);
+  const isLoadedFor = (path: string) => {
+    if (loadedSignature.value === folderRequestSignature(path)) return true;
+    return currentDetail.value === "basic" && loadedSignature.value === folderRequestSignature(path, "full");
+  }
 
   const markStale = () => {
     loadedSignature.value = "";
