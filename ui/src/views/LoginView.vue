@@ -1,14 +1,24 @@
 <script setup lang="ts">
-import {onMounted, ref} from "vue";
+import {computed, onMounted, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
-import {getSession, login} from "../network/api";
+import {getSession, login, setupPassword} from "../network/api";
+import {isApiError} from "../network";
 
 const route = useRoute();
 const router = useRouter();
 const password = ref("");
+const confirmPassword = ref("");
 const loading = ref(false);
+const checkingSession = ref(true);
 const errorMessage = ref("");
 const authConfigured = ref(true);
+const setupMode = computed(() => !authConfigured.value);
+const titleText = computed(() => setupMode.value ? "首次设置管理员密码" : "管理员登录");
+const passwordAutocomplete = computed(() => setupMode.value ? "new-password" : "current-password");
+const canSubmit = computed(() => {
+  if (checkingSession.value || loading.value || password.value.length < 8) return false;
+  return !setupMode.value || confirmPassword.value.length >= 8;
+});
 
 const redirectPath = () => {
   const redirect = route.query.redirect;
@@ -24,18 +34,50 @@ onMounted(async () => {
     }
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "读取会话失败";
+  } finally {
+    checkingSession.value = false;
   }
 })
 
+const validate = () => {
+  if (password.value.length < 8) {
+    errorMessage.value = "密码至少需要 8 个字符";
+    return false;
+  }
+  if (setupMode.value && password.value !== confirmPassword.value) {
+    errorMessage.value = "两次输入的密码不一致";
+    return false;
+  }
+  return true;
+}
+
+const handleAuthConflict = (error: unknown, wasSetupMode: boolean) => {
+  if (!isApiError(error) || error.status !== 409) return false;
+  confirmPassword.value = "";
+  authConfigured.value = wasSetupMode;
+  errorMessage.value = wasSetupMode
+      ? "管理员密码已经初始化，请直接登录"
+      : "管理员密码尚未初始化，请先设置密码";
+  return true;
+}
+
 const submit = async () => {
-  if (!password.value || loading.value) return;
+  if (loading.value || checkingSession.value || !validate()) return;
   loading.value = true;
   errorMessage.value = "";
+  const wasSetupMode = setupMode.value;
   try {
-    await login(password.value);
+    const session = wasSetupMode
+        ? await setupPassword(password.value)
+        : await login(password.value);
+    authConfigured.value = session.authConfigured;
     await router.replace(redirectPath());
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "登录失败";
+    if (!handleAuthConflict(error, wasSetupMode)) {
+      errorMessage.value = error instanceof Error
+          ? error.message
+          : wasSetupMode ? "设置密码失败" : "登录失败";
+    }
   } finally {
     loading.value = false;
   }
@@ -47,21 +89,31 @@ const submit = async () => {
     <form class="login-panel" @submit.prevent="submit">
       <div>
         <h1>Web File Browser</h1>
-        <p>管理员登录</p>
+        <p>{{ titleText }}</p>
       </div>
 
       <label class="field">
         <span>管理员密码</span>
-        <input v-model="password" type="password" autocomplete="current-password" autofocus>
+        <input
+            v-model="password"
+            type="password"
+            minlength="8"
+            :autocomplete="passwordAutocomplete"
+            autofocus>
       </label>
 
-      <div v-if="!authConfigured" class="message">
-        管理员密码尚未初始化，请先设置 WEB_FILE_BROWSER_ADMIN_PASSWORD 后重启服务。
+      <label v-if="setupMode" class="field">
+        <span>确认密码</span>
+        <input v-model="confirmPassword" type="password" minlength="8" autocomplete="new-password">
+      </label>
+
+      <div v-if="setupMode" class="hint">
+        管理员密码尚未初始化。设置完成后会自动登录，后端只保存密码哈希。
       </div>
       <div v-if="errorMessage" class="message">{{ errorMessage }}</div>
 
-      <button class="primary-button" type="submit" :disabled="loading || !password || !authConfigured">
-        {{ loading ? "登录中" : "登录" }}
+      <button class="primary-button" type="submit" :disabled="!canSubmit">
+        {{ loading ? (setupMode ? "设置中" : "登录中") : (setupMode ? "设置并进入" : "登录") }}
       </button>
     </form>
   </div>
@@ -112,6 +164,13 @@ p {
   border-color: var(--app-danger-border);
   background: var(--app-danger-soft);
   color: var(--app-danger-text);
+}
+
+.hint {
+  @apply rounded-md border px-3 py-2 text-sm;
+  border-color: var(--app-accent-border);
+  background: var(--app-accent-soft);
+  color: var(--app-accent);
 }
 
 .primary-button {

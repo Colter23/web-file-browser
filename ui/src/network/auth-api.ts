@@ -5,6 +5,10 @@ export const login = async (password: string): Promise<SessionResponse> => {
     return (await network.post("/api/auth/login", {password})).data
 }
 
+export const setupPassword = async (password: string): Promise<SessionResponse> => {
+    return (await network.post("/api/auth/setup", {password})).data
+}
+
 export const logout = async (): Promise<SessionResponse> => {
     return (await network.post("/api/auth/logout")).data
 }
