@@ -21,6 +21,7 @@ export type OperationPanelState = {
 export type DeleteConfirmState = {
   visible: boolean;
   entries: ExplorerEntry[];
+  permanent: boolean;
   submitting: boolean;
   error: string;
 }

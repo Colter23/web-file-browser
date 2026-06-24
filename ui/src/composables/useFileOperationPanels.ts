@@ -27,6 +27,7 @@ const emptyOperationPanel = (): OperationPanelState => ({
 const emptyDeleteConfirm = (): DeleteConfirmState => ({
   visible: false,
   entries: [],
+  permanent: false,
   submitting: false,
   error: ""
 });
@@ -101,6 +102,7 @@ export const useFileOperationPanels = ({
     deleteConfirm.value = {
       visible: true,
       entries,
+      permanent: false,
       submitting: false,
       error: ""
     };

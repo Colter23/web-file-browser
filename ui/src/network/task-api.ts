@@ -37,8 +37,8 @@ export const createMoveTask = async (
     return response
 }
 
-export const createDeleteTask = async (paths: string[]): Promise<TaskResponse> => {
-    const response = (await network.post("/api/tasks/delete", {paths})).data
+export const createDeleteTask = async (paths: string[], permanent = false): Promise<TaskResponse> => {
+    const response = (await network.post("/api/tasks/delete", {paths, permanent})).data
     invalidateFolderDataCache([...paths, ...paths.map(parentPath)], {includeAncestors: true});
     return response
 }

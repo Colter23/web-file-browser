@@ -139,8 +139,9 @@ export const useFileMutationOperations = ({
     deleteConfirm.value.submitting = true;
     deleteConfirm.value.error = "";
     try {
-      const task = await createDeleteTask(entries.map(item => item.path));
-      await taskStarted(task.id, "删除任务");
+      const permanent = deleteConfirm.value.permanent;
+      const task = await createDeleteTask(entries.map(item => item.path), permanent);
+      await taskStarted(task.id, permanent ? "永久删除任务" : "删除任务");
       removeEntriesFromCutClipboard(entries.map(item => item.path));
       resetDeleteConfirm();
       await refreshCurrent();

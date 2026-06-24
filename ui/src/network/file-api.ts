@@ -195,8 +195,10 @@ export const moveEntry = async (path: string, targetPath: string): Promise<FileO
     return response
 }
 
-export const deleteEntry = async (path: string): Promise<FileOperationResponse> => {
-    const response = (await network.delete(pathUrl("/api/file", path))).data
+export const deleteEntry = async (path: string, permanent = false): Promise<FileOperationResponse> => {
+    const response = (await network.delete(pathUrl("/api/file", path), {
+        params: permanent ? {permanent: true} : undefined
+    })).data
     invalidateFolderDataCache([parentPath(path), path], {includeAncestors: true});
     return response
 }

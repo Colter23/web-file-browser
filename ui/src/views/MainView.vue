@@ -928,6 +928,7 @@ const signOut = async () => {
                 ref="deleteConfirmRef"
                 :state="deleteConfirm"
                 @close="closeDeleteConfirmAndFocus"
+                @update:permanent="value => deleteConfirm.permanent = value"
                 @submit="submitDeleteConfirm" />
             <properties-panel
                 ref="propertiesPanelRef"
