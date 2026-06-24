@@ -16,6 +16,7 @@ import {useExplorerStatusText} from "../../composables/useExplorerStatusText.ts"
 import {useExplorerThumbnails} from "../../composables/useExplorerThumbnails.ts";
 import {useExplorerTypeahead} from "../../composables/useExplorerTypeahead.ts";
 import {useExplorerItemRefs, useExplorerViewport} from "../../composables/useExplorerViewport.ts";
+import type {DirEntryFilter} from "../../class.ts";
 import {
   entryTypeText,
   fileEntryIconKind,
@@ -348,7 +349,7 @@ const loadFolder = async (path: string = fileStore.currentPath || "/", options: 
   });
 }
 
-const loadSearch = async (query: string) => {
+const loadSearch = async (query: string, type: DirEntryFilter = "all") => {
   const mountPath = fileStore.currentPath === "/"
       ? undefined
       : `/${fileStore.currentPath.split("/").filter(Boolean)[0] ?? ""}`;
@@ -361,7 +362,8 @@ const loadSearch = async (query: string) => {
     },
     clearSelection,
     afterRender: observePendingThumbnails,
-    mount: mountPath === "/" ? undefined : mountPath
+    mount: mountPath === "/" ? undefined : mountPath,
+    type: type === "all" ? undefined : type
   });
 }
 

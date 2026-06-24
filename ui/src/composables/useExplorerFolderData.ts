@@ -1,6 +1,6 @@
 import {computed, nextTick, ref} from "vue";
 import type {Ref} from "vue";
-import type {DirDetail, DirSortKey, FileInfo, FolderData, FolderQueryParams, SearchResult} from "../class.ts";
+import type {DirDetail, DirEntryFilter, DirSortKey, FileInfo, FolderData, FolderQueryParams, SearchResult} from "../class.ts";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import {getFolderData} from "../network/file-api.ts";
 import {getRecentEntries, searchEntries} from "../network/search-api.ts";
@@ -20,6 +20,7 @@ type FolderLoadOptions = FolderLoadLifecycle & {
 
 type SearchLoadOptions = FolderLoadLifecycle & {
   mount?: string;
+  type?: Exclude<DirEntryFilter, "all">;
 }
 
 type ExplorerFolderDataOptions = {
@@ -122,7 +123,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
   const sourceMode = ref<ExplorerDataSourceMode>("folder");
   const sourceTitle = ref("当前文件夹");
   const resultTotal = ref<number | null>(null);
-  const searchContext = ref<{query: string; mount?: string} | null>(null);
+  const searchContext = ref<{query: string; mount?: string; type?: Exclude<DirEntryFilter, "all">} | null>(null);
   const searchKeyword = computed(() => sourceMode.value === "search" ? searchContext.value?.query ?? "" : "");
 
   const allEntries = computed<ExplorerEntry[]>(() => [
@@ -216,20 +217,21 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
     loading.value = true;
     loadingMore.value = false;
     sourceMode.value = "search";
-    sourceTitle.value = `搜索：“${keyword}”`;
-    searchContext.value = {query: keyword, mount: lifecycle.mount};
+    sourceTitle.value = `${lifecycle.type === "file" ? "搜索文件" : lifecycle.type === "folder" ? "搜索文件夹" : "搜索"}：“${keyword}”`;
+    searchContext.value = {query: keyword, mount: lifecycle.mount, type: lifecycle.type};
     resetForLoad(lifecycle);
     let loaded = false;
     try {
       const data = await searchEntries({
         q: keyword,
         mount: lifecycle.mount,
+        type: lifecycle.type,
         offset: 0,
         limit: pageSize
       });
       folderData.value = normalizeSearchResultFolderData(data.items ?? [], fileStore.currentPath || "/", data);
       resultTotal.value = data.total ?? allEntries.value.length;
-      loadedSignature.value = `search|${keyword}|${lifecycle.mount ?? ""}`;
+      loadedSignature.value = `search|${keyword}|${lifecycle.mount ?? ""}|${lifecycle.type ?? "all"}`;
       lifecycle.clearSelection?.();
       fileStore.closeEditor();
       await nextTick();
@@ -284,6 +286,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
       const data = await searchEntries({
         q: searchContext.value.query,
         mount: searchContext.value.mount,
+        type: searchContext.value.type,
         offset,
         limit: pageSize
       });
@@ -291,7 +294,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
       const merged = normalizeFolderData(mergeFolderData(current, next));
       folderData.value = merged;
       resultTotal.value = data.total ?? resultTotal.value ?? allEntries.value.length;
-      loadedSignature.value = `search|${searchContext.value.query}|${searchContext.value.mount ?? ""}|${merged.offset ?? 0}`;
+      loadedSignature.value = `search|${searchContext.value.query}|${searchContext.value.mount ?? ""}|${searchContext.value.type ?? "all"}|${merged.offset ?? 0}`;
       await nextTick();
       lifecycle.afterRender?.();
       loaded = true;

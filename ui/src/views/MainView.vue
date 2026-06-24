@@ -29,7 +29,7 @@ import ShellNotice from "../components/shell/ShellNotice.vue";
 import SidebarPanel from "../components/shell/SidebarPanel.vue";
 import ShellMoreMenu from "../components/shell/ShellMoreMenu.vue";
 import UploadDropOverlay from "../components/shell/UploadDropOverlay.vue";
-import type {DirSortKey, DirSortOrder, FileTreeData} from "../class.ts";
+import type {DirEntryFilter, DirSortKey, DirSortOrder, FileTreeData} from "../class.ts";
 import type {ExplorerEntry, ExplorerEntryPathDropPayload} from "../components/explorer/types.ts";
 import {usePreviewPaneResize} from "../composables/usePreviewPaneResize.ts";
 import {useSidebarResize} from "../composables/useSidebarResize.ts";
@@ -65,7 +65,7 @@ type ExplorerExpose = {
   selectAllEntries: () => boolean;
   setSortKey: (key: DirSortKey) => Promise<void>;
   setSortOrder: (order: DirSortOrder) => Promise<void>;
-  search: (query: string) => Promise<boolean>;
+  search: (query: string, type?: DirEntryFilter) => Promise<boolean>;
   showRecent: () => Promise<boolean>;
   clearResults: () => Promise<boolean>;
   isResultActive: () => boolean;
@@ -207,6 +207,7 @@ const {
   handleSearchEscape,
   focusSearchInput
 } = useExplorerSearchBox({focusExplorer});
+const searchType = ref<DirEntryFilter>("all");
 
 const updateSearchText = (value: string) => {
   searchText.value = value;
@@ -220,8 +221,15 @@ const runIndexedSearch = async () => {
   }
   if (!await fileStore.requestEditorLeave()) return;
   closeTransientPanels();
-  const loaded = await explorerRef.value?.search(query);
+  const loaded = await explorerRef.value?.search(query, searchType.value);
   if (loaded) await focusExplorer();
+}
+
+const updateSearchType = async (value: DirEntryFilter) => {
+  searchType.value = value;
+  const query = searchText.value.trim();
+  if (!query || !(explorerRef.value?.isResultActive() ?? false)) return;
+  await runIndexedSearch();
 }
 
 const showRecentEntries = async () => {
@@ -726,6 +734,7 @@ const signOut = async () => {
           :navigate-up-title="navigateUpTitle"
           :search-text="searchText"
           :is-filtering="isFiltering"
+          :search-type="searchType"
           :set-search-input-ref="setSearchInputRef"
           @navigate-back="navigateBack"
           @navigate-forward="navigateForward"
@@ -735,6 +744,7 @@ const signOut = async () => {
           @breadcrumb-navigate="handleBreadcrumbNavigate"
           @breadcrumb-drop="dropEntriesToPathFolder"
           @update:search-text="updateSearchText"
+          @update:search-type="updateSearchType"
           @search-enter="runIndexedSearch"
           @search-escape="handleSearchEscape"
           @clear-search="clearSearchOrResults" />
