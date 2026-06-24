@@ -217,14 +217,24 @@ const handleKeyDown = (event: KeyboardEvent) => {
   }
 }
 
+const handleGlobalPointerDown = (event: PointerEvent) => {
+  if (!activeMenu.value) return;
+  const target = event.target as Element | null;
+  if (!target) return;
+  if (target.closest("[data-editor-menu-layer]") || target.closest("[data-editor-menu-button]")) return;
+  closeMenus();
+}
+
 onMounted(() => {
   window.addEventListener("keydown", handleKeyDown);
+  window.addEventListener("pointerdown", handleGlobalPointerDown, true);
   window.addEventListener("beforeunload", handleBeforeUnload);
   void loadCurrentFile();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeyDown);
+  window.removeEventListener("pointerdown", handleGlobalPointerDown, true);
   window.removeEventListener("beforeunload", handleBeforeUnload);
   disposeEditorSession();
 });

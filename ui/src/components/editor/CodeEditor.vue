@@ -63,6 +63,7 @@ const editorRef = ref<HTMLElement | null>(null);
 let editor: ReturnType<typeof ace.edit> | null = null;
 let syncing = false;
 let disposed = false;
+const editorScrollMargin = 10;
 
 const findNeedle = (options: EditorSearchOptions) => {
   if (!editor || !options.needle) return false;
@@ -189,6 +190,7 @@ const initializeEditor = async () => {
     enableSnippets: true,
     enableLiveAutocompletion: true
   });
+  editor.renderer.setScrollMargin(editorScrollMargin, editorScrollMargin);
   editor.session.setUseWrapMode(props.wrap);
   editor.session.setTabSize(props.tabSize);
   editor.commands.addCommand({

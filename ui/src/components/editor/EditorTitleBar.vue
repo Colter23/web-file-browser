@@ -35,7 +35,7 @@ const emitMenuToggle = (menu: EditorMenuName, event: MouseEvent, align: EditorMe
 </script>
 
 <template>
-  <header class="editor-titlebar" @click.stop>
+  <header class="editor-titlebar">
     <div class="editor-file-head">
       <div class="file-mark">
         <icon icon="action.edit" color="var(--app-accent-contrast)" />
@@ -50,15 +50,15 @@ const emitMenuToggle = (menu: EditorMenuName, event: MouseEvent, align: EditorMe
     </div>
 
     <div class="editor-actions">
-      <button class="menu-button" :class="{active: activeMenu === 'language'}" @click.stop="emitMenuToggle('language', $event, 'start')">
+      <button class="menu-button" :class="{active: activeMenu === 'language'}" data-editor-menu-button @click.stop="emitMenuToggle('language', $event, 'start')">
         <icon icon="file.text" />
         <span>语言：{{ selectedModeName }}</span>
       </button>
-      <button class="menu-button" :class="{active: activeMenu === 'theme'}" @click.stop="emitMenuToggle('theme', $event, 'start')">
+      <button class="menu-button" :class="{active: activeMenu === 'theme'}" data-editor-menu-button @click.stop="emitMenuToggle('theme', $event, 'start')">
         <icon icon="action.settings" />
         <span>主题：{{ selectedThemeName }}</span>
       </button>
-      <button class="icon-button" :class="{active: activeMenu === 'settings'}" title="编辑设置" @click.stop="emitMenuToggle('settings', $event)">
+      <button class="icon-button" :class="{active: activeMenu === 'settings'}" data-editor-menu-button title="编辑设置" @click.stop="emitMenuToggle('settings', $event)">
         <icon icon="action.settings" />
       </button>
       <button class="icon-button" :disabled="loading" title="重新载入" @click.stop="emit('reload')">

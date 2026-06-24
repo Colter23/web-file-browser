@@ -41,10 +41,11 @@ const menuLayerStyle = computed(() => {
   const anchor = props.anchor;
   if (!anchor || !props.activeMenu) return {};
   const width = props.activeMenu === "language" ? 208 : 224;
+  const maxHeight = props.activeMenu === "settings" ? 180 : 320;
   const padding = 8;
   const rawLeft = anchor.align === "start" ? anchor.left : anchor.right - width;
   const left = Math.min(Math.max(padding, rawLeft), Math.max(padding, window.innerWidth - width - padding));
-  const top = Math.min(Math.max(padding, anchor.bottom + 6), Math.max(padding, window.innerHeight - padding));
+  const top = Math.min(Math.max(padding, anchor.bottom + 6), Math.max(padding, window.innerHeight - maxHeight - padding));
   return {
     left: `${left}px`,
     top: `${top}px`
@@ -53,7 +54,8 @@ const menuLayerStyle = computed(() => {
 </script>
 
 <template>
-  <div class="menu-layer" :style="menuLayerStyle" @click.stop>
+  <Teleport to="body">
+  <div v-if="activeMenu && anchor" class="menu-layer" :style="menuLayerStyle" data-editor-menu-layer @click.stop>
     <div v-if="activeMenu === 'language'" class="editor-menu language-menu">
       <button
           v-for="mode in modes"
@@ -99,6 +101,7 @@ const menuLayerStyle = computed(() => {
       </label>
     </div>
   </div>
+  </Teleport>
 </template>
 
 <style scoped lang="postcss">
