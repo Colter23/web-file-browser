@@ -5,3 +5,4 @@ export * from "./mapping-api";
 export * from "./settings-api";
 export * from "./task-api";
 export * from "./ops-api";
+export * from "./index-api";

@@ -1,8 +1,18 @@
 <script setup lang="ts">
-import {onMounted, reactive, ref} from "vue";
+import {computed, onMounted, reactive, ref} from "vue";
 import {useRouter} from "vue-router";
-import {PathMapping, RuntimeSettings} from "../class";
-import {changePassword, createMapping, deleteMapping, getMappings, getSettings, updateMapping} from "../network/api";
+import type {IndexStatus, PathMapping, RuntimeSettings} from "../class";
+import {
+  cancelIndexRebuild,
+  changePassword,
+  createMapping,
+  deleteMapping,
+  getIndexStatus,
+  getMappings,
+  getSettings,
+  rebuildIndex,
+  updateMapping
+} from "../network/api";
 import {
   accentColorOptions,
   colorModeOptions,
@@ -10,12 +20,16 @@ import {
   iconStyleOptions,
   useAppearanceStore
 } from "../store/appearance.ts";
+import {formatEntryDate} from "../utils/file-entry.ts";
 
 const router = useRouter();
 const appearanceStore = useAppearanceStore();
 const mappings = ref<PathMapping[]>([]);
 const settings = ref<RuntimeSettings | null>(null);
+const indexStatus = ref<IndexStatus | null>(null);
 const loading = ref(false);
+const indexLoading = ref(false);
+const indexActionLoading = ref(false);
 const message = ref("");
 const messageKind = ref<"success" | "error">("error");
 
@@ -33,6 +47,11 @@ const passwordForm = reactive({
   confirmPassword: ""
 })
 
+const indexBusy = computed(() => indexLoading.value || indexActionLoading.value);
+const indexBuilding = computed(() => indexStatus.value?.state === "building");
+const canRebuildIndex = computed(() => Boolean(indexStatus.value?.enabled) && !indexBusy.value && !indexBuilding.value);
+const canCancelIndex = computed(() => Boolean(indexStatus.value?.enabled) && !indexBusy.value && indexBuilding.value);
+
 const load = async () => {
   loading.value = true;
   message.value = "";
@@ -40,6 +59,7 @@ const load = async () => {
     const [mappingData, settingData] = await Promise.all([getMappings(), getSettings()]);
     mappings.value = mappingData;
     settings.value = settingData;
+    await loadIndexStatus(false);
   } catch (error) {
     showError(error, "加载设置失败");
   } finally {
@@ -73,6 +93,29 @@ const listText = (values: string[]) => {
   return values.length ? values.join("，") : "不限制";
 }
 
+const indexStateText = (status: IndexStatus | null) => {
+  if (!status) return "未知";
+  if (!status.enabled || status.state === "disabled") return "未启用";
+  return {
+    idle: "空闲",
+    building: "重建中",
+    error: "异常"
+  }[status.state] ?? status.state;
+}
+
+const indexStateClass = (status: IndexStatus | null) => {
+  if (!status || !status.enabled || status.state === "disabled") return "disabled";
+  return {
+    idle: "idle",
+    building: "building",
+    error: "error"
+  }[status.state] ?? "idle";
+}
+
+const optionalDateText = (value?: string | null) => value ? formatEntryDate(value) : "-";
+
+const indexEntryCountText = (value?: number) => Number.isFinite(value) ? `${value} 项` : "-";
+
 const showError = (error: unknown, fallback: string) => {
   messageKind.value = "error";
   message.value = error instanceof Error ? error.message : fallback;
@@ -81,6 +124,48 @@ const showError = (error: unknown, fallback: string) => {
 const showSuccess = (text: string) => {
   messageKind.value = "success";
   message.value = text;
+}
+
+const loadIndexStatus = async (showFailure = true) => {
+  indexLoading.value = true;
+  try {
+    indexStatus.value = await getIndexStatus();
+  } catch (error) {
+    indexStatus.value = null;
+    if (showFailure) showError(error, "加载索引状态失败");
+  } finally {
+    indexLoading.value = false;
+  }
+}
+
+const requestIndexRebuild = async () => {
+  if (!canRebuildIndex.value) return;
+  message.value = "";
+  indexActionLoading.value = true;
+  try {
+    await rebuildIndex();
+    showSuccess("已开始重建搜索索引");
+    await loadIndexStatus(false);
+  } catch (error) {
+    showError(error, "启动索引重建失败");
+  } finally {
+    indexActionLoading.value = false;
+  }
+}
+
+const requestIndexCancel = async () => {
+  if (!canCancelIndex.value) return;
+  message.value = "";
+  indexActionLoading.value = true;
+  try {
+    await cancelIndexRebuild();
+    showSuccess("已发送取消索引重建请求");
+    await loadIndexStatus(false);
+  } catch (error) {
+    showError(error, "取消索引重建失败");
+  } finally {
+    indexActionLoading.value = false;
+  }
 }
 
 const addMapping = async () => {
@@ -250,6 +335,26 @@ const savePassword = async () => {
         </div>
       </section>
 
+      <section class="panel index-panel">
+        <div class="section-heading">
+          <h2>搜索索引</h2>
+          <div class="panel-actions">
+            <button class="plain-button" :disabled="indexBusy" @click="loadIndexStatus(true)">刷新状态</button>
+            <button class="primary-button" :disabled="!canRebuildIndex" @click="requestIndexRebuild">重建索引</button>
+            <button v-if="indexBuilding" class="danger-button" :disabled="!canCancelIndex" @click="requestIndexCancel">取消重建</button>
+          </div>
+        </div>
+        <div class="index-status-line">
+          <span class="index-state" :class="indexStateClass(indexStatus)">{{ indexLoading ? "读取中" : indexStateText(indexStatus) }}</span>
+          <span>已索引 {{ indexEntryCountText(indexStatus?.indexedEntries) }}</span>
+        </div>
+        <dl class="index-meta">
+          <div><dt>上次开始</dt><dd>{{ optionalDateText(indexStatus?.lastStartedAt) }}</dd></div>
+          <div><dt>上次完成</dt><dd>{{ optionalDateText(indexStatus?.lastFinishedAt) }}</dd></div>
+          <div v-if="indexStatus?.lastError"><dt>错误</dt><dd>{{ indexStatus.lastError }}</dd></div>
+        </dl>
+      </section>
+
       <section class="panel" v-if="settings">
         <h2>服务配置</h2>
         <dl>
@@ -322,6 +427,14 @@ h2 {
   @apply text-base font-semibold
 }
 
+.section-heading {
+  @apply flex flex-wrap items-center justify-between gap-3;
+}
+
+.panel-actions {
+  @apply flex flex-wrap items-center gap-2;
+}
+
 .mapping-form,
 .mapping-row,
 .password-form {
@@ -389,6 +502,37 @@ h2 {
   box-shadow: 0 0 0 3px var(--app-accent-soft, #eff6ff), 0 0 0 5px var(--app-accent-border, #bfdbfe);
 }
 
+.index-status-line {
+  @apply flex flex-wrap items-center gap-3 text-sm;
+  color: var(--app-text-muted);
+}
+
+.index-state {
+  @apply inline-flex h-7 items-center rounded-full px-3 text-xs font-semibold;
+  background: var(--app-panel-muted);
+  color: var(--app-text-muted);
+}
+
+.index-state.idle {
+  background: var(--app-success-soft);
+  color: var(--app-success-text);
+}
+
+.index-state.building {
+  background: var(--app-accent-soft);
+  color: var(--app-accent);
+}
+
+.index-state.error {
+  background: var(--app-danger-soft);
+  color: var(--app-danger-text);
+}
+
+.index-state.disabled {
+  background: var(--app-panel-muted);
+  color: var(--app-text-subtle);
+}
+
 input {
   @apply h-9 min-w-0 rounded-md border px-2 text-sm outline-none;
   border-color: var(--app-border-soft);
@@ -450,6 +594,13 @@ input:focus {
   background: color-mix(in srgb, var(--app-danger) 16%, var(--app-panel-solid));
 }
 
+.primary-button:disabled,
+.plain-button:disabled,
+.danger-button:disabled,
+.ghost-button:disabled {
+  @apply cursor-not-allowed opacity-50;
+}
+
 .empty {
   @apply rounded-md border border-dashed px-3 py-6 text-center text-sm;
   border-color: var(--app-border-soft);
@@ -458,6 +609,10 @@ input:focus {
 
 dl {
   @apply grid gap-2 text-sm
+}
+
+.index-meta {
+  @apply grid gap-2 text-sm;
 }
 
 dl div {

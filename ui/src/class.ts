@@ -196,11 +196,11 @@ export interface TaskStatus {
 
 export interface IndexStatus {
     enabled: boolean;
-    state: string;
+    state: "disabled" | "idle" | "building" | "error" | string;
     indexedEntries: number;
-    lastStartedAt?: string;
-    lastFinishedAt?: string;
-    lastError?: string;
+    lastStartedAt?: string | null;
+    lastFinishedAt?: string | null;
+    lastError?: string | null;
 }
 
 export interface TaskMetrics {
