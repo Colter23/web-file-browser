@@ -4,6 +4,7 @@ import {useRouter} from "vue-router";
 import {useFileStore} from "../store";
 import {
   cancelTask,
+  cleanupTasks,
   getFolderData,
   listTasks,
   logout,
@@ -113,11 +114,13 @@ let refreshCurrentTreePath = async () => {};
 const {
   visible: taskPanelVisible,
   loading: tasksLoading,
+  cleanupLoading: tasksCleanupLoading,
   tasks,
   message: taskMessage,
   lastUpdatedAt: taskLastUpdatedAt,
   cancelConfirm: taskCancelConfirm,
   buttonText: taskButtonText,
+  cleanupTaskCount,
   load: loadTasks,
   toggle: toggleTaskPanel,
   close: closeTaskPanel,
@@ -126,10 +129,12 @@ const {
   requestCancel: cancelTaskById,
   closeCancelConfirm: closeTaskCancelConfirm,
   submitCancelConfirm: submitTaskCancelConfirm,
+  cleanupFinishedTasks,
   markStarted: taskStarted
 } = useTaskPanel({
   listTasks,
   cancelTask,
+  cleanupTasks,
   showError: showErrorNotice,
   onTaskSettled: async () => {
     await refreshCurrent(true);
@@ -751,10 +756,13 @@ const signOut = async () => {
                 v-if="taskPanelVisible"
                 :tasks="tasks"
                 :loading="tasksLoading"
+                :cleanup-loading="tasksCleanupLoading"
+                :cleanup-task-count="cleanupTaskCount"
                 :message="taskMessage"
                 :last-updated-at="taskLastUpdatedAt"
                 :cancel-confirm="taskCancelConfirm"
                 @refresh="loadTasks()"
+                @cleanup-finished="cleanupFinishedTasks"
                 @close="closeTaskPanelAndFocus"
                 @cancel="cancelTaskById"
                 @close-cancel="closeTaskCancelConfirm"

@@ -1,5 +1,5 @@
 import network from "../network";
-import type {ArchiveFormat, RuntimeSettings, TaskResponse, TaskStatus} from "../class";
+import type {ArchiveFormat, RuntimeSettings, TaskCleanupResponse, TaskResponse, TaskStatus} from "../class";
 import {parentPath} from "../utils/file-path.ts";
 import {invalidateFolderDataCache} from "./file-api.ts";
 
@@ -83,4 +83,8 @@ export const getTask = async (id: string): Promise<TaskStatus> => {
 
 export const cancelTask = async (id: string): Promise<TaskStatus> => {
     return (await network.post(`/api/tasks/${encodeURIComponent(id)}/cancel`)).data
+}
+
+export const cleanupTasks = async (): Promise<TaskCleanupResponse> => {
+    return (await network.post("/api/tasks/cleanup")).data
 }

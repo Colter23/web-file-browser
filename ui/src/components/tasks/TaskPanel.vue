@@ -7,6 +7,8 @@ import Icon from "../Icon.vue";
 const props = defineProps<{
   tasks: TaskStatus[];
   loading: boolean;
+  cleanupLoading: boolean;
+  cleanupTaskCount: number;
   message: string;
   lastUpdatedAt: string;
   cancelConfirm: TaskCancelConfirmState;
@@ -14,6 +16,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "refresh"): void;
+  (e: "cleanup-finished"): void;
   (e: "close"): void;
   (e: "cancel", task: TaskStatus): void;
   (e: "close-cancel"): void;
@@ -135,6 +138,13 @@ watch(() => props.cancelConfirm.visible, async visible => {
       <div class="task-panel-actions">
         <button class="task-icon-button" :disabled="loading" title="刷新任务" @click="emit('refresh')">
           <icon icon="action.refresh" size="normal" />
+        </button>
+        <button
+            class="task-icon-button"
+            :disabled="loading || cleanupLoading || cleanupTaskCount === 0"
+            title="清理已结束任务"
+            @click="emit('cleanup-finished')">
+          <icon icon="action.clean" size="normal" />
         </button>
         <button class="task-icon-button" title="关闭任务面板" @click="emit('close')">
           <icon icon="action.close" size="normal" />

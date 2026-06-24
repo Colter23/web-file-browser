@@ -11,6 +11,7 @@ export type TaskCancelConfirmState = {
 type TaskPanelOptions = {
   listTasks: () => Promise<TaskStatus[]>;
   cancelTask: (id: string) => Promise<unknown>;
+  cleanupTasks: () => Promise<{removed: number}>;
   showError: (error: unknown, fallback: string, title?: string) => void;
   onTaskSettled?: (tasks: TaskStatus[]) => void | Promise<void>;
 }
@@ -23,12 +24,14 @@ const emptyCancelConfirm = (): TaskCancelConfirmState => ({
 });
 
 const canCancelTask = (task: TaskStatus) => task.state === "queued" || task.state === "running";
+const canCleanupTask = (task: TaskStatus) => !canCancelTask(task);
 
 const shortTaskId = (id: string) => id.slice(0, 8);
 
-export const useTaskPanel = ({listTasks, cancelTask, showError, onTaskSettled}: TaskPanelOptions) => {
+export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showError, onTaskSettled}: TaskPanelOptions) => {
   const visible = ref(false);
   const loading = ref(false);
+  const cleanupLoading = ref(false);
   const tasks = ref<TaskStatus[]>([]);
   const message = ref("");
   const lastUpdatedAt = ref("");
@@ -38,6 +41,7 @@ export const useTaskPanel = ({listTasks, cancelTask, showError, onTaskSettled}: 
   let pollTimer: number | undefined;
 
   const activeTaskCount = computed(() => tasks.value.filter(task => task.state === "running" || task.state === "queued").length);
+  const cleanupTaskCount = computed(() => tasks.value.filter(canCleanupTask).length);
   const hasActiveTasks = computed(() => activeTaskCount.value > 0);
   const buttonText = computed(() => hasActiveTasks.value ? `任务 ${activeTaskCount.value}` : "任务");
 
@@ -143,6 +147,21 @@ export const useTaskPanel = ({listTasks, cancelTask, showError, onTaskSettled}: 
     }
   }
 
+  const cleanupFinishedTasks = async () => {
+    if (cleanupLoading.value || loading.value) return;
+    cleanupLoading.value = true;
+    try {
+      resetCancelConfirm();
+      const result = await cleanupTasks();
+      message.value = result.removed > 0 ? `已清理 ${result.removed} 条已结束任务` : "没有可清理的已结束任务";
+      await load(true);
+    } catch (error) {
+      showError(error, "清理已结束任务失败", "任务清理失败");
+    } finally {
+      cleanupLoading.value = false;
+    }
+  }
+
   const markStarted = async (id: string, label = "后台任务") => {
     message.value = `${label}已创建：${shortTaskId(id)}`;
     pendingTaskIds.add(id);
@@ -153,6 +172,7 @@ export const useTaskPanel = ({listTasks, cancelTask, showError, onTaskSettled}: 
   return {
     visible,
     loading,
+    cleanupLoading,
     tasks,
     message,
     lastUpdatedAt,
@@ -166,6 +186,8 @@ export const useTaskPanel = ({listTasks, cancelTask, showError, onTaskSettled}: 
     requestCancel,
     closeCancelConfirm,
     submitCancelConfirm,
+    cleanupFinishedTasks,
+    cleanupTaskCount,
     markStarted
   };
 }

@@ -167,6 +167,10 @@ export interface TaskResponse {
     id: string;
 }
 
+export interface TaskCleanupResponse {
+    removed: number;
+}
+
 export interface TaskError {
     path: string;
     message: string;
