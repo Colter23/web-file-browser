@@ -680,7 +680,6 @@ const signOut = async () => {
               @dragover="handleUploadDragOver"
               @dragleave="handleUploadDragLeave"
               @drop="handleUploadDrop">
-            <editor-panel v-show="fileStore.showEditor"></editor-panel>
             <explorer
                 ref="explorerRef"
                 v-show="!fileStore.showEditor"
@@ -777,6 +776,10 @@ const signOut = async () => {
             @download="downloadSelected"
             @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)">
         </image-viewer>
+
+        <div v-show="fileStore.showEditor" class="editor-overlay-panel">
+          <editor-panel></editor-panel>
+        </div>
       </section>
       </div>
     </main>
@@ -904,6 +907,10 @@ const signOut = async () => {
 
 .browser-main.dropActive {
   background: color-mix(in srgb, var(--app-accent-soft, #eff6ff) 42%, transparent);
+}
+
+.editor-overlay-panel {
+  @apply absolute inset-0 z-30 min-h-0 overflow-hidden;
 }
 
 .preview-pane {

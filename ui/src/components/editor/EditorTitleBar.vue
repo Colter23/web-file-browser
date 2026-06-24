@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import Icon from "../Icon.vue";
-import type {EditorMenuName} from "./types.ts";
+import type {EditorMenuAnchor, EditorMenuName} from "./types.ts";
 
 defineProps<{
   activeMenu: EditorMenuName;
@@ -15,11 +15,23 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "toggle-menu", menu: EditorMenuName): void;
+  (e: "toggle-menu", menu: EditorMenuName, anchor: EditorMenuAnchor): void;
   (e: "reload"): void;
   (e: "save"): void;
   (e: "close"): void;
 }>();
+
+const emitMenuToggle = (menu: EditorMenuName, event: MouseEvent, align: EditorMenuAnchor["align"] = "end") => {
+  const target = event.currentTarget as HTMLElement | null;
+  if (!target) return;
+  const rect = target.getBoundingClientRect();
+  emit("toggle-menu", menu, {
+    left: rect.left,
+    right: rect.right,
+    bottom: rect.bottom,
+    align
+  });
+}
 </script>
 
 <template>
@@ -38,15 +50,15 @@ const emit = defineEmits<{
     </div>
 
     <div class="editor-actions">
-      <button class="menu-button" :class="{active: activeMenu === 'language'}" @click.stop="emit('toggle-menu', 'language')">
+      <button class="menu-button" :class="{active: activeMenu === 'language'}" @click.stop="emitMenuToggle('language', $event, 'start')">
         <icon icon="file.text" />
         <span>语言：{{ selectedModeName }}</span>
       </button>
-      <button class="menu-button" :class="{active: activeMenu === 'theme'}" @click.stop="emit('toggle-menu', 'theme')">
+      <button class="menu-button" :class="{active: activeMenu === 'theme'}" @click.stop="emitMenuToggle('theme', $event, 'start')">
         <icon icon="action.settings" />
         <span>主题：{{ selectedThemeName }}</span>
       </button>
-      <button class="icon-button" :class="{active: activeMenu === 'settings'}" title="编辑设置" @click.stop="emit('toggle-menu', 'settings')">
+      <button class="icon-button" :class="{active: activeMenu === 'settings'}" title="编辑设置" @click.stop="emitMenuToggle('settings', $event)">
         <icon icon="action.settings" />
       </button>
       <button class="icon-button" :disabled="loading" title="重新载入" @click.stop="emit('reload')">

@@ -2,7 +2,7 @@ import {computed} from "vue";
 import type {Ref} from "vue";
 import type {FileInfo} from "../class.ts";
 import type {EditorCursorStatus, EditorModeOption, EditorThemeGroups, PendingEditorAction} from "../components/editor/types.ts";
-import {formatEntryDate, formatEntrySize} from "../utils/file-entry.ts";
+import {formatEntrySize} from "../utils/file-entry.ts";
 
 type EditorStatusTextOptions = {
   fileInfo: Ref<FileInfo | null>;
@@ -12,11 +12,7 @@ type EditorStatusTextOptions = {
   themes: EditorThemeGroups;
   wrap: Ref<boolean>;
   cursorStatus: Ref<EditorCursorStatus>;
-  saving: Ref<boolean>;
-  loading: Ref<boolean>;
   saveConflict: Ref<boolean>;
-  isChange: Ref<boolean>;
-  statusText: Ref<string>;
   errorText: Ref<string>;
   pendingAction: Ref<PendingEditorAction>;
   pendingBusy: Ref<boolean>;
@@ -30,11 +26,7 @@ export const useEditorStatusText = ({
   themes,
   wrap,
   cursorStatus,
-  saving,
-  loading,
   saveConflict,
-  isChange,
-  statusText,
   errorText,
   pendingAction,
   pendingBusy
@@ -51,12 +43,6 @@ export const useEditorStatusText = ({
 
   const wrapText = computed(() => wrap.value ? "自动换行" : "不换行");
 
-  const editorMetaText = computed(() => {
-    const parts = [selectedModeName.value, formatEntrySize(fileInfo.value?.size, "0 B"), wrapText.value];
-    return parts.join(" · ");
-  });
-
-  const modifiedText = computed(() => formatEntryDate(fileInfo.value?.modified));
   const fileSizeText = computed(() => formatEntrySize(fileInfo.value?.size, "0 B"));
   const cursorStatusText = computed(() => `第 ${cursorStatus.value.line} 行，第 ${cursorStatus.value.column} 列`);
 
@@ -64,14 +50,6 @@ export const useEditorStatusText = ({
     if (!cursorStatus.value.selectedCharacters) return "";
     const rows = cursorStatus.value.selectedRows > 1 ? `${cursorStatus.value.selectedRows} 行，` : "";
     return `已选中 ${rows}${cursorStatus.value.selectedCharacters} 字符`;
-  });
-
-  const dirtyText = computed(() => {
-    if (saving.value) return "保存中";
-    if (loading.value) return "加载中";
-    if (saveConflict.value) return "需重新载入";
-    if (isChange.value) return "未保存";
-    return statusText.value || "已同步";
   });
 
   const editorMessageText = computed(() => errorText.value || (saveConflict.value ? "文件版本已变化，请重新载入后再保存" : ""));
@@ -105,13 +83,10 @@ export const useEditorStatusText = ({
     filePathText,
     selectedModeName,
     selectedThemeName,
-    editorMetaText,
-    modifiedText,
     fileSizeText,
     wrapText,
     cursorStatusText,
     selectionStatusText,
-    dirtyText,
     editorMessageText,
     confirmTitle,
     confirmDescription,

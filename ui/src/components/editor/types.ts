@@ -9,6 +9,13 @@ export type EditorCursorStatus = {
 
 export type EditorMenuName = "language" | "theme" | "settings" | "";
 
+export type EditorMenuAnchor = {
+  left: number;
+  right: number;
+  bottom: number;
+  align?: "start" | "end";
+}
+
 export type PendingEditorAction = "close" | "reload" | "external" | "";
 
 export type EditorInputRefSetter = (element: Element | ComponentPublicInstance | null) => void;

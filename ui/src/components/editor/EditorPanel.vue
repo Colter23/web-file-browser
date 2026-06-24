@@ -7,10 +7,9 @@ import {useEditorFileSession} from "../../composables/useEditorFileSession.ts";
 import {useEditorPreferences} from "../../composables/useEditorPreferences.ts";
 import {useEditorSearch} from "../../composables/useEditorSearch.ts";
 import {useEditorStatusText} from "../../composables/useEditorStatusText.ts";
-import type {CodeEditorExpose, EditorMenuName} from "./types.ts";
+import type {CodeEditorExpose, EditorMenuAnchor, EditorMenuName} from "./types.ts";
 import EditorGotoBar from "./EditorGotoBar.vue";
 import EditorConfirmDialog from "./EditorConfirmDialog.vue";
-import EditorInfoBar from "./EditorInfoBar.vue";
 import EditorMenuLayer from "./EditorMenuLayer.vue";
 import EditorSearchBar from "./EditorSearchBar.vue";
 import EditorStatusBar from "./EditorStatusBar.vue";
@@ -19,6 +18,7 @@ import EditorTitleBar from "./EditorTitleBar.vue";
 const fileStore = useFileStore();
 const editorRef = ref<CodeEditorExpose | null>(null);
 const activeMenu = ref<EditorMenuName>("");
+const menuAnchor = ref<EditorMenuAnchor | null>(null);
 const {
   currentTheme,
   fontSize,
@@ -37,7 +37,6 @@ const {
   isChange,
   loading,
   saving,
-  statusText,
   errorText,
   saveConflict,
   pendingAction,
@@ -66,6 +65,7 @@ const themeClass = computed(() => `ace-${currentTheme.value.replace(/_/g, "-")}`
 
 const closeMenus = () => {
   activeMenu.value = "";
+  menuAnchor.value = null;
 }
 
 const {
@@ -117,13 +117,10 @@ const {
   filePathText,
   selectedModeName,
   selectedThemeName,
-  editorMetaText,
-  modifiedText,
   fileSizeText,
   wrapText,
   cursorStatusText,
   selectionStatusText,
-  dirtyText,
   editorMessageText,
   confirmTitle,
   confirmDescription,
@@ -137,18 +134,19 @@ const {
   themes: editorConfig.theme,
   wrap,
   cursorStatus,
-  saving,
-  loading,
   saveConflict,
-  isChange,
-  statusText,
   errorText,
   pendingAction,
   pendingBusy
 });
 
-const toggleMenu = (menu: EditorMenuName) => {
-  activeMenu.value = activeMenu.value === menu ? "" : menu;
+const toggleMenu = (menu: EditorMenuName, anchor: EditorMenuAnchor) => {
+  if (activeMenu.value === menu) {
+    closeMenus();
+    return;
+  }
+  activeMenu.value = menu;
+  menuAnchor.value = anchor;
 }
 
 const changeMode = (mode: string) => {
@@ -249,19 +247,12 @@ onBeforeUnmount(() => {
         @save="save"
         @close="close" />
 
-    <editor-info-bar
-        :dirty-text="dirtyText"
-        :meta-text="editorMetaText"
-        :modified-text="modifiedText"
-        :dirty="isChange"
-        :saving="saving"
-        :conflict="saveConflict" />
-
     <editor-menu-layer
         v-model:font-size="fontSize"
         v-model:tab-size="tabSize"
         v-model:wrap="wrap"
         :active-menu="activeMenu"
+        :anchor="menuAnchor"
         :modes="editorConfig.mode"
         :themes="editorConfig.theme"
         :current-mode="currentMode"

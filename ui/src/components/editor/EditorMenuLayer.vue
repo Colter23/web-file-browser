@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import {computed} from "vue";
 import Icon from "../Icon.vue";
-import type {EditorMenuName, EditorModeOption, EditorThemeGroups} from "./types.ts";
+import type {EditorMenuAnchor, EditorMenuName, EditorModeOption, EditorThemeGroups} from "./types.ts";
 
-defineProps<{
+const props = defineProps<{
   activeMenu: EditorMenuName;
+  anchor: EditorMenuAnchor | null;
   modes: EditorModeOption[];
   themes: EditorThemeGroups;
   currentMode: string;
@@ -34,10 +36,24 @@ const updateWrap = (event: Event) => {
   const input = event.target as HTMLInputElement | null;
   emit("update:wrap", Boolean(input?.checked));
 }
+
+const menuLayerStyle = computed(() => {
+  const anchor = props.anchor;
+  if (!anchor || !props.activeMenu) return {};
+  const width = props.activeMenu === "language" ? 208 : 224;
+  const padding = 8;
+  const rawLeft = anchor.align === "start" ? anchor.left : anchor.right - width;
+  const left = Math.min(Math.max(padding, rawLeft), Math.max(padding, window.innerWidth - width - padding));
+  const top = Math.min(Math.max(padding, anchor.bottom + 6), Math.max(padding, window.innerHeight - padding));
+  return {
+    left: `${left}px`,
+    top: `${top}px`
+  };
+});
 </script>
 
 <template>
-  <div class="menu-layer" @click.stop>
+  <div class="menu-layer" :style="menuLayerStyle" @click.stop>
     <div v-if="activeMenu === 'language'" class="editor-menu language-menu">
       <button
           v-for="mode in modes"
@@ -89,11 +105,11 @@ const updateWrap = (event: Event) => {
 @reference "tailwindcss";
 
 .menu-layer {
-  @apply absolute right-3 top-[5.25rem] z-30;
+  @apply fixed z-50;
 }
 
 .editor-menu {
-  @apply mt-2 flex max-h-80 min-w-44 flex-col gap-1 overflow-auto rounded-md border p-1 text-sm shadow-2xl;
+  @apply flex max-h-80 min-w-44 flex-col gap-1 overflow-auto rounded-md border p-1 text-sm shadow-2xl;
   border-color: var(--app-border-soft);
   background: var(--app-panel-solid);
   box-shadow: var(--app-menu-shadow);
