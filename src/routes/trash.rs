@@ -13,7 +13,7 @@ use crate::{
     models::ConflictPolicy,
     services::{
         path_resolver::MappingSnapshot,
-        trash::{TrashRecord, TrashRestoreResult},
+        trash::{TrashBatchItemError, TrashRecord, TrashRestoreResult},
     },
 };
 
@@ -39,16 +39,9 @@ struct TrashBatchRequest {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct TrashBatchError {
-    id: String,
-    message: String,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 struct TrashBatchRestoreResponse {
     restored: Vec<TrashRestoreResult>,
-    errors: Vec<TrashBatchError>,
+    errors: Vec<TrashBatchItemError>,
     success: usize,
     failed: usize,
 }
@@ -57,7 +50,7 @@ struct TrashBatchRestoreResponse {
 #[serde(rename_all = "camelCase")]
 struct TrashBatchPurgeResponse {
     purged: Vec<String>,
-    errors: Vec<TrashBatchError>,
+    errors: Vec<TrashBatchItemError>,
     success: usize,
     failed: usize,
 }
@@ -144,38 +137,27 @@ async fn restore_trash_batch(
         .conflict_policy
         .unwrap_or(state.runtime_settings.conflict_policy);
     let snapshot = state.mapping_store.snapshot().await;
-    let mut restored = Vec::new();
-    let mut errors = Vec::new();
+    let outcome = state
+        .trash
+        .restore_batch(snapshot.clone(), ids, policy)
+        .await?;
 
-    for id in ids {
-        match state
-            .trash
-            .restore(snapshot.clone(), id.clone(), policy)
-            .await
-        {
-            Ok(result) => {
-                index_upsert_ignore(&state, snapshot.clone(), &result.restored_virtual_path).await;
-                audit_ignore(
-                    &state,
-                    "trash.restore",
-                    Some(&result.restored_virtual_path),
-                    None,
-                )
-                .await;
-                restored.push(result);
-            }
-            Err(error) => errors.push(TrashBatchError {
-                id,
-                message: error.to_string(),
-            }),
-        }
+    for result in &outcome.restored {
+        index_upsert_ignore(&state, snapshot.clone(), &result.restored_virtual_path).await;
+        audit_ignore(
+            &state,
+            "trash.restore",
+            Some(&result.restored_virtual_path),
+            None,
+        )
+        .await;
     }
 
-    let success = restored.len();
-    let failed = errors.len();
+    let success = outcome.restored.len();
+    let failed = outcome.errors.len();
     Ok(Json(TrashBatchRestoreResponse {
-        restored,
-        errors,
+        restored: outcome.restored,
+        errors: outcome.errors,
         success,
         failed,
     }))
@@ -214,27 +196,17 @@ async fn purge_trash_batch(
     Json(request): Json<TrashBatchRequest>,
 ) -> Result<Json<TrashBatchPurgeResponse>, AppError> {
     let ids = validate_batch_ids(request.ids)?;
-    let mut purged = Vec::new();
-    let mut errors = Vec::new();
+    let outcome = state.trash.purge_batch(ids).await?;
 
-    for id in ids {
-        match state.trash.purge(id.clone()).await {
-            Ok(()) => {
-                audit_ignore(&state, "trash.purge", None, Some(&id)).await;
-                purged.push(id);
-            }
-            Err(error) => errors.push(TrashBatchError {
-                id,
-                message: error.to_string(),
-            }),
-        }
+    for id in &outcome.purged {
+        audit_ignore(&state, "trash.purge", None, Some(id)).await;
     }
 
-    let success = purged.len();
-    let failed = errors.len();
+    let success = outcome.purged.len();
+    let failed = outcome.errors.len();
     Ok(Json(TrashBatchPurgeResponse {
-        purged,
-        errors,
+        purged: outcome.purged,
+        errors: outcome.errors,
         success,
         failed,
     }))

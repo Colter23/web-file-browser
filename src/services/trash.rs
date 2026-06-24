@@ -47,6 +47,27 @@ pub struct TrashRestoreResult {
     pub restored_real_path: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashBatchItemError {
+    pub id: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashBatchRestoreOutcome {
+    pub restored: Vec<TrashRestoreResult>,
+    pub errors: Vec<TrashBatchItemError>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashBatchPurgeOutcome {
+    pub purged: Vec<String>,
+    pub errors: Vec<TrashBatchItemError>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TrashEntryKind {
@@ -158,6 +179,58 @@ impl TrashService {
         Ok(restored)
     }
 
+    pub async fn restore_batch(
+        &self,
+        snapshot: Arc<MappingSnapshot>,
+        ids: Vec<String>,
+        policy: ConflictPolicy,
+    ) -> Result<TrashBatchRestoreOutcome, AppError> {
+        let mut available_records = self.records.read().await.clone();
+        let mut restored = Vec::new();
+        let mut errors = Vec::new();
+        let mut restored_ids = HashSet::new();
+
+        for id in ids {
+            let Some(record) = available_records
+                .iter()
+                .find(|record| record.id == id)
+                .cloned()
+            else {
+                errors.push(TrashBatchItemError {
+                    id: id.clone(),
+                    message: format!("查无此回收站记录: {id}"),
+                });
+                continue;
+            };
+
+            let result = tokio::task::spawn_blocking({
+                let snapshot = snapshot.clone();
+                let record = record.clone();
+                move || {
+                    let parent =
+                        resolve_parent_for_child_sync(&snapshot, &record.original_virtual_path)?;
+                    restore_sync(record, parent, policy)
+                }
+            })
+            .await?;
+
+            match result {
+                Ok(result) => {
+                    restored_ids.insert(id.clone());
+                    available_records.retain(|record| record.id != id);
+                    restored.push(result);
+                }
+                Err(error) => errors.push(TrashBatchItemError {
+                    id,
+                    message: error.to_string(),
+                }),
+            }
+        }
+
+        self.remove_records_once(&restored_ids).await?;
+        Ok(TrashBatchRestoreOutcome { restored, errors })
+    }
+
     pub async fn purge(&self, id: String) -> Result<(), AppError> {
         let record = self
             .records
@@ -169,6 +242,43 @@ impl TrashService {
             .ok_or_else(|| AppError::not_found(format!("查无此回收站记录: {id}")))?;
         tokio::task::spawn_blocking(move || purge_record_sync(&record)).await??;
         self.remove_record(&id).await
+    }
+
+    pub async fn purge_batch(&self, ids: Vec<String>) -> Result<TrashBatchPurgeOutcome, AppError> {
+        let mut available_records = self.records.read().await.clone();
+        let mut purged = Vec::new();
+        let mut errors = Vec::new();
+        let mut purged_ids = HashSet::new();
+
+        for id in ids {
+            let Some(record) = available_records
+                .iter()
+                .find(|record| record.id == id)
+                .cloned()
+            else {
+                errors.push(TrashBatchItemError {
+                    id: id.clone(),
+                    message: format!("查无此回收站记录: {id}"),
+                });
+                continue;
+            };
+
+            let result = tokio::task::spawn_blocking(move || purge_record_sync(&record)).await?;
+            match result {
+                Ok(()) => {
+                    purged_ids.insert(id.clone());
+                    available_records.retain(|record| record.id != id);
+                    purged.push(id);
+                }
+                Err(error) => errors.push(TrashBatchItemError {
+                    id,
+                    message: error.to_string(),
+                }),
+            }
+        }
+
+        self.remove_records_once(&purged_ids).await?;
+        Ok(TrashBatchPurgeOutcome { purged, errors })
     }
 
     pub async fn empty(&self) -> Result<usize, AppError> {
@@ -217,6 +327,16 @@ impl TrashService {
     async fn remove_record(&self, id: &str) -> Result<(), AppError> {
         let mut records = self.records.write().await;
         records.retain(|record| record.id != id);
+        self.save_all(&records).await
+    }
+
+    async fn remove_records_once(&self, ids: &HashSet<String>) -> Result<(), AppError> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+
+        let mut records = self.records.write().await;
+        records.retain(|record| !ids.contains(&record.id));
         self.save_all(&records).await
     }
 
@@ -460,7 +580,8 @@ fn move_to_trash_sync(
         .ok_or_else(|| AppError::bad_request("不能删除挂载根路径"))?;
 
     let mount_trash_root = reserved::mount_trash_root(&mount_root);
-    let (entry_dir, payload_path) = prepare_trash_entry_dir(&mount_trash_root, &root, &id, name)?;
+    let (entry_dir, payload_path) =
+        prepare_trash_entry_dir(&mount_trash_root, &mount_root, &root, &id, name)?;
 
     if let Err(rename_error) = fs::rename(&source, &payload_path) {
         copy_then_remove(&source, &payload_path, &kind)
@@ -489,11 +610,12 @@ fn move_to_trash_sync(
 
 fn prepare_trash_entry_dir(
     preferred_root: &Path,
+    preferred_mount_root: &Path,
     fallback_root: &Path,
     id: &str,
     name: &std::ffi::OsStr,
 ) -> Result<(PathBuf, PathBuf), AppError> {
-    match prepare_trash_entry_dir_in_root(preferred_root, id, name) {
+    match prepare_mount_trash_entry_dir_in_root(preferred_root, preferred_mount_root, id, name) {
         Ok(paths) => Ok(paths),
         Err(error) => {
             tracing::warn!(
@@ -516,6 +638,37 @@ fn prepare_trash_entry_dir_in_root(
     fs::create_dir(&entry_dir)?;
     let payload_path = entry_dir.join(name);
     Ok((entry_dir, payload_path))
+}
+
+fn prepare_mount_trash_entry_dir_in_root(
+    root: &Path,
+    mount_root: &Path,
+    id: &str,
+    name: &std::ffi::OsStr,
+) -> Result<(PathBuf, PathBuf), AppError> {
+    fs::create_dir_all(root)?;
+    ensure_safe_mount_trash_root(root, mount_root)?;
+    let entry_dir = root.join(id);
+    fs::create_dir(&entry_dir)?;
+    let payload_path = entry_dir.join(name);
+    Ok((entry_dir, payload_path))
+}
+
+fn ensure_safe_mount_trash_root(root: &Path, mount_root: &Path) -> Result<(), AppError> {
+    let metadata = fs::symlink_metadata(root)?;
+    if metadata.file_type().is_symlink() {
+        return Err(AppError::bad_request("挂载内回收站不能是符号链接"));
+    }
+    if !metadata.is_dir() {
+        return Err(AppError::bad_request("挂载内回收站路径不是目录"));
+    }
+
+    let root = root.canonicalize()?;
+    let mount_root = mount_root.canonicalize()?;
+    if !root.starts_with(&mount_root) {
+        return Err(AppError::bad_request("挂载内回收站路径越界"));
+    }
+    Ok(())
 }
 
 fn copy_then_remove(
@@ -628,6 +781,39 @@ mod tests {
         let record_dir = Path::new(&record.trash_path).parent().unwrap();
         assert!(record_dir.join("metadata.json").exists());
         assert_eq!(record.size_bytes, Some(5));
+
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[test]
+    fn mount_trash_symlink_falls_back_to_central_trash_when_available() {
+        let temp = temp_dir("web-file-browser-trash-symlink-root-test");
+        let source_dir = temp.join("source");
+        let linked_dir = temp.join("linked-trash");
+        let fallback_dir = temp.join("central-trash");
+        fs::create_dir_all(&source_dir).unwrap();
+        fs::create_dir_all(&linked_dir).unwrap();
+        if !try_create_dir_symlink(&linked_dir, &source_dir.join(".web-file-browser-trash")) {
+            fs::remove_dir_all(temp).unwrap();
+            return;
+        }
+        let source = source_dir.join("hello.txt");
+        fs::write(&source, "hello").unwrap();
+
+        let record = move_to_trash_sync(
+            fallback_dir.clone(),
+            source_dir.clone(),
+            source.clone(),
+            "/repo/hello.txt".to_string(),
+            source.to_string_lossy().to_string(),
+            "admin".to_string(),
+        )
+        .unwrap();
+
+        assert!(!source.exists());
+        assert!(Path::new(&record.trash_path).starts_with(&fallback_dir));
+        assert!(Path::new(&record.trash_path).exists());
+        assert!(fs::read_dir(linked_dir).unwrap().next().is_none());
 
         fs::remove_dir_all(temp).unwrap();
     }
@@ -954,6 +1140,22 @@ mod tests {
             .unwrap()
             .as_nanos();
         std::env::temp_dir().join(format!("{prefix}-{nonce}"))
+    }
+
+    fn try_create_dir_symlink(source: &Path, link: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(source, link).is_ok()
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_dir(source, link).is_ok()
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = (source, link);
+            false
+        }
     }
 
     fn test_record(id: &str, deleted_at: &str, size_bytes: Option<u64>) -> TrashRecord {
