@@ -6,12 +6,14 @@ type MainViewPanelClosersOptions = {
   editorVisible: () => boolean;
   focusExplorer: () => Promise<void>;
   taskPanelVisible: Ref<boolean>;
+  trashPanelVisible: Ref<boolean>;
   operationPanel: Ref<OperationPanelState>;
   deleteConfirm: Ref<DeleteConfirmState>;
   propertiesPanel: Ref<PropertiesPanelState>;
   previewPanelVisible: Ref<boolean>;
   imageViewerVisible: Ref<boolean>;
   closeTaskPanel: () => void;
+  closeTrashPanel: () => void;
   closeOperationPanel: () => void;
   closeDeleteConfirm: () => void;
   closePropertiesPanel: () => void;
@@ -23,12 +25,14 @@ export const useMainViewPanelClosers = ({
   editorVisible,
   focusExplorer,
   taskPanelVisible,
+  trashPanelVisible,
   operationPanel,
   deleteConfirm,
   propertiesPanel,
   previewPanelVisible,
   imageViewerVisible,
   closeTaskPanel,
+  closeTrashPanel,
   closeOperationPanel,
   closeDeleteConfirm,
   closePropertiesPanel,
@@ -42,6 +46,7 @@ export const useMainViewPanelClosers = ({
 
   return {
     closeTaskPanelAndFocus: () => closeAndFocusExplorer(() => taskPanelVisible.value, closeTaskPanel),
+    closeTrashPanelAndFocus: () => closeAndFocusExplorer(() => trashPanelVisible.value, closeTrashPanel),
     closeOperationPanelAndFocus: () => closeAndFocusExplorer(() => operationPanel.value.visible, closeOperationPanel),
     closeDeleteConfirmAndFocus: () => closeAndFocusExplorer(() => deleteConfirm.value.visible, closeDeleteConfirm),
     closePropertiesPanelAndFocus: () => closeAndFocusExplorer(() => propertiesPanel.value.visible, closePropertiesPanel),

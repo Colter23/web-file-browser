@@ -33,7 +33,7 @@ type ExplorerShortcutsOptions = {
 
 const formControlSelector = "input, textarea, select, [contenteditable='true']";
 const operationOverlaySelector = ".operation-shell, .operation-panel, .delete-confirm-panel, .properties-panel";
-const shellOverlaySelector = `.ace_editor, ${operationOverlaySelector}, .context-menu, .tab-context-menu, .view-menu-panel, .task-panel`;
+const shellOverlaySelector = `.ace_editor, ${operationOverlaySelector}, .context-menu, .tab-context-menu, .view-menu-panel, .task-panel, .trash-panel`;
 
 export const shouldIgnoreNavigationShortcut = (target: EventTarget | null) => {
   if (!(target instanceof HTMLElement)) return false;

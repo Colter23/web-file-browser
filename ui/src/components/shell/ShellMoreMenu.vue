@@ -15,11 +15,13 @@ import Icon from "../Icon.vue";
 defineProps<{
   taskButtonText: string;
   taskActive: boolean;
+  trashActive: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "open-settings"): void;
   (e: "toggle-tasks"): void;
+  (e: "toggle-trash"): void;
   (e: "sign-out"): void;
 }>();
 
@@ -72,10 +74,11 @@ const toggle = async () => {
   if (open.value) await focusFirstItem();
 }
 
-const closeAndEmit = (event: "open-settings" | "toggle-tasks" | "sign-out") => {
+const closeAndEmit = (event: "open-settings" | "toggle-tasks" | "toggle-trash" | "sign-out") => {
   close();
   if (event === "open-settings") emit("open-settings");
   if (event === "toggle-tasks") emit("toggle-tasks");
+  if (event === "toggle-trash") emit("toggle-trash");
   if (event === "sign-out") emit("sign-out");
 }
 
@@ -149,6 +152,14 @@ onBeforeUnmount(() => {
         <span class="item-copy">
           <strong>{{ taskButtonText }}</strong>
           <small>后台任务与传输进度</small>
+        </span>
+      </button>
+
+      <button class="command-item" :class="{active: trashActive}" role="menuitem" tabindex="-1" @click="closeAndEmit('toggle-trash')">
+        <icon icon="action.trash" />
+        <span class="item-copy">
+          <strong>回收站</strong>
+          <small>恢复或永久删除项目</small>
         </span>
       </button>
 

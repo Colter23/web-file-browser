@@ -5,14 +5,20 @@ import {useFileStore} from "../store";
 import {
   cancelTask,
   cleanupTasks,
+  cleanupTrash,
+  deleteTrashRecord,
+  emptyTrash,
   getFolderData,
   listTasks,
+  listTrashRecords,
   logout,
+  restoreTrashRecord,
 } from "../network/api";
 import Explorer from "../components/explorer/Explorer.vue";
 import ImageViewer from "../components/viewer/ImageViewer.vue";
 import PreviewPane from "../components/viewer/PreviewPane.vue";
 import TaskPanel from "../components/tasks/TaskPanel.vue";
+import TrashPanel from "../components/trash/TrashPanel.vue";
 import TabStrip from "../components/tabs/TabStrip.vue";
 import OperationPanel from "../components/operations/OperationPanel.vue";
 import DeleteConfirmPanel from "../components/operations/DeleteConfirmPanel.vue";
@@ -42,6 +48,7 @@ import {useMainViewLifecycle} from "../composables/useMainViewLifecycle.ts";
 import {useMainViewPanelClosers} from "../composables/useMainViewPanelClosers.ts";
 import {useMainViewSelectionCommands} from "../composables/useMainViewSelectionCommands.ts";
 import {useTaskPanel} from "../composables/useTaskPanel.ts";
+import {useTrashPanel} from "../composables/useTrashPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
 import {entryFileInfo} from "../utils/file-entry.ts";
 
@@ -138,6 +145,36 @@ const {
   showError: showErrorNotice,
   onTaskSettled: async () => {
     await refreshCurrent(true);
+    await refreshCurrentTreePath();
+  }
+});
+const {
+  visible: trashPanelVisible,
+  loading: trashLoading,
+  actionLoading: trashActionLoading,
+  records: trashRecords,
+  message: trashMessage,
+  selectedId: trashSelectedId,
+  selectedRecord: trashSelectedRecord,
+  load: loadTrash,
+  toggle: toggleTrashPanelBase,
+  close: closeTrashPanel,
+  selectRecord: selectTrashRecord,
+  restoreSelected: restoreTrashSelected,
+  deleteSelected: deleteTrashSelected,
+  empty: emptyTrashPanel,
+  cleanup: cleanupTrashPanel
+} = useTrashPanel({
+  listTrashRecords,
+  restoreTrashRecord,
+  deleteTrashRecord,
+  emptyTrash,
+  cleanupTrash,
+  showError: showErrorNotice,
+  onRestored: async () => {
+    const path = currentFolder();
+    if (path === "/") await loadRoot({forceRefresh: true});
+    await explorerRef.value?.refresh(path, {forceRefresh: true});
     await refreshCurrentTreePath();
   }
 });
@@ -415,7 +452,8 @@ const shellActions = useMainViewShellActions({
   resetOperationPanel,
   resetDeleteConfirm,
   closePropertiesPanel,
-  resetTaskCancelConfirm
+  resetTaskCancelConfirm,
+  closeTrashPanel
 });
 
 closePanelsHandler = shellActions.closePanels;
@@ -544,6 +582,7 @@ const editPreviewEntry = (entry: ExplorerEntry) => {
 
 const {
   closeTaskPanelAndFocus,
+  closeTrashPanelAndFocus,
   closeOperationPanelAndFocus,
   closeDeleteConfirmAndFocus,
   closePropertiesPanelAndFocus,
@@ -553,18 +592,30 @@ const {
   editorVisible: () => fileStore.showEditor,
   focusExplorer,
   taskPanelVisible,
+  trashPanelVisible,
   operationPanel,
   deleteConfirm,
   propertiesPanel,
   previewPanelVisible,
   imageViewerVisible,
   closeTaskPanel,
+  closeTrashPanel,
   closeOperationPanel,
   closeDeleteConfirm,
   closePropertiesPanel,
   closePreview,
   closeImageViewer
 });
+
+const toggleTasksFromMenu = async () => {
+  if (trashPanelVisible.value) closeTrashPanel();
+  await toggleTaskPanel();
+}
+
+const toggleTrashFromMenu = async () => {
+  if (taskPanelVisible.value) closeTaskPanel();
+  await toggleTrashPanelBase();
+}
 
 const openSettings = async () => {
   if (!await fileStore.requestEditorLeave()) return;
@@ -617,8 +668,10 @@ const signOut = async () => {
         <shell-more-menu
             :task-button-text="taskButtonText"
             :task-active="taskPanelVisible"
+            :trash-active="trashPanelVisible"
             @open-settings="openSettings"
-            @toggle-tasks="toggleTaskPanel"
+            @toggle-tasks="toggleTasksFromMenu"
+            @toggle-trash="toggleTrashFromMenu"
             @sign-out="signOut" />
       </div>
     </header>
@@ -768,6 +821,22 @@ const signOut = async () => {
                 @close-cancel="closeTaskCancelConfirm"
                 @confirm-cancel="submitTaskCancelConfirm">
             </task-panel>
+            <trash-panel
+                v-if="trashPanelVisible"
+                :records="trashRecords"
+                :selected-id="trashSelectedId"
+                :selected-record="trashSelectedRecord"
+                :loading="trashLoading"
+                :action-loading="trashActionLoading"
+                :message="trashMessage"
+                @select="selectTrashRecord"
+                @refresh="loadTrash()"
+                @restore="restoreTrashSelected"
+                @delete="deleteTrashSelected"
+                @empty="emptyTrashPanel"
+                @cleanup="cleanupTrashPanel"
+                @close="closeTrashPanelAndFocus">
+            </trash-panel>
             <operation-panel
                 ref="operationPanelRef"
                 :state="operationPanel"

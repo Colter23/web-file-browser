@@ -19,6 +19,7 @@ type MainViewShellActionsOptions = {
   resetDeleteConfirm: () => void;
   closePropertiesPanel: () => void;
   resetTaskCancelConfirm: () => void;
+  closeTrashPanel: () => void;
 }
 
 export const useMainViewShellActions = ({
@@ -38,7 +39,8 @@ export const useMainViewShellActions = ({
   resetOperationPanel,
   resetDeleteConfirm,
   closePropertiesPanel,
-  resetTaskCancelConfirm
+  resetTaskCancelConfirm,
+  closeTrashPanel
 }: MainViewShellActionsOptions) => {
   const closePanels = () => {
     closePreviewPanel();
@@ -46,6 +48,7 @@ export const useMainViewShellActions = ({
     resetDeleteConfirm();
     closePropertiesPanel();
     resetTaskCancelConfirm();
+    closeTrashPanel();
     resetImageViewer();
   }
 
@@ -55,12 +58,14 @@ export const useMainViewShellActions = ({
     resetDeleteConfirm();
     closePropertiesPanel();
     resetTaskCancelConfirm();
+    closeTrashPanel();
     closeImageViewer();
   }
 
   const closeOperationShellPanels = () => {
     closePreviewPanel();
     resetTaskCancelConfirm();
+    closeTrashPanel();
   }
 
   const closePreview = () => {
@@ -72,6 +77,7 @@ export const useMainViewShellActions = ({
     resetOperationPanel();
     resetDeleteConfirm();
     resetTaskCancelConfirm();
+    closeTrashPanel();
     resetImageViewer();
   }
 

@@ -171,6 +171,29 @@ export interface TaskCleanupResponse {
     removed: number;
 }
 
+export type TrashRecordKind = "file" | "folder" | string;
+
+export interface TrashRecord {
+    id: string;
+    originalVirtualPath: string;
+    originalRealPath: string;
+    trashPath: string;
+    sizeBytes?: number;
+    deletedAt: string;
+    actor?: string;
+    kind: TrashRecordKind;
+}
+
+export interface TrashRestoreResponse {
+    record: TrashRecord;
+    restoredVirtualPath: string;
+    restoredRealPath: string;
+}
+
+export interface TrashCleanupResponse {
+    removed: number;
+}
+
 export interface TaskError {
     path: string;
     message: string;
