@@ -20,6 +20,7 @@ type ExplorerEntryDragOptions = {
   isSelected: (path: string) => boolean;
   isRenaming: (entry: ExplorerEntry) => boolean;
   setSelection: (paths: string[], focusPath?: string, keepAnchor?: boolean) => void;
+  focusEntryOnly: (entry: ExplorerEntry) => void;
   focusViewport: () => void;
   closeContextMenu: () => void;
   cancelMarqueeSelection: () => void;
@@ -36,6 +37,7 @@ export const useExplorerEntryDrag = ({
   isSelected,
   isRenaming,
   setSelection,
+  focusEntryOnly,
   focusViewport,
   closeContextMenu,
   cancelMarqueeSelection,
@@ -88,6 +90,7 @@ export const useExplorerEntryDrag = ({
     }
     cancelMarqueeSelection();
     focusViewport();
+    if (isSelected(entry.path)) focusEntryOnly(entry);
     const entriesToDrag = selectedEntriesForDrag(entry);
     if (!entriesToDrag.length) {
       cancelEntryDragStart(event);

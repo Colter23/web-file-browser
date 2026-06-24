@@ -40,6 +40,12 @@ export const useExplorerSelection = ({
 
   const entryByPath = (path: string) => entries.value.find(entry => entry.path === path);
 
+  const existingAnchorOrFocus = (fallbackPath: string) => {
+    if (anchorPath.value && entryByPath(anchorPath.value)) return anchorPath.value;
+    if (focusedPath.value && entryByPath(focusedPath.value)) return focusedPath.value;
+    return fallbackPath;
+  }
+
   const firstSelectedEntry = () => {
     if (!selectedPaths.value.length) return null;
     return entryByPath(selectedPaths.value[0]) ?? null;
@@ -58,7 +64,8 @@ export const useExplorerSelection = ({
   }
 
   const setSelection = (paths: string[], focusPath = paths[paths.length - 1] ?? "", keepAnchor = false) => {
-    applySelectionState(paths, focusPath, keepAnchor ? anchorPath.value : focusPath || anchorPath.value);
+    const fallbackAnchor = focusPath || (paths[0] ?? "");
+    applySelectionState(paths, focusPath, keepAnchor ? existingAnchorOrFocus(fallbackAnchor) : focusPath || anchorPath.value);
   }
 
   const clearSelection = () => {
@@ -159,9 +166,15 @@ export const useExplorerSelection = ({
   }
 
   const ensureEntrySelected = (entry: ExplorerEntry) => {
-    if (!isSelected(entry.path)) {
-      setSelection([entry.path], entry.path);
+    if (isSelected(entry.path)) {
+      applySelectionState(selectedPaths.value, entry.path, existingAnchorOrFocus(entry.path));
+      return;
     }
+    setSelection([entry.path], entry.path);
+  }
+
+  const focusEntryOnly = (entry: ExplorerEntry) => {
+    applySelectionState(selectedPaths.value, entry.path, existingAnchorOrFocus(entry.path));
   }
 
   const selectAllEntries = () => {
@@ -203,7 +216,7 @@ export const useExplorerSelection = ({
     const entry = entries.value[nextIndex];
     if (!entry) return;
     if (mode === "moveFocusOnly") {
-      setSelection(selectedPaths.value, entry.path);
+      focusEntryOnly(entry);
     } else if (mode === "extendSelection") {
       selectRange(entry.path, false);
     } else {
@@ -271,6 +284,7 @@ export const useExplorerSelection = ({
     selectEntry,
     toggleFocusedSelection,
     ensureEntrySelected,
+    focusEntryOnly,
     selectAllEntries,
     clearCurrentSelection,
     invertCurrentSelection,
