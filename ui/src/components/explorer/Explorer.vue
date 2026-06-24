@@ -132,6 +132,7 @@ const {
   sourceMode,
   sourceTitle,
   resultTotal,
+  searchKeyword,
   loadFolder: loadFolderData,
   loadSearch: loadSearchData,
   loadRecent: loadRecentData,
@@ -706,6 +707,7 @@ defineExpose({
             :modified-text="formatDate(entry.modified)"
             :size-text="formatSize(entry.size)"
             :tile-meta-text="`${formatDate(entry.modified)} · ${formatSize(entry.size)}`"
+            :search-highlight-text="searchKeyword"
             @select="selectEntry(entry, $event)"
             @aux-click="handleAuxClick($event, entry)"
             @open="openEntry(entry)"

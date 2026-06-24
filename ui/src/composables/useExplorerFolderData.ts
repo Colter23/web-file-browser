@@ -123,6 +123,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
   const sourceTitle = ref("当前文件夹");
   const resultTotal = ref<number | null>(null);
   const searchContext = ref<{query: string; mount?: string} | null>(null);
+  const searchKeyword = computed(() => sourceMode.value === "search" ? searchContext.value?.query ?? "" : "");
 
   const allEntries = computed<ExplorerEntry[]>(() => [
     ...(folderData.value.folder ?? []).map(folder => ({
@@ -353,6 +354,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
     sourceMode,
     sourceTitle,
     resultTotal,
+    searchKeyword,
     allEntries,
     filterKeyword,
     entries,

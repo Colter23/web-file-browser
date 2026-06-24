@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type {ComponentPublicInstance} from "vue";
+import {computed} from "vue";
 import type {ExplorerIconSize, ExplorerViewMode} from "../../class.ts";
 import type {FileEntryIconKind} from "../../utils/file-entry.ts";
 import type {ExplorerEntry} from "./types.ts";
 import FileTypeIcon from "../FileTypeIcon.vue";
 
-defineProps<{
+const props = withDefaults(defineProps<{
   entry: ExplorerEntry;
   entryId: string;
   viewMode: ExplorerViewMode;
@@ -27,7 +28,10 @@ defineProps<{
   modifiedText: string;
   sizeText: string;
   tileMetaText: string;
-}>();
+  searchHighlightText?: string;
+}>(), {
+  searchHighlightText: ""
+});
 
 const emit = defineEmits<{
   (e: "select", event: MouseEvent): void;
@@ -50,6 +54,29 @@ const updateRenameDraft = (event: Event) => {
   const target = event.target;
   if (target instanceof HTMLInputElement) emit("update:renameDraft", target.value);
 }
+
+const highlightedNameSegments = computed(() => {
+  const name = props.entry.name;
+  const keyword = props.searchHighlightText.trim();
+  if (!keyword) return [{text: name, matched: false}];
+
+  const lowerName = name.toLocaleLowerCase();
+  const lowerKeyword = keyword.toLocaleLowerCase();
+  const segments: Array<{text: string; matched: boolean}> = [];
+  let cursor = 0;
+  let matchIndex = lowerName.indexOf(lowerKeyword);
+
+  while (matchIndex >= 0) {
+    if (matchIndex > cursor) segments.push({text: name.slice(cursor, matchIndex), matched: false});
+    const nextCursor = matchIndex + keyword.length;
+    segments.push({text: name.slice(matchIndex, nextCursor), matched: true});
+    cursor = nextCursor;
+    matchIndex = lowerName.indexOf(lowerKeyword, cursor);
+  }
+
+  if (cursor < name.length) segments.push({text: name.slice(cursor), matched: false});
+  return segments.length ? segments : [{text: name, matched: false}];
+});
 </script>
 
 <template>
@@ -98,7 +125,14 @@ const updateRenameDraft = (event: Event) => {
             @keydown.enter.prevent="emit('commit-rename')"
             @keydown.esc.prevent.stop="emit('cancel-rename')"
             @blur="emit('commit-rename')">
-        <span v-else class="entry-name">{{ entry.name }}</span>
+        <span v-else class="entry-name">
+          <span
+              v-for="(segment, index) in highlightedNameSegments"
+              :key="`${index}-${segment.text}`"
+              :class="{match: segment.matched}">
+            {{ segment.text }}
+          </span>
+        </span>
         <span v-if="viewMode !== 'details'" class="entry-meta">{{ typeText }}</span>
       </div>
     </div>
@@ -247,6 +281,17 @@ const updateRenameDraft = (event: Event) => {
 
 .entry-name {
   @apply block w-full min-w-0 max-w-full truncate;
+}
+
+.entry-name .match {
+  @apply rounded-sm px-0.5;
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 18%, transparent);
+  color: var(--app-accent, #2563eb);
+}
+
+.entry-item.selected .entry-name .match {
+  background: color-mix(in srgb, var(--app-panel-solid) 42%, transparent);
+  color: var(--app-text);
 }
 
 .entry-rename-input {
