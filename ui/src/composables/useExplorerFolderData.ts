@@ -41,6 +41,10 @@ const normalizeFolderData = (data: FolderData): FolderData => ({
   hasMore: data.hasMore
 })
 
+const normalizePagingValue = (value: number | undefined, fallback: number) => {
+  return Number.isFinite(value) ? value! : fallback;
+}
+
 const searchResultFileInfo = (item: SearchResult): FileInfo => ({
   path: item.path,
   name: item.name,
@@ -50,20 +54,32 @@ const searchResultFileInfo = (item: SearchResult): FileInfo => ({
   type: item.type
 })
 
-const normalizeSearchResultFolderData = (items: SearchResult[], path: string): FolderData => ({
-  path,
-  folder: items
-      .filter(item => item.type === "folder")
-      .map(item => ({
-        path: item.path,
-        name: item.name,
-        modified: item.modified ?? "",
-        type: "folder"
-      })),
-  file: items
-      .filter(item => item.type !== "folder")
-      .map(searchResultFileInfo)
-})
+const normalizeSearchResultFolderData = (
+    items: SearchResult[],
+    path: string,
+    paging: {offset?: number; limit?: number; total?: number} = {}
+): FolderData => {
+  const offset = normalizePagingValue(paging.offset, 0);
+  const limit = normalizePagingValue(paging.limit, pageSize);
+  const total = Number.isFinite(paging.total) ? paging.total! : undefined;
+  return {
+    path,
+    folder: items
+        .filter(item => item.type === "folder")
+        .map(item => ({
+          path: item.path,
+          name: item.name,
+          modified: item.modified ?? "",
+          type: "folder"
+        })),
+    file: items
+        .filter(item => item.type !== "folder")
+        .map(searchResultFileInfo),
+    offset,
+    limit,
+    hasMore: total !== undefined ? offset + items.length < total : items.length >= limit
+  };
+}
 
 const mergeFolderData = (current: FolderData, next: FolderData): FolderData => ({
   ...next,
@@ -106,6 +122,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
   const sourceMode = ref<ExplorerDataSourceMode>("folder");
   const sourceTitle = ref("当前文件夹");
   const resultTotal = ref<number | null>(null);
+  const searchContext = ref<{query: string; mount?: string} | null>(null);
 
   const allEntries = computed<ExplorerEntry[]>(() => [
     ...(folderData.value.folder ?? []).map(folder => ({
@@ -170,6 +187,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
     let loaded = false;
     sourceMode.value = "folder";
     sourceTitle.value = "当前文件夹";
+    searchContext.value = null;
     resetForLoad(lifecycle);
     try {
       const data = normalizeFolderData(await getFolderData(path, folderQuery(), {forceRefresh: lifecycle.forceRefresh}));
@@ -198,6 +216,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
     loadingMore.value = false;
     sourceMode.value = "search";
     sourceTitle.value = `搜索：“${keyword}”`;
+    searchContext.value = {query: keyword, mount: lifecycle.mount};
     resetForLoad(lifecycle);
     let loaded = false;
     try {
@@ -207,7 +226,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
         offset: 0,
         limit: pageSize
       });
-      folderData.value = normalizeSearchResultFolderData(data.items ?? [], fileStore.currentPath || "/");
+      folderData.value = normalizeSearchResultFolderData(data.items ?? [], fileStore.currentPath || "/", data);
       resultTotal.value = data.total ?? allEntries.value.length;
       loadedSignature.value = `search|${keyword}|${lifecycle.mount ?? ""}`;
       lifecycle.clearSelection?.();
@@ -228,11 +247,16 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
     loadingMore.value = false;
     sourceMode.value = "recent";
     sourceTitle.value = "最近文件";
+    searchContext.value = null;
     resetForLoad(lifecycle);
     let loaded = false;
     try {
       const items = await getRecentEntries(50);
-      folderData.value = normalizeSearchResultFolderData(items ?? [], fileStore.currentPath || "/");
+      folderData.value = normalizeSearchResultFolderData(items ?? [], fileStore.currentPath || "/", {
+        offset: 0,
+        limit: items?.length ?? 0,
+        total: items?.length ?? 0
+      });
       resultTotal.value = allEntries.value.length;
       loadedSignature.value = "recent";
       lifecycle.clearSelection?.();
@@ -248,7 +272,38 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
     return loaded;
   }
 
+  const loadMoreSearch = async (lifecycle: FolderLoadLifecycle = {}) => {
+    if (!searchContext.value || loading.value || loadingMore.value || !folderData.value.hasMore) return false;
+    loadingMore.value = true;
+    message.value = "";
+    let loaded = false;
+    try {
+      const current = folderData.value;
+      const offset = (current.offset ?? 0) + (current.limit ?? allEntries.value.length);
+      const data = await searchEntries({
+        q: searchContext.value.query,
+        mount: searchContext.value.mount,
+        offset,
+        limit: pageSize
+      });
+      const next = normalizeSearchResultFolderData(data.items ?? [], current.path || fileStore.currentPath || "/", data);
+      const merged = normalizeFolderData(mergeFolderData(current, next));
+      folderData.value = merged;
+      resultTotal.value = data.total ?? resultTotal.value ?? allEntries.value.length;
+      loadedSignature.value = `search|${searchContext.value.query}|${searchContext.value.mount ?? ""}|${merged.offset ?? 0}`;
+      await nextTick();
+      lifecycle.afterRender?.();
+      loaded = true;
+    } catch (error) {
+      message.value = error instanceof Error ? error.message : "加载更多搜索结果失败";
+    } finally {
+      loadingMore.value = false;
+    }
+    return loaded;
+  }
+
   const loadMore = async (lifecycle: FolderLoadLifecycle = {}) => {
+    if (sourceMode.value === "search") return loadMoreSearch(lifecycle);
     if (sourceMode.value !== "folder" || loading.value || loadingMore.value || !folderData.value.hasMore) return false;
     loadingMore.value = true;
     message.value = "";
@@ -275,7 +330,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
 
   const maybeLoadMoreOnScroll = (lifecycle: FolderLoadLifecycle = {}) => {
     const viewport = viewportRef.value;
-    if (sourceMode.value !== "folder" || !viewport || filterKeyword.value || loading.value || loadingMore.value || !folderData.value.hasMore) return;
+    if (sourceMode.value === "recent" || !viewport || filterKeyword.value || loading.value || loadingMore.value || !folderData.value.hasMore) return;
     const distanceToBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
     if (distanceToBottom <= autoLoadMoreDistance) void loadMore(lifecycle);
   }

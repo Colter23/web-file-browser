@@ -434,6 +434,11 @@ watch(() => props.filterText, resetTypeahead);
 const resultActive = computed(() => sourceMode.value !== "folder");
 const emptyActionVisible = computed(() => filterActive.value || resultActive.value);
 const emptyActionText = computed(() => resultActive.value ? "返回当前文件夹" : "清除筛选");
+const canLoadMoreEntries = computed(() => sourceMode.value !== "recent" && Boolean(folderData.value.hasMore) && !props.filterText.trim());
+const loadMoreText = computed(() => {
+  if (loadingMore.value) return "正在加载...";
+  return sourceMode.value === "search" ? "加载更多搜索结果" : "加载更多";
+});
 
 const fileIconKind = (entry: ExplorerEntry) => {
   return fileEntryIconKind(entry, fileStore.extensions);
@@ -716,9 +721,9 @@ defineExpose({
             @commit-rename="commitRename"
             @cancel-rename="cancelRename" />
 
-        <div v-if="sourceMode === 'folder' && folderData.hasMore && !props.filterText.trim()" class="load-more-row">
+        <div v-if="canLoadMoreEntries" class="load-more-row">
           <button class="load-more-button" :disabled="loadingMore" @click.stop="loadMore">
-            {{ loadingMore ? "正在加载..." : "加载更多" }}
+            {{ loadMoreText }}
           </button>
         </div>
       </div>
