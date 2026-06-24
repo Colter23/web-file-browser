@@ -3,7 +3,7 @@ import type {FileTreeData, FolderData, FolderQueryParams} from "../class.ts";
 import {useFileStore} from "../store";
 
 type FileTreeLoaderOptions = {
-  getFolderData: (path: string, params?: FolderQueryParams) => Promise<FolderData>;
+  getFolderData: (path: string, params?: FolderQueryParams, options?: {forceRefresh?: boolean}) => Promise<FolderData>;
   navigateToPath: (path: string, options?: {skipEditorLeave?: boolean; focusExplorer?: boolean}) => Promise<boolean>;
   showError: (error: unknown, fallback: string, title?: string) => void;
 }
@@ -34,8 +34,8 @@ export const useFileTreeLoader = ({getFolderData, navigateToPath, showError}: Fi
   const fileStore = useFileStore();
   const treeData = ref<FileTreeData[]>([]);
 
-  const loadRoot = async () => {
-    const data = await getFolderData("/", treeQuery);
+  const loadRoot = async (options: {forceRefresh?: boolean} = {}) => {
+    const data = await getFolderData("/", treeQuery, options);
     fileStore.saveFolderData(data);
     treeData.value = [rootTreeNode(folderDataToTreeNodes(data))];
   }
@@ -46,7 +46,7 @@ export const useFileTreeLoader = ({getFolderData, navigateToPath, showError}: Fi
     try {
       let loadedPath = node.path;
       if (options.refresh || node.children === undefined) {
-        const data = await getFolderData(node.path, treeQuery);
+        const data = await getFolderData(node.path, treeQuery, {forceRefresh: options.refresh});
         fileStore.saveFolderData(data);
         node.children = folderDataToTreeNodes(data);
         loadedPath = data.path || node.path;

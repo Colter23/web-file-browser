@@ -13,6 +13,15 @@ export type FolderRequestOptions = {
     forceRefresh?: boolean;
 }
 
+type FolderCacheEntry = {
+    data: FolderData;
+    etag?: string;
+    lastModified?: string;
+}
+
+const folderCacheMaxSize = 120;
+const folderResponseCache = new Map<string, FolderCacheEntry>();
+
 const encodeVirtualPath = (path: string = ""): string => {
     return path
         .split("/")
@@ -26,19 +35,99 @@ const pathUrl = (base: string, path: string = ""): string => {
     return encoded ? `${base}/${encoded}` : base
 }
 
+const normalizeCachePath = (path: string = ""): string => {
+    const parts = path.split("/").filter(part => part.length > 0);
+    return parts.length ? `/${parts.join("/")}` : "/";
+}
+
+const folderCacheKey = (path: string = "", params: FolderQueryParams = {}): string => {
+    const keys: (keyof FolderQueryParams)[] = [
+        "offset",
+        "limit",
+        "detail",
+        "sort",
+        "order",
+        "type",
+        "includeHidden",
+        "includeTotal"
+    ];
+    const query = keys
+        .filter(key => params[key] !== undefined)
+        .map(key => `${key}=${String(params[key])}`)
+        .join("&");
+    return `${normalizeCachePath(path)}?${query}`;
+}
+
+const clearFolderCache = (path: string = "") => {
+    const prefix = `${normalizeCachePath(path)}?`;
+    Array.from(folderResponseCache.keys()).forEach(key => {
+        if (key.startsWith(prefix)) folderResponseCache.delete(key);
+    });
+}
+
+const cloneFolderData = (data: FolderData): FolderData => ({
+    ...data,
+    folder: data.folder?.map(folder => ({...folder})),
+    file: data.file?.map(file => ({...file}))
+})
+
+const headerValue = (headers: Record<string, unknown>, name: string): string | undefined => {
+    if ("get" in headers && typeof headers.get === "function") {
+        const header = headers.get(name);
+        if (header) return String(header);
+    }
+    const value = headers[name] ?? headers[name.toLowerCase()];
+    if (Array.isArray(value)) return value[0] ? String(value[0]) : undefined;
+    return value ? String(value) : undefined;
+}
+
+const saveFolderCache = (key: string, data: FolderData, headers: Record<string, unknown>) => {
+    const etag = headerValue(headers, "etag");
+    const lastModified = headerValue(headers, "last-modified");
+    if (!etag && !lastModified) {
+        folderResponseCache.delete(key);
+        return;
+    }
+    folderResponseCache.set(key, {
+        data: cloneFolderData(data),
+        etag,
+        lastModified
+    });
+    if (folderResponseCache.size <= folderCacheMaxSize) return;
+    const oldestKey = folderResponseCache.keys().next().value;
+    if (oldestKey) folderResponseCache.delete(oldestKey);
+}
+
 export const getFolderData = async (path: string = "", params: FolderQueryParams = {}, options: FolderRequestOptions = {}): Promise<FolderData> => {
+    if (options.forceRefresh) clearFolderCache(path);
+    const cacheKey = folderCacheKey(path, params);
+    const cached = options.forceRefresh ? undefined : folderResponseCache.get(cacheKey);
+    const conditionalHeaders = cached
+        ? {
+            ...(cached.etag ? {"If-None-Match": cached.etag} : {}),
+            ...(!cached.etag && cached.lastModified ? {"If-Modified-Since": cached.lastModified} : {})
+        }
+        : {};
     const requestParams = options.forceRefresh
         ? {...params, _: `${Date.now()}-${Math.random().toString(16).slice(2)}`}
         : params;
-    return (await network.get(pathUrl("/api/file", path), {
+    const response = await network.get(pathUrl("/api/file", path), {
         params: requestParams,
         headers: options.forceRefresh
             ? {
                 "Cache-Control": "no-cache, no-store, max-age=0",
                 "Pragma": "no-cache"
             }
-            : undefined
-    })).data
+            : conditionalHeaders,
+        validateStatus: status => (status >= 200 && status < 300) || status === 304
+    });
+    if (response.status === 304) {
+        if (cached) return cloneFolderData(cached.data);
+        folderResponseCache.delete(cacheKey);
+        return getFolderData(path, params, {forceRefresh: true});
+    }
+    saveFolderCache(cacheKey, response.data, response.headers as Record<string, unknown>);
+    return response.data
 }
 
 export const getFile = async (path: string = ""): Promise<FileContentResponse> => {
