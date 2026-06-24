@@ -8,6 +8,7 @@ import {
   cleanupTrash,
   deleteTrashRecord,
   emptyTrash,
+  getIndexStatus,
   getFolderData,
   listTasks,
   listTrashRecords,
@@ -50,6 +51,7 @@ import {useMainViewSelectionCommands} from "../composables/useMainViewSelectionC
 import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useTrashPanel} from "../composables/useTrashPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
+import {useSearchIndexStatusHint} from "../composables/useSearchIndexStatusHint.ts";
 import {entryFileInfo} from "../utils/file-entry.ts";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
@@ -208,6 +210,12 @@ const {
   focusSearchInput
 } = useExplorerSearchBox({focusExplorer});
 const searchType = ref<DirEntryFilter>("all");
+const {
+  inspectSearchIndexBeforeSearch
+} = useSearchIndexStatusHint({
+  getIndexStatus,
+  showNotice: showShellNotice
+});
 
 const updateSearchText = (value: string) => {
   searchText.value = value;
@@ -220,6 +228,7 @@ const runIndexedSearch = async () => {
     return;
   }
   if (!await fileStore.requestEditorLeave()) return;
+  await inspectSearchIndexBeforeSearch();
   closeTransientPanels();
   const loaded = await explorerRef.value?.search(query, searchType.value);
   if (loaded) await focusExplorer();
