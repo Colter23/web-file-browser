@@ -63,7 +63,8 @@ const editorRef = ref<HTMLElement | null>(null);
 let editor: ReturnType<typeof ace.edit> | null = null;
 let syncing = false;
 let disposed = false;
-const editorScrollMargin = 10;
+const editorVerticalInset = 12;
+const editorScrollMargin = 8;
 
 const findNeedle = (options: EditorSearchOptions) => {
   if (!editor || !options.needle) return false;
@@ -137,8 +138,15 @@ const emitCursorStatus = () => {
   });
 }
 
+const applyEditorSpacing = () => {
+  if (!editor) return;
+  editor.renderer.setMargin(editorVerticalInset, editorVerticalInset, 0, 0);
+  editor.renderer.setScrollMargin(editorScrollMargin, editorScrollMargin);
+}
+
 watch(() => props.theme, (theme: string) => {
   editor?.setTheme("ace/theme/" + theme);
+  requestAnimationFrame(applyEditorSpacing);
 });
 
 watch(() => props.mode, (mode: string) => {
@@ -190,7 +198,7 @@ const initializeEditor = async () => {
     enableSnippets: true,
     enableLiveAutocompletion: true
   });
-  editor.renderer.setScrollMargin(editorScrollMargin, editorScrollMargin);
+  applyEditorSpacing();
   editor.session.setUseWrapMode(props.wrap);
   editor.session.setTabSize(props.tabSize);
   editor.commands.addCommand({
