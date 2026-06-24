@@ -1,6 +1,6 @@
 import {computed, nextTick, ref} from "vue";
 import type {Ref} from "vue";
-import type {DirDetail, DirEntryFilter, DirSortKey, FileInfo, FolderData, FolderQueryParams, SearchResult} from "../class.ts";
+import type {DirDetail, DirEntryFilter, DirSortKey, FileInfo, FolderData, FolderQueryParams, SearchResult, SearchScope} from "../class.ts";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import {getFolderData} from "../network/file-api.ts";
 import {getRecentEntries, searchEntries} from "../network/search-api.ts";
@@ -21,6 +21,7 @@ type FolderLoadOptions = FolderLoadLifecycle & {
 type SearchLoadOptions = FolderLoadLifecycle & {
   mount?: string;
   type?: Exclude<DirEntryFilter, "all">;
+  scope?: SearchScope;
 }
 
 type ExplorerFolderDataOptions = {
@@ -123,7 +124,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
   const sourceMode = ref<ExplorerDataSourceMode>("folder");
   const sourceTitle = ref("当前文件夹");
   const resultTotal = ref<number | null>(null);
-  const searchContext = ref<{query: string; mount?: string; type?: Exclude<DirEntryFilter, "all">} | null>(null);
+  const searchContext = ref<{query: string; mount?: string; type?: Exclude<DirEntryFilter, "all">; scope: SearchScope} | null>(null);
   const searchKeyword = computed(() => sourceMode.value === "search" ? searchContext.value?.query ?? "" : "");
 
   const allEntries = computed<ExplorerEntry[]>(() => [
@@ -217,8 +218,11 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
     loading.value = true;
     loadingMore.value = false;
     sourceMode.value = "search";
-    sourceTitle.value = `${lifecycle.type === "file" ? "搜索文件" : lifecycle.type === "folder" ? "搜索文件夹" : "搜索"}：“${keyword}”`;
-    searchContext.value = {query: keyword, mount: lifecycle.mount, type: lifecycle.type};
+    const scope = lifecycle.scope ?? (lifecycle.mount ? "mount" : "all");
+    const typeTitle = lifecycle.type === "file" ? "搜索文件" : lifecycle.type === "folder" ? "搜索文件夹" : "搜索";
+    const scopeTitle = scope === "all" ? "全部位置" : "当前挂载";
+    sourceTitle.value = `${typeTitle}（${scopeTitle}）：“${keyword}”`;
+    searchContext.value = {query: keyword, mount: lifecycle.mount, type: lifecycle.type, scope};
     resetForLoad(lifecycle);
     let loaded = false;
     try {
@@ -231,7 +235,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
       });
       folderData.value = normalizeSearchResultFolderData(data.items ?? [], fileStore.currentPath || "/", data);
       resultTotal.value = data.total ?? allEntries.value.length;
-      loadedSignature.value = `search|${keyword}|${lifecycle.mount ?? ""}|${lifecycle.type ?? "all"}`;
+      loadedSignature.value = `search|${keyword}|${lifecycle.mount ?? ""}|${lifecycle.type ?? "all"}|${scope}`;
       lifecycle.clearSelection?.();
       fileStore.closeEditor();
       await nextTick();
@@ -294,7 +298,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
       const merged = normalizeFolderData(mergeFolderData(current, next));
       folderData.value = merged;
       resultTotal.value = data.total ?? resultTotal.value ?? allEntries.value.length;
-      loadedSignature.value = `search|${searchContext.value.query}|${searchContext.value.mount ?? ""}|${searchContext.value.type ?? "all"}|${merged.offset ?? 0}`;
+      loadedSignature.value = `search|${searchContext.value.query}|${searchContext.value.mount ?? ""}|${searchContext.value.type ?? "all"}|${searchContext.value.scope}|${merged.offset ?? 0}`;
       await nextTick();
       lifecycle.afterRender?.();
       loaded = true;

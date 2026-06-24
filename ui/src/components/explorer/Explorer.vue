@@ -16,7 +16,7 @@ import {useExplorerStatusText} from "../../composables/useExplorerStatusText.ts"
 import {useExplorerThumbnails} from "../../composables/useExplorerThumbnails.ts";
 import {useExplorerTypeahead} from "../../composables/useExplorerTypeahead.ts";
 import {useExplorerItemRefs, useExplorerViewport} from "../../composables/useExplorerViewport.ts";
-import type {DirEntryFilter} from "../../class.ts";
+import type {DirEntryFilter, SearchScope} from "../../class.ts";
 import {
   entryTypeText,
   fileEntryIconKind,
@@ -349,10 +349,12 @@ const loadFolder = async (path: string = fileStore.currentPath || "/", options: 
   });
 }
 
-const loadSearch = async (query: string, type: DirEntryFilter = "all") => {
+const loadSearch = async (query: string, type: DirEntryFilter = "all", scope: SearchScope = "mount") => {
   const mountPath = fileStore.currentPath === "/"
       ? undefined
       : `/${fileStore.currentPath.split("/").filter(Boolean)[0] ?? ""}`;
+  const effectiveScope: SearchScope = !mountPath || scope === "all" ? "all" : "mount";
+  const searchMount = effectiveScope === "all" ? undefined : mountPath;
   return loadSearchData(query, {
     resetBeforeLoad: () => {
       resetRename();
@@ -362,7 +364,8 @@ const loadSearch = async (query: string, type: DirEntryFilter = "all") => {
     },
     clearSelection,
     afterRender: observePendingThumbnails,
-    mount: mountPath === "/" ? undefined : mountPath,
+    mount: searchMount === "/" ? undefined : searchMount,
+    scope: effectiveScope,
     type: type === "all" ? undefined : type
   });
 }

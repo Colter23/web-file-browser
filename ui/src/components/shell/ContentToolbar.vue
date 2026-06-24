@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type {ComponentPublicInstance} from "vue";
 import {computed, nextTick, onBeforeUnmount, onMounted, ref} from "vue";
-import type {DirEntryFilter} from "../../class.ts";
+import type {DirEntryFilter, SearchScope} from "../../class.ts";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
 import Breadcrumb from "../Breadcrumb.vue";
@@ -24,6 +24,7 @@ const props = defineProps<{
   searchText: string;
   isFiltering: boolean;
   searchType: DirEntryFilter;
+  searchScope: SearchScope;
   setSearchInputRef: (element: Element | ComponentPublicInstance | null) => void;
 }>();
 
@@ -37,16 +38,17 @@ const emit = defineEmits<{
   (e: "breadcrumb-drop", payload: ExplorerEntryPathDropPayload): void;
   (e: "update:search-text", value: string): void;
   (e: "update:search-type", value: DirEntryFilter): void;
+  (e: "update:search-scope", value: SearchScope): void;
   (e: "search-enter"): void;
   (e: "search-escape"): void;
   (e: "clear-search"): void;
 }>();
 
 const breadcrumbRef = ref<BreadcrumbExpose | null>(null);
-const searchTypeMenuRef = ref<HTMLElement | null>(null);
-const searchTypePanelRef = ref<HTMLElement | null>(null);
-const searchTypeButtonRef = ref<HTMLButtonElement | null>(null);
-const searchTypeMenuOpen = ref(false);
+const searchOptionsMenuRef = ref<HTMLElement | null>(null);
+const searchOptionsPanelRef = ref<HTMLElement | null>(null);
+const searchOptionsButtonRef = ref<HTMLButtonElement | null>(null);
+const searchOptionsMenuOpen = ref(false);
 
 const searchTypeOptions: Array<{type: DirEntryFilter; label: string; icon: string; title: string}> = [
   {type: "all", label: "全部", icon: "action.search", title: "搜索全部项目"},
@@ -54,61 +56,77 @@ const searchTypeOptions: Array<{type: DirEntryFilter; label: string; icon: strin
   {type: "folder", label: "文件夹", icon: "file.folder", title: "只搜索文件夹"}
 ];
 
+const searchScopeOptions: Array<{scope: SearchScope; label: string; icon: string; title: string}> = [
+  {scope: "mount", label: "当前挂载", icon: "file.folder", title: "只搜索当前挂载点"},
+  {scope: "all", label: "全部位置", icon: "file.home", title: "搜索所有挂载位置"}
+];
+
 const activeSearchType = computed(() => {
   return searchTypeOptions.find(option => option.type === props.searchType) ?? searchTypeOptions[0];
 });
 
-const closeSearchTypeMenu = () => {
-  searchTypeMenuOpen.value = false;
+const activeSearchScope = computed(() => {
+  return searchScopeOptions.find(option => option.scope === props.searchScope) ?? searchScopeOptions[0];
+});
+
+const searchOptionsActive = computed(() => {
+  return searchOptionsMenuOpen.value || props.searchType !== "all" || props.searchScope !== "mount";
+});
+
+const closeSearchOptionsMenu = () => {
+  searchOptionsMenuOpen.value = false;
 }
 
-const focusSearchTypeButton = async () => {
+const focusSearchOptionsButton = async () => {
   await nextTick();
-  searchTypeButtonRef.value?.focus({preventScroll: true});
+  searchOptionsButtonRef.value?.focus({preventScroll: true});
 }
 
 const {
   focusMenuButton,
   handleMenuKeyDown
 } = useMenuKeyboardNavigation({
-  menuRef: searchTypePanelRef,
+  menuRef: searchOptionsPanelRef,
   onEscape: () => {
-    closeSearchTypeMenu();
-    void focusSearchTypeButton();
+    closeSearchOptionsMenu();
+    void focusSearchOptionsButton();
   }
 });
 
-const focusActiveSearchType = async () => {
+const focusActiveSearchOption = async () => {
   await nextTick();
   const activeIndex = searchTypeOptions.findIndex(option => option.type === props.searchType);
   focusMenuButton(activeIndex >= 0 ? activeIndex : 0);
 }
 
-const toggleSearchTypeMenu = async () => {
-  searchTypeMenuOpen.value = !searchTypeMenuOpen.value;
-  if (searchTypeMenuOpen.value) await focusActiveSearchType();
+const toggleSearchOptionsMenu = async () => {
+  searchOptionsMenuOpen.value = !searchOptionsMenuOpen.value;
+  if (searchOptionsMenuOpen.value) await focusActiveSearchOption();
 }
 
 const selectSearchType = (type: DirEntryFilter) => {
-  closeSearchTypeMenu();
   emit("update:search-type", type);
 }
 
-const handleSearchTypeButtonKeyDown = (event: KeyboardEvent) => {
+const selectSearchScope = (scope: SearchScope) => {
+  emit("update:search-scope", scope);
+}
+
+const handleSearchOptionsButtonKeyDown = (event: KeyboardEvent) => {
   if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
   event.preventDefault();
-  if (!searchTypeMenuOpen.value) searchTypeMenuOpen.value = true;
-  void focusActiveSearchType();
+  if (!searchOptionsMenuOpen.value) searchOptionsMenuOpen.value = true;
+  void focusActiveSearchOption();
 }
 
 useOutsidePointerDown({
-  refs: [searchTypeMenuRef],
-  enabled: () => searchTypeMenuOpen.value,
-  onOutsidePointerDown: closeSearchTypeMenu
+  refs: [searchOptionsMenuRef],
+  enabled: () => searchOptionsMenuOpen.value,
+  onOutsidePointerDown: closeSearchOptionsMenu
 });
 
 const handleDocumentKeyDown = (event: KeyboardEvent) => {
-  if (event.key === "Escape") closeSearchTypeMenu();
+  if (event.key === "Escape") closeSearchOptionsMenu();
 }
 
 onMounted(() => {
@@ -158,39 +176,57 @@ defineExpose({
           @input="emit('update:search-text', ($event.target as HTMLInputElement).value)"
           @keydown.enter.prevent="emit('search-enter')"
           @keydown.escape.prevent="emit('search-escape')">
-      <div ref="searchTypeMenuRef" class="search-type-menu">
+      <div ref="searchOptionsMenuRef" class="search-options-menu">
         <button
-            ref="searchTypeButtonRef"
+            ref="searchOptionsButtonRef"
             type="button"
-            class="search-type-trigger"
-            :class="{active: searchTypeMenuOpen || searchType !== 'all'}"
-            :title="activeSearchType.title"
+            class="search-options-trigger"
+            :class="{active: searchOptionsActive}"
+            :title="`${activeSearchScope.label} · ${activeSearchType.title}`"
             aria-haspopup="menu"
-            :aria-expanded="searchTypeMenuOpen"
-            @click.prevent="toggleSearchTypeMenu"
-            @keydown="handleSearchTypeButtonKeyDown">
+            :aria-expanded="searchOptionsMenuOpen"
+            @click.prevent="toggleSearchOptionsMenu"
+            @keydown="handleSearchOptionsButtonKeyDown">
           <icon :icon="activeSearchType.icon" />
           <span>{{ activeSearchType.label }}</span>
-          <icon class="search-type-caret" icon="action.down" />
+          <icon class="search-options-caret" icon="action.down" />
         </button>
         <div
-            v-if="searchTypeMenuOpen"
-            ref="searchTypePanelRef"
-            class="search-type-panel"
+            v-if="searchOptionsMenuOpen"
+            ref="searchOptionsPanelRef"
+            class="search-options-panel"
             role="menu"
-            aria-label="搜索类型"
+            aria-label="搜索选项"
             @keydown="handleMenuKeyDown">
+          <p class="search-options-title">类型</p>
           <button
               v-for="option in searchTypeOptions"
               :key="option.type"
               type="button"
-              class="search-type-option"
+              class="search-options-item"
               :class="{active: searchType === option.type}"
               role="menuitemradio"
               :aria-checked="searchType === option.type"
               tabindex="-1"
               @click.prevent="selectSearchType(option.type)">
-            <span class="search-type-check">{{ searchType === option.type ? "✓" : "" }}</span>
+            <span class="search-options-check">{{ searchType === option.type ? "✓" : "" }}</span>
+            <icon :icon="option.icon" />
+            <span>{{ option.label }}</span>
+          </button>
+          <div class="search-options-separator"></div>
+          <p class="search-options-title">范围</p>
+          <button
+              v-for="option in searchScopeOptions"
+              :key="option.scope"
+              type="button"
+              class="search-options-item"
+              :class="{active: searchScope === option.scope}"
+              role="menuitemradio"
+              :aria-checked="searchScope === option.scope"
+              tabindex="-1"
+              :title="option.title"
+              @click.prevent="selectSearchScope(option.scope)">
+            <span class="search-options-check">{{ searchScope === option.scope ? "✓" : "" }}</span>
             <icon :icon="option.icon" />
             <span>{{ option.label }}</span>
           </button>
@@ -274,56 +310,66 @@ defineExpose({
   @apply shrink-0;
 }
 
-.search-type-menu {
+.search-options-menu {
   @apply relative shrink-0;
 }
 
-.search-type-trigger {
+.search-options-trigger {
   @apply mr-0 inline-flex h-6 w-auto max-w-20 items-center gap-1 rounded-md border border-transparent px-1.5 text-[0.68rem];
   color: var(--app-text-subtle);
 }
 
-.search-type-trigger:hover {
+.search-options-trigger:hover {
   background: var(--app-control-hover);
   color: var(--app-text-muted);
 }
 
-.search-type-trigger.active {
+.search-options-trigger.active {
   border-color: var(--app-accent-border, #bfdbfe);
   background: var(--app-control-solid);
   color: var(--app-accent, #2563eb);
 }
 
-.search-type-trigger span {
+.search-options-trigger span {
   @apply min-w-0 truncate;
 }
 
-.search-type-caret {
+.search-options-caret {
   @apply shrink-0 text-[0.6rem];
 }
 
-.search-type-panel {
-  @apply absolute right-0 top-[calc(100%+0.45rem)] z-50 w-36 overflow-hidden rounded-md border py-1;
+.search-options-panel {
+  @apply absolute right-0 top-[calc(100%+0.45rem)] z-50 w-44 overflow-hidden rounded-md border py-1;
   border-color: var(--app-border-soft);
   background: var(--app-panel-solid);
   box-shadow: var(--app-menu-shadow);
 }
 
-.search-type-option {
+.search-options-title {
+  @apply px-3 py-1 text-[0.68rem] font-medium;
+  color: var(--app-text-subtle);
+}
+
+.search-options-separator {
+  @apply my-1 h-px;
+  background: var(--app-border-soft);
+}
+
+.search-options-item {
   @apply mr-0 grid h-auto w-full grid-cols-[1rem_1rem_minmax(0,1fr)] items-center gap-2 rounded-none px-2.5 py-1.5 text-left text-sm;
   color: var(--app-text-muted);
 }
 
-.search-type-option:hover {
+.search-options-item:hover {
   background: var(--app-accent-hover, #eff6ff);
 }
 
-.search-type-option.active {
+.search-options-item.active {
   background: var(--app-accent-soft, #eff6ff);
   color: var(--app-accent, #2563eb);
 }
 
-.search-type-check {
+.search-options-check {
   @apply text-center text-xs font-semibold;
   color: var(--app-accent, #2563eb);
 }
@@ -334,14 +380,14 @@ defineExpose({
 }
 
 .search-clear-button:focus-visible,
-.search-type-trigger:focus-visible,
-.search-type-option:focus-visible {
+.search-options-trigger:focus-visible,
+.search-options-item:focus-visible {
   @apply outline-none;
   background: var(--app-control-hover);
   box-shadow: inset 0 0 0 1px var(--app-accent, #2563eb);
 }
 
-.search-type-option:focus-visible {
+.search-options-item:focus-visible {
   background: var(--app-accent-soft, #eff6ff);
   color: var(--app-accent, #2563eb);
 }

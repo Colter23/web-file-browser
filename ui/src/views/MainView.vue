@@ -30,7 +30,7 @@ import ShellNotice from "../components/shell/ShellNotice.vue";
 import SidebarPanel from "../components/shell/SidebarPanel.vue";
 import ShellMoreMenu from "../components/shell/ShellMoreMenu.vue";
 import UploadDropOverlay from "../components/shell/UploadDropOverlay.vue";
-import type {DirEntryFilter, DirSortKey, DirSortOrder, FileTreeData} from "../class.ts";
+import type {DirEntryFilter, DirSortKey, DirSortOrder, FileTreeData, SearchScope} from "../class.ts";
 import type {ExplorerEntry, ExplorerEntryPathDropPayload} from "../components/explorer/types.ts";
 import {usePreviewPaneResize} from "../composables/usePreviewPaneResize.ts";
 import {useSidebarResize} from "../composables/useSidebarResize.ts";
@@ -67,7 +67,7 @@ type ExplorerExpose = {
   selectAllEntries: () => boolean;
   setSortKey: (key: DirSortKey) => Promise<void>;
   setSortOrder: (order: DirSortOrder) => Promise<void>;
-  search: (query: string, type?: DirEntryFilter) => Promise<boolean>;
+  search: (query: string, type?: DirEntryFilter, scope?: SearchScope) => Promise<boolean>;
   showRecent: () => Promise<boolean>;
   clearResults: () => Promise<boolean>;
   isResultActive: () => boolean;
@@ -210,6 +210,7 @@ const {
   focusSearchInput
 } = useExplorerSearchBox({focusExplorer});
 const searchType = ref<DirEntryFilter>("all");
+const searchScope = ref<SearchScope>("mount");
 const {
   inspectSearchIndexBeforeSearch
 } = useSearchIndexStatusHint({
@@ -230,15 +231,24 @@ const runIndexedSearch = async () => {
   if (!await fileStore.requestEditorLeave()) return;
   await inspectSearchIndexBeforeSearch();
   closeTransientPanels();
-  const loaded = await explorerRef.value?.search(query, searchType.value);
+  const loaded = await explorerRef.value?.search(query, searchType.value, searchScope.value);
   if (loaded) await focusExplorer();
+}
+
+const rerunSearchIfResultActive = async () => {
+  const query = searchText.value.trim();
+  if (!query || !(explorerRef.value?.isResultActive() ?? false)) return;
+  await runIndexedSearch();
 }
 
 const updateSearchType = async (value: DirEntryFilter) => {
   searchType.value = value;
-  const query = searchText.value.trim();
-  if (!query || !(explorerRef.value?.isResultActive() ?? false)) return;
-  await runIndexedSearch();
+  await rerunSearchIfResultActive();
+}
+
+const updateSearchScope = async (value: SearchScope) => {
+  searchScope.value = value;
+  await rerunSearchIfResultActive();
 }
 
 const showRecentEntries = async () => {
@@ -744,6 +754,7 @@ const signOut = async () => {
           :search-text="searchText"
           :is-filtering="isFiltering"
           :search-type="searchType"
+          :search-scope="searchScope"
           :set-search-input-ref="setSearchInputRef"
           @navigate-back="navigateBack"
           @navigate-forward="navigateForward"
@@ -754,6 +765,7 @@ const signOut = async () => {
           @breadcrumb-drop="dropEntriesToPathFolder"
           @update:search-text="updateSearchText"
           @update:search-type="updateSearchType"
+          @update:search-scope="updateSearchScope"
           @search-enter="runIndexedSearch"
           @search-escape="handleSearchEscape"
           @clear-search="clearSearchOrResults" />

@@ -17,6 +17,7 @@ export type DirSortKey = "name" | "modified" | "size";
 export type DirSortOrder = "asc" | "desc";
 export type DirEntryFilter = "all" | "folder" | "file";
 export type DirDetail = "basic" | "full";
+export type SearchScope = "mount" | "all";
 
 export interface FolderQueryParams {
     offset?: number;
