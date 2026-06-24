@@ -195,9 +195,18 @@ export const fileEntryIconKind = (entry: FileEntryLike, editableExtensions: read
 
 export const fileEntryIconName = (entry: FileEntryLike, editableExtensions: readonly string[] = []) => `file.${fileEntryIconKind(entry, editableExtensions)}`;
 
+const parseEntryDate = (srcDate: string) => {
+  const trimmed = srcDate.trim();
+  if (/^\d+$/.test(trimmed)) {
+    const value = Number(trimmed);
+    if (Number.isFinite(value)) return new Date(value < 10_000_000_000 ? value * 1000 : value);
+  }
+  return new Date(srcDate);
+}
+
 export const formatEntryDate = (srcDate?: string) => {
   if (!srcDate) return "-";
-  const date = new Date(srcDate);
+  const date = parseEntryDate(srcDate);
   if (Number.isNaN(date.getTime())) return srcDate;
   return new Intl.DateTimeFormat("zh-CN", {
     year: "numeric",

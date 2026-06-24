@@ -11,7 +11,7 @@ type MainViewShellActionsOptions = {
   selectPaths: (paths: string[]) => Promise<boolean | undefined>;
   clearPersistedSelection: () => void;
   closePreviewPanel: () => void;
-  clearPreviewContent: () => void;
+  resetPreviewContext: () => void;
   resetImageViewer: () => void;
   closeImageViewer: () => void;
   hideOperationPanel: () => void;
@@ -31,7 +31,7 @@ export const useMainViewShellActions = ({
   selectPaths,
   clearPersistedSelection,
   closePreviewPanel,
-  clearPreviewContent,
+  resetPreviewContext,
   resetImageViewer,
   closeImageViewer,
   hideOperationPanel,
@@ -50,7 +50,7 @@ export const useMainViewShellActions = ({
   }
 
   const closeTransientPanels = () => {
-    clearPreviewContent();
+    resetPreviewContext();
     hideOperationPanel();
     resetDeleteConfirm();
     closePropertiesPanel();
@@ -68,7 +68,7 @@ export const useMainViewShellActions = ({
   }
 
   const resetPanelsForKeptPreview = () => {
-    clearPreviewContent();
+    resetPreviewContext();
     resetOperationPanel();
     resetDeleteConfirm();
     resetTaskCancelConfirm();

@@ -61,6 +61,11 @@ export const useExplorerPreview = ({
     previewEntry.value = null;
   }
 
+  const resetPreviewContext = () => {
+    clearPreviewContent();
+    currentSelection.value = [];
+  }
+
   const resetImageViewerState = () => {
     imageViewerVisible.value = false;
     imageViewerEntry.value = null;
@@ -164,6 +169,7 @@ export const useExplorerPreview = ({
     previewEmptySubtitle,
     previewEmptyIcon,
     clearPreviewContent,
+    resetPreviewContext,
     resetImageViewer: resetImageViewerState,
     closePreviewPanel,
     closeImageViewer,
