@@ -2,20 +2,21 @@ use axum::{
     Json, Router,
     extract::{Path, State},
     http::StatusCode,
-    routing::{get, put},
+    routing::{get, post, put},
 };
 use std::sync::Arc;
 
 use crate::{
     app::AppState,
     error::AppError,
-    models::{FolderNode, PathMapping},
+    models::{FolderNode, PathMapping, ReorderMappingsRequest},
 };
 
 pub fn mapping_routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/mapping", get(list_mappings).post(create_mapping))
         .route("/mapping/root", get(mapping_root))
+        .route("/mapping/reorder", post(reorder_mappings))
         .route("/mapping/{id}", put(update_mapping).delete(delete_mapping))
 }
 
@@ -63,6 +64,14 @@ async fn update_mapping(
     if let Some(mapping) = state.mapping_store.get(id).await {
         index_remove_mount_ignore(&state, &mapping.mount_path).await;
     }
+    Ok(StatusCode::OK)
+}
+
+async fn reorder_mappings(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<ReorderMappingsRequest>,
+) -> Result<StatusCode, AppError> {
+    state.mapping_store.reorder(request).await?;
     Ok(StatusCode::OK)
 }
 

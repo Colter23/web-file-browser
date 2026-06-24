@@ -35,6 +35,19 @@ fn default_writable() -> bool {
     true
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReorderMappingItem {
+    pub id: i64,
+    pub order: i32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReorderMappingsRequest {
+    pub items: Vec<ReorderMappingItem>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum ConflictPolicy {

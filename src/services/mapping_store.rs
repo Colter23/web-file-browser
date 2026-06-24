@@ -3,7 +3,7 @@ use tokio::sync::RwLock;
 
 use crate::{
     error::AppError,
-    models::{FolderNode, PathMapping},
+    models::{FolderNode, PathMapping, ReorderMappingsRequest},
     services::path_resolver::MappingSnapshot,
 };
 
@@ -90,6 +90,32 @@ impl MappingStore {
         validate_mount_conflict(&mappings, &mapping.mount_path, Some(id))?;
         mappings[index] = mapping;
         let next = mappings.clone();
+        drop(mappings);
+        self.save_and_refresh(&next).await
+    }
+
+    pub async fn reorder(&self, request: ReorderMappingsRequest) -> Result<(), AppError> {
+        let mut mappings = self.mappings.write().await;
+        for requested in &request.items {
+            if !mappings
+                .iter()
+                .any(|mapping| mapping.id == Some(requested.id))
+            {
+                return Err(AppError::not_found(format!("查无此映射: {}", requested.id)));
+            }
+        }
+
+        for requested in request.items {
+            if let Some(mapping) = mappings
+                .iter_mut()
+                .find(|mapping| mapping.id == Some(requested.id))
+            {
+                mapping.order = Some(requested.order);
+            }
+        }
+
+        let next = sorted_mappings(&mappings);
+        *mappings = next.clone();
         drop(mappings);
         self.save_and_refresh(&next).await
     }
