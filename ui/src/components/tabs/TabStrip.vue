@@ -183,6 +183,13 @@ const emit = defineEmits<{
   background: var(--app-control-hover);
 }
 
+.tab-button:focus-visible,
+.tab-add:focus-visible {
+  @apply outline-none;
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
 .tab-button.active {
   border-color: var(--app-accent, #2563eb);
   background: var(--app-accent, #2563eb);
@@ -202,6 +209,10 @@ const emit = defineEmits<{
 .tab-button.active.dropBefore,
 .tab-button.active.dropAfter {
   background: var(--app-accent, #2563eb);
+}
+
+.tab-button.active:focus-visible {
+  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22)), inset 0 0 0 1px var(--app-accent-contrast);
 }
 
 .tab-button.dropBefore::before,

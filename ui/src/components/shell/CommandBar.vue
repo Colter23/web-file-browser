@@ -153,6 +153,13 @@ const emit = defineEmits<{
   background: var(--app-control-hover);
 }
 
+.command-button:focus-visible,
+.view-button:focus-visible {
+  @apply outline-none;
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
 .command-button.active {
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);

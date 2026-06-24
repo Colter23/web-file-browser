@@ -141,6 +141,11 @@ onBeforeUnmount(() => {
   background: var(--app-control-solid);
 }
 
+.path-card:focus-within {
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
 .path-box {
   @apply shrink overflow-x-scroll;
 }

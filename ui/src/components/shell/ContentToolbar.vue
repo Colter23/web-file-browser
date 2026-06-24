@@ -94,6 +94,12 @@ defineExpose({
   background: var(--app-control-hover);
 }
 
+.nav-button:focus-visible {
+  @apply outline-none;
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
 .nav-button {
   @apply h-9 w-9 shrink-0;
 }
@@ -117,6 +123,11 @@ defineExpose({
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.2));
 }
 
+.search-box:focus-within {
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
 .search-box input {
   @apply min-w-0 grow bg-transparent text-sm outline-none;
   color: var(--app-text-muted);
@@ -134,5 +145,11 @@ defineExpose({
 .search-box button:hover {
   background: var(--app-control-hover);
   color: var(--app-text-muted);
+}
+
+.search-box button:focus-visible {
+  @apply outline-none;
+  background: var(--app-control-hover);
+  box-shadow: inset 0 0 0 1px var(--app-accent, #2563eb);
 }
 </style>

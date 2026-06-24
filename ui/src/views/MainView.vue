@@ -807,6 +807,14 @@ const signOut = async () => {
   background: var(--app-control-hover);
 }
 
+.square-button:focus-visible,
+.task-top-button:focus-visible,
+.plain-button:focus-visible {
+  @apply outline-none;
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
 .task-top-button {
   @apply inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 text-sm shadow-sm backdrop-blur;
   border-color: color-mix(in srgb, var(--app-border) 45%, transparent);

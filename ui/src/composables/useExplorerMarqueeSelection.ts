@@ -56,6 +56,8 @@ export const useExplorerMarqueeSelection = ({
   let originClientX = 0;
   let originClientY = 0;
   let scrollFrame = 0;
+  let suppressNextBackgroundClick = false;
+  let suppressClickTimer = 0;
   const startThreshold = 4;
   const scrollEdge = 48;
   const maxScrollSpeed = 24;
@@ -65,6 +67,25 @@ export const useExplorerMarqueeSelection = ({
     if (!scrollFrame) return;
     window.cancelAnimationFrame(scrollFrame);
     scrollFrame = 0;
+  }
+
+  const suppressNextViewportClick = () => {
+    suppressNextBackgroundClick = true;
+    if (suppressClickTimer) window.clearTimeout(suppressClickTimer);
+    suppressClickTimer = window.setTimeout(() => {
+      suppressNextBackgroundClick = false;
+      suppressClickTimer = 0;
+    }, 0);
+  }
+
+  const consumeMarqueeClickSuppression = () => {
+    if (!suppressNextBackgroundClick) return false;
+    suppressNextBackgroundClick = false;
+    if (suppressClickTimer) {
+      window.clearTimeout(suppressClickTimer);
+      suppressClickTimer = 0;
+    }
+    return true;
   }
 
   const resetSelectionBox = () => {
@@ -90,6 +111,7 @@ export const useExplorerMarqueeSelection = ({
     const rect = viewport.getBoundingClientRect();
     event.preventDefault();
     closeContextMenu();
+    suppressNextBackgroundClick = false;
     pointerX = event.clientX;
     pointerY = event.clientY;
     originClientX = event.clientX;
@@ -205,12 +227,16 @@ export const useExplorerMarqueeSelection = ({
     if (!tracking && !selectionBox.active) return;
     const finishedActiveBox = selectionBox.active;
     resetSelectionBox();
-    if (finishedActiveBox) commitSelectionAnchor();
+    if (finishedActiveBox) {
+      suppressNextViewportClick();
+      commitSelectionAnchor();
+    }
   }
 
   return {
     selectionBox,
     resetSelectionBox,
+    consumeMarqueeClickSuppression,
     beginMarqueeSelection,
     handleSelectionMove,
     finishMarqueeSelection,

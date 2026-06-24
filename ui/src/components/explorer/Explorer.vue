@@ -231,6 +231,7 @@ const {
 const {
   selectionBox,
   resetSelectionBox,
+  consumeMarqueeClickSuppression,
   beginMarqueeSelection,
   handleSelectionMove,
   finishMarqueeSelection,
@@ -410,7 +411,11 @@ const selectPathForRename = async (path: string) => {
   return true;
 }
 
-const activateViewport = () => {
+const activateViewport = (event: MouseEvent) => {
+  if (consumeMarqueeClickSuppression()) {
+    event.preventDefault();
+    return;
+  }
   closeContextMenu();
   focusViewport();
   clearSelectionKeepingFocus();
@@ -733,6 +738,8 @@ defineExpose({
 
 .explorer-viewport.view-details {
   @apply min-w-0;
+  --details-header-height: 2.25rem;
+  scroll-padding-top: calc(var(--details-header-height) + 0.25rem);
 }
 
 .entry-surface {
@@ -740,7 +747,7 @@ defineExpose({
 }
 
 .explorer-viewport.view-details .entry-surface {
-  @apply flex w-max min-w-full flex-col gap-0 p-1;
+  @apply flex w-max min-w-full flex-col gap-0 px-1 pb-1 pt-1.5;
   min-height: calc(100% - var(--details-header-height, 2.25rem));
 }
 
