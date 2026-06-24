@@ -171,7 +171,9 @@ const {
   toggle: toggleTrashPanelBase,
   close: closeTrashPanel,
   selectRecord: selectTrashRecord,
+  moveSelection: moveTrashSelection,
   selectAllRecords: selectAllTrashRecords,
+  toggleFocusedRecord: toggleFocusedTrashRecord,
   closeConfirm: closeTrashConfirm,
   submitConfirm: submitTrashConfirm,
   restoreSelected: restoreTrashSelected,
@@ -925,7 +927,9 @@ const signOut = async () => {
                 :action-loading="trashActionLoading"
                 :message="trashMessage"
                 @select="selectTrashRecord"
+                @move-selection="moveTrashSelection"
                 @select-all="selectAllTrashRecords"
+                @toggle-focused="toggleFocusedTrashRecord"
                 @refresh="loadTrash()"
                 @restore="restoreTrashSelected"
                 @delete="deleteTrashSelected"

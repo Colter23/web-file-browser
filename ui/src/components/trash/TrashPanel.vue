@@ -11,6 +11,9 @@ type TrashSelectOptions = {
   toggle?: boolean;
 }
 
+type TrashMoveDirection = "next" | "previous" | "first" | "last";
+type TrashFocusMoveMode = "replaceSelection" | "extendSelection" | "moveFocusOnly";
+
 const props = defineProps<{
   records: TrashRecord[];
   selectedId: string;
@@ -23,7 +26,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "select", id: string, options?: TrashSelectOptions): void;
+  (e: "move-selection", direction: TrashMoveDirection, mode?: TrashFocusMoveMode): void;
   (e: "select-all"): void;
+  (e: "toggle-focused"): void;
   (e: "refresh"): void;
   (e: "restore"): void;
   (e: "delete"): void;
@@ -72,10 +77,46 @@ const handleRowClick = (event: MouseEvent, record: TrashRecord) => {
   });
 }
 
+const navigationKeyMap: Record<string, TrashMoveDirection | undefined> = {
+  ArrowDown: "next",
+  ArrowUp: "previous",
+  Home: "first",
+  End: "last"
+};
+
+const isSpaceKey = (event: KeyboardEvent) => event.key === " " || event.code === "Space";
+
+const isListKeyboardTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return false;
+  return target === panelRef.value || Boolean(target.closest(".trash-list, .trash-row"));
+}
+
 const handleKeydown = (event: KeyboardEvent) => {
+  if (!isListKeyboardTarget(event.target)) return;
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
     event.preventDefault();
     emit("select-all");
+    return;
+  }
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && isSpaceKey(event)) {
+    event.preventDefault();
+    emit("toggle-focused");
+    return;
+  }
+  const moveDirection = navigationKeyMap[event.key];
+  if (moveDirection) {
+    event.preventDefault();
+    const mode: TrashFocusMoveMode = event.shiftKey
+        ? "extendSelection"
+        : event.ctrlKey || event.metaKey
+          ? "moveFocusOnly"
+          : "replaceSelection";
+    emit("move-selection", moveDirection, mode);
+    return;
+  }
+  if (event.key === "Enter" && canAct.value) {
+    event.preventDefault();
+    emit("restore");
     return;
   }
   if (event.key === "Delete" && canAct.value) {
@@ -84,10 +125,22 @@ const handleKeydown = (event: KeyboardEvent) => {
   }
 }
 
+const scrollFocusedRecordIntoView = async (id: string) => {
+  if (!id) return;
+  await nextTick();
+  panelRef.value
+      ?.querySelector<HTMLElement>(`[data-trash-id="${CSS.escape(id)}"]`)
+      ?.scrollIntoView({block: "nearest"});
+}
+
 watch(() => props.records.length, async () => {
   await nextTick();
   panelRef.value?.focus({preventScroll: true});
 }, {once: true});
+
+watch(() => props.selectedId, id => {
+  void scrollFocusedRecordIntoView(id);
+});
 
 defineExpose({
   focus: () => panelRef.value?.focus({preventScroll: true})
@@ -153,6 +206,7 @@ defineExpose({
             :class="{active: selectedIdSet.has(record.id), focused: selectedId === record.id}"
             role="option"
             :aria-selected="selectedIdSet.has(record.id)"
+            :data-trash-id="record.id"
             :title="record.originalVirtualPath"
             @click="event => handleRowClick(event, record)">
           <span class="trash-row-check" aria-hidden="true">

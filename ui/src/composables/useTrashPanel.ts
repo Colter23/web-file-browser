@@ -14,6 +14,8 @@ type TrashSelectOptions = {
   toggle?: boolean;
 }
 
+type TrashFocusMoveMode = "replaceSelection" | "extendSelection" | "moveFocusOnly";
+
 type TrashPanelOptions = {
   listTrashRecords: () => Promise<TrashRecord[]>;
   restoreTrashRecord: (id: string, conflictPolicy?: ConflictPolicy) => Promise<TrashRestoreResponse>;
@@ -155,6 +157,25 @@ export const useTrashPanel = ({
     setSelection([id], id);
   }
 
+  const moveSelection = (direction: "next" | "previous" | "first" | "last", mode: TrashFocusMoveMode = "replaceSelection") => {
+    if (!records.value.length) return;
+    const currentIndex = selectedId.value
+        ? records.value.findIndex(record => record.id === selectedId.value)
+        : -1;
+    let nextIndex = currentIndex >= 0 ? currentIndex : 0;
+    if (direction === "next") nextIndex = Math.min(records.value.length - 1, nextIndex + 1);
+    if (direction === "previous") nextIndex = Math.max(0, nextIndex - 1);
+    if (direction === "first") nextIndex = 0;
+    if (direction === "last") nextIndex = records.value.length - 1;
+    const nextRecord = records.value[nextIndex];
+    if (!nextRecord) return;
+    if (mode === "moveFocusOnly") {
+      selectedId.value = nextRecord.id;
+      return;
+    }
+    selectRecord(nextRecord.id, {range: mode === "extendSelection"});
+  }
+
   const selectAllRecords = () => {
     const ids = records.value.map(record => record.id);
     setSelection(ids, selectedId.value || (ids[0] ?? ""));
@@ -165,6 +186,12 @@ export const useTrashPanel = ({
     selectedIds.value = [];
     selectedId.value = "";
     selectionAnchorId.value = "";
+  }
+
+  const toggleFocusedRecord = () => {
+    const focusedId = selectedId.value || selectedIds.value[0];
+    if (!focusedId) return;
+    selectRecord(focusedId, {toggle: true});
   }
 
   const resetConfirm = () => {
@@ -316,8 +343,10 @@ export const useTrashPanel = ({
     close,
     toggle,
     selectRecord,
+    moveSelection,
     selectAllRecords,
     clearSelection,
+    toggleFocusedRecord,
     closeConfirm,
     submitConfirm,
     restoreSelected,
