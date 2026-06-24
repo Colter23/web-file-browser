@@ -218,10 +218,21 @@ let closePanelsHandler = () => {};
 let closeTransientPanelsHandler = () => {};
 let closeOperationShellPanelsHandler = () => {};
 let closePreviewHandler = () => {};
+let tabHoverSwitchTimer: number | undefined;
+let tabHoverSwitchTargetId = "";
 const closePanels = () => closePanelsHandler();
 const closeTransientPanels = () => closeTransientPanelsHandler();
 const closeOperationShellPanels = () => closeOperationShellPanelsHandler();
 const closePreview = () => closePreviewHandler();
+
+const stopTabHoverSwitch = (tabId?: string) => {
+  if (tabId && tabHoverSwitchTargetId !== tabId) return;
+  if (tabHoverSwitchTimer) {
+    window.clearTimeout(tabHoverSwitchTimer);
+    tabHoverSwitchTimer = undefined;
+  }
+  if (!tabId || tabHoverSwitchTargetId === tabId) tabHoverSwitchTargetId = "";
+}
 
 const {
   currentFolder,
@@ -286,6 +297,23 @@ const {
   persistCurrentExplorerScrollTop,
   showNotice: showShellNotice
 });
+
+const scheduleTabHoverSwitch = (tabId: string) => {
+  if (!tabId || tabId === fileStore.activeTabId) {
+    stopTabHoverSwitch();
+    return;
+  }
+  if (tabHoverSwitchTargetId === tabId && tabHoverSwitchTimer) return;
+  stopTabHoverSwitch();
+  tabHoverSwitchTargetId = tabId;
+  tabHoverSwitchTimer = window.setTimeout(() => {
+    const targetTabId = tabHoverSwitchTargetId;
+    tabHoverSwitchTimer = undefined;
+    tabHoverSwitchTargetId = "";
+    if (!targetTabId || targetTabId === fileStore.activeTabId) return;
+    void switchTab(targetTabId);
+  }, 650);
+}
 
 const {treeData, loadRoot, handleLoad, refreshPath: refreshTreePath} = useFileTreeLoader({
   getFolderData,
@@ -460,6 +488,7 @@ useMainViewLifecycle({
     await syncActiveTabContext();
   },
   stopScrollPersistence,
+  stopTabHoverSwitch,
   stopShellNoticeTimer,
   stopTaskPolling,
   handleWindowKeyDown,
@@ -492,6 +521,7 @@ const treeNodeToFolderEntry = (node: Pick<FileTreeData, "path" | "name">): Explo
 });
 
 const dropEntriesToPathFolder = ({entries, target, action}: ExplorerEntryPathDropPayload) => {
+  stopTabHoverSwitch();
   void dropEntriesToFolder({
     entries,
     action,
@@ -569,6 +599,8 @@ const signOut = async () => {
           @tab-drop="dropTab"
           @tab-drag-end="finishTabDrag"
           @drop-entries="dropEntriesToPathFolder"
+          @entry-drag-hover-tab="scheduleTabHoverSwitch"
+          @entry-drag-leave-tab="stopTabHoverSwitch"
           @open-entry-new-tab="openEntryInNewTab"
           @duplicate-tab="duplicateTabFromMenu"
           @close-context-tab="closeTabFromMenu"

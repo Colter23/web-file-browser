@@ -3,6 +3,7 @@ import {onBeforeUnmount, onMounted} from "vue";
 type MainViewLifecycleOptions = {
   initialize: () => Promise<void>;
   stopScrollPersistence: () => void;
+  stopTabHoverSwitch: () => void;
   stopShellNoticeTimer: () => void;
   stopTaskPolling: () => void;
   handleWindowKeyDown: (event: KeyboardEvent) => void;
@@ -20,6 +21,7 @@ type MainViewLifecycleOptions = {
 export const useMainViewLifecycle = ({
   initialize,
   stopScrollPersistence,
+  stopTabHoverSwitch,
   stopShellNoticeTimer,
   stopTaskPolling,
   handleWindowKeyDown,
@@ -66,6 +68,7 @@ export const useMainViewLifecycle = ({
   onBeforeUnmount(() => {
     disposed = true;
     for (const remove of removeListeners.splice(0)) remove();
+    stopTabHoverSwitch();
     stopScrollPersistence();
     stopShellNoticeTimer();
     stopTaskPolling();

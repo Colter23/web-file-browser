@@ -98,9 +98,14 @@ const handleWindowResize = () => {
 }
 
 const clearEntryDropTarget = () => {
+  if (entryDropTargetTabId.value) emit("entry-drag-leave-tab", entryDropTargetTabId.value);
   entryDropTargetTabId.value = "";
   addButtonDropTarget.value = false;
 }
+
+watch(() => props.activeTabId, () => {
+  clearEntryDropTarget();
+});
 
 onMounted(() => {
   window.addEventListener("resize", handleWindowResize);
@@ -133,6 +138,8 @@ const emit = defineEmits<{
   (e: "tab-drop", event: DragEvent, tabId: string): void;
   (e: "tab-drag-end"): void;
   (e: "drop-entries", payload: ExplorerEntryPathDropPayload): void;
+  (e: "entry-drag-hover-tab", tabId: string): void;
+  (e: "entry-drag-leave-tab", tabId: string): void;
   (e: "open-entry-new-tab", entry: ExplorerEntry): void;
   (e: "duplicate-tab"): void;
   (e: "close-context-tab"): void;
@@ -157,6 +164,7 @@ const handleTabDragOver = (event: DragEvent, tab: ExplorerTab) => {
   event.preventDefault();
   event.stopPropagation();
   entryDropTargetTabId.value = tab.id;
+  emit("entry-drag-hover-tab", tab.id);
   if (event.dataTransfer) event.dataTransfer.dropEffect = isCopyEntryDrop(event) ? "copy" : "move";
 }
 
@@ -168,6 +176,7 @@ const handleTabDragLeave = (event: DragEvent, tab: ExplorerTab) => {
   const related = event.relatedTarget;
   if (related instanceof Node && event.currentTarget instanceof HTMLElement && event.currentTarget.contains(related)) return;
   entryDropTargetTabId.value = "";
+  emit("entry-drag-leave-tab", tab.id);
 }
 
 const handleTabDrop = (event: DragEvent, tab: ExplorerTab) => {
@@ -183,6 +192,7 @@ const handleTabDrop = (event: DragEvent, tab: ExplorerTab) => {
   event.preventDefault();
   event.stopPropagation();
   entryDropTargetTabId.value = "";
+  emit("entry-drag-leave-tab", tab.id);
   emit("drop-entries", {
     entries,
     target: {
