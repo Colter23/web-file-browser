@@ -6,11 +6,14 @@ import {
   cancelTask,
   cleanupTasks,
   cleanupTrash,
+  createFavorite,
+  deleteFavorite,
   deleteTrashRecords,
   deleteTrashRecord,
   emptyTrash,
   getIndexStatus,
   getFolderData,
+  listFavorites,
   listTasks,
   listTrashRecords,
   logout,
@@ -33,7 +36,7 @@ import ShellNotice from "../components/shell/ShellNotice.vue";
 import SidebarPanel from "../components/shell/SidebarPanel.vue";
 import ShellMoreMenu from "../components/shell/ShellMoreMenu.vue";
 import UploadDropOverlay from "../components/shell/UploadDropOverlay.vue";
-import type {DirEntryFilter, DirSortKey, DirSortOrder, FileTreeData, SearchScope} from "../class.ts";
+import type {DirEntryFilter, DirSortKey, DirSortOrder, FavoriteItem, FileTreeData, SearchScope} from "../class.ts";
 import type {ExplorerEntry, ExplorerEntryPathDropPayload} from "../components/explorer/types.ts";
 import {usePreviewPaneResize} from "../composables/usePreviewPaneResize.ts";
 import {useSidebarResize} from "../composables/useSidebarResize.ts";
@@ -55,6 +58,7 @@ import {useTaskPanel} from "../composables/useTaskPanel.ts";
 import {useTrashPanel} from "../composables/useTrashPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
 import {useSearchIndexStatusHint} from "../composables/useSearchIndexStatusHint.ts";
+import {useFavorites} from "../composables/useFavorites.ts";
 import {entryFileInfo} from "../utils/file-entry.ts";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
@@ -444,6 +448,21 @@ const {treeData, loadRoot, handleLoad, refreshPath: refreshTreePath} = useFileTr
   showError: showErrorNotice
 });
 
+const {
+  favorites,
+  favoritesLoading,
+  favoritePaths,
+  loadFavorites,
+  addFavorite,
+  removeFavorite
+} = useFavorites({
+  listFavorites,
+  createFavorite,
+  deleteFavorite,
+  showNotice: showShellNotice,
+  showError: showErrorNotice
+});
+
 refreshCurrentTreePath = async () => {
   await refreshTreePath(currentFolder());
 }
@@ -617,7 +636,7 @@ const {
 useMainViewLifecycle({
   initialize: async () => {
     fileStore.ensureActiveTab();
-    await loadRoot();
+    await Promise.all([loadRoot(), loadFavorites()]);
     await syncActiveTabContext();
   },
   stopScrollPersistence,
@@ -653,6 +672,13 @@ const treeNodeToFolderEntry = (node: Pick<FileTreeData, "path" | "name">): Explo
   modified: ""
 });
 
+const favoriteToFolderEntry = (favorite: FavoriteItem): ExplorerEntry => ({
+  type: "folder",
+  path: favorite.path,
+  name: favorite.name,
+  modified: ""
+});
+
 const dropEntriesToPathFolder = ({entries, target, action}: ExplorerEntryPathDropPayload) => {
   stopTabHoverSwitch();
   void dropEntriesToFolder({
@@ -664,6 +690,23 @@ const dropEntriesToPathFolder = ({entries, target, action}: ExplorerEntryPathDro
 
 const openTreeFolderInNewTab = (node: FileTreeData) => {
   void openEntryInNewTab(treeNodeToFolderEntry(node));
+}
+
+const openFavorite = async (favorite: FavoriteItem) => {
+  await navigateToPath(favorite.path);
+}
+
+const openFavoriteInNewTab = (favorite: FavoriteItem) => {
+  void openEntryInNewTab(favoriteToFolderEntry(favorite));
+}
+
+const addTreeNodeToFavorites = (node: FileTreeData) => {
+  void addFavorite(node.path, node.name);
+}
+
+const addExplorerEntryToFavorites = (entry: ExplorerEntry) => {
+  if (entry.type !== "folder") return;
+  void addFavorite(entry.path, entry.name);
 }
 
 const editPreviewEntry = (entry: ExplorerEntry) => {
@@ -800,8 +843,17 @@ const signOut = async () => {
           :tree-data="treeData"
           :load-data="handleLoad"
           :current-path="fileStore.currentPath"
+          :favorites="favorites"
+          :favorites-loading="favoritesLoading"
+          :favorite-paths="favoritePaths"
           @drop-entries="dropEntriesToPathFolder"
           @open-new-tab="openTreeFolderInNewTab"
+          @open-favorite="openFavorite"
+          @open-favorite-new-tab="openFavoriteInNewTab"
+          @remove-favorite="favorite => removeFavorite(favorite)"
+          @refresh-favorites="loadFavorites({check: true})"
+          @add-favorite="addTreeNodeToFavorites"
+          @remove-favorite-path="path => removeFavorite(path)"
           @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)" />
 
       <div
@@ -869,6 +921,7 @@ const signOut = async () => {
                 :filter-text="searchText"
                 :dimmed-paths="fileClipboardAction === 'cut' ? clipboardPaths : []"
                 :can-paste="canPasteSelection"
+                :favorite-paths="favoritePaths"
                 :apply-view-shortcut="applyViewShortcut"
                 @rename="renameSelected"
                 @delete="deleteSelected"
@@ -890,6 +943,8 @@ const signOut = async () => {
                 @clear-filter="() => clearSearch()"
                 @clear-result="clearExplorerResults"
                 @open-new-tab="openEntryInNewTab"
+                @add-favorite="addExplorerEntryToFavorites"
+                @remove-favorite="path => removeFavorite(path)"
                 @open-image-viewer="openImageViewer">
             </explorer>
             <shell-notice

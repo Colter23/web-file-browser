@@ -15,11 +15,14 @@ const props = defineProps<{
   data: FileTreeData[];
   loadData: LoadData;
   currentPath: string;
+  favoritePaths: string[];
 }>();
 
 const emit = defineEmits<{
   (e: "drop-entries", payload: {entries: ExplorerEntry[]; target: FileTreeData; action: "copy" | "move"}): void;
   (e: "open-new-tab", node: FileTreeData): void;
+  (e: "add-favorite", node: FileTreeData): void;
+  (e: "remove-favorite", path: string): void;
   (e: "notice", payload: {message: string; kind?: "info" | "success" | "warning" | "error"; title?: string}): void;
 }>();
 
@@ -78,6 +81,7 @@ const contextNodePath = computed(() => normalizePathText(contextNode.value?.path
 const contextNodeExpanded = computed(() => isExpanded(contextNodePath.value));
 const contextNodeLoading = computed(() => isLoading(contextNodePath.value));
 const contextNodeHasChildren = computed(() => Boolean(contextNode.value?.children?.length));
+const contextNodeFavorite = computed(() => props.favoritePaths.some(path => normalizePathText(path) === contextNodePath.value));
 
 const ancestorPaths = (path: string) => {
   const normalized = normalizePathText(path);
@@ -252,6 +256,20 @@ const copyContextNodePath = async () => {
   } catch {
     emit("notice", {message: "浏览器未允许写入剪贴板，请手动复制路径。", kind: "error", title: "复制路径失败"});
   }
+}
+
+const addContextNodeToFavorites = () => {
+  const node = contextNode.value;
+  if (!node) return;
+  closeContextMenu();
+  emit("add-favorite", node);
+}
+
+const removeContextNodeFromFavorites = () => {
+  const node = contextNode.value;
+  if (!node) return;
+  closeContextMenu();
+  emit("remove-favorite", node.path);
 }
 
 const isCopyDrop = (event: DragEvent) => Boolean(event.ctrlKey || event.metaKey);
@@ -445,6 +463,7 @@ watch([() => props.currentPath, () => props.data], () => {
           :expanded-paths="expandedPaths"
           :loading-paths="loadingPaths"
           :drop-target-path="dropTargetPath"
+          :favorite-paths="favoritePaths"
           :load-data="loadData"
           @toggle="toggleNode"
           @navigate="navigateNode"
@@ -464,12 +483,15 @@ watch([() => props.currentPath, () => props.data], () => {
         :expanded="contextNodeExpanded"
         :loading="contextNodeLoading"
         :has-children="contextNodeHasChildren"
+        :favorite="contextNodeFavorite"
         @close="closeContextMenu"
         @escape="closeContextMenu"
         @open="openContextNode"
         @open-new-tab="openContextNodeInNewTab"
         @refresh="refreshContextNode"
         @toggle="toggleContextNode"
+        @add-favorite="addContextNodeToFavorites"
+        @remove-favorite="removeContextNodeFromFavorites"
         @copy-path="copyContextNodePath" />
   </div>
 </template>

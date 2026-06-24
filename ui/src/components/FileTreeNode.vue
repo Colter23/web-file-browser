@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<{
   expandedPaths: Set<string>;
   loadingPaths: Set<string>;
   dropTargetPath: string;
+  favoritePaths: string[];
   loadData: LoadData;
 }>(), {
   deep: 0
@@ -34,6 +35,7 @@ const focused = computed(() => normalizedPath.value === normalizePathText(props.
 const expanded = computed(() => props.expandedPaths.has(normalizedPath.value));
 const loading = computed(() => props.loadingPaths.has(normalizedPath.value));
 const dropTarget = computed(() => Boolean(props.dropTargetPath) && normalizedPath.value === normalizePathText(props.dropTargetPath));
+const favorite = computed(() => props.favoritePaths.some(path => normalizePathText(path) === normalizedPath.value));
 const hasChildren = computed(() => Boolean(props.data.children?.length));
 const nodeIcon = computed(() => normalizedPath.value === "/" ? "file.home" : "file.folder");
 const nodeStyle = computed(() => ({"--tree-depth": props.deep}));
@@ -89,6 +91,9 @@ const handleToggle = (event: MouseEvent) => {
         <file-type-icon v-else kind="folder" :open="expanded" size="1.05rem" />
       </span>
       <span class="node-name">{{ data.name }}</span>
+      <span v-if="favorite && normalizedPath !== '/'" class="node-favorite" aria-label="已收藏" title="已收藏">
+        <icon icon="action.favorite-filled" size="0.72rem" />
+      </span>
     </div>
 
     <div v-if="expanded && hasChildren" class="tree-children" role="group">
@@ -102,6 +107,7 @@ const handleToggle = (event: MouseEvent) => {
           :expanded-paths="expandedPaths"
           :loading-paths="loadingPaths"
           :drop-target-path="dropTargetPath"
+          :favorite-paths="favoritePaths"
           :load-data="loadData"
           @toggle="node => emit('toggle', node)"
           @navigate="node => emit('navigate', node)"
@@ -198,6 +204,11 @@ const handleToggle = (event: MouseEvent) => {
 
 .node-name {
   @apply min-w-0 max-w-52 truncate text-[13px] leading-none;
+}
+
+.node-favorite {
+  @apply ml-1 inline-flex shrink-0 items-center justify-center;
+  color: var(--app-accent, #2563eb);
 }
 
 .tree-children {

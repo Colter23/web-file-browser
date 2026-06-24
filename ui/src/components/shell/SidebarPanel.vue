@@ -1,29 +1,50 @@
 <script setup lang="ts">
-import type {FileTreeData, LoadData} from "../../class.ts";
+import type {FavoriteItem, FileTreeData, LoadData} from "../../class.ts";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import FileTree from "../FileTree.vue";
+import FavoritePanel from "./FavoritePanel.vue";
 
 defineProps<{
   treeData: FileTreeData[];
   loadData: LoadData;
   currentPath: string;
+  favorites: FavoriteItem[];
+  favoritesLoading: boolean;
+  favoritePaths: string[];
 }>();
 
 defineEmits<{
   (e: "drop-entries", payload: {entries: ExplorerEntry[]; target: FileTreeData; action: "copy" | "move"}): void;
   (e: "open-new-tab", node: FileTreeData): void;
+  (e: "open-favorite", favorite: FavoriteItem): void;
+  (e: "open-favorite-new-tab", favorite: FavoriteItem): void;
+  (e: "remove-favorite", favorite: FavoriteItem): void;
+  (e: "refresh-favorites"): void;
+  (e: "add-favorite", node: FileTreeData): void;
+  (e: "remove-favorite-path", path: string): void;
   (e: "notice", payload: {message: string; kind?: "info" | "success" | "warning" | "error"; title?: string}): void;
 }>();
 </script>
 
 <template>
   <aside class="sidebar">
+    <favorite-panel
+        :favorites="favorites"
+        :loading="favoritesLoading"
+        :current-path="currentPath"
+        @open="favorite => $emit('open-favorite', favorite)"
+        @open-new-tab="favorite => $emit('open-favorite-new-tab', favorite)"
+        @remove="favorite => $emit('remove-favorite', favorite)"
+        @refresh="$emit('refresh-favorites')" />
     <file-tree
         :data="treeData"
         :load-data="loadData"
         :current-path="currentPath"
+        :favorite-paths="favoritePaths"
         @drop-entries="payload => $emit('drop-entries', payload)"
         @open-new-tab="node => $emit('open-new-tab', node)"
+        @add-favorite="node => $emit('add-favorite', node)"
+        @remove-favorite="path => $emit('remove-favorite-path', path)"
         @notice="payload => $emit('notice', payload)" />
   </aside>
 </template>

@@ -8,3 +8,4 @@ export * from "./ops-api";
 export * from "./index-api";
 export * from "./trash-api";
 export * from "./search-api";
+export * from "./favorites-api";

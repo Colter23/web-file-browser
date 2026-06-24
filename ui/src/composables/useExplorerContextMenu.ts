@@ -1,6 +1,7 @@
 import {computed, reactive} from "vue";
 import type {ComputedRef, Ref} from "vue";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
+import {normalizePathText} from "../utils/file-path.ts";
 
 type MaybePromise<T = unknown> = T | Promise<T>;
 
@@ -17,6 +18,7 @@ type ExplorerContextMenuOptions = {
   imageEntries: ComputedRef<ExplorerEntry[]>;
   selectedPaths: Ref<string[]>;
   selectedEntries: ComputedRef<ExplorerEntry[]>;
+  favoritePaths: ComputedRef<string[]>;
   focusedPath: Ref<string>;
   viewportRef: Ref<HTMLElement | null>;
   itemRefs: Map<string, HTMLElement>;
@@ -48,12 +50,15 @@ type ExplorerContextMenuOptions = {
   extractEntry: (entry: ExplorerEntry) => void;
   deleteEntry: (entry: ExplorerEntry) => void;
   showProperties: (entries: ExplorerEntry[]) => void;
+  addFavorite: (entry: ExplorerEntry) => MaybePromise;
+  removeFavorite: (path: string) => MaybePromise;
 }
 
 export const useExplorerContextMenu = ({
   imageEntries,
   selectedPaths,
   selectedEntries,
+  favoritePaths,
   focusedPath,
   viewportRef,
   itemRefs,
@@ -84,7 +89,9 @@ export const useExplorerContextMenu = ({
   archiveEntry,
   extractEntry,
   deleteEntry,
-  showProperties
+  showProperties,
+  addFavorite,
+  removeFavorite
 }: ExplorerContextMenuOptions) => {
   const contextMenu = reactive({visible: false, x: 0, y: 0, targetPath: "", background: false});
 
@@ -172,6 +179,16 @@ export const useExplorerContextMenu = ({
   const contextCanViewImage = computed(() => Boolean(primaryContextEntry.value && isImageFile(primaryContextEntry.value)));
   const contextCanEdit = computed(() => canEditEntry(primaryContextEntry.value));
   const contextCanExtract = computed(() => canExtract(primaryContextEntry.value));
+  const contextCanFavorite = computed(() => {
+    const entry = primaryContextEntry.value;
+    return Boolean(entry && entry.type === "folder" && contextSelectionCount.value === 1 && normalizePathText(entry.path) !== "/");
+  });
+  const contextFavorite = computed(() => {
+    const entry = primaryContextEntry.value;
+    if (!entry || entry.type !== "folder") return false;
+    const normalized = normalizePathText(entry.path);
+    return favoritePaths.value.some(path => normalizePathText(path) === normalized);
+  });
 
   const openEntryFromContext = async () => {
     const entry = primaryContextEntry.value;
@@ -262,6 +279,19 @@ export const useExplorerContextMenu = ({
     });
   }
 
+  const addContextFavorite = async () => {
+    await runAsyncEntryContextAction(async entry => {
+      if (entry.type === "folder") await addFavorite(entry);
+    }, true);
+  }
+
+  const removeContextFavorite = async () => {
+    const entry = primaryContextEntry.value;
+    await runAsyncContextAction(async () => {
+      if (entry) await removeFavorite(entry.path);
+    }, true);
+  }
+
   return {
     contextMenu,
     closeContextMenu,
@@ -275,6 +305,8 @@ export const useExplorerContextMenu = ({
     contextCanViewImage,
     contextCanEdit,
     contextCanExtract,
+    contextCanFavorite,
+    contextFavorite,
     openEntryFromContext,
     openContextEntryInNewTab,
     previewContextEntry,
@@ -294,6 +326,8 @@ export const useExplorerContextMenu = ({
     extractContextEntry,
     renameContextEntry,
     deleteContextEntries,
-    showContextProperties
+    showContextProperties,
+    addContextFavorite,
+    removeContextFavorite
   };
 }

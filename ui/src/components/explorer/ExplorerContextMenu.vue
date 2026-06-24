@@ -18,6 +18,8 @@ const props = defineProps<{
   canViewImage: boolean;
   canEdit: boolean;
   canExtract: boolean;
+  canFavorite: boolean;
+  favorite: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -38,6 +40,8 @@ const emit = defineEmits<{
   (e: "rename"): void;
   (e: "delete"): void;
   (e: "properties"): void;
+  (e: "add-favorite"): void;
+  (e: "remove-favorite"): void;
   (e: "create-file"): void;
   (e: "create-folder"): void;
   (e: "select-all"): void;
@@ -175,6 +179,14 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
           <span class="context-row-icon"><icon icon="action.open-new-tab" /></span>
           <span class="context-row-label">在新标签页中打开</span>
         </button>
+        <button v-if="favorite" class="context-row" :disabled="!canFavorite" @click="emit('remove-favorite')">
+          <span class="context-row-icon favorite"><icon icon="action.favorite-filled" /></span>
+          <span class="context-row-label">从收藏夹移除</span>
+        </button>
+        <button v-else class="context-row" :disabled="!canFavorite" @click="emit('add-favorite')">
+          <span class="context-row-icon favorite"><icon icon="action.favorite" /></span>
+          <span class="context-row-label">添加到收藏夹</span>
+        </button>
         <button class="context-row" :disabled="!canViewImage" @click="emit('view-image')">
           <span class="context-row-icon"><icon icon="view.image" /></span>
           <span class="context-row-label">查看图片</span>
@@ -290,6 +302,10 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
 .context-row-icon {
   @apply inline-flex items-center justify-center text-[0.95rem];
   color: var(--app-accent, #2563eb);
+}
+
+.context-row-icon.favorite {
+  color: color-mix(in srgb, var(--app-warning) 88%, var(--app-accent, #2563eb));
 }
 
 .context-row-label {

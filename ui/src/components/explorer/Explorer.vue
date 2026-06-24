@@ -79,6 +79,8 @@ const emit = defineEmits<{
   (e: "drop-to-current-folder", payload: DropToCurrentFolderPayload): void;
   (e: "open-new-tab", entry: ExplorerEntry): void;
   (e: "copy-path", payload: CopyPathPayload): void;
+  (e: "add-favorite", entry: ExplorerEntry): void;
+  (e: "remove-favorite", path: string): void;
   (e: "selection-change", entries: ExplorerEntry[]): void;
   (e: "clear-filter"): void;
   (e: "clear-result"): void;
@@ -89,10 +91,12 @@ const props = withDefaults(defineProps<{
   filterText?: string;
   dimmedPaths?: string[];
   canPaste?: boolean;
+  favoritePaths?: string[];
   applyViewShortcut?: (code: string) => boolean;
 }>(), {
   filterText: "",
   dimmedPaths: () => [],
+  favoritePaths: () => [],
   canPaste: false
 })
 
@@ -502,6 +506,8 @@ const {
   contextCanViewImage,
   contextCanEdit,
   contextCanExtract,
+  contextCanFavorite,
+  contextFavorite,
   openEntryFromContext,
   openContextEntryInNewTab,
   previewContextEntry,
@@ -521,11 +527,14 @@ const {
   extractContextEntry,
   renameContextEntry,
   deleteContextEntries,
-  showContextProperties
+  showContextProperties,
+  addContextFavorite,
+  removeContextFavorite
 } = useExplorerContextMenu({
   imageEntries,
   selectedPaths,
   selectedEntries,
+  favoritePaths: computed(() => props.favoritePaths),
   focusedPath,
   viewportRef,
   itemRefs,
@@ -556,7 +565,9 @@ const {
   archiveEntry: entry => emit("archive", entry),
   extractEntry: entry => emit("extract", entry),
   deleteEntry: entry => emit("delete", entry),
-  showProperties: entries => emit("properties", entries)
+  showProperties: entries => emit("properties", entries),
+  addFavorite: entry => emit("add-favorite", entry),
+  removeFavorite: path => emit("remove-favorite", path)
 });
 
 closeContextMenuHandler = closeExplorerContextMenu;
@@ -761,6 +772,8 @@ defineExpose({
         :can-view-image="contextCanViewImage"
         :can-edit="contextCanEdit"
         :can-extract="contextCanExtract"
+        :can-favorite="contextCanFavorite"
+        :favorite="contextFavorite"
         @close="closeContextMenu"
         @escape="closeContextMenuAndFocus"
         @open="openEntryFromContext"
@@ -778,6 +791,8 @@ defineExpose({
         @rename="renameContextEntry"
         @delete="deleteContextEntries"
         @properties="showContextProperties"
+        @add-favorite="addContextFavorite"
+        @remove-favorite="removeContextFavorite"
         @create-file="createFileFromContext"
         @create-folder="createFolderFromContext"
         @select-all="selectAllFromContext"

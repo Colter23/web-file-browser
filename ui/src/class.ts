@@ -100,6 +100,34 @@ export interface FileTreeData {
     children?: FileTreeData[]
 }
 
+export interface FavoriteItem {
+    id: string;
+    mountId: number | string;
+    mountPath: string;
+    relativePath: string;
+    path: string;
+    name: string;
+    order: number;
+    createdAt: string;
+    missing?: boolean;
+}
+
+export interface CreateFavoriteRequest {
+    path: string;
+    name?: string;
+    order?: number;
+}
+
+export interface UpdateFavoriteRequest {
+    name?: string;
+    order?: number;
+}
+
+export interface ReorderFavoriteItem {
+    id: string;
+    order: number;
+}
+
 export enum FileType {
      
     IMAGE,
