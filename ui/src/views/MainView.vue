@@ -8,7 +8,6 @@ import {
   listTasks,
   logout,
 } from "../network/api";
-import Icon from "../components/Icon.vue";
 import Explorer from "../components/explorer/Explorer.vue";
 import ImageViewer from "../components/viewer/ImageViewer.vue";
 import PreviewPane from "../components/viewer/PreviewPane.vue";
@@ -21,6 +20,7 @@ import ContentToolbar from "../components/shell/ContentToolbar.vue";
 import CommandBar from "../components/shell/CommandBar.vue";
 import ShellNotice from "../components/shell/ShellNotice.vue";
 import SidebarPanel from "../components/shell/SidebarPanel.vue";
+import ShellMoreMenu from "../components/shell/ShellMoreMenu.vue";
 import UploadDropOverlay from "../components/shell/UploadDropOverlay.vue";
 import type {DirSortKey, DirSortOrder, FileTreeData} from "../class.ts";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
@@ -575,14 +575,12 @@ const signOut = async () => {
           @close-right-tabs="closeRightTabsFromMenu"
           @close-context-menu="closeTabContextMenu" />
       <div class="top-actions">
-        <button class="square-button" title="设置" @click="openSettings">
-          <icon icon="action.settings" size="large" />
-        </button>
-        <button :class="['task-top-button', {active: taskPanelVisible}]" title="后台任务" @click="toggleTaskPanel">
-          <icon icon="view.details" />
-          <span>{{ taskButtonText }}</span>
-        </button>
-        <button class="plain-button" @click="signOut">退出</button>
+        <shell-more-menu
+            :task-button-text="taskButtonText"
+            :task-active="taskPanelVisible"
+            @open-settings="openSettings"
+            @toggle-tasks="toggleTaskPanel"
+            @sign-out="signOut" />
       </div>
     </header>
 
@@ -810,54 +808,7 @@ const signOut = async () => {
 }
 
 .top-actions {
-  @apply flex h-full shrink-0 items-center gap-3;
-}
-
-.square-button {
-  @apply inline-flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm backdrop-blur;
-  border-color: color-mix(in srgb, var(--app-border) 45%, transparent);
-  background: var(--app-control);
-  color: var(--app-accent, #2563eb);
-}
-
-.square-button:hover {
-  background: var(--app-control-hover);
-}
-
-.square-button:focus-visible,
-.task-top-button:focus-visible,
-.plain-button:focus-visible {
-  @apply outline-none;
-  border-color: var(--app-accent, #2563eb);
-  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
-}
-
-.task-top-button {
-  @apply inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 text-sm shadow-sm backdrop-blur;
-  border-color: color-mix(in srgb, var(--app-border) 45%, transparent);
-  background: var(--app-control);
-  color: var(--app-text-muted);
-}
-
-.task-top-button:hover {
-  background: var(--app-control-hover);
-}
-
-.task-top-button.active {
-  border-color: var(--app-accent-border, #bfdbfe);
-  background: var(--app-accent-soft, #eff6ff);
-  color: var(--app-accent, #2563eb);
-}
-
-.plain-button {
-  @apply h-10 rounded-lg border px-3 text-sm shadow-sm;
-  border-color: color-mix(in srgb, var(--app-border) 45%, transparent);
-  background: var(--app-control);
-  color: var(--app-text-muted);
-}
-
-.plain-button:hover {
-  background: var(--app-control-hover);
+  @apply flex h-full shrink-0 items-center;
 }
 
 .workspace {

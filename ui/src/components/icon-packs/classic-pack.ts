@@ -20,6 +20,8 @@ const classicSymbolIcons: Record<string, string> = {
   "action.add": "icon-add",
   "action.refresh": "icon-refresh",
   "action.settings": "icon-setting",
+  "action.more": "icon-unfold",
+  "action.logout": "icon-user-fill",
   "action.search": "icon-fenxiang",
   "action.share": "icon-fenxiang",
   "action.fullscreen": "icon-viewgrid",
