@@ -1,4 +1,11 @@
-import type {RuntimeSettings, TrashCleanupResponse, TrashRecord, TrashRestoreResponse} from "../class";
+import type {
+    RuntimeSettings,
+    TrashBatchPurgeResponse,
+    TrashBatchRestoreResponse,
+    TrashCleanupResponse,
+    TrashRecord,
+    TrashRestoreResponse
+} from "../class";
 import network from "../network";
 import {parentPath} from "../utils/file-path.ts";
 import {invalidateFolderDataCache} from "./file-api.ts";
@@ -17,8 +24,26 @@ export const restoreTrashRecord = async (id: string, conflictPolicy?: ConflictPo
     return response
 }
 
+export const restoreTrashRecords = async (
+    ids: string[],
+    conflictPolicy?: ConflictPolicy
+): Promise<TrashBatchRestoreResponse> => {
+    const response: TrashBatchRestoreResponse = (await network.post("/api/trash/batch/restore", {
+        ids,
+        conflictPolicy
+    })).data
+    response.restored.forEach(item => {
+        invalidateFolderDataCache(parentPath(item.restoredVirtualPath), {includeAncestors: true});
+    });
+    return response
+}
+
 export const deleteTrashRecord = async (id: string): Promise<void> => {
     await network.delete(`/api/trash/${encodeURIComponent(id)}`)
+}
+
+export const deleteTrashRecords = async (ids: string[]): Promise<TrashBatchPurgeResponse> => {
+    return (await network.post("/api/trash/batch/purge", {ids})).data
 }
 
 export const emptyTrash = async (): Promise<TrashCleanupResponse> => {

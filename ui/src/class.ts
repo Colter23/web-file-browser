@@ -210,6 +210,25 @@ export interface TrashRestoreResponse {
     restoredRealPath: string;
 }
 
+export interface TrashBatchError {
+    id: string;
+    message: string;
+}
+
+export interface TrashBatchRestoreResponse {
+    restored: TrashRestoreResponse[];
+    errors: TrashBatchError[];
+    success: number;
+    failed: number;
+}
+
+export interface TrashBatchPurgeResponse {
+    purged: string[];
+    errors: TrashBatchError[];
+    success: number;
+    failed: number;
+}
+
 export interface TrashCleanupResponse {
     removed: number;
 }

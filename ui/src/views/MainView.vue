@@ -6,6 +6,7 @@ import {
   cancelTask,
   cleanupTasks,
   cleanupTrash,
+  deleteTrashRecords,
   deleteTrashRecord,
   emptyTrash,
   getIndexStatus,
@@ -13,6 +14,7 @@ import {
   listTasks,
   listTrashRecords,
   logout,
+  restoreTrashRecords,
   restoreTrashRecord,
 } from "../network/api";
 import Explorer from "../components/explorer/Explorer.vue";
@@ -161,11 +163,13 @@ const {
   records: trashRecords,
   message: trashMessage,
   selectedId: trashSelectedId,
+  selectedIds: trashSelectedIds,
   selectedRecord: trashSelectedRecord,
   load: loadTrash,
   toggle: toggleTrashPanelBase,
   close: closeTrashPanel,
   selectRecord: selectTrashRecord,
+  selectAllRecords: selectAllTrashRecords,
   restoreSelected: restoreTrashSelected,
   deleteSelected: deleteTrashSelected,
   empty: emptyTrashPanel,
@@ -173,7 +177,9 @@ const {
 } = useTrashPanel({
   listTrashRecords,
   restoreTrashRecord,
+  restoreTrashRecords,
   deleteTrashRecord,
+  deleteTrashRecords,
   emptyTrash,
   cleanupTrash,
   showError: showErrorNotice,
@@ -897,11 +903,13 @@ const signOut = async () => {
                 v-if="trashPanelVisible"
                 :records="trashRecords"
                 :selected-id="trashSelectedId"
+                :selected-ids="trashSelectedIds"
                 :selected-record="trashSelectedRecord"
                 :loading="trashLoading"
                 :action-loading="trashActionLoading"
                 :message="trashMessage"
                 @select="selectTrashRecord"
+                @select-all="selectAllTrashRecords"
                 @refresh="loadTrash()"
                 @restore="restoreTrashSelected"
                 @delete="deleteTrashSelected"

@@ -6,9 +6,15 @@ import {parentPath} from "../../utils/file-path.ts";
 import FileTypeIcon from "../FileTypeIcon.vue";
 import Icon from "../Icon.vue";
 
+type TrashSelectOptions = {
+  range?: boolean;
+  toggle?: boolean;
+}
+
 const props = defineProps<{
   records: TrashRecord[];
   selectedId: string;
+  selectedIds: string[];
   selectedRecord: TrashRecord | null;
   loading: boolean;
   actionLoading: boolean;
@@ -16,7 +22,8 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "select", id: string): void;
+  (e: "select", id: string, options?: TrashSelectOptions): void;
+  (e: "select-all"): void;
   (e: "refresh"): void;
   (e: "restore"): void;
   (e: "delete"): void;
@@ -27,7 +34,12 @@ const emit = defineEmits<{
 
 const panelRef = ref<HTMLElement | null>(null);
 
-const canAct = computed(() => Boolean(props.selectedRecord) && !props.loading && !props.actionLoading);
+const selectedIdSet = computed(() => new Set(props.selectedIds));
+const selectedCount = computed(() => props.selectedIds.length);
+const selectedCountText = computed(() => selectedCount.value ? `已选择 ${selectedCount.value} 项` : "未选择项目");
+const restoreText = computed(() => selectedCount.value > 1 ? `恢复 ${selectedCount.value} 项` : "恢复");
+const deleteText = computed(() => selectedCount.value > 1 ? `永久删除 ${selectedCount.value} 项` : "永久删除");
+const canAct = computed(() => selectedCount.value > 0 && !props.loading && !props.actionLoading);
 const canBulkAct = computed(() => props.records.length > 0 && !props.loading && !props.actionLoading);
 
 const recordName = (record: TrashRecord) => {
@@ -53,6 +65,25 @@ const selectedDetails = computed(() => {
   ];
 });
 
+const handleRowClick = (event: MouseEvent, record: TrashRecord) => {
+  emit("select", record.id, {
+    range: event.shiftKey,
+    toggle: event.ctrlKey || event.metaKey
+  });
+}
+
+const handleKeydown = (event: KeyboardEvent) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
+    event.preventDefault();
+    emit("select-all");
+    return;
+  }
+  if (event.key === "Delete" && canAct.value) {
+    event.preventDefault();
+    emit("delete");
+  }
+}
+
 watch(() => props.records.length, async () => {
   await nextTick();
   panelRef.value?.focus({preventScroll: true});
@@ -60,13 +91,19 @@ watch(() => props.records.length, async () => {
 </script>
 
 <template>
-  <section ref="panelRef" class="trash-panel" aria-label="回收站" tabindex="-1" @keydown.esc.prevent.stop="emit('close')">
+  <section
+      ref="panelRef"
+      class="trash-panel"
+      aria-label="回收站"
+      tabindex="-1"
+      @keydown="handleKeydown"
+      @keydown.esc.prevent.stop="emit('close')">
     <div class="trash-panel-header">
       <div class="trash-title">
         <span class="trash-icon"><icon icon="action.trash" /></span>
         <div>
           <p>回收站</p>
-          <small>{{ records.length ? `${records.length} 项` : "暂无可恢复项目" }}</small>
+          <small>{{ records.length ? `${records.length} 项 · ${selectedCountText}` : "暂无可恢复项目" }}</small>
         </div>
       </div>
       <div class="trash-actions">
@@ -82,11 +119,11 @@ watch(() => props.records.length, async () => {
     <div class="trash-toolbar">
       <button type="button" class="trash-primary" :disabled="!canAct" @click="emit('restore')">
         <icon icon="action.restore" />
-        <span>恢复</span>
+        <span>{{ restoreText }}</span>
       </button>
       <button type="button" class="trash-secondary" :disabled="!canAct" @click="emit('delete')">
         <icon icon="action.delete" />
-        <span>永久删除</span>
+        <span>{{ deleteText }}</span>
       </button>
       <button type="button" class="trash-secondary" :disabled="!canBulkAct" @click="emit('cleanup')">
         <icon icon="action.clean" />
@@ -103,17 +140,20 @@ watch(() => props.records.length, async () => {
     <div v-if="loading" class="trash-empty">正在加载回收站...</div>
     <div v-else-if="!records.length" class="trash-empty">回收站为空</div>
     <div v-else class="trash-content">
-      <div class="trash-list" role="listbox" aria-label="回收站项目">
+      <div class="trash-list" role="listbox" aria-label="回收站项目" aria-multiselectable="true">
         <button
             v-for="record in records"
             :key="record.id"
             type="button"
             class="trash-row"
-            :class="{active: selectedId === record.id}"
+            :class="{active: selectedIdSet.has(record.id), focused: selectedId === record.id}"
             role="option"
-            :aria-selected="selectedId === record.id"
+            :aria-selected="selectedIdSet.has(record.id)"
             :title="record.originalVirtualPath"
-            @click="emit('select', record.id)">
+            @click="event => handleRowClick(event, record)">
+          <span class="trash-row-check" aria-hidden="true">
+            <icon v-if="selectedIdSet.has(record.id)" icon="action.check" />
+          </span>
           <file-type-icon :kind="recordKind(record)" />
           <span class="trash-row-main">
             <strong>{{ recordName(record) }}</strong>
@@ -143,7 +183,7 @@ watch(() => props.records.length, async () => {
 @reference "tailwindcss";
 
 .trash-panel {
-  @apply absolute right-3 top-3 z-20 flex w-[min(52rem,calc(100%-1.5rem))] flex-col gap-3 overflow-hidden rounded-lg border p-3 shadow-2xl outline-none backdrop-blur;
+  @apply absolute right-3 top-3 z-20 flex w-[min(56rem,calc(100%-1.5rem))] flex-col gap-3 overflow-hidden rounded-lg border p-3 shadow-2xl outline-none backdrop-blur;
   max-height: min(36rem, calc(100% - 1.5rem));
   border-color: var(--app-border-soft);
   background: color-mix(in srgb, var(--app-panel-solid) 96%, transparent);
@@ -267,7 +307,7 @@ watch(() => props.records.length, async () => {
 }
 
 .trash-row {
-  @apply grid min-h-14 w-full grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md border px-3 py-2 text-left;
+  @apply grid min-h-14 w-full grid-cols-[1rem_1.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md border px-3 py-2 text-left;
   border-color: transparent;
   color: var(--app-text-muted);
 }
@@ -277,6 +317,22 @@ watch(() => props.records.length, async () => {
   border-color: var(--app-accent-border, #bfdbfe);
   background: var(--app-accent-soft, #eff6ff);
   color: var(--app-accent, #2563eb);
+}
+
+.trash-row.focused {
+  box-shadow: inset 0 0 0 1px var(--app-accent, #2563eb);
+}
+
+.trash-row-check {
+  @apply flex h-4 w-4 items-center justify-center rounded border text-[0.625rem];
+  border-color: var(--app-border);
+  background: var(--app-control-solid);
+  color: var(--app-accent, #2563eb);
+}
+
+.trash-row.active .trash-row-check {
+  border-color: var(--app-accent, #2563eb);
+  background: var(--app-accent-soft, #eff6ff);
 }
 
 .trash-row-main {
@@ -328,11 +384,11 @@ watch(() => props.records.length, async () => {
   }
 
   .trash-row {
-    grid-template-columns: 1.25rem minmax(0, 1fr);
+    grid-template-columns: 1rem 1.25rem minmax(0, 1fr);
   }
 
   .trash-row-meta {
-    @apply col-start-2 items-start;
+    @apply col-start-3 items-start;
   }
 }
 </style>
