@@ -23,7 +23,7 @@ import SidebarPanel from "../components/shell/SidebarPanel.vue";
 import ShellMoreMenu from "../components/shell/ShellMoreMenu.vue";
 import UploadDropOverlay from "../components/shell/UploadDropOverlay.vue";
 import type {DirSortKey, DirSortOrder, FileTreeData} from "../class.ts";
-import type {ExplorerEntry} from "../components/explorer/types.ts";
+import type {ExplorerEntry, ExplorerEntryPathDropPayload} from "../components/explorer/types.ts";
 import {usePreviewPaneResize} from "../composables/usePreviewPaneResize.ts";
 import {useSidebarResize} from "../composables/useSidebarResize.ts";
 import {useShellNotice} from "../composables/useShellNotice.ts";
@@ -491,7 +491,7 @@ const treeNodeToFolderEntry = (node: Pick<FileTreeData, "path" | "name">): Explo
   modified: ""
 });
 
-const dropEntriesToPathFolder = ({entries, target, action}: {entries: ExplorerEntry[]; target: {path: string; name: string}; action: "copy" | "move"}) => {
+const dropEntriesToPathFolder = ({entries, target, action}: ExplorerEntryPathDropPayload) => {
   void dropEntriesToFolder({
     entries,
     action,
@@ -568,6 +568,7 @@ const signOut = async () => {
           @tab-drag-leave="leaveTabDropTarget"
           @tab-drop="dropTab"
           @tab-drag-end="finishTabDrag"
+          @drop-entries="dropEntriesToPathFolder"
           @duplicate-tab="duplicateTabFromMenu"
           @close-context-tab="closeTabFromMenu"
           @reopen-closed-tab="reopenClosedTab"

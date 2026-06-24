@@ -3,21 +3,13 @@ import type {ComponentPublicInstance} from "vue";
 import {ref} from "vue";
 import Breadcrumb from "../Breadcrumb.vue";
 import Icon from "../Icon.vue";
-import type {ExplorerEntry} from "../explorer/types.ts";
+import type {ExplorerEntryPathDropPayload} from "../explorer/types.ts";
 
 type BreadcrumbExpose = {
   focusInput: () => void;
 }
 
 type NavigateComplete = (navigated: boolean) => void;
-type BreadcrumbDropPayload = {
-  entries: ExplorerEntry[];
-  target: {
-    path: string;
-    name: string;
-  };
-  action: "copy" | "move";
-}
 
 defineProps<{
   canNavigateBack: boolean;
@@ -37,7 +29,7 @@ const emit = defineEmits<{
   (e: "navigate-up"): void;
   (e: "refresh"): void;
   (e: "breadcrumb-navigate", path: string, complete?: NavigateComplete): void;
-  (e: "breadcrumb-drop", payload: BreadcrumbDropPayload): void;
+  (e: "breadcrumb-drop", payload: ExplorerEntryPathDropPayload): void;
   (e: "update:search-text", value: string): void;
   (e: "search-enter"): void;
   (e: "search-escape"): void;

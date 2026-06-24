@@ -2,10 +2,12 @@
 import {nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ExplorerTab} from "../../class";
 import type {TabContextMenuState, TabDropPlacement} from "./types.ts";
+import type {ExplorerEntryPathDropPayload} from "../explorer/types.ts";
 import Icon from "../Icon.vue";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
 import {useViewportMenuPosition} from "../../composables/useViewportMenuPosition.ts";
+import {hasInternalEntryDragData, readInternalEntryDragData} from "../../utils/internal-entry-drag.ts";
 import {scrollHorizontallyWithWheel} from "../../utils/wheel.ts";
 
 const props = defineProps<{
@@ -26,6 +28,7 @@ const tabButtonRefs = new Map<string, HTMLElement>();
 const tabScrollRef = ref<HTMLElement | null>(null);
 const contextMenuRef = ref<HTMLElement | null>(null);
 const addButtonPinned = ref(false);
+const entryDropTargetTabId = ref("");
 const {menuPosition: contextMenuPosition, placeMenu: placeContextMenu} = useViewportMenuPosition({menuRef: contextMenuRef});
 let tabScrollResizeObserver: ResizeObserver | null = null;
 let tabOverflowFrame = 0;
@@ -93,8 +96,14 @@ const handleWindowResize = () => {
   if (props.contextMenu.visible) void refreshContextMenu();
 }
 
+const clearEntryDropTarget = () => {
+  entryDropTargetTabId.value = "";
+}
+
 onMounted(() => {
   window.addEventListener("resize", handleWindowResize);
+  document.addEventListener("dragend", clearEntryDropTarget, true);
+  document.addEventListener("drop", clearEntryDropTarget, true);
   if (typeof ResizeObserver !== "undefined" && tabScrollRef.value) {
     tabScrollResizeObserver = new ResizeObserver(scheduleTabOverflowUpdate);
     tabScrollResizeObserver.observe(tabScrollRef.value);
@@ -104,6 +113,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", handleWindowResize);
+  document.removeEventListener("dragend", clearEntryDropTarget, true);
+  document.removeEventListener("drop", clearEntryDropTarget, true);
   tabScrollResizeObserver?.disconnect();
   if (tabOverflowFrame) window.cancelAnimationFrame(tabOverflowFrame);
 });
@@ -119,6 +130,7 @@ const emit = defineEmits<{
   (e: "tab-drag-leave", event: DragEvent, tabId: string): void;
   (e: "tab-drop", event: DragEvent, tabId: string): void;
   (e: "tab-drag-end"): void;
+  (e: "drop-entries", payload: ExplorerEntryPathDropPayload): void;
   (e: "duplicate-tab"): void;
   (e: "close-context-tab"): void;
   (e: "reopen-closed-tab"): void;
@@ -126,6 +138,57 @@ const emit = defineEmits<{
   (e: "close-right-tabs"): void;
   (e: "close-context-menu"): void;
 }>();
+
+const isCopyEntryDrop = (event: DragEvent) => Boolean(event.ctrlKey || event.metaKey);
+
+const canAcceptEntryDrop = (event: DragEvent) => {
+  if (props.draggingTabId) return false;
+  return hasInternalEntryDragData(event.dataTransfer);
+}
+
+const handleTabDragOver = (event: DragEvent, tab: ExplorerTab) => {
+  if (!canAcceptEntryDrop(event)) {
+    emit("tab-drag-over", event, tab.id);
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  entryDropTargetTabId.value = tab.id;
+  if (event.dataTransfer) event.dataTransfer.dropEffect = isCopyEntryDrop(event) ? "copy" : "move";
+}
+
+const handleTabDragLeave = (event: DragEvent, tab: ExplorerTab) => {
+  if (entryDropTargetTabId.value !== tab.id) {
+    emit("tab-drag-leave", event, tab.id);
+    return;
+  }
+  const related = event.relatedTarget;
+  if (related instanceof Node && event.currentTarget instanceof HTMLElement && event.currentTarget.contains(related)) return;
+  entryDropTargetTabId.value = "";
+}
+
+const handleTabDrop = (event: DragEvent, tab: ExplorerTab) => {
+  if (!canAcceptEntryDrop(event)) {
+    emit("tab-drop", event, tab.id);
+    return;
+  }
+  const entries = readInternalEntryDragData(event.dataTransfer);
+  if (!entries.length) {
+    entryDropTargetTabId.value = "";
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  entryDropTargetTabId.value = "";
+  emit("drop-entries", {
+    entries,
+    target: {
+      path: tab.path,
+      name: tab.title
+    },
+    action: isCopyEntryDrop(event) ? "copy" : "move"
+  });
+}
 </script>
 
 <template>
@@ -140,7 +203,8 @@ const emit = defineEmits<{
             active: tab.id === activeTabId,
             dragging: draggingTabId === tab.id,
             dropBefore: dropTargetId === tab.id && dropPlacement === 'before',
-            dropAfter: dropTargetId === tab.id && dropPlacement === 'after'
+            dropAfter: dropTargetId === tab.id && dropPlacement === 'after',
+            entryDropTarget: entryDropTargetTabId === tab.id
           }"
           :title="`${tab.path} · Ctrl+Tab 切换 · 中键关闭`"
           draggable="true"
@@ -148,9 +212,9 @@ const emit = defineEmits<{
           @auxclick="emit('tab-aux-click', $event, tab.id)"
           @contextmenu="emit('tab-context-menu', $event, tab.id)"
           @dragstart="emit('tab-drag-start', $event, tab.id)"
-          @dragover="emit('tab-drag-over', $event, tab.id)"
-          @dragleave="emit('tab-drag-leave', $event, tab.id)"
-          @drop="emit('tab-drop', $event, tab.id)"
+          @dragover="handleTabDragOver($event, tab)"
+          @dragleave="handleTabDragLeave($event, tab)"
+          @drop="handleTabDrop($event, tab)"
           @dragend="emit('tab-drag-end')">
         <icon icon="file.folder" />
         <span>{{ tab.title }}</span>
@@ -237,9 +301,18 @@ const emit = defineEmits<{
   box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.2));
 }
 
+.tab-button.entryDropTarget {
+  border-color: var(--app-accent, #2563eb);
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
 .tab-button.active.dropBefore,
-.tab-button.active.dropAfter {
+.tab-button.active.dropAfter,
+.tab-button.active.entryDropTarget {
   background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast);
 }
 
 .tab-button.active:focus-visible {

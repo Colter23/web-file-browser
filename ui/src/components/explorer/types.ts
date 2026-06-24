@@ -13,3 +13,14 @@ export type ExplorerEntry = {
   extension?: string;
   file?: FileInfo;
 }
+
+export type ExplorerDropAction = "copy" | "move";
+
+export type ExplorerEntryPathDropPayload = {
+  entries: ExplorerEntry[];
+  target: {
+    path: string;
+    name: string;
+  };
+  action: ExplorerDropAction;
+}

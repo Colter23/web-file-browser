@@ -3,23 +3,15 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import Icon from "./Icon.vue";
 import {useFileStore} from "../store";
 import {scrollHorizontallyWithWheel} from "../utils/wheel.ts";
-import type {ExplorerEntry} from "./explorer/types.ts";
+import type {ExplorerEntryPathDropPayload} from "./explorer/types.ts";
 import {hasInternalEntryDragData, readInternalEntryDragData} from "../utils/internal-entry-drag.ts";
 
 const fileStore = useFileStore();
 type NavigateComplete = (navigated: boolean) => void;
-type BreadcrumbDropPayload = {
-  entries: ExplorerEntry[];
-  target: {
-    path: string;
-    name: string;
-  };
-  action: "copy" | "move";
-}
 
 const emit = defineEmits<{
   (e: "navigate", path: string, complete?: NavigateComplete): void;
-  (e: "drop-entries", payload: BreadcrumbDropPayload): void;
+  (e: "drop-entries", payload: ExplorerEntryPathDropPayload): void;
 }>();
 
 const splitPath = (path: string) => path.substring(1).split("/").filter(Boolean);
