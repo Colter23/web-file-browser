@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, onMounted, reactive, ref} from "vue";
 import {useRouter} from "vue-router";
-import type {IndexStatus, PathMapping, RuntimeSettings} from "../class";
+import type {IndexStatus, MetricsResponse, PathMapping, RuntimeSettings} from "../class";
 import {
   cancelIndexRebuild,
   changePassword,
@@ -9,6 +9,7 @@ import {
   deleteMapping,
   getIndexStatus,
   getMappings,
+  getMetrics,
   getSettings,
   rebuildIndex,
   updateMapping
@@ -20,16 +21,18 @@ import {
   iconStyleOptions,
   useAppearanceStore
 } from "../store/appearance.ts";
-import {formatEntryDate} from "../utils/file-entry.ts";
+import {formatEntryDate, formatEntrySize} from "../utils/file-entry.ts";
 
 const router = useRouter();
 const appearanceStore = useAppearanceStore();
 const mappings = ref<PathMapping[]>([]);
 const settings = ref<RuntimeSettings | null>(null);
 const indexStatus = ref<IndexStatus | null>(null);
+const metrics = ref<MetricsResponse | null>(null);
 const loading = ref(false);
 const indexLoading = ref(false);
 const indexActionLoading = ref(false);
+const metricsLoading = ref(false);
 const message = ref("");
 const messageKind = ref<"success" | "error">("error");
 
@@ -51,6 +54,8 @@ const indexBusy = computed(() => indexLoading.value || indexActionLoading.value)
 const indexBuilding = computed(() => indexStatus.value?.state === "building");
 const canRebuildIndex = computed(() => Boolean(indexStatus.value?.enabled) && !indexBusy.value && !indexBuilding.value);
 const canCancelIndex = computed(() => Boolean(indexStatus.value?.enabled) && !indexBusy.value && indexBuilding.value);
+const taskMetrics = computed(() => metrics.value?.tasks);
+const limitMetrics = computed(() => metrics.value?.limits);
 
 const load = async () => {
   loading.value = true;
@@ -59,7 +64,7 @@ const load = async () => {
     const [mappingData, settingData] = await Promise.all([getMappings(), getSettings()]);
     mappings.value = mappingData;
     settings.value = settingData;
-    await loadIndexStatus(false);
+    await Promise.all([loadIndexStatus(false), loadMetrics(false)]);
   } catch (error) {
     showError(error, "加载设置失败");
   } finally {
@@ -116,6 +121,26 @@ const optionalDateText = (value?: string | null) => value ? formatEntryDate(valu
 
 const indexEntryCountText = (value?: number) => Number.isFinite(value) ? `${value} 项` : "-";
 
+const isFiniteNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+
+const countText = (value?: number) => isFiniteNumber(value) ? String(value) : "-";
+
+const bytesText = (value?: number) => formatEntrySize(value, "-");
+
+const optionalBytesText = (value?: number) => isFiniteNumber(value) && value > 0 ? formatEntrySize(value) : "不限制";
+
+const speedText = (value?: number) => `${formatEntrySize(value, "0 B")}/s`;
+
+const limitUsageText = (active?: number, limit?: number) => {
+  if (!isFiniteNumber(active) || !isFiniteNumber(limit)) return "-";
+  return `${active}/${limit}`;
+}
+
+const limitUsageRatio = (active?: number, limit?: number) => {
+  if (!isFiniteNumber(active) || !isFiniteNumber(limit) || !limit) return "0%";
+  return `${Math.min(100, Math.max(0, active / limit * 100))}%`;
+}
+
 const showError = (error: unknown, fallback: string) => {
   messageKind.value = "error";
   message.value = error instanceof Error ? error.message : fallback;
@@ -135,6 +160,19 @@ const loadIndexStatus = async (showFailure = true) => {
     if (showFailure) showError(error, "加载索引状态失败");
   } finally {
     indexLoading.value = false;
+  }
+}
+
+const loadMetrics = async (showFailure = true) => {
+  metricsLoading.value = true;
+  try {
+    metrics.value = await getMetrics();
+    if (metrics.value.index) indexStatus.value = metrics.value.index;
+  } catch (error) {
+    metrics.value = null;
+    if (showFailure) showError(error, "加载运行状态失败");
+  } finally {
+    metricsLoading.value = false;
   }
 }
 
@@ -335,6 +373,80 @@ const savePassword = async () => {
         </div>
       </section>
 
+      <section class="panel metrics-panel">
+        <div class="section-heading">
+          <h2>运行状态</h2>
+          <button class="plain-button" :disabled="metricsLoading" @click="loadMetrics(true)">刷新状态</button>
+        </div>
+        <div v-if="metricsLoading && !metrics" class="empty">正在加载运行状态...</div>
+        <template v-else>
+          <div class="metrics-summary">
+            <div class="metric-tile">
+              <span>挂载</span>
+              <strong>{{ countText(metrics?.mappings) }}</strong>
+            </div>
+            <div class="metric-tile">
+              <span>会话</span>
+              <strong>{{ countText(metrics?.activeSessions) }}</strong>
+            </div>
+            <div class="metric-tile">
+              <span>回收站</span>
+              <strong>{{ countText(metrics?.trashEntries) }}</strong>
+            </div>
+            <div class="metric-tile">
+              <span>后台任务</span>
+              <strong>{{ countText(taskMetrics?.total) }}</strong>
+            </div>
+          </div>
+
+          <div class="metrics-grid">
+            <section class="metric-section" aria-label="任务统计">
+              <h3>任务统计</h3>
+              <dl class="compact-meta">
+                <div><dt>运行 / 排队</dt><dd>{{ countText(taskMetrics?.running) }} / {{ countText(taskMetrics?.queued) }}</dd></div>
+                <div><dt>完成 / 失败 / 取消</dt><dd>{{ countText(taskMetrics?.completed) }} / {{ countText(taskMetrics?.failed) }} / {{ countText(taskMetrics?.cancelled) }}</dd></div>
+                <div><dt>错误数</dt><dd>{{ countText(taskMetrics?.errorsTotal) }}</dd></div>
+                <div><dt>已处理</dt><dd>{{ bytesText(taskMetrics?.processedBytes) }}</dd></div>
+                <div><dt>当前速度</dt><dd>{{ speedText(taskMetrics?.currentSpeedBytesPerSec) }}</dd></div>
+              </dl>
+            </section>
+
+            <section class="metric-section" aria-label="并发占用">
+              <h3>并发占用</h3>
+              <div class="limit-list">
+                <div class="limit-row">
+                  <div>
+                    <span>目录扫描</span>
+                    <strong>{{ limitUsageText(limitMetrics?.activeDirScans, limitMetrics?.dirScanLimit) }}</strong>
+                  </div>
+                  <span class="limit-bar"><span :style="{width: limitUsageRatio(limitMetrics?.activeDirScans, limitMetrics?.dirScanLimit)}"></span></span>
+                </div>
+                <div class="limit-row">
+                  <div>
+                    <span>文件传输</span>
+                    <strong>{{ limitUsageText(limitMetrics?.activeTransfers, limitMetrics?.transferLimit) }}</strong>
+                  </div>
+                  <span class="limit-bar"><span :style="{width: limitUsageRatio(limitMetrics?.activeTransfers, limitMetrics?.transferLimit)}"></span></span>
+                </div>
+                <div class="limit-row">
+                  <div>
+                    <span>IP 请求</span>
+                    <strong>{{ limitUsageText(limitMetrics?.activeIpRequests, limitMetrics?.ipLimit) }}</strong>
+                  </div>
+                  <span class="limit-bar"><span :style="{width: limitUsageRatio(limitMetrics?.activeIpRequests, limitMetrics?.ipLimit)}"></span></span>
+                </div>
+                <div class="limit-row tracked">
+                  <div>
+                    <span>已跟踪 IP</span>
+                    <strong>{{ countText(limitMetrics?.trackedIps) }}</strong>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </template>
+      </section>
+
       <section class="panel index-panel">
         <div class="section-heading">
           <h2>搜索索引</h2>
@@ -365,26 +477,26 @@ const savePassword = async () => {
           <div><dt>静态目录</dt><dd>{{ settings.staticDir }}</dd></div>
           <div><dt>CORS 来源</dt><dd>{{ corsOriginsText(settings.corsAllowedOrigins) }}</dd></div>
           <div><dt>信任代理来源头</dt><dd>{{ settings.trustProxyHeaders ? "已启用" : "未启用" }}</dd></div>
-          <div><dt>编辑上限</dt><dd>{{ settings.maxEditBytes }} bytes</dd></div>
+          <div><dt>编辑上限</dt><dd>{{ bytesText(settings.maxEditBytes) }}</dd></div>
           <div><dt>可编辑扩展名</dt><dd>{{ listText(settings.editableExtensions) }}</dd></div>
           <div><dt>可编辑 MIME</dt><dd>{{ listText(settings.editableMimeTypes) }}</dd></div>
-          <div><dt>上传上限</dt><dd>{{ settings.maxUploadBytes ? `${settings.maxUploadBytes} bytes` : "不限制" }}</dd></div>
+          <div><dt>上传上限</dt><dd>{{ optionalBytesText(settings.maxUploadBytes) }}</dd></div>
           <div><dt>目录分页上限</dt><dd>{{ settings.maxDirPageSize }}</dd></div>
           <div><dt>目录并发</dt><dd>{{ settings.maxDirConcurrency }}</dd></div>
           <div><dt>传输并发</dt><dd>{{ settings.maxTransferConcurrency }}</dd></div>
           <div><dt>IP 并发</dt><dd>{{ settings.maxIpConcurrency }}</dd></div>
           <div><dt>任务并发</dt><dd>{{ settings.maxTaskConcurrency }}</dd></div>
           <div><dt>任务历史</dt><dd>最近 {{ settings.taskHistoryLimit }} 条已结束任务</dd></div>
-          <div><dt>任务限速</dt><dd>{{ settings.taskSpeedLimitBytesPerSec ? `${settings.taskSpeedLimitBytesPerSec} bytes/s` : "不限制" }}</dd></div>
-          <div><dt>解压字节上限</dt><dd>{{ settings.maxExtractBytes ? `${settings.maxExtractBytes} bytes` : "不限制" }}</dd></div>
+          <div><dt>任务限速</dt><dd>{{ settings.taskSpeedLimitBytesPerSec ? speedText(settings.taskSpeedLimitBytesPerSec) : "不限制" }}</dd></div>
+          <div><dt>解压字节上限</dt><dd>{{ optionalBytesText(settings.maxExtractBytes) }}</dd></div>
           <div><dt>解压条目上限</dt><dd>{{ settings.maxExtractFiles ? settings.maxExtractFiles : "不限制" }}</dd></div>
           <div><dt>搜索索引</dt><dd>{{ settings.indexEnabled ? "已启用" : "未启用" }}</dd></div>
           <div><dt>启动重建索引</dt><dd>{{ settings.indexRebuildOnStartup ? "启用" : "关闭" }}</dd></div>
           <div><dt>审计日志</dt><dd>{{ settings.auditFile }}</dd></div>
-          <div><dt>审计轮转</dt><dd>{{ settings.auditMaxBytes ? `${settings.auditMaxBytes} bytes` : "不限制" }}</dd></div>
+          <div><dt>审计轮转</dt><dd>{{ optionalBytesText(settings.auditMaxBytes) }}</dd></div>
           <div><dt>审计保留</dt><dd>最近 {{ settings.auditRetentionFiles }} 个轮转文件</dd></div>
           <div><dt>回收站保留</dt><dd>{{ settings.trashRetentionDays ? `${settings.trashRetentionDays} 天` : "不限制" }}</dd></div>
-          <div><dt>回收站容量</dt><dd>{{ settings.trashMaxBytes ? `${settings.trashMaxBytes} bytes` : "不限制" }}</dd></div>
+          <div><dt>回收站容量</dt><dd>{{ optionalBytesText(settings.trashMaxBytes) }}</dd></div>
           <div><dt>冲突策略</dt><dd>{{ conflictPolicyText(settings.conflictPolicy) }}</dd></div>
           <div><dt>认证</dt><dd>{{ settings.authConfigured ? "已初始化" : "未初始化" }}</dd></div>
         </dl>
@@ -500,6 +612,89 @@ h2 {
 
 .color-swatch.active {
   box-shadow: 0 0 0 3px var(--app-accent-soft, #eff6ff), 0 0 0 5px var(--app-accent-border, #bfdbfe);
+}
+
+.metrics-summary {
+  @apply grid overflow-hidden rounded-md border;
+  border-color: var(--app-border-soft);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metric-tile {
+  @apply flex min-w-0 items-center justify-between gap-3 border-r px-3 py-2;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-muted);
+}
+
+.metric-tile:last-child {
+  @apply border-r-0;
+}
+
+.metric-tile span,
+.limit-row span {
+  @apply truncate text-xs;
+  color: var(--app-text-subtle);
+}
+
+.metric-tile strong {
+  @apply shrink-0 text-base font-semibold;
+  color: var(--app-text);
+}
+
+.metrics-grid {
+  @apply grid gap-4;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.metric-section {
+  @apply min-w-0 rounded-md border p-3;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-muted);
+}
+
+.metric-section h3 {
+  @apply mb-3 text-sm font-semibold;
+  color: var(--app-text);
+}
+
+.compact-meta {
+  @apply gap-1;
+}
+
+.compact-meta div {
+  @apply py-0.5;
+  grid-template-columns: 7rem minmax(0, 1fr);
+}
+
+.limit-list {
+  @apply flex flex-col gap-3;
+}
+
+.limit-row {
+  @apply grid gap-1.5;
+}
+
+.limit-row > div {
+  @apply flex min-w-0 items-center justify-between gap-3;
+}
+
+.limit-row strong {
+  @apply shrink-0 text-sm font-semibold;
+  color: var(--app-text);
+}
+
+.limit-bar {
+  @apply block h-1.5 overflow-hidden rounded-full;
+  background: var(--app-control-solid);
+}
+
+.limit-bar span {
+  @apply block h-full rounded-full transition-[width];
+  background: var(--app-accent, #2563eb);
+}
+
+.limit-row.tracked {
+  @apply pt-1;
 }
 
 .index-status-line {
@@ -645,8 +840,18 @@ dd {
   .mapping-form,
   .mapping-row,
   .password-form,
-  .preference-row {
+  .preference-row,
+  .metrics-summary,
+  .metrics-grid {
     grid-template-columns: 1fr;
+  }
+
+  .metric-tile {
+    @apply border-r-0 border-b;
+  }
+
+  .metric-tile:last-child {
+    @apply border-b-0;
   }
 }
 </style>
