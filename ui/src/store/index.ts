@@ -279,8 +279,8 @@ export const useFileStore = defineStore('file', {
             this.persistTabs();
         },
 
-        openTab(path?: string) {
-            const tab = createTab(path || "/");
+        openTab(path = "/") {
+            const tab = createTab(path);
             this.tabs.push(tab);
             this.activateTab(tab);
             this.persistTabs();

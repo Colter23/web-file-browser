@@ -23,8 +23,12 @@ const props = defineProps<{
 }>();
 
 const tabButtonRefs = new Map<string, HTMLElement>();
+const tabScrollRef = ref<HTMLElement | null>(null);
 const contextMenuRef = ref<HTMLElement | null>(null);
+const addButtonPinned = ref(false);
 const {menuPosition: contextMenuPosition, placeMenu: placeContextMenu} = useViewportMenuPosition({menuRef: contextMenuRef});
+let tabScrollResizeObserver: ResizeObserver | null = null;
+let tabOverflowFrame = 0;
 
 const setTabButtonRef = (tabId: string, element: unknown) => {
   if (element instanceof HTMLElement) {
@@ -37,6 +41,19 @@ const setTabButtonRef = (tabId: string, element: unknown) => {
 const revealActiveTab = async () => {
   await nextTick();
   tabButtonRefs.get(props.activeTabId)?.scrollIntoView({block: "nearest", inline: "nearest"});
+}
+
+const updateTabOverflow = () => {
+  const scroll = tabScrollRef.value;
+  addButtonPinned.value = scroll ? scroll.scrollWidth - scroll.clientWidth > 1 : false;
+}
+
+const scheduleTabOverflowUpdate = () => {
+  if (tabOverflowFrame) window.cancelAnimationFrame(tabOverflowFrame);
+  tabOverflowFrame = window.requestAnimationFrame(() => {
+    tabOverflowFrame = 0;
+    updateTabOverflow();
+  });
 }
 
 const {
@@ -62,20 +79,33 @@ watch(() => [props.activeTabId, props.tabs.length] as const, () => {
   void revealActiveTab();
 }, {immediate: true});
 
+watch(() => props.tabs.map(tab => `${tab.id}:${tab.title}`).join("|"), async () => {
+  await nextTick();
+  scheduleTabOverflowUpdate();
+}, {flush: "post", immediate: true});
+
 watch(() => [props.contextMenu.visible, props.contextMenu.tabId, props.contextMenu.x, props.contextMenu.y] as const, ([visible]) => {
   if (visible) void refreshContextMenu();
 }, {flush: "post"});
 
 const handleWindowResize = () => {
+  scheduleTabOverflowUpdate();
   if (props.contextMenu.visible) void refreshContextMenu();
 }
 
 onMounted(() => {
   window.addEventListener("resize", handleWindowResize);
+  if (typeof ResizeObserver !== "undefined" && tabScrollRef.value) {
+    tabScrollResizeObserver = new ResizeObserver(scheduleTabOverflowUpdate);
+    tabScrollResizeObserver.observe(tabScrollRef.value);
+  }
+  scheduleTabOverflowUpdate();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", handleWindowResize);
+  tabScrollResizeObserver?.disconnect();
+  if (tabOverflowFrame) window.cancelAnimationFrame(tabOverflowFrame);
 });
 
 const emit = defineEmits<{
@@ -100,7 +130,7 @@ const emit = defineEmits<{
 
 <template>
   <nav class="tab-strip" aria-label="目录标签">
-    <div class="tab-scroll" @wheel="scrollHorizontallyWithWheel">
+    <div ref="tabScrollRef" class="tab-scroll" @wheel="scrollHorizontallyWithWheel">
       <button
           v-for="tab in tabs"
           :key="tab.id"
@@ -128,7 +158,7 @@ const emit = defineEmits<{
           <icon icon="action.close" size="small" />
         </span>
       </button>
-      <button class="tab-add" title="新建标签页 (Ctrl+T)" @click="emit('new-tab')">
+      <button :class="['tab-add', {pinned: addButtonPinned}]" title="新建标签页 (Ctrl+T)" @click="emit('new-tab')">
         <icon icon="action.add" />
       </button>
     </div>
@@ -245,11 +275,15 @@ const emit = defineEmits<{
 }
 
 .tab-add {
-  @apply sticky right-0 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border shadow-sm;
+  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border shadow-sm;
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);
   color: var(--app-text-muted);
   z-index: 2;
+}
+
+.tab-add.pinned {
+  @apply sticky right-0;
 }
 
 .tab-add:hover {
