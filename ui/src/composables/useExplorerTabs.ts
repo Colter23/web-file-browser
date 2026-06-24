@@ -3,6 +3,7 @@ import type {ExplorerEntry} from "../components/explorer/types.ts";
 import type {ShellNoticeKind} from "../components/shell/types.ts";
 import type {TabContextMenuState, TabDropPlacement} from "../components/tabs/types.ts";
 import {useFileStore} from "../store";
+import {parentPath} from "../utils/file-path.ts";
 
 type ExplorerTabsOptions = {
   closeTransientPanels: () => void;
@@ -55,11 +56,12 @@ export const useExplorerTabs = ({
   }
 
   const openEntryInNewTab = async (entry: ExplorerEntry) => {
-    if (entry.type !== "folder") return;
     if (!await fileStore.requestEditorLeave()) return;
     persistCurrentExplorerScrollTop();
     closeTabContextMenu();
-    fileStore.openPathInNewTab(entry.path);
+    const targetPath = entry.type === "folder" ? entry.path : parentPath(entry.path);
+    const selectedPaths = entry.type === "folder" ? [] : [entry.path];
+    fileStore.openTab(targetPath, selectedPaths);
     closeTransientPanels();
     await syncActiveTabContext();
   }

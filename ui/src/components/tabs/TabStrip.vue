@@ -2,7 +2,7 @@
 import {nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ExplorerTab} from "../../class";
 import type {TabContextMenuState, TabDropPlacement} from "./types.ts";
-import type {ExplorerEntryPathDropPayload} from "../explorer/types.ts";
+import type {ExplorerEntry, ExplorerEntryPathDropPayload} from "../explorer/types.ts";
 import Icon from "../Icon.vue";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
@@ -29,6 +29,7 @@ const tabScrollRef = ref<HTMLElement | null>(null);
 const contextMenuRef = ref<HTMLElement | null>(null);
 const addButtonPinned = ref(false);
 const entryDropTargetTabId = ref("");
+const addButtonDropTarget = ref(false);
 const {menuPosition: contextMenuPosition, placeMenu: placeContextMenu} = useViewportMenuPosition({menuRef: contextMenuRef});
 let tabScrollResizeObserver: ResizeObserver | null = null;
 let tabOverflowFrame = 0;
@@ -98,6 +99,7 @@ const handleWindowResize = () => {
 
 const clearEntryDropTarget = () => {
   entryDropTargetTabId.value = "";
+  addButtonDropTarget.value = false;
 }
 
 onMounted(() => {
@@ -131,6 +133,7 @@ const emit = defineEmits<{
   (e: "tab-drop", event: DragEvent, tabId: string): void;
   (e: "tab-drag-end"): void;
   (e: "drop-entries", payload: ExplorerEntryPathDropPayload): void;
+  (e: "open-entry-new-tab", entry: ExplorerEntry): void;
   (e: "duplicate-tab"): void;
   (e: "close-context-tab"): void;
   (e: "reopen-closed-tab"): void;
@@ -189,6 +192,34 @@ const handleTabDrop = (event: DragEvent, tab: ExplorerTab) => {
     action: isCopyEntryDrop(event) ? "copy" : "move"
   });
 }
+
+const handleAddDragOver = (event: DragEvent) => {
+  if (!canAcceptEntryDrop(event)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  addButtonDropTarget.value = true;
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+}
+
+const handleAddDragLeave = (event: DragEvent) => {
+  if (!addButtonDropTarget.value) return;
+  const related = event.relatedTarget;
+  if (related instanceof Node && event.currentTarget instanceof HTMLElement && event.currentTarget.contains(related)) return;
+  addButtonDropTarget.value = false;
+}
+
+const handleAddDrop = (event: DragEvent) => {
+  if (!canAcceptEntryDrop(event)) return;
+  const [entry] = readInternalEntryDragData(event.dataTransfer);
+  if (!entry) {
+    addButtonDropTarget.value = false;
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  addButtonDropTarget.value = false;
+  emit("open-entry-new-tab", entry);
+}
 </script>
 
 <template>
@@ -222,7 +253,13 @@ const handleTabDrop = (event: DragEvent, tab: ExplorerTab) => {
           <icon icon="action.close" size="small" />
         </span>
       </button>
-      <button :class="['tab-add', {pinned: addButtonPinned}]" title="新建标签页 (Ctrl+T)" @click="emit('new-tab')">
+      <button
+          :class="['tab-add', {pinned: addButtonPinned, entryDropTarget: addButtonDropTarget}]"
+          title="新建标签页 (Ctrl+T)"
+          @click="emit('new-tab')"
+          @dragover="handleAddDragOver"
+          @dragleave="handleAddDragLeave"
+          @drop="handleAddDrop">
         <icon icon="action.add" />
       </button>
     </div>
@@ -301,7 +338,8 @@ const handleTabDrop = (event: DragEvent, tab: ExplorerTab) => {
   box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.2));
 }
 
-.tab-button.entryDropTarget {
+.tab-button.entryDropTarget,
+.tab-add.entryDropTarget {
   border-color: var(--app-accent, #2563eb);
   background: var(--app-accent-soft, #eff6ff);
   color: var(--app-accent, #2563eb);

@@ -569,6 +569,7 @@ const signOut = async () => {
           @tab-drop="dropTab"
           @tab-drag-end="finishTabDrag"
           @drop-entries="dropEntriesToPathFolder"
+          @open-entry-new-tab="openEntryInNewTab"
           @duplicate-tab="duplicateTabFromMenu"
           @close-context-tab="closeTabFromMenu"
           @reopen-closed-tab="reopenClosedTab"
