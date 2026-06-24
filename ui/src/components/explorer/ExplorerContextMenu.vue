@@ -4,6 +4,7 @@ import type {ExplorerEntry} from "./types.ts";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
 import {useViewportMenuPosition} from "../../composables/useViewportMenuPosition.ts";
+import Icon from "../Icon.vue";
 
 const props = defineProps<{
   background: boolean;
@@ -95,37 +96,127 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
         @contextmenu.prevent.stop
         @keydown="handleMenuKeyDown">
       <template v-if="background">
-        <button @click="emit('create-file')">新建文件</button>
-        <button @click="emit('create-folder')">新建文件夹</button>
+        <button class="context-row" @click="emit('create-file')">
+          <span class="context-row-icon"><icon icon="action.new-file" /></span>
+          <span class="context-row-label">新建文件</span>
+        </button>
+        <button class="context-row" @click="emit('create-folder')">
+          <span class="context-row-icon"><icon icon="action.new-folder" /></span>
+          <span class="context-row-label">新建文件夹</span>
+        </button>
         <div class="context-separator"></div>
-        <button :disabled="!canPaste" @click="emit('paste')">粘贴</button>
-        <button @click="emit('copy-path')">复制当前路径</button>
+        <button class="context-row" :disabled="!canPaste" @click="emit('paste')">
+          <span class="context-row-icon"><icon icon="action.paste" /></span>
+          <span class="context-row-label">粘贴</span>
+          <span class="context-row-shortcut">Ctrl+V</span>
+        </button>
+        <button class="context-row" @click="emit('copy-path')">
+          <span class="context-row-icon"><icon icon="action.copy-path" /></span>
+          <span class="context-row-label">复制当前路径</span>
+        </button>
         <div class="context-separator"></div>
-        <button :disabled="!hasEntries" @click="emit('select-all')">全选</button>
-        <button :disabled="!hasEntries" @click="emit('invert-selection')">反向选择</button>
-        <button :disabled="!hasSelection" @click="emit('clear-selection')">取消选择</button>
+        <button class="context-row" :disabled="!hasEntries" @click="emit('select-all')">
+          <span class="context-row-icon"><icon icon="action.select-all" /></span>
+          <span class="context-row-label">全选</span>
+          <span class="context-row-shortcut">Ctrl+A</span>
+        </button>
+        <button class="context-row" :disabled="!hasEntries" @click="emit('invert-selection')">
+          <span class="context-row-icon"><icon icon="action.invert-selection" /></span>
+          <span class="context-row-label">反向选择</span>
+        </button>
+        <button class="context-row" :disabled="!hasSelection" @click="emit('clear-selection')">
+          <span class="context-row-icon"><icon icon="action.clear-selection" /></span>
+          <span class="context-row-label">取消选择</span>
+        </button>
       </template>
 
       <template v-else>
-        <button @click="emit('open')">打开</button>
-        <button :disabled="!primaryEntry || primaryEntry.type !== 'folder'" @click="emit('open-new-tab')">在新标签页中打开</button>
-        <button :disabled="!canViewImage" @click="emit('view-image')">查看图片</button>
-        <button :disabled="!canEdit" @click="emit('edit')">编辑</button>
-        <button :disabled="!primaryEntry || primaryEntry.type !== 'file'" @click="emit('preview')">预览</button>
+        <div class="context-quick-actions" aria-label="常用操作">
+          <button
+              class="context-quick-button"
+              :disabled="!selectionCount"
+              :title="`${contextLabel('剪切', '剪切选中项')} (Ctrl+X)`"
+              @click="emit('cut')">
+            <icon icon="action.cut" />
+            <span>剪切</span>
+          </button>
+          <button
+              class="context-quick-button"
+              :disabled="!selectionCount"
+              :title="`${contextLabel('复制', '复制选中项')} (Ctrl+C)`"
+              @click="emit('copy')">
+            <icon icon="action.copy" />
+            <span>复制</span>
+          </button>
+          <button
+              class="context-quick-button"
+              :disabled="!primaryEntry || isMultiSelect"
+              title="重命名"
+              @click="emit('rename')">
+            <icon icon="action.rename" />
+            <span>重命名</span>
+          </button>
+          <button
+              class="context-quick-button danger"
+              :disabled="!primaryEntry"
+              :title="contextLabel('删除', '删除选中项')"
+              @click="emit('delete')">
+            <icon icon="action.delete" />
+            <span>删除</span>
+          </button>
+        </div>
         <div class="context-separator"></div>
-        <button :disabled="!selectionCount" @click="emit('cut')">{{ contextLabel("剪切", "剪切选中项") }}</button>
-        <button :disabled="!selectionCount" @click="emit('copy')">{{ contextLabel("复制", "复制选中项") }}</button>
-        <button :disabled="!selectionCount" @click="emit('copy-path')">{{ contextLabel("复制路径", "复制选中项路径") }}</button>
-        <button :disabled="!canPaste" @click="emit('paste')">粘贴</button>
+        <button class="context-row" @click="emit('open')">
+          <span class="context-row-icon"><icon icon="action.open" /></span>
+          <span class="context-row-label">打开</span>
+          <span class="context-row-shortcut">Enter</span>
+        </button>
+        <button class="context-row" :disabled="!primaryEntry || primaryEntry.type !== 'folder'" @click="emit('open-new-tab')">
+          <span class="context-row-icon"><icon icon="action.open-new-tab" /></span>
+          <span class="context-row-label">在新标签页中打开</span>
+        </button>
+        <button class="context-row" :disabled="!canViewImage" @click="emit('view-image')">
+          <span class="context-row-icon"><icon icon="view.image" /></span>
+          <span class="context-row-label">查看图片</span>
+        </button>
+        <button class="context-row" :disabled="!canEdit" @click="emit('edit')">
+          <span class="context-row-icon"><icon icon="action.edit" /></span>
+          <span class="context-row-label">编辑</span>
+        </button>
+        <button class="context-row" :disabled="!primaryEntry || primaryEntry.type !== 'file'" @click="emit('preview')">
+          <span class="context-row-icon"><icon icon="action.preview" /></span>
+          <span class="context-row-label">预览</span>
+          <span class="context-row-shortcut">Space</span>
+        </button>
         <div class="context-separator"></div>
-        <button :disabled="!primaryEntry || primaryEntry.type !== 'file'" @click="emit('download')">下载</button>
-        <button :disabled="!selectionCount" @click="emit('archive')">{{ contextLabel("压缩", "压缩选中项") }}</button>
-        <button :disabled="!canExtract" @click="emit('extract')">解压</button>
+        <button class="context-row" :disabled="!canPaste" @click="emit('paste')">
+          <span class="context-row-icon"><icon icon="action.paste" /></span>
+          <span class="context-row-label">粘贴</span>
+          <span class="context-row-shortcut">Ctrl+V</span>
+        </button>
+        <button class="context-row" :disabled="!selectionCount" @click="emit('copy-path')">
+          <span class="context-row-icon"><icon icon="action.copy-path" /></span>
+          <span class="context-row-label">{{ contextLabel("复制路径", "复制选中项路径") }}</span>
+        </button>
         <div class="context-separator"></div>
-        <button :disabled="!primaryEntry || isMultiSelect" @click="emit('rename')">重命名</button>
-        <button class="danger" :disabled="!primaryEntry" @click="emit('delete')">{{ contextLabel("删除", "删除选中项") }}</button>
+        <button class="context-row" :disabled="!primaryEntry || primaryEntry.type !== 'file'" @click="emit('download')">
+          <span class="context-row-icon"><icon icon="action.download" /></span>
+          <span class="context-row-label">下载</span>
+        </button>
+        <button class="context-row" :disabled="!selectionCount" @click="emit('archive')">
+          <span class="context-row-icon"><icon icon="action.archive" /></span>
+          <span class="context-row-label">{{ contextLabel("压缩", "压缩选中项") }}</span>
+        </button>
+        <button class="context-row" :disabled="!canExtract" @click="emit('extract')">
+          <span class="context-row-icon"><icon icon="action.extract" /></span>
+          <span class="context-row-label">解压</span>
+        </button>
         <div class="context-separator"></div>
-        <button :disabled="!selectionCount" @click="emit('properties')">属性</button>
+        <button class="context-row" :disabled="!selectionCount" @click="emit('properties')">
+          <span class="context-row-icon"><icon icon="action.properties" /></span>
+          <span class="context-row-label">属性</span>
+          <span class="context-row-shortcut">Alt+Enter</span>
+        </button>
       </template>
     </div>
   </Teleport>
@@ -135,23 +226,29 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
 @reference "tailwindcss";
 
 .context-menu {
-  @apply fixed z-50 w-44 rounded-md border py-1 text-sm;
+  @apply fixed z-50 w-[17.5rem] overflow-hidden rounded-md border py-1 text-sm;
   border-color: var(--app-border-soft);
   background: var(--app-panel-solid);
   box-shadow: var(--app-menu-shadow);
 }
 
 .context-menu button {
-  @apply block h-8 w-full px-3 text-left;
+  @apply border-0 bg-transparent;
   color: var(--app-text-muted);
 }
 
 .context-menu button:disabled {
+  @apply cursor-default;
   color: var(--app-text-disabled);
 }
 
 .context-menu button:disabled:hover {
   background: var(--app-panel-solid);
+}
+
+.context-menu button:hover:not(:disabled),
+.context-menu button:focus-visible {
+  color: var(--app-text);
 }
 
 .context-menu button:hover:not(:disabled) {
@@ -161,8 +258,52 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
 .context-menu button:focus-visible {
   @apply outline-none;
   background: var(--app-accent-soft, #eff6ff);
-  color: var(--app-accent, #2563eb);
   box-shadow: inset 0 0 0 1px var(--app-accent-border, #bfdbfe);
+}
+
+.context-quick-actions {
+  @apply grid grid-cols-4 px-1;
+}
+
+.context-quick-button {
+  @apply relative flex h-[3.25rem] min-w-0 flex-col items-center justify-center gap-1 rounded px-1 text-xs;
+}
+
+.context-quick-button:not(:last-child)::after {
+  @apply absolute right-0 top-2 h-9 w-px content-[''];
+  background: var(--app-divider);
+}
+
+.context-quick-button :deep(.icon) {
+  @apply text-[1rem];
+}
+
+.context-quick-button span {
+  @apply max-w-full truncate;
+}
+
+.context-row {
+  @apply grid h-8 w-full items-center gap-2 px-3 text-left;
+  grid-template-columns: 1rem minmax(0, 1fr) auto;
+}
+
+.context-row-icon {
+  @apply inline-flex items-center justify-center text-[0.95rem];
+  color: var(--app-accent, #2563eb);
+}
+
+.context-row-label {
+  @apply min-w-0 truncate;
+}
+
+.context-row-shortcut {
+  @apply pl-4 text-xs;
+  color: var(--app-text-subtle);
+}
+
+.context-row:disabled .context-row-icon,
+.context-row:disabled .context-row-shortcut {
+  color: var(--app-text-disabled);
 }
 
 .context-separator {
@@ -170,11 +311,21 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
   border-color: var(--app-border-soft);
 }
 
-.context-menu .danger {
+.context-menu .danger,
+.context-menu .danger .context-row-icon {
   color: var(--app-danger);
 }
 
 .context-menu .danger:hover:not(:disabled) {
   background: var(--app-danger-soft);
+}
+
+.context-menu .danger:disabled {
+  color: color-mix(in srgb, var(--app-danger) 38%, var(--app-text-disabled));
+}
+
+.context-menu .danger:focus-visible {
+  background: var(--app-danger-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-danger) 38%, transparent);
 }
 </style>
