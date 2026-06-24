@@ -1,6 +1,6 @@
 import {computed, ref} from "vue";
 import type {ComputedRef, Ref} from "vue";
-import type {CreateFavoriteRequest, FavoriteItem} from "../class.ts";
+import type {CreateFavoriteRequest, FavoriteItem, ReorderFavoriteItem, UpdateFavoriteRequest} from "../class.ts";
 import {isApiError} from "../network";
 import type {ShellNoticeKind} from "../components/shell/types.ts";
 import {normalizePathText} from "../utils/file-path.ts";
@@ -12,6 +12,8 @@ type ListFavoritesOptions = {
 type UseFavoritesOptions = {
   listFavorites: (options?: ListFavoritesOptions) => Promise<FavoriteItem[]>;
   createFavorite: (request: CreateFavoriteRequest) => Promise<FavoriteItem>;
+  updateFavorite: (id: string, request: UpdateFavoriteRequest) => Promise<FavoriteItem>;
+  reorderFavorites: (items: ReorderFavoriteItem[]) => Promise<void>;
   deleteFavorite: (id: string) => Promise<void>;
   showNotice: (message: string, kind?: ShellNoticeKind, title?: string, timeoutMs?: number) => void;
   showError: (error: unknown, fallback: string, title?: string) => void;
@@ -24,6 +26,8 @@ type UseFavoritesReturn = {
   loadFavorites: (options?: ListFavoritesOptions) => Promise<void>;
   favoriteByPath: (path: string) => FavoriteItem | null;
   addFavorite: (path: string, name?: string) => Promise<FavoriteItem | null>;
+  renameFavorite: (favorite: FavoriteItem, name: string) => Promise<boolean>;
+  reorderFavorite: (source: FavoriteItem, target: FavoriteItem, placement: "before" | "after") => Promise<boolean>;
   removeFavorite: (favoriteOrPath: FavoriteItem | string) => Promise<boolean>;
   toggleFavoritePath: (path: string, name?: string) => Promise<void>;
 }
@@ -40,6 +44,8 @@ const sortFavorites = (items: FavoriteItem[]) => {
 export const useFavorites = ({
   listFavorites,
   createFavorite,
+  updateFavorite,
+  reorderFavorites,
   deleteFavorite,
   showNotice,
   showError
@@ -69,6 +75,13 @@ export const useFavorites = ({
     const next = favorites.value.filter(favorite => favorite.id !== item.id);
     next.push(item);
     favorites.value = sortFavorites(next);
+  }
+
+  const withDenseOrder = (items: FavoriteItem[]) => {
+    return items.map((item, index) => ({
+      ...item,
+      order: (index + 1) * 10
+    }));
   }
 
   const addFavorite = async (path: string, name?: string) => {
@@ -121,6 +134,51 @@ export const useFavorites = ({
     }
   }
 
+  const renameFavorite = async (favorite: FavoriteItem, name: string) => {
+    const nextName = name.trim();
+    if (!nextName) {
+      showNotice("收藏夹名称不能为空", "warning", "收藏夹");
+      return false;
+    }
+    if (nextName === favorite.name) return true;
+
+    try {
+      const item = await updateFavorite(favorite.id, {name: nextName});
+      replaceFavorite(item);
+      showNotice("已重命名收藏项", "success", "收藏夹");
+      return true;
+    } catch (error) {
+      showError(error, "重命名收藏项失败", "收藏夹");
+      return false;
+    }
+  }
+
+  const reorderFavorite = async (source: FavoriteItem, target: FavoriteItem, placement: "before" | "after") => {
+    if (source.id === target.id) return true;
+    const previous = sortFavorites(favorites.value);
+    const sourceIndex = previous.findIndex(item => item.id === source.id);
+    const targetIndex = previous.findIndex(item => item.id === target.id);
+    if (sourceIndex < 0 || targetIndex < 0) return false;
+
+    const next = [...previous];
+    const [moved] = next.splice(sourceIndex, 1);
+    const nextTargetIndex = next.findIndex(item => item.id === target.id);
+    if (!moved || nextTargetIndex < 0) return false;
+
+    next.splice(placement === "after" ? nextTargetIndex + 1 : nextTargetIndex, 0, moved);
+    const ordered = withDenseOrder(next);
+    favorites.value = ordered;
+
+    try {
+      await reorderFavorites(ordered.map(({id, order}) => ({id, order})));
+      return true;
+    } catch (error) {
+      favorites.value = previous;
+      showError(error, "调整收藏夹顺序失败", "收藏夹");
+      return false;
+    }
+  }
+
   const toggleFavoritePath = async (path: string, name?: string) => {
     const existing = favoriteByPath(path);
     if (existing) {
@@ -137,6 +195,8 @@ export const useFavorites = ({
     loadFavorites,
     favoriteByPath,
     addFavorite,
+    renameFavorite,
+    reorderFavorite,
     removeFavorite,
     toggleFavoritePath
   };

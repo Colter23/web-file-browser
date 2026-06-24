@@ -18,6 +18,8 @@ defineEmits<{
   (e: "open-new-tab", node: FileTreeData): void;
   (e: "open-favorite", favorite: FavoriteItem): void;
   (e: "open-favorite-new-tab", favorite: FavoriteItem): void;
+  (e: "rename-favorite", payload: {favorite: FavoriteItem; name: string}): void;
+  (e: "reorder-favorite", payload: {source: FavoriteItem; target: FavoriteItem; placement: "before" | "after"}): void;
   (e: "remove-favorite", favorite: FavoriteItem): void;
   (e: "refresh-favorites"): void;
   (e: "add-favorite", node: FileTreeData): void;
@@ -34,8 +36,11 @@ defineEmits<{
         :current-path="currentPath"
         @open="favorite => $emit('open-favorite', favorite)"
         @open-new-tab="favorite => $emit('open-favorite-new-tab', favorite)"
+        @rename="payload => $emit('rename-favorite', payload)"
+        @reorder="payload => $emit('reorder-favorite', payload)"
         @remove="favorite => $emit('remove-favorite', favorite)"
-        @refresh="$emit('refresh-favorites')" />
+        @refresh="$emit('refresh-favorites')"
+        @notice="payload => $emit('notice', payload)" />
     <file-tree
         :data="treeData"
         :load-data="loadData"

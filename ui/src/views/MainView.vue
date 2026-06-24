@@ -17,8 +17,10 @@ import {
   listTasks,
   listTrashRecords,
   logout,
+  reorderFavorites,
   restoreTrashRecords,
   restoreTrashRecord,
+  updateFavorite,
 } from "../network/api";
 import Explorer from "../components/explorer/Explorer.vue";
 import ImageViewer from "../components/viewer/ImageViewer.vue";
@@ -454,10 +456,14 @@ const {
   favoritePaths,
   loadFavorites,
   addFavorite,
+  renameFavorite,
+  reorderFavorite,
   removeFavorite
 } = useFavorites({
   listFavorites,
   createFavorite,
+  updateFavorite,
+  reorderFavorites,
   deleteFavorite,
   showNotice: showShellNotice,
   showError: showErrorNotice
@@ -850,6 +856,8 @@ const signOut = async () => {
           @open-new-tab="openTreeFolderInNewTab"
           @open-favorite="openFavorite"
           @open-favorite-new-tab="openFavoriteInNewTab"
+          @rename-favorite="payload => renameFavorite(payload.favorite, payload.name)"
+          @reorder-favorite="payload => reorderFavorite(payload.source, payload.target, payload.placement)"
           @remove-favorite="favorite => removeFavorite(favorite)"
           @refresh-favorites="loadFavorites({check: true})"
           @add-favorite="addTreeNodeToFavorites"
