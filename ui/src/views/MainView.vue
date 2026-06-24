@@ -106,6 +106,10 @@ const {
   close: closeShellNotice,
   stopTimer: stopShellNoticeTimer
 } = useShellNotice();
+let refreshCurrentHandler = async (_keepSelection = false) => {};
+const refreshCurrent = (keepSelection = false) => refreshCurrentHandler(keepSelection);
+let refreshCurrentTreePath = async () => {};
+
 const {
   visible: taskPanelVisible,
   loading: tasksLoading,
@@ -126,7 +130,11 @@ const {
 } = useTaskPanel({
   listTasks,
   cancelTask,
-  showError: showErrorNotice
+  showError: showErrorNotice,
+  onTaskSettled: async () => {
+    await refreshCurrent(true);
+    await refreshCurrentTreePath();
+  }
 });
 const explorerRef = ref<ExplorerExpose | null>(null);
 const contentToolbarRef = ref<ContentToolbarExpose | null>(null);
@@ -210,12 +218,10 @@ let closePanelsHandler = () => {};
 let closeTransientPanelsHandler = () => {};
 let closeOperationShellPanelsHandler = () => {};
 let closePreviewHandler = () => {};
-let refreshCurrentHandler = async (_keepSelection = false) => {};
 const closePanels = () => closePanelsHandler();
 const closeTransientPanels = () => closeTransientPanelsHandler();
 const closeOperationShellPanels = () => closeOperationShellPanelsHandler();
 const closePreview = () => closePreviewHandler();
-const refreshCurrent = (keepSelection = false) => refreshCurrentHandler(keepSelection);
 
 const {
   currentFolder,
@@ -281,11 +287,15 @@ const {
   showNotice: showShellNotice
 });
 
-const {treeData, loadRoot, handleLoad} = useFileTreeLoader({
+const {treeData, loadRoot, handleLoad, refreshPath: refreshTreePath} = useFileTreeLoader({
   getFolderData,
   navigateToPath,
   showError: showErrorNotice
 });
+
+refreshCurrentTreePath = async () => {
+  await refreshTreePath(currentFolder());
+}
 
 const {
   fileClipboardAction,

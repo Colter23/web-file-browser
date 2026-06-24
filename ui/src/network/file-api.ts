@@ -8,6 +8,7 @@ import {
     UploadResponse
 } from "../class";
 import config from "../config";
+import {parentPath} from "../utils/file-path.ts";
 
 export type FolderRequestOptions = {
     forceRefresh?: boolean;
@@ -63,6 +64,29 @@ const clearFolderCache = (path: string = "") => {
     Array.from(folderResponseCache.keys()).forEach(key => {
         if (key.startsWith(prefix)) folderResponseCache.delete(key);
     });
+}
+
+const folderCachePathAncestors = (path: string = ""): string[] => {
+    const normalized = normalizeCachePath(path);
+    const parts = normalized.split("/").filter(Boolean);
+    const paths = ["/"];
+    let current = "";
+    parts.forEach(part => {
+        current = `${current}/${part}`;
+        paths.push(current);
+    });
+    return paths;
+}
+
+export const invalidateFolderDataCache = (
+    paths: string | string[] = "/",
+    options: {includeAncestors?: boolean} = {}
+) => {
+    const normalizedPaths = Array.isArray(paths) ? paths : [paths];
+    const candidates = normalizedPaths.flatMap(path => {
+        return options.includeAncestors ? folderCachePathAncestors(path) : [normalizeCachePath(path)];
+    });
+    Array.from(new Set(candidates)).forEach(clearFolderCache);
 }
 
 const cloneFolderData = (data: FolderData): FolderData => ({
@@ -146,7 +170,9 @@ export const createEntry = async (
     type: "file" | "folder",
     name: string
 ): Promise<FileOperationResponse> => {
-    return (await network.post(pathUrl("/api/file", parentPath), {type, name})).data
+    const response = (await network.post(pathUrl("/api/file", parentPath), {type, name})).data
+    invalidateFolderDataCache(parentPath, {includeAncestors: true});
+    return response
 }
 
 export const saveFile = async (path: string, content: string, etag: string): Promise<SaveFileResponse> => {
@@ -156,6 +182,7 @@ export const saveFile = async (path: string, content: string, etag: string): Pro
             "If-Match": etag
         }
     })
+    invalidateFolderDataCache(parentPath(path), {includeAncestors: true});
     return {
         ...res.data,
         etag: res.headers.etag ?? etag
@@ -163,17 +190,23 @@ export const saveFile = async (path: string, content: string, etag: string): Pro
 }
 
 export const moveEntry = async (path: string, targetPath: string): Promise<FileOperationResponse> => {
-    return (await network.patch(pathUrl("/api/file", path), {targetPath})).data
+    const response = (await network.patch(pathUrl("/api/file", path), {targetPath})).data
+    invalidateFolderDataCache([parentPath(path), parentPath(targetPath), path, targetPath], {includeAncestors: true});
+    return response
 }
 
 export const deleteEntry = async (path: string): Promise<FileOperationResponse> => {
-    return (await network.delete(pathUrl("/api/file", path))).data
+    const response = (await network.delete(pathUrl("/api/file", path))).data
+    invalidateFolderDataCache([parentPath(path), path], {includeAncestors: true});
+    return response
 }
 
 export const uploadFiles = async (path: string, files: FileList | File[]): Promise<UploadResponse> => {
     const form = new FormData()
     Array.from(files).forEach(file => form.append("files", file, file.name))
-    return (await network.post(pathUrl("/api/upload", path), form)).data
+    const response = (await network.post(pathUrl("/api/upload", path), form)).data
+    invalidateFolderDataCache(path, {includeAncestors: true});
+    return response
 }
 
 export const downloadFile = async (path: string): Promise<Blob> => {

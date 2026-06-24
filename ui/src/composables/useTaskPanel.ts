@@ -12,6 +12,7 @@ type TaskPanelOptions = {
   listTasks: () => Promise<TaskStatus[]>;
   cancelTask: (id: string) => Promise<unknown>;
   showError: (error: unknown, fallback: string, title?: string) => void;
+  onTaskSettled?: (tasks: TaskStatus[]) => void | Promise<void>;
 }
 
 const emptyCancelConfirm = (): TaskCancelConfirmState => ({
@@ -25,13 +26,15 @@ const canCancelTask = (task: TaskStatus) => task.state === "queued" || task.stat
 
 const shortTaskId = (id: string) => id.slice(0, 8);
 
-export const useTaskPanel = ({listTasks, cancelTask, showError}: TaskPanelOptions) => {
+export const useTaskPanel = ({listTasks, cancelTask, showError, onTaskSettled}: TaskPanelOptions) => {
   const visible = ref(false);
   const loading = ref(false);
   const tasks = ref<TaskStatus[]>([]);
   const message = ref("");
   const lastUpdatedAt = ref("");
   const cancelConfirm = ref<TaskCancelConfirmState>(emptyCancelConfirm());
+  const trackedActiveTaskIds = new Set<string>();
+  const pendingTaskIds = new Set<string>();
   let pollTimer: number | undefined;
 
   const activeTaskCount = computed(() => tasks.value.filter(task => task.state === "running" || task.state === "queued").length);
@@ -52,10 +55,25 @@ export const useTaskPanel = ({listTasks, cancelTask, showError}: TaskPanelOption
     pollTimer = undefined;
   }
 
+  const syncTaskTransitions = (nextTasks: TaskStatus[]) => {
+    const nextTaskIds = new Set(nextTasks.map(task => task.id));
+    const settledTasks = nextTasks.filter(task => {
+      if (canCancelTask(task)) return false;
+      return trackedActiveTaskIds.has(task.id) || pendingTaskIds.has(task.id);
+    });
+    nextTasks.forEach(task => pendingTaskIds.delete(task.id));
+    const removedActiveTaskSettled = Array.from(trackedActiveTaskIds).some(id => !pendingTaskIds.has(id) && !nextTaskIds.has(id));
+    trackedActiveTaskIds.clear();
+    nextTasks.filter(canCancelTask).forEach(task => trackedActiveTaskIds.add(task.id));
+    if (settledTasks.length || removedActiveTaskSettled) void onTaskSettled?.(settledTasks);
+  }
+
   const load = async (silent = false) => {
     if (!silent) loading.value = true;
     try {
-      tasks.value = await listTasks();
+      const nextTasks = await listTasks();
+      syncTaskTransitions(nextTasks);
+      tasks.value = nextTasks;
       updateRefreshTime();
       schedulePolling();
     } catch (error) {
@@ -68,7 +86,7 @@ export const useTaskPanel = ({listTasks, cancelTask, showError}: TaskPanelOption
 
   const schedulePolling = () => {
     stopPolling();
-    if (!visible.value || !hasActiveTasks.value) return;
+    if (!hasActiveTasks.value && !pendingTaskIds.size) return;
     pollTimer = window.setTimeout(() => {
       void load(true);
     }, 1500);
@@ -79,13 +97,14 @@ export const useTaskPanel = ({listTasks, cancelTask, showError}: TaskPanelOption
     if (visible.value) {
       await load();
     } else {
-      stopPolling();
+      close();
     }
   }
 
   const close = () => {
     visible.value = false;
-    stopPolling();
+    if (hasActiveTasks.value || pendingTaskIds.size) schedulePolling();
+    else stopPolling();
   }
 
   const resetCancelConfirm = () => {
@@ -126,6 +145,7 @@ export const useTaskPanel = ({listTasks, cancelTask, showError}: TaskPanelOption
 
   const markStarted = async (id: string, label = "后台任务") => {
     message.value = `${label}已创建：${shortTaskId(id)}`;
+    pendingTaskIds.add(id);
     visible.value = true;
     await load();
   }

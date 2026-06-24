@@ -1,6 +1,7 @@
 import {ref} from "vue";
 import type {FileTreeData, FolderData, FolderQueryParams} from "../class.ts";
 import {useFileStore} from "../store";
+import {normalizePathText} from "../utils/file-path.ts";
 
 type FileTreeLoaderOptions = {
   getFolderData: (path: string, params?: FolderQueryParams, options?: {forceRefresh?: boolean}) => Promise<FolderData>;
@@ -29,6 +30,16 @@ const rootTreeNode = (children: FileTreeData[] = []): FileTreeData => ({
   isFile: false,
   children
 });
+
+const findNodeByPath = (nodes: FileTreeData[], path: string): FileTreeData | null => {
+  const normalized = normalizePathText(path);
+  for (const node of nodes) {
+    if (normalizePathText(node.path) === normalized) return node;
+    const child = node.children ? findNodeByPath(node.children, normalized) : null;
+    if (child) return child;
+  }
+  return null;
+}
 
 export const useFileTreeLoader = ({getFolderData, navigateToPath, showError}: FileTreeLoaderOptions) => {
   const fileStore = useFileStore();
@@ -61,9 +72,29 @@ export const useFileTreeLoader = ({getFolderData, navigateToPath, showError}: Fi
     }
   }
 
+  const refreshPath = async (path: string) => {
+    const normalized = normalizePathText(path);
+    try {
+      if (normalized === "/") {
+        await loadRoot({forceRefresh: true});
+        return true;
+      }
+      const node = findNodeByPath(treeData.value, normalized);
+      if (!node || node.isFile) return false;
+      const data = await getFolderData(node.path, treeQuery, {forceRefresh: true});
+      fileStore.saveFolderData(data);
+      node.children = folderDataToTreeNodes(data);
+      return true;
+    } catch (error) {
+      showError(error, "刷新文件树失败");
+      return false;
+    }
+  }
+
   return {
     treeData,
     loadRoot,
-    handleLoad
+    handleLoad,
+    refreshPath
   };
 }

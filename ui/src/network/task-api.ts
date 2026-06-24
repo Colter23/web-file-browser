@@ -1,5 +1,7 @@
 import network from "../network";
 import type {ArchiveFormat, RuntimeSettings, TaskResponse, TaskStatus} from "../class";
+import {parentPath} from "../utils/file-path.ts";
+import {invalidateFolderDataCache} from "./file-api.ts";
 
 type ConflictPolicy = RuntimeSettings["conflictPolicy"];
 
@@ -12,11 +14,13 @@ export const createCopyTask = async (
     targetPath: string,
     conflictPolicy?: ConflictPolicy
 ): Promise<TaskResponse> => {
-    return (await network.post("/api/tasks/copy", {
+    const response = (await network.post("/api/tasks/copy", {
         sources,
         targetPath,
         ...conflictPayload(conflictPolicy)
     })).data
+    invalidateFolderDataCache([targetPath, ...sources.map(parentPath)], {includeAncestors: true});
+    return response
 }
 
 export const createMoveTask = async (
@@ -24,15 +28,19 @@ export const createMoveTask = async (
     targetPath: string,
     conflictPolicy?: ConflictPolicy
 ): Promise<TaskResponse> => {
-    return (await network.post("/api/tasks/move", {
+    const response = (await network.post("/api/tasks/move", {
         sources,
         targetPath,
         ...conflictPayload(conflictPolicy)
     })).data
+    invalidateFolderDataCache([targetPath, ...sources, ...sources.map(parentPath)], {includeAncestors: true});
+    return response
 }
 
 export const createDeleteTask = async (paths: string[]): Promise<TaskResponse> => {
-    return (await network.post("/api/tasks/delete", {paths})).data
+    const response = (await network.post("/api/tasks/delete", {paths})).data
+    invalidateFolderDataCache([...paths, ...paths.map(parentPath)], {includeAncestors: true});
+    return response
 }
 
 export const createArchiveTask = async (
@@ -41,12 +49,14 @@ export const createArchiveTask = async (
     format: ArchiveFormat,
     outputName?: string
 ): Promise<TaskResponse> => {
-    return (await network.post("/api/tasks/archive", {
+    const response = (await network.post("/api/tasks/archive", {
         sources,
         targetPath,
         format,
         outputName: outputName || undefined
     })).data
+    invalidateFolderDataCache([targetPath, ...sources.map(parentPath)], {includeAncestors: true});
+    return response
 }
 
 export const createExtractTask = async (
@@ -54,11 +64,13 @@ export const createExtractTask = async (
     targetPath: string,
     folderName?: string
 ): Promise<TaskResponse> => {
-    return (await network.post("/api/tasks/extract", {
+    const response = (await network.post("/api/tasks/extract", {
         sourcePath,
         targetPath,
         folderName: folderName || undefined
     })).data
+    invalidateFolderDataCache([targetPath, parentPath(sourcePath)], {includeAncestors: true});
+    return response
 }
 
 export const listTasks = async (): Promise<TaskStatus[]> => {
