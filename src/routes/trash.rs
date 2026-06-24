@@ -29,6 +29,39 @@ struct TrashCleanupResponse {
     removed: usize,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TrashBatchRequest {
+    ids: Vec<String>,
+    #[serde(default, alias = "conflict")]
+    conflict_policy: Option<ConflictPolicy>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TrashBatchError {
+    id: String,
+    message: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TrashBatchRestoreResponse {
+    restored: Vec<TrashRestoreResult>,
+    errors: Vec<TrashBatchError>,
+    success: usize,
+    failed: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TrashBatchPurgeResponse {
+    purged: Vec<String>,
+    errors: Vec<TrashBatchError>,
+    success: usize,
+    failed: usize,
+}
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TrashWriteQuery {
@@ -54,6 +87,8 @@ pub fn trash_routes() -> Router<Arc<AppState>> {
         .route("/trash", get(list_trash))
         .route("/trash/cleanup", post(cleanup_trash))
         .route("/trash/empty", post(empty_trash))
+        .route("/trash/batch/restore", post(restore_trash_batch))
+        .route("/trash/batch/purge", post(purge_trash_batch))
         .route("/trash/{id}/restore", post(restore_trash))
         .route("/trash/{id}", delete(purge_trash))
 }
@@ -100,6 +135,52 @@ async fn restore_trash(
     Ok(Json(restored))
 }
 
+async fn restore_trash_batch(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<TrashBatchRequest>,
+) -> Result<Json<TrashBatchRestoreResponse>, AppError> {
+    let ids = validate_batch_ids(request.ids)?;
+    let policy = request
+        .conflict_policy
+        .unwrap_or(state.runtime_settings.conflict_policy);
+    let snapshot = state.mapping_store.snapshot().await;
+    let mut restored = Vec::new();
+    let mut errors = Vec::new();
+
+    for id in ids {
+        match state
+            .trash
+            .restore(snapshot.clone(), id.clone(), policy)
+            .await
+        {
+            Ok(result) => {
+                index_upsert_ignore(&state, snapshot.clone(), &result.restored_virtual_path).await;
+                audit_ignore(
+                    &state,
+                    "trash.restore",
+                    Some(&result.restored_virtual_path),
+                    None,
+                )
+                .await;
+                restored.push(result);
+            }
+            Err(error) => errors.push(TrashBatchError {
+                id,
+                message: error.to_string(),
+            }),
+        }
+    }
+
+    let success = restored.len();
+    let failed = errors.len();
+    Ok(Json(TrashBatchRestoreResponse {
+        restored,
+        errors,
+        success,
+        failed,
+    }))
+}
+
 async fn index_upsert_ignore(state: &AppState, snapshot: Arc<MappingSnapshot>, virtual_path: &str) {
     if let Err(error) = state
         .search
@@ -107,6 +188,12 @@ async fn index_upsert_ignore(state: &AppState, snapshot: Arc<MappingSnapshot>, v
         .await
     {
         tracing::warn!("更新搜索索引失败: {error}");
+    }
+}
+
+async fn audit_ignore(state: &AppState, action: &str, target: Option<&str>, detail: Option<&str>) {
+    if let Err(error) = state.audit.record("admin", action, target, detail).await {
+        tracing::warn!("写入审计日志失败: {error}");
     }
 }
 
@@ -122,6 +209,37 @@ async fn purge_trash(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn purge_trash_batch(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<TrashBatchRequest>,
+) -> Result<Json<TrashBatchPurgeResponse>, AppError> {
+    let ids = validate_batch_ids(request.ids)?;
+    let mut purged = Vec::new();
+    let mut errors = Vec::new();
+
+    for id in ids {
+        match state.trash.purge(id.clone()).await {
+            Ok(()) => {
+                audit_ignore(&state, "trash.purge", None, Some(&id)).await;
+                purged.push(id);
+            }
+            Err(error) => errors.push(TrashBatchError {
+                id,
+                message: error.to_string(),
+            }),
+        }
+    }
+
+    let success = purged.len();
+    let failed = errors.len();
+    Ok(Json(TrashBatchPurgeResponse {
+        purged,
+        errors,
+        success,
+        failed,
+    }))
+}
+
 async fn empty_trash(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<TrashEmptyResponse>, AppError> {
@@ -132,4 +250,19 @@ async fn empty_trash(
         .record("admin", "trash.empty", None, Some(&detail))
         .await?;
     Ok(Json(TrashEmptyResponse { removed }))
+}
+
+fn validate_batch_ids(ids: Vec<String>) -> Result<Vec<String>, AppError> {
+    if ids.is_empty() {
+        return Err(AppError::bad_request("批量回收站操作 ids 不能为空"));
+    }
+    let mut clean_ids = Vec::with_capacity(ids.len());
+    for id in ids {
+        let id = id.trim();
+        if id.is_empty() {
+            return Err(AppError::bad_request("批量回收站操作 ids 包含空编号"));
+        }
+        clean_ids.push(id.to_string());
+    }
+    Ok(clean_ids)
 }

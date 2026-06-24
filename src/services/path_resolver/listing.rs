@@ -3,6 +3,7 @@ use std::{cmp::Ordering, collections::BinaryHeap, fs, path::Path, time::UNIX_EPO
 use crate::{
     error::AppError,
     models::{EntryKind, FileInfo, FolderData, FolderInfo, FolderNode, FolderPageInfo},
+    services::reserved,
 };
 
 use super::{
@@ -97,7 +98,9 @@ fn read_light_entries_with_window(
     for entry in fs::read_dir(path)? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().to_string();
-        if !options.include_hidden && name.starts_with('.') {
+        if reserved::is_mount_trash_dir_name(&name)
+            || (!options.include_hidden && name.starts_with('.'))
+        {
             continue;
         }
         let kind = if entry.file_type()?.is_dir() {

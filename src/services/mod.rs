@@ -6,6 +6,7 @@ pub mod file_ops;
 pub mod mapping_store;
 pub mod path_resolver;
 pub mod request_limits;
+pub mod reserved;
 pub mod search;
 pub mod task_io;
 pub mod tasks;

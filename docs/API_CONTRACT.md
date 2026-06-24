@@ -250,7 +250,7 @@
 
 ### `DELETE /api/file/{path...}`
 
-删除到应用自管回收站，不直接永久删除。成功返回：
+默认删除到应用自管回收站。带 `permanent=true` 时直接永久删除，不生成回收站记录。成功返回：
 
 ```json
 {
@@ -410,11 +410,12 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
 
 ```json
 {
-  "paths": ["/files/a.txt", "/files/old"]
+  "paths": ["/files/a.txt", "/files/old"],
+  "permanent": false
 }
 ```
 
-删除进入回收站。
+默认删除进入回收站；`permanent=true` 时直接永久删除。
 
 ### `POST /api/tasks/archive`
 
@@ -455,7 +456,7 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
     "id": "uuid",
     "originalVirtualPath": "/files/a.txt",
     "originalRealPath": "/mnt/files/a.txt",
-    "trashPath": "data/trash/uuid/a.txt",
+    "trashPath": "/mnt/files/.web-file-browser-trash/uuid/a.txt",
     "sizeBytes": 12,
     "deletedAt": "2026-06-23T00:00:00Z",
     "actor": "admin",
@@ -478,9 +479,62 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
 
 恢复会按当前挂载配置重新解析原虚拟路径，目标父目录必须仍在可写挂载中。
 
+### `POST /api/trash/batch/restore`
+
+批量恢复回收站记录。单条失败不会中断后续记录，适合前端多选操作：
+
+```json
+{
+  "ids": ["uuid-1", "uuid-2"],
+  "conflictPolicy": "autoRename"
+}
+```
+
+成功返回：
+
+```json
+{
+  "restored": [],
+  "errors": [
+    {
+      "id": "uuid-2",
+      "message": "错误信息"
+    }
+  ],
+  "success": 1,
+  "failed": 1
+}
+```
+
 ### `DELETE /api/trash/{id}`
 
 永久删除单条回收站记录。成功返回 `204`。
+
+### `POST /api/trash/batch/purge`
+
+批量永久删除回收站记录。单条失败不会中断后续记录：
+
+```json
+{
+  "ids": ["uuid-1", "uuid-2"]
+}
+```
+
+成功返回：
+
+```json
+{
+  "purged": ["uuid-1"],
+  "errors": [
+    {
+      "id": "uuid-2",
+      "message": "错误信息"
+    }
+  ],
+  "success": 1,
+  "failed": 1
+}
+```
 
 ### `POST /api/trash/empty`
 

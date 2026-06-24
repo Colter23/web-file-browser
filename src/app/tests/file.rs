@@ -242,6 +242,50 @@ async fn delete_rejects_symlink_target_through_api_when_available() {
 }
 
 #[tokio::test]
+async fn internal_mount_trash_directory_is_not_accessible_through_api() {
+    let (root, app) = test_app("internal-trash-hidden-api").await;
+    let files_dir = root.path().join("files");
+    tokio::fs::create_dir_all(&files_dir).await.unwrap();
+    tokio::fs::write(files_dir.join("hello.txt"), b"delete-body")
+        .await
+        .unwrap();
+
+    let cookie = login_cookie(&app).await;
+    create_mapping(&app, &cookie, "/docs", &files_dir, true).await;
+
+    let response = app
+        .clone()
+        .oneshot(empty_request_with_cookie(
+            Method::DELETE,
+            "/api/file/docs/hello.txt",
+            &cookie,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(files_dir.join(".web-file-browser-trash").is_dir());
+
+    let response = app
+        .clone()
+        .oneshot(empty_request_with_cookie(
+            Method::GET,
+            "/api/file/docs/.web-file-browser-trash",
+            &cookie,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let metadata = get_json(&app, &cookie, "/api/file/docs?includeHidden=true").await;
+    let folders = metadata["folder"].as_array().unwrap();
+    assert!(
+        folders
+            .iter()
+            .all(|folder| folder["name"] != ".web-file-browser-trash")
+    );
+}
+
+#[tokio::test]
 async fn login_allows_mapping_metadata_and_range_content() {
     let (root, app) = test_app("login-file-flow").await;
     let files_dir = root.path().join("files");

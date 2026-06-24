@@ -16,9 +16,12 @@ use tokio::sync::RwLock;
 use crate::{
     error::AppError,
     models::{EntryKind, IndexStatus, PathMapping, SearchResponse, SearchResult},
-    services::path_resolver::{
-        MappingSnapshot, join_virtual_path, resolve_existing_sync, split_virtual_path,
-        virtual_path_from_parts,
+    services::{
+        path_resolver::{
+            MappingSnapshot, join_virtual_path, resolve_existing_sync, split_virtual_path,
+            virtual_path_from_parts,
+        },
+        reserved,
     },
 };
 
@@ -406,6 +409,10 @@ fn scan_dir(
     for entry in fs::read_dir(dir)? {
         ensure_scan_not_cancelled(rebuild_token, expected_token)?;
         let entry = entry?;
+        let name = entry.file_name().to_string_lossy().to_string();
+        if reserved::is_mount_trash_dir_name(&name) {
+            continue;
+        }
         let path = entry.path();
         let file_type = entry.file_type()?;
         let kind = if file_type.is_dir() {

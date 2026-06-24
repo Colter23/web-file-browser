@@ -8,6 +8,7 @@ use std::{
 use crate::{
     error::AppError,
     models::{FileInfo, FolderData, FolderNode, PathMapping},
+    services::reserved,
 };
 
 mod listing;
@@ -85,6 +86,7 @@ pub struct ResolvedPath {
     pub relative_parts: Vec<String>,
     pub virtual_path: String,
     pub real_path: PathBuf,
+    pub mount_root: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -160,6 +162,7 @@ pub fn resolve_existing_sync(
         relative_parts,
         virtual_path,
         real_path,
+        mount_root: mount.root_path.clone(),
     })
 }
 
@@ -179,6 +182,7 @@ pub fn resolve_existing_no_follow_final_sync(
         relative_parts,
         virtual_path,
         real_path,
+        mount_root: mount.root_path.clone(),
     })
 }
 
@@ -395,6 +399,7 @@ fn secure_join_existing(
     relative_parts: &[String],
     virtual_path: &str,
 ) -> Result<PathBuf, AppError> {
+    ensure_not_reserved_relative_path(relative_parts)?;
     let mut target = root.to_path_buf();
     for part in relative_parts {
         validate_path_segment(part)?;
@@ -415,6 +420,7 @@ fn secure_join_existing_no_follow_final(
     relative_parts: &[String],
     virtual_path: &str,
 ) -> Result<PathBuf, AppError> {
+    ensure_not_reserved_relative_path(relative_parts)?;
     let mut target = root.to_path_buf();
     for part in relative_parts {
         validate_path_segment(part)?;
@@ -442,6 +448,16 @@ fn secure_join_existing_no_follow_final(
         return Err(AppError::bad_request("路径越界"));
     }
     Ok(target)
+}
+
+fn ensure_not_reserved_relative_path(relative_parts: &[String]) -> Result<(), AppError> {
+    if relative_parts
+        .first()
+        .is_some_and(|part| reserved::is_mount_trash_dir_name(part))
+    {
+        return Err(AppError::bad_request("不能访问应用内部回收站目录"));
+    }
+    Ok(())
 }
 
 fn validate_path_segment(part: &str) -> Result<(), AppError> {

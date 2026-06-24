@@ -19,6 +19,7 @@ use crate::{
         path_resolver::{
             MappingSnapshot, ResolvedParentPath, join_virtual_path, resolve_parent_for_child_sync,
         },
+        reserved,
     },
 };
 
@@ -189,6 +190,7 @@ impl TrashService {
     pub async fn move_to_trash(
         &self,
         source: PathBuf,
+        mount_root: PathBuf,
         original_virtual_path: String,
         original_real_path: String,
         actor: String,
@@ -197,6 +199,7 @@ impl TrashService {
         let record = tokio::task::spawn_blocking(move || {
             move_to_trash_sync(
                 root,
+                mount_root,
                 source,
                 original_virtual_path,
                 original_real_path,
@@ -327,13 +330,28 @@ fn purge_record_sync(record: &TrashRecord) -> Result<(), AppError> {
 
 fn remove_record_dir(record: &TrashRecord) -> Result<(), AppError> {
     let payload = Path::new(&record.trash_path);
-    let record_dir = payload
-        .parent()
-        .ok_or_else(|| AppError::bad_request("回收站记录路径无效"))?;
+    let record_dir = record_dir_from_payload(record, payload)?;
     if record_dir.exists() {
         fs::remove_dir_all(record_dir)?;
     }
     Ok(())
+}
+
+fn record_dir_from_payload<'a>(
+    record: &TrashRecord,
+    payload: &'a Path,
+) -> Result<&'a Path, AppError> {
+    let record_dir = payload
+        .parent()
+        .ok_or_else(|| AppError::bad_request("回收站记录路径无效"))?;
+    let dir_name = record_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| AppError::bad_request("回收站记录目录无效"))?;
+    if dir_name != record.id {
+        return Err(AppError::bad_request("回收站记录目录与记录编号不匹配"));
+    }
+    Ok(record_dir)
 }
 
 fn record_size(record: &TrashRecord) -> Result<u64, AppError> {
@@ -421,6 +439,7 @@ fn parse_deleted_at(value: &str) -> Option<OffsetDateTime> {
 
 fn move_to_trash_sync(
     root: PathBuf,
+    mount_root: PathBuf,
     source: PathBuf,
     original_virtual_path: String,
     original_real_path: String,
@@ -435,15 +454,13 @@ fn move_to_trash_sync(
     };
     let size_bytes = matches!(kind, TrashEntryKind::File).then_some(metadata.len());
 
-    fs::create_dir_all(&root)?;
     let id = Uuid::new_v4().to_string();
-    let entry_dir = root.join(&id);
-    fs::create_dir_all(&entry_dir)?;
-
     let name = source
         .file_name()
         .ok_or_else(|| AppError::bad_request("不能删除挂载根路径"))?;
-    let payload_path = entry_dir.join(name);
+
+    let mount_trash_root = reserved::mount_trash_root(&mount_root);
+    let (entry_dir, payload_path) = prepare_trash_entry_dir(&mount_trash_root, &root, &id, name)?;
 
     if let Err(rename_error) = fs::rename(&source, &payload_path) {
         copy_then_remove(&source, &payload_path, &kind)
@@ -468,6 +485,37 @@ fn move_to_trash_sync(
     fs::write(entry_dir.join("metadata.json"), metadata_text)?;
 
     Ok(record)
+}
+
+fn prepare_trash_entry_dir(
+    preferred_root: &Path,
+    fallback_root: &Path,
+    id: &str,
+    name: &std::ffi::OsStr,
+) -> Result<(PathBuf, PathBuf), AppError> {
+    match prepare_trash_entry_dir_in_root(preferred_root, id, name) {
+        Ok(paths) => Ok(paths),
+        Err(error) => {
+            tracing::warn!(
+                "挂载内回收站不可用，回退到中央回收站: {}; {}",
+                preferred_root.display(),
+                error
+            );
+            prepare_trash_entry_dir_in_root(fallback_root, id, name)
+        }
+    }
+}
+
+fn prepare_trash_entry_dir_in_root(
+    root: &Path,
+    id: &str,
+    name: &std::ffi::OsStr,
+) -> Result<(PathBuf, PathBuf), AppError> {
+    fs::create_dir_all(root)?;
+    let entry_dir = root.join(id);
+    fs::create_dir(&entry_dir)?;
+    let payload_path = entry_dir.join(name);
+    Ok((entry_dir, payload_path))
 }
 
 fn copy_then_remove(
@@ -567,6 +615,7 @@ mod tests {
 
         let record = move_to_trash_sync(
             trash_dir.clone(),
+            source_dir.clone(),
             source.clone(),
             "/repo/hello.txt".to_string(),
             source.to_string_lossy().to_string(),
@@ -576,7 +625,8 @@ mod tests {
 
         assert!(!source.exists());
         assert!(Path::new(&record.trash_path).exists());
-        assert!(trash_dir.join(&record.id).join("metadata.json").exists());
+        let record_dir = Path::new(&record.trash_path).parent().unwrap();
+        assert!(record_dir.join("metadata.json").exists());
         assert_eq!(record.size_bytes, Some(5));
 
         fs::remove_dir_all(temp).unwrap();
@@ -663,6 +713,7 @@ mod tests {
 
         let mut old = move_to_trash_sync(
             trash_dir.clone(),
+            source_dir.clone(),
             old_source.clone(),
             "/repo/old.txt".to_string(),
             old_source.to_string_lossy().to_string(),
@@ -672,6 +723,7 @@ mod tests {
         old.deleted_at = "2000-01-01T00:00:00Z".to_string();
         let current = move_to_trash_sync(
             trash_dir,
+            source_dir.clone(),
             current_source.clone(),
             "/repo/current.txt".to_string(),
             current_source.to_string_lossy().to_string(),
@@ -711,6 +763,7 @@ mod tests {
         fs::write(&old_source, "old").unwrap();
         let mut old = move_to_trash_sync(
             trash_dir.clone(),
+            source_dir.clone(),
             old_source.clone(),
             "/repo/old.txt".to_string(),
             old_source.to_string_lossy().to_string(),
@@ -752,6 +805,7 @@ mod tests {
 
         let mut first = move_to_trash_sync(
             trash_dir.clone(),
+            source_dir.clone(),
             first_source.clone(),
             "/repo/old-1.txt".to_string(),
             first_source.to_string_lossy().to_string(),
@@ -772,6 +826,7 @@ mod tests {
 
         let mut second = move_to_trash_sync(
             trash_dir,
+            source_dir.clone(),
             second_source.clone(),
             "/repo/old-2.txt".to_string(),
             second_source.to_string_lossy().to_string(),
@@ -815,6 +870,7 @@ mod tests {
 
         let record = move_to_trash_sync(
             trash_dir,
+            source_dir.clone(),
             source.clone(),
             "/repo/hello.txt".to_string(),
             source.to_string_lossy().to_string(),
@@ -862,6 +918,7 @@ mod tests {
 
         let record = move_to_trash_sync(
             trash_dir,
+            source_dir.clone(),
             source.clone(),
             "/repo/hello.txt".to_string(),
             source.to_string_lossy().to_string(),

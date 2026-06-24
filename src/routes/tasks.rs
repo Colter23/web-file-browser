@@ -140,7 +140,7 @@ async fn create_delete_task(
         .create(TaskKind::Delete, request.paths.len(), 0)
         .await?;
     let id = task.id.clone();
-    spawn_delete_task(state, id.clone(), request.paths);
+    spawn_delete_task(state, id.clone(), request.paths, request.permanent);
     Ok(Json(TaskResponse { id }))
 }
 
@@ -306,7 +306,7 @@ fn spawn_move_task(
     });
 }
 
-fn spawn_delete_task(state: Arc<AppState>, task_id: String, paths: Vec<String>) {
+fn spawn_delete_task(state: Arc<AppState>, task_id: String, paths: Vec<String>, permanent: bool) {
     tokio::spawn(async move {
         let Ok(_permit) = state.tasks.acquire_run_permit().await else {
             let _ = state
@@ -325,7 +325,7 @@ fn spawn_delete_task(state: Arc<AppState>, task_id: String, paths: Vec<String>) 
                 .tasks
                 .set_current_path(&task_id, Some(path.clone()))
                 .await;
-            let result = delete_one(state.clone(), task_id.clone(), path.clone()).await;
+            let result = delete_one(state.clone(), task_id.clone(), path.clone(), permanent).await;
             match result {
                 Ok(bytes) => {
                     let _ = state.tasks.item_done(&task_id, bytes).await;
@@ -675,8 +675,24 @@ async fn move_one(
     Ok(())
 }
 
-async fn delete_one(state: Arc<AppState>, task_id: String, path: String) -> Result<u64, AppError> {
+async fn delete_one(
+    state: Arc<AppState>,
+    task_id: String,
+    path: String,
+    permanent: bool,
+) -> Result<u64, AppError> {
     let snapshot = state.mapping_store.snapshot().await;
+    if permanent {
+        state.tasks.ensure_not_cancelled(&task_id).await?;
+        let response = file_ops::permanent_delete(snapshot, path).await?;
+        state
+            .audit
+            .record("admin", "task.delete.permanent", Some(&response.path), None)
+            .await?;
+        index_remove_ignore(&state, &response.path).await;
+        return Ok(0);
+    }
+
     let target = file_ops::resolve_delete_target(snapshot, path).await?;
     state.tasks.ensure_not_cancelled(&task_id).await?;
     let original_virtual_path = target.virtual_path.clone();
@@ -685,6 +701,7 @@ async fn delete_one(state: Arc<AppState>, task_id: String, path: String) -> Resu
         .trash
         .move_to_trash(
             target.real_path,
+            target.mount_root,
             original_virtual_path.clone(),
             original_real_path,
             "admin".to_string(),

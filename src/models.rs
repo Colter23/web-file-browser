@@ -306,6 +306,8 @@ pub struct ExtractTaskRequest {
 #[serde(rename_all = "camelCase")]
 pub struct DeleteTaskRequest {
     pub paths: Vec<String>,
+    #[serde(default)]
+    pub permanent: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

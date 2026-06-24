@@ -58,6 +58,13 @@ struct WriteQuery {
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct DeleteQuery {
+    #[serde(default)]
+    permanent: bool,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ContentQuery {
     mode: Option<String>,
 }
@@ -482,22 +489,32 @@ async fn move_entry_at_path(
 
 async fn delete_root_entry(
     State(state): State<Arc<AppState>>,
+    Query(query): Query<DeleteQuery>,
 ) -> Result<Json<FileOperationResponse>, AppError> {
-    delete_entry_at_path(state, String::new()).await
+    delete_entry_at_path(state, String::new(), query).await
 }
 
 async fn delete_entry(
     State(state): State<Arc<AppState>>,
     Path(path): Path<String>,
+    Query(query): Query<DeleteQuery>,
 ) -> Result<Json<FileOperationResponse>, AppError> {
-    delete_entry_at_path(state, path).await
+    delete_entry_at_path(state, path, query).await
 }
 
 async fn delete_entry_at_path(
     state: Arc<AppState>,
     path: String,
+    query: DeleteQuery,
 ) -> Result<Json<FileOperationResponse>, AppError> {
     let snapshot = state.mapping_store.snapshot().await;
+    if query.permanent {
+        let response = file_ops::permanent_delete(snapshot, path).await?;
+        audit_ignore(&state, "delete.permanent", Some(&response.path), None).await;
+        index_remove_ignore(&state, &response.path).await;
+        return Ok(Json(response));
+    }
+
     let target = file_ops::resolve_delete_target(snapshot, path).await?;
     let original_virtual_path = target.virtual_path.clone();
     let original_real_path = target.real_path.to_string_lossy().to_string();
@@ -505,6 +522,7 @@ async fn delete_entry_at_path(
         .trash
         .move_to_trash(
             target.real_path,
+            target.mount_root,
             original_virtual_path.clone(),
             original_real_path,
             "admin".to_string(),

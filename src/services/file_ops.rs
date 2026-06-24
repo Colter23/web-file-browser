@@ -1,4 +1,4 @@
-use std::{fs, sync::Arc};
+use std::{fs, path::Path, sync::Arc};
 
 use crate::{
     error::AppError,
@@ -13,6 +13,7 @@ use crate::{
             join_virtual_path, normalize_child_name, resolve_existing_no_follow_final_sync,
             resolve_existing_sync, split_virtual_path, virtual_path_from_parts,
         },
+        reserved,
     },
 };
 
@@ -36,18 +37,36 @@ pub async fn move_entry(
         .await?
 }
 
+pub async fn permanent_delete(
+    snapshot: Arc<MappingSnapshot>,
+    path: String,
+) -> Result<FileOperationResponse, AppError> {
+    tokio::task::spawn_blocking(move || {
+        let target = resolve_delete_target_sync(&snapshot, &path)?;
+        let deleted_path = target.virtual_path.clone();
+        delete_path_sync(&target.real_path)?;
+        Ok(FileOperationResponse { path: deleted_path })
+    })
+    .await?
+}
+
 pub async fn resolve_delete_target(
     snapshot: Arc<MappingSnapshot>,
     path: String,
 ) -> Result<ResolvedPath, AppError> {
-    tokio::task::spawn_blocking(move || {
-        let resolved = resolve_existing_no_follow_final_sync(&snapshot, &path)?;
-        ensure_writable(&resolved.mapping)?;
-        ensure_not_mount_root(&resolved)?;
-        ensure_no_symlink(&resolved.real_path, "不支持删除符号链接")?;
-        Ok(resolved)
-    })
-    .await?
+    tokio::task::spawn_blocking(move || resolve_delete_target_sync(&snapshot, &path)).await?
+}
+
+fn resolve_delete_target_sync(
+    snapshot: &MappingSnapshot,
+    path: &str,
+) -> Result<ResolvedPath, AppError> {
+    let resolved = resolve_existing_no_follow_final_sync(snapshot, path)?;
+    ensure_writable(&resolved.mapping)?;
+    ensure_not_mount_root(&resolved)?;
+    ensure_not_reserved_path(&resolved)?;
+    ensure_no_symlink(&resolved.real_path, "不支持删除符号链接")?;
+    Ok(resolved)
 }
 
 fn create_entry_sync(
@@ -152,6 +171,32 @@ fn ensure_no_symlink(path: &std::path::Path, message: &str) -> Result<(), AppErr
             "{message}: {}",
             path.display()
         )));
+    }
+    Ok(())
+}
+
+fn ensure_not_reserved_path(resolved: &ResolvedPath) -> Result<(), AppError> {
+    if resolved
+        .relative_parts
+        .first()
+        .is_some_and(|name| reserved::is_mount_trash_dir_name(name))
+    {
+        return Err(AppError::bad_request("不能操作应用内部回收站目录"));
+    }
+    Ok(())
+}
+
+fn delete_path_sync(path: &Path) -> Result<(), AppError> {
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.file_type().is_symlink() {
+        return Err(AppError::bad_request("不支持删除符号链接"));
+    }
+    if metadata.is_dir() {
+        fs::remove_dir_all(path)?;
+    } else if metadata.is_file() {
+        fs::remove_file(path)?;
+    } else {
+        return Err(AppError::bad_request("不支持删除特殊文件"));
     }
     Ok(())
 }
