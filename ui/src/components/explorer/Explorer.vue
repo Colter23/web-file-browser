@@ -80,6 +80,7 @@ const emit = defineEmits<{
   (e: "copy-path", payload: CopyPathPayload): void;
   (e: "selection-change", entries: ExplorerEntry[]): void;
   (e: "clear-filter"): void;
+  (e: "clear-result"): void;
   (e: "scroll-change", scrollTop: number): void;
 }>()
 
@@ -128,7 +129,12 @@ const {
   allEntries,
   filterKeyword,
   entries,
+  sourceMode,
+  sourceTitle,
+  resultTotal,
   loadFolder: loadFolderData,
+  loadSearch: loadSearchData,
+  loadRecent: loadRecentData,
   loadMore: loadMoreData,
   maybeLoadMoreOnScroll,
   isLoadedFor,
@@ -188,7 +194,10 @@ const {
   entries,
   selectedEntries,
   filterKeyword,
-  hasMore: hasMoreEntries
+  hasMore: hasMoreEntries,
+  sourceMode,
+  sourceTitle,
+  resultTotal
 });
 
 watch(selectedEntries, selected => {
@@ -338,6 +347,36 @@ const loadFolder = async (path: string = fileStore.currentPath || "/", options: 
   });
 }
 
+const loadSearch = async (query: string) => {
+  const mountPath = fileStore.currentPath === "/"
+      ? undefined
+      : `/${fileStore.currentPath.split("/").filter(Boolean)[0] ?? ""}`;
+  return loadSearchData(query, {
+    resetBeforeLoad: () => {
+      resetRename();
+      resetTypeahead();
+      resetSelectionBox();
+      clearThumbnailState();
+    },
+    clearSelection,
+    afterRender: observePendingThumbnails,
+    mount: mountPath === "/" ? undefined : mountPath
+  });
+}
+
+const loadRecent = async () => {
+  return loadRecentData({
+    resetBeforeLoad: () => {
+      resetRename();
+      resetTypeahead();
+      resetSelectionBox();
+      clearThumbnailState();
+    },
+    clearSelection,
+    afterRender: observePendingThumbnails
+  });
+}
+
 const loadMore = async () => {
   await loadMoreData({afterRender: observePendingThumbnails});
 }
@@ -359,6 +398,7 @@ const {
 } = useExplorerPresentation({
   loading,
   markStale,
+  isFolderSource: () => sourceMode.value === "folder",
   loadFolder,
   captureSelectionSnapshot,
   restoreSelectionSnapshot,
@@ -367,10 +407,16 @@ const {
   viewportHeight
 });
 
-watch(() => [fileStore.activeTabId, fileStore.currentPath, fileStore.viewMode] as const, async ([, path]) => {
+watch(() => [fileStore.activeTabId, fileStore.currentPath] as const, async ([, path]) => {
   if (!path || fileStore.showEditor) return;
   if (isLoadedFor(path)) return;
   await loadFolder(path);
+});
+
+watch(() => fileStore.viewMode, async () => {
+  if (fileStore.showEditor || sourceMode.value !== "folder") return;
+  if (isLoadedFor(fileStore.currentPath || "/")) return;
+  await loadFolder(fileStore.currentPath || "/");
 });
 
 watch(thumbnailActive, async iconLike => {
@@ -384,6 +430,10 @@ watch(thumbnailActive, async iconLike => {
 });
 
 watch(() => props.filterText, resetTypeahead);
+
+const resultActive = computed(() => sourceMode.value !== "folder");
+const emptyActionVisible = computed(() => filterActive.value || resultActive.value);
+const emptyActionText = computed(() => resultActive.value ? "返回当前文件夹" : "清除筛选");
 
 const fileIconKind = (entry: ExplorerEntry) => {
   return fileEntryIconKind(entry, fileStore.extensions);
@@ -574,6 +624,10 @@ defineExpose({
   invertCurrentSelection,
   setSortKey: changeSort,
   setSortOrder: changeSortOrder,
+  search: loadSearch,
+  showRecent: loadRecent,
+  clearResults: () => loadFolder(fileStore.currentPath || "/"),
+  isResultActive: () => resultActive.value,
   focus: focusViewport,
   getScrollTop,
   setScrollTop
@@ -617,8 +671,9 @@ defineExpose({
           :message="message"
           :empty-text="emptyText"
           :empty-hint-text="emptyHintText"
-          :filter-active="filterActive"
-          @clear-filter="emit('clear-filter')" />
+          :action-visible="emptyActionVisible"
+          :action-text="emptyActionText"
+          @clear-filter="resultActive ? emit('clear-result') : emit('clear-filter')" />
 
       <div v-else class="entry-surface">
         <explorer-entry-item
@@ -661,7 +716,7 @@ defineExpose({
             @commit-rename="commitRename"
             @cancel-rename="cancelRename" />
 
-        <div v-if="folderData.hasMore && !props.filterText.trim()" class="load-more-row">
+        <div v-if="sourceMode === 'folder' && folderData.hasMore && !props.filterText.trim()" class="load-more-row">
           <button class="load-more-button" :disabled="loadingMore" @click.stop="loadMore">
             {{ loadingMore ? "正在加载..." : "加载更多" }}
           </button>

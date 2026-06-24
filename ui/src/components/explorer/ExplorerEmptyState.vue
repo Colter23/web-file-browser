@@ -4,7 +4,8 @@ defineProps<{
   message: string;
   emptyText: string;
   emptyHintText: string;
-  filterActive: boolean;
+  actionVisible: boolean;
+  actionText: string;
 }>();
 
 const emit = defineEmits<{
@@ -18,7 +19,7 @@ const emit = defineEmits<{
   <div v-else class="explorer-empty">
     <span>{{ emptyText }}</span>
     <small v-if="emptyHintText">{{ emptyHintText }}</small>
-    <button v-if="filterActive" type="button" class="empty-action" @click.stop="emit('clear-filter')">清除筛选</button>
+    <button v-if="actionVisible" type="button" class="empty-action" @click.stop="emit('clear-filter')">{{ actionText }}</button>
   </div>
 </template>
 

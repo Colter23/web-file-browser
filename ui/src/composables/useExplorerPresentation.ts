@@ -8,6 +8,7 @@ import {useExplorerViewDensity} from "./useExplorerViewDensity.ts";
 type ExplorerPresentationOptions = {
   loading: Ref<boolean>;
   markStale: () => void;
+  isFolderSource: () => boolean;
   loadFolder: (path?: string) => Promise<unknown>;
   captureSelectionSnapshot: () => ExplorerSelectionSnapshot;
   restoreSelectionSnapshot: (snapshot: ExplorerSelectionSnapshot) => Promise<boolean>;
@@ -19,6 +20,7 @@ type ExplorerPresentationOptions = {
 export const useExplorerPresentation = ({
   loading,
   markStale,
+  isFolderSource,
   loadFolder,
   captureSelectionSnapshot,
   restoreSelectionSnapshot,
@@ -42,6 +44,11 @@ export const useExplorerPresentation = ({
     if (loading.value) return;
     const snapshot = captureSelectionSnapshot();
     fileStore.setSort(key);
+    if (!isFolderSource()) {
+      await restoreSelectionSnapshot(snapshot);
+      focusViewport();
+      return;
+    }
     markStale();
     if (await loadFolder(fileStore.currentPath || "/")) await restoreSelectionSnapshot(snapshot);
   }
@@ -50,6 +57,11 @@ export const useExplorerPresentation = ({
     if (loading.value || fileStore.sortOrder === order) return;
     const snapshot = captureSelectionSnapshot();
     fileStore.setSort(fileStore.sortKey, order);
+    if (!isFolderSource()) {
+      await restoreSelectionSnapshot(snapshot);
+      focusViewport();
+      return;
+    }
     markStale();
     if (await loadFolder(fileStore.currentPath || "/")) await restoreSelectionSnapshot(snapshot);
   }

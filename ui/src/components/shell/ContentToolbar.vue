@@ -28,6 +28,7 @@ const emit = defineEmits<{
   (e: "navigate-forward"): void;
   (e: "navigate-up"): void;
   (e: "refresh"): void;
+  (e: "show-recent"): void;
   (e: "breadcrumb-navigate", path: string, complete?: NavigateComplete): void;
   (e: "breadcrumb-drop", payload: ExplorerEntryPathDropPayload): void;
   (e: "update:search-text", value: string): void;
@@ -57,6 +58,9 @@ defineExpose({
     <button class="nav-button" title="刷新 (F5 / Ctrl+R)" @click="emit('refresh')">
       <icon icon="action.refresh" size="large" />
     </button>
+    <button class="nav-button" title="最近文件" @click="emit('show-recent')">
+      <icon icon="action.recent" size="large" />
+    </button>
     <breadcrumb
         ref="breadcrumbRef"
         @navigate="(path, complete) => emit('breadcrumb-navigate', path, complete)"
@@ -69,7 +73,7 @@ defineExpose({
           type="search"
           placeholder="搜索当前文件夹"
           aria-label="搜索当前文件夹"
-          title="搜索当前文件夹 (Ctrl+F / Ctrl+E)"
+          title="输入后筛选当前文件夹，按 Enter 搜索索引 (Ctrl+F / Ctrl+E)"
           @input="emit('update:search-text', ($event.target as HTMLInputElement).value)"
           @keydown.enter.prevent="emit('search-enter')"
           @keydown.escape.prevent="emit('search-escape')">

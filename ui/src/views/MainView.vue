@@ -65,6 +65,10 @@ type ExplorerExpose = {
   selectAllEntries: () => boolean;
   setSortKey: (key: DirSortKey) => Promise<void>;
   setSortOrder: (order: DirSortOrder) => Promise<void>;
+  search: (query: string) => Promise<boolean>;
+  showRecent: () => Promise<boolean>;
+  clearResults: () => Promise<boolean>;
+  isResultActive: () => boolean;
   focus: () => void;
   getImageEntries: () => ExplorerEntry[];
   getScrollTop: () => number;
@@ -206,6 +210,41 @@ const {
 
 const updateSearchText = (value: string) => {
   searchText.value = value;
+}
+
+const runIndexedSearch = async () => {
+  const query = searchText.value.trim();
+  if (!query) {
+    await focusExplorer();
+    return;
+  }
+  if (!await fileStore.requestEditorLeave()) return;
+  closeTransientPanels();
+  const loaded = await explorerRef.value?.search(query);
+  if (loaded) await focusExplorer();
+}
+
+const showRecentEntries = async () => {
+  if (!await fileStore.requestEditorLeave()) return;
+  clearSearch(false);
+  closeTransientPanels();
+  const loaded = await explorerRef.value?.showRecent();
+  if (loaded) await focusExplorer();
+}
+
+const clearSearchOrResults = async () => {
+  const resultActive = explorerRef.value?.isResultActive() ?? false;
+  clearSearch(false);
+  if (resultActive) {
+    await explorerRef.value?.clearResults();
+  }
+  await focusExplorer();
+}
+
+const clearExplorerResults = async () => {
+  clearSearch(false);
+  await explorerRef.value?.clearResults();
+  await focusExplorer();
 }
 
 const {
@@ -692,12 +731,13 @@ const signOut = async () => {
           @navigate-forward="navigateForward"
           @navigate-up="navigateUp"
           @refresh="refreshCurrent(true)"
+          @show-recent="showRecentEntries"
           @breadcrumb-navigate="handleBreadcrumbNavigate"
           @breadcrumb-drop="dropEntriesToPathFolder"
           @update:search-text="updateSearchText"
-          @search-enter="focusExplorer"
+          @search-enter="runIndexedSearch"
           @search-escape="handleSearchEscape"
-          @clear-search="() => clearSearch()" />
+          @clear-search="clearSearchOrResults" />
 
       <div class="workspace-body">
       <sidebar-panel
@@ -792,6 +832,7 @@ const signOut = async () => {
                 @selection-change="handleSelectionChange"
                 @scroll-change="persistActiveTabScrollTop"
                 @clear-filter="() => clearSearch()"
+                @clear-result="clearExplorerResults"
                 @open-new-tab="openEntryInNewTab"
                 @open-image-viewer="openImageViewer">
             </explorer>

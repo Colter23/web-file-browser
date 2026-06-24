@@ -21,6 +21,7 @@ const classicSymbolIcons: Record<string, string> = {
   "action.close": "icon-close",
   "action.add": "icon-add",
   "action.refresh": "icon-refresh",
+  "action.recent": "icon-refresh",
   "action.clean": "icon-delete",
   "action.settings": "icon-setting",
   "action.more": "icon-unfold",

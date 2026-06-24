@@ -71,6 +71,25 @@ export interface FileInfo {
     type?: string;
 }
 
+export type SearchResultType = "file" | "folder" | string;
+
+export interface SearchResult {
+    name: string;
+    path: string;
+    extension?: string;
+    modified?: string;
+    size?: number;
+    type: SearchResultType;
+    mountPath?: string;
+}
+
+export interface SearchResponse {
+    items: SearchResult[];
+    total: number;
+    offset: number;
+    limit: number;
+}
+
 
 export type LoadData = (node: FileTreeData, options?: {navigate?: boolean; focusExplorer?: boolean; refresh?: boolean}) => Promise<boolean>
 export interface FileTreeData {
