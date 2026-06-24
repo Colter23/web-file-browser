@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ace from "ace-builds";
 import {onBeforeUnmount, onMounted, ref, watch} from "vue";
+import {aceModePath, aceThemePath, loadAceMode, loadAceTheme, registerAceResources} from "./ace-resources.ts";
 import type {EditorCursorStatus, EditorSearchOptions} from "./types.ts";
 
 let aceReady: Promise<void> | null = null;
@@ -9,22 +10,14 @@ const exposeAceGlobal = () => {
   (globalThis as typeof globalThis & {ace?: typeof ace}).ace = ace;
 }
 
-const configureAce = () => {
-  ace.config.setModuleUrl("ace/mode/base_worker", "/ace/worker-base.js");
-  ace.config.setModuleUrl("ace/mode/json_worker", "/ace/worker-json.js");
-  ace.config.setModuleUrl("ace/mode/xml_worker", "/ace/worker-xml.js");
-  ace.config.setModuleUrl("ace/mode/yaml_worker", "/ace/worker-yaml.js");
-}
-
 const ensureAceReady = async () => {
   if (!aceReady) {
     exposeAceGlobal();
     aceReady = Promise.all([
-      import("ace-builds/esm-resolver"),
       import("ace-builds/src-noconflict/ext-language_tools")
     ]).then(() => {
       exposeAceGlobal();
-      configureAce();
+      registerAceResources();
     });
   }
   await aceReady;
@@ -65,6 +58,8 @@ let syncing = false;
 let disposed = false;
 const editorVerticalInset = 12;
 const editorScrollMargin = 8;
+let themeLoadToken = 0;
+let modeLoadToken = 0;
 
 const findNeedle = (options: EditorSearchOptions) => {
   if (!editor || !options.needle) return false;
@@ -144,13 +139,19 @@ const applyEditorSpacing = () => {
   editor.renderer.setScrollMargin(editorScrollMargin, editorScrollMargin);
 }
 
-watch(() => props.theme, (theme: string) => {
-  editor?.setTheme("ace/theme/" + theme);
+watch(() => props.theme, async (theme: string) => {
+  const token = ++themeLoadToken;
+  await loadAceTheme(theme);
+  if (!editor || disposed || token !== themeLoadToken) return;
+  editor.setTheme(aceThemePath(theme));
   requestAnimationFrame(applyEditorSpacing);
 });
 
-watch(() => props.mode, (mode: string) => {
-  editor?.session.setMode("ace/mode/" + mode);
+watch(() => props.mode, async (mode: string) => {
+  const token = ++modeLoadToken;
+  await loadAceMode(mode);
+  if (!editor || disposed || token !== modeLoadToken) return;
+  editor.session.setMode(aceModePath(mode));
 });
 
 watch(() => props.content, (content: string) => {
@@ -184,13 +185,14 @@ onMounted(() => {
 
 const initializeEditor = async () => {
   await ensureAceReady();
+  await Promise.all([loadAceTheme(props.theme), loadAceMode(props.mode)]);
   if (disposed || !editorRef.value || editor) return;
   editor = ace.edit(editorRef.value);
 
   editor.setOptions({
-    theme: "ace/theme/" + props.theme,
+    theme: aceThemePath(props.theme),
     fontSize: props.fontSize,
-    mode: "ace/mode/" + props.mode,
+    mode: aceModePath(props.mode),
     value: props.content,
     readOnly: props.readOnly,
 
