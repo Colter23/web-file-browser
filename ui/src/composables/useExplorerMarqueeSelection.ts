@@ -58,7 +58,11 @@ export const useExplorerMarqueeSelection = ({
   let scrollFrame = 0;
   let suppressNextBackgroundClick = false;
   let suppressClickTimer = 0;
+  let suppressClickX = 0;
+  let suppressClickY = 0;
   const startThreshold = 4;
+  const clickSuppressionMs = 160;
+  const clickSuppressionDistance = 8;
   const scrollEdge = 48;
   const maxScrollSpeed = 24;
   const interactiveSelector = "button, a, input, textarea, select, [contenteditable='true']";
@@ -71,15 +75,21 @@ export const useExplorerMarqueeSelection = ({
 
   const suppressNextViewportClick = () => {
     suppressNextBackgroundClick = true;
+    suppressClickX = pointerX;
+    suppressClickY = pointerY;
     if (suppressClickTimer) window.clearTimeout(suppressClickTimer);
     suppressClickTimer = window.setTimeout(() => {
       suppressNextBackgroundClick = false;
       suppressClickTimer = 0;
-    }, 0);
+    }, clickSuppressionMs);
   }
 
-  const consumeMarqueeClickSuppression = () => {
+  const consumeMarqueeClickSuppression = (event?: MouseEvent) => {
     if (!suppressNextBackgroundClick) return false;
+    if (event) {
+      const distance = Math.hypot(event.clientX - suppressClickX, event.clientY - suppressClickY);
+      if (distance > clickSuppressionDistance) return false;
+    }
     suppressNextBackgroundClick = false;
     if (suppressClickTimer) {
       window.clearTimeout(suppressClickTimer);

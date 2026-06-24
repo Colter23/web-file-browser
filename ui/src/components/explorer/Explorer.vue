@@ -417,7 +417,7 @@ const selectPathForRename = async (path: string) => {
 }
 
 const activateViewport = (event: MouseEvent) => {
-  if (consumeMarqueeClickSuppression()) {
+  if (consumeMarqueeClickSuppression(event)) {
     event.preventDefault();
     return;
   }
