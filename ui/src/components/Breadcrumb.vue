@@ -108,18 +108,18 @@ onBeforeUnmount(() => {
 <template>
   <div class="path-card" title="地址栏 (Ctrl+L / Alt+D)">
     <div class="flex items-center gap-1 pl-2">
-      <div class="path-item px-1" title="主页" @click="changePath(-1)">
+      <button class="path-item px-1" type="button" title="主页" @click="changePath(-1)">
         <icon icon="file.home" size="large" />
-      </div>
+      </button>
       <div v-if="pathList.length" class="separator">
         <icon icon="action.next" />
       </div>
     </div>
     <div ref="pathBox" class="path-box" :class="isInput ? 'hidden' : 'flex'">
       <div v-for="(pathItem, index) in pathList" :key="`${pathItem}-${index}`" class="flex items-center">
-        <div class="path-item px-2" @click="changePath(index)">
+        <button class="path-item px-2" type="button" @click="changePath(index)">
           <span>{{ pathItem }}</span>
-        </div>
+        </button>
         <div v-if="index !== pathList.length - 1" class="separator">
           <icon icon="action.next" />
         </div>
@@ -151,12 +151,19 @@ onBeforeUnmount(() => {
 }
 
 .path-item {
-  @apply inline-flex h-7 cursor-pointer items-center rounded-sm text-nowrap truncate text-sm;
+  @apply inline-flex h-7 cursor-pointer items-center rounded-sm border border-transparent bg-transparent text-nowrap truncate text-sm outline-none;
   color: var(--app-text-muted);
 }
 
 .path-item:hover {
   background: var(--app-accent-hover, #eff6ff);
+}
+
+.path-item:focus-visible {
+  border-color: var(--app-accent, #2563eb);
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
 }
 
 .separator {
