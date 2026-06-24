@@ -394,6 +394,7 @@ const {
   tabDropTargetId,
   tabDropPlacement,
   closeTabContextMenu,
+  openTabContextMenuAt,
   openTabContextMenu,
   openTab,
   openEntryInNewTab,
@@ -738,6 +739,7 @@ const signOut = async () => {
           @close-tab="closeTab"
           @tab-aux-click="handleTabAuxClick"
           @tab-context-menu="openTabContextMenu"
+          @tab-keyboard-context-menu="payload => openTabContextMenuAt(payload.x, payload.y, payload.tabId)"
           @tab-drag-start="startTabDrag"
           @tab-drag-over="dragOverTab"
           @tab-drag-leave="leaveTabDropTarget"

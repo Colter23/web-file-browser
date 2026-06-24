@@ -40,10 +40,14 @@ export const useExplorerTabs = ({
     tabContextMenu.value.visible = false;
   }
 
+  const openTabContextMenuAt = (x: number, y: number, tabId: string) => {
+    tabContextMenu.value = {visible: true, x, y, tabId};
+  }
+
   const openTabContextMenu = (event: MouseEvent, tabId: string) => {
     event.preventDefault();
     event.stopPropagation();
-    tabContextMenu.value = {visible: true, x: event.clientX, y: event.clientY, tabId};
+    openTabContextMenuAt(event.clientX, event.clientY, tabId);
   }
 
   const openTab = async () => {
@@ -248,6 +252,7 @@ export const useExplorerTabs = ({
     tabDropTargetId,
     tabDropPlacement,
     closeTabContextMenu,
+    openTabContextMenuAt,
     openTabContextMenu,
     openTab,
     openEntryInNewTab,

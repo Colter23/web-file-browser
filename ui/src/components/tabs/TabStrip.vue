@@ -47,6 +47,13 @@ const revealActiveTab = async () => {
   tabButtonRefs.get(props.activeTabId)?.scrollIntoView({block: "nearest", inline: "nearest"});
 }
 
+const focusTabButton = async (tabId: string) => {
+  await nextTick();
+  const button = tabButtonRefs.get(tabId);
+  button?.focus({preventScroll: true});
+  button?.scrollIntoView({block: "nearest", inline: "nearest"});
+}
+
 const updateTabOverflow = () => {
   const scroll = tabScrollRef.value;
   addButtonPinned.value = scroll ? scroll.scrollWidth - scroll.clientWidth > 1 : false;
@@ -92,6 +99,11 @@ watch(() => [props.contextMenu.visible, props.contextMenu.tabId, props.contextMe
   if (visible) void refreshContextMenu();
 }, {flush: "post"});
 
+watch(() => props.contextMenu.visible, async (visible, wasVisible) => {
+  if (visible || !wasVisible || !props.contextMenu.tabId) return;
+  await focusTabButton(props.contextMenu.tabId);
+});
+
 const handleWindowResize = () => {
   scheduleTabOverflowUpdate();
   if (props.contextMenu.visible) void refreshContextMenu();
@@ -132,6 +144,7 @@ const emit = defineEmits<{
   (e: "close-tab", event: MouseEvent, tabId: string): void;
   (e: "tab-aux-click", event: MouseEvent, tabId: string): void;
   (e: "tab-context-menu", event: MouseEvent, tabId: string): void;
+  (e: "tab-keyboard-context-menu", payload: {x: number; y: number; tabId: string}): void;
   (e: "tab-drag-start", event: DragEvent, tabId: string): void;
   (e: "tab-drag-over", event: DragEvent, tabId: string): void;
   (e: "tab-drag-leave", event: DragEvent, tabId: string): void;
@@ -150,6 +163,61 @@ const emit = defineEmits<{
 }>();
 
 const isCopyEntryDrop = (event: DragEvent) => Boolean(event.ctrlKey || event.metaKey);
+
+const tabIndexById = (tabId: string) => props.tabs.findIndex(tab => tab.id === tabId);
+
+const focusTabByOffset = async (tabId: string, offset: number) => {
+  if (!props.tabs.length) return;
+  const currentIndex = tabIndexById(tabId);
+  const startIndex = currentIndex >= 0 ? currentIndex : 0;
+  const nextIndex = Math.max(0, Math.min(props.tabs.length - 1, startIndex + offset));
+  const nextTab = props.tabs[nextIndex];
+  if (nextTab) await focusTabButton(nextTab.id);
+}
+
+const openKeyboardContextMenu = (tabId: string) => {
+  const button = tabButtonRefs.get(tabId);
+  const rect = button?.getBoundingClientRect();
+  emit("tab-keyboard-context-menu", {
+    x: rect ? rect.left + Math.min(rect.width - 8, 28) : window.innerWidth / 2,
+    y: rect ? rect.bottom - 4 : window.innerHeight / 2,
+    tabId
+  });
+}
+
+const handleTabKeyDown = async (event: KeyboardEvent, tab: ExplorerTab) => {
+  if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+    event.preventDefault();
+    openKeyboardContextMenu(tab.id);
+    return;
+  }
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    await focusTabByOffset(tab.id, 1);
+    return;
+  }
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    await focusTabByOffset(tab.id, -1);
+    return;
+  }
+  if (event.key === "Home") {
+    event.preventDefault();
+    const firstTab = props.tabs[0];
+    if (firstTab) await focusTabButton(firstTab.id);
+    return;
+  }
+  if (event.key === "End") {
+    event.preventDefault();
+    const lastTab = props.tabs[props.tabs.length - 1];
+    if (lastTab) await focusTabButton(lastTab.id);
+    return;
+  }
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    emit("activate-tab", tab.id);
+  }
+}
 
 const canAcceptEntryDrop = (event: DragEvent) => {
   if (props.draggingTabId) return false;
@@ -252,6 +320,7 @@ const handleAddDrop = (event: DragEvent) => {
           @click="emit('activate-tab', tab.id)"
           @auxclick="emit('tab-aux-click', $event, tab.id)"
           @contextmenu="emit('tab-context-menu', $event, tab.id)"
+          @keydown="handleTabKeyDown($event, tab)"
           @dragstart="emit('tab-drag-start', $event, tab.id)"
           @dragover="handleTabDragOver($event, tab)"
           @dragleave="handleTabDragLeave($event, tab)"
