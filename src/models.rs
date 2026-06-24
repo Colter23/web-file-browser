@@ -196,6 +196,7 @@ pub struct RuntimeSettings {
     pub mapping_file: String,
     pub config_file: String,
     pub auth_file: String,
+    pub favorites_file: String,
     pub trash_dir: String,
     pub static_dir: String,
     pub cors_allowed_origins: Vec<String>,
@@ -455,4 +456,65 @@ pub struct RequestLimitMetrics {
     pub ip_limit: usize,
     pub tracked_ips: usize,
     pub active_ip_requests: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FavoriteItem {
+    pub id: String,
+    #[serde(default)]
+    pub mount_id: Option<i64>,
+    pub mount_path: String,
+    #[serde(default)]
+    pub relative_path: String,
+    pub name: String,
+    pub order: i32,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FavoriteResponse {
+    pub id: String,
+    pub mount_id: Option<i64>,
+    pub mount_path: String,
+    pub relative_path: String,
+    pub path: String,
+    pub name: String,
+    pub order: i32,
+    pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missing: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateFavoriteRequest {
+    pub path: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub order: Option<i32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateFavoriteRequest {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub order: Option<i32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReorderFavoriteItem {
+    pub id: String,
+    pub order: i32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReorderFavoritesRequest {
+    pub items: Vec<ReorderFavoriteItem>,
 }

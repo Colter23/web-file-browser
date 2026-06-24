@@ -47,6 +47,7 @@ pub(super) async fn test_app_with_config(
         mapping_file: root.path().join("data/mappings.json"),
         config_file: root.path().join("data/config.json"),
         auth_file: root.path().join("data/auth.json"),
+        favorites_file: root.path().join("data/favorites.json"),
         trash_dir: root.path().join("data/trash"),
         static_dir: root.path().join("static"),
         cors_allowed_origins: Vec::new(),

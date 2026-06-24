@@ -2,6 +2,7 @@ pub mod audit;
 pub mod auth;
 pub mod auth_store;
 pub mod conflict;
+pub mod favorites;
 pub mod file_ops;
 pub mod mapping_store;
 pub mod path_resolver;

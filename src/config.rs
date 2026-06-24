@@ -9,6 +9,7 @@ const DEFAULT_PORT: u16 = 8080;
 const DEFAULT_MAPPING_FILE: &str = "data/mappings.json";
 const DEFAULT_CONFIG_FILE: &str = "data/config.json";
 const DEFAULT_AUTH_FILE: &str = "data/auth.json";
+const DEFAULT_FAVORITES_FILE: &str = "data/favorites.json";
 const DEFAULT_TRASH_DIR: &str = "data/trash";
 const DEFAULT_STATIC_DIR: &str = "ui/dist";
 const DEFAULT_TRUST_PROXY_HEADERS: bool = false;
@@ -35,6 +36,7 @@ pub struct AppConfig {
     pub mapping_file: PathBuf,
     pub config_file: PathBuf,
     pub auth_file: PathBuf,
+    pub favorites_file: PathBuf,
     pub trash_dir: PathBuf,
     pub static_dir: PathBuf,
     pub cors_allowed_origins: Vec<String>,
@@ -85,6 +87,7 @@ impl AppConfig {
             mapping_file: PathBuf::from(DEFAULT_MAPPING_FILE),
             config_file,
             auth_file: PathBuf::from(DEFAULT_AUTH_FILE),
+            favorites_file: PathBuf::from(DEFAULT_FAVORITES_FILE),
             trash_dir: PathBuf::from(DEFAULT_TRASH_DIR),
             static_dir: PathBuf::from(DEFAULT_STATIC_DIR),
             cors_allowed_origins: Vec::new(),
@@ -127,6 +130,7 @@ impl AppConfig {
         if let Some(storage) = file_config.storage {
             assign(&mut self.mapping_file, storage.mapping_file);
             assign(&mut self.auth_file, storage.auth_file);
+            assign(&mut self.favorites_file, storage.favorites_file);
             assign(&mut self.trash_dir, storage.trash_dir);
             assign(&mut self.audit_file, storage.audit_file);
         }
@@ -193,6 +197,7 @@ impl AppConfig {
         assign_env_u16(&mut self.port, "PORT");
         assign_env_path(&mut self.mapping_file, "WEB_FILE_BROWSER_MAPPING_FILE");
         assign_env_path(&mut self.auth_file, "WEB_FILE_BROWSER_AUTH_FILE");
+        assign_env_path(&mut self.favorites_file, "WEB_FILE_BROWSER_FAVORITES_FILE");
         assign_env_path(&mut self.trash_dir, "WEB_FILE_BROWSER_TRASH_DIR");
         assign_env_path(&mut self.static_dir, "WEB_FILE_BROWSER_STATIC_DIR");
         assign_env_list(
@@ -359,6 +364,8 @@ struct StorageConfigFile {
     mapping_file: Option<PathBuf>,
     #[serde(default)]
     auth_file: Option<PathBuf>,
+    #[serde(default)]
+    favorites_file: Option<PathBuf>,
     #[serde(default)]
     trash_dir: Option<PathBuf>,
     #[serde(default)]

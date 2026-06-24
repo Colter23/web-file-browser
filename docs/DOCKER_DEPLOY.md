@@ -55,6 +55,9 @@ docker compose up -d --build
     "bind": "0.0.0.0",
     "port": 8080
   },
+  "storage": {
+    "favoritesFile": "data/favorites.json"
+  },
   "limits": {
     "maxUploadBytes": null,
     "maxDirPageSize": 2000,
@@ -194,10 +197,11 @@ Compose 示例默认挂载：
 - `config.json`
 - `auth.json`
 - `mappings.json`
+- `favorites.json`
 - `trash/`
 - `audit.jsonl`
 
-`config.json` 是运行配置，可手动编辑；`auth.json` 是认证状态文件，通常不需要手动修改。
+`config.json` 是运行配置，可手动编辑；`auth.json` 是认证状态文件，通常不需要手动修改；`favorites.json` 保存文件夹收藏快捷入口。
 
 `/mnt/files` 是业务文件目录示例。进入管理界面新增挂载时，`folderPath` 可以填写 `/mnt/files`。
 
@@ -264,6 +268,7 @@ WEB_FILE_BROWSER_TRUST_PROXY_HEADERS=true
 - `data/config.json`
 - `data/auth.json`
 - `data/mappings.json`
+- `data/favorites.json`
 - `data/trash/`
 - `data/audit.jsonl`
 - 实际业务文件挂载目录

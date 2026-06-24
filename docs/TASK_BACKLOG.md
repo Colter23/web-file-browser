@@ -62,6 +62,14 @@
    - 跨域只通过 `WEB_FILE_BROWSER_CORS_ORIGINS` 显式开启，不支持 `*`。
    - 默认不信任 `X-Forwarded-For`；可信反向代理部署必须显式开启 `WEB_FILE_BROWSER_TRUST_PROXY_HEADERS`。
 
+6. 文件夹收藏。
+   - 只收藏文件夹，不收藏文件。
+   - 收藏项保存到 `data/favorites.json`，不塞进运行配置。
+   - 默认列表不检查磁盘存在性，避免首页或侧边栏触发无意义 `stat`。
+   - 显式 `GET /api/favorites?check=true` 时才检查目录是否缺失。
+   - 挂载显示路径变化但挂载 `id` 不变时，收藏项按当前挂载路径返回。
+   - 不做标签、分享、多用户收藏、真实软链接或额外挂载点。
+
 ## 必须完善
 
 1. 目录浏览性能。
@@ -212,3 +220,4 @@
 - 上传和保存大小上限已补充 API 冒烟测试：超过 `WEB_FILE_BROWSER_MAX_UPLOAD_BYTES` 时返回稳定 `413 PAYLOAD_TOO_LARGE`，并验证失败不会改写原文件或留下上传目标。
 - 下载接口已移除默认审计写入，并增加测试防止回归，继续保持下载、目录列表和预览默认不审计。
 - 审计边界已补充 API 冒烟测试：登录、保存、上传、删除和回收站恢复会写入审计；目录列表、内容读取和下载不会额外写入审计。
+- 文件夹收藏后端已完成基础实现：新增 `GET/POST /api/favorites`、`PATCH/DELETE /api/favorites/{id}` 和 `POST /api/favorites/reorder`，收藏项按 JSON 保存到 `data/favorites.json`，默认不检查磁盘，显式 `check=true` 才返回 `missing`。

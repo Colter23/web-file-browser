@@ -1,5 +1,6 @@
 mod audit;
 mod auth;
+mod favorites;
 mod file;
 mod mapping;
 mod ops;
@@ -26,6 +27,7 @@ use crate::{
     routes::{
         audit::audit_routes,
         auth::{protected_auth_routes, public_auth_routes, require_auth},
+        favorites::favorite_routes,
         file::file_routes,
         mapping::mapping_routes,
         ops::{ops_routes, public_ops_routes},
@@ -40,6 +42,7 @@ pub fn api_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
     let protected_routes = Router::new()
         .merge(protected_auth_routes())
         .merge(audit_routes())
+        .merge(favorite_routes())
         .merge(file_routes())
         .merge(mapping_routes())
         .merge(settings_routes())

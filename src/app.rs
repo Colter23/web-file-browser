@@ -18,9 +18,9 @@ use crate::{
     models::RuntimeSettings,
     routes,
     services::{
-        audit::AuditService, auth::AuthService, auth_store::AuthStore, mapping_store::MappingStore,
-        request_limits::RequestLimits, search::SearchService, tasks::TaskService,
-        trash::TrashService,
+        audit::AuditService, auth::AuthService, auth_store::AuthStore, favorites::FavoriteService,
+        mapping_store::MappingStore, request_limits::RequestLimits, search::SearchService,
+        tasks::TaskService, trash::TrashService,
     },
 };
 
@@ -29,6 +29,7 @@ pub struct AppState {
     pub mapping_store: MappingStore,
     pub auth_store: AuthStore,
     pub auth: AuthService,
+    pub favorites: FavoriteService,
     pub trash: TrashService,
     pub audit: AuditService,
     pub limits: RequestLimits,
@@ -40,6 +41,7 @@ pub struct AppState {
 pub async fn build(config: AppConfig) -> Result<Router, AppError> {
     let mapping_store = MappingStore::load(config.mapping_file.clone()).await?;
     let auth_store = AuthStore::load(config.auth_file.clone()).await?;
+    let favorites = FavoriteService::load(config.favorites_file.clone()).await?;
     let trash = TrashService::load(
         config.trash_dir.clone(),
         config.trash_retention_days,
@@ -69,6 +71,7 @@ pub async fn build(config: AppConfig) -> Result<Router, AppError> {
         mapping_file: path_to_string(&config.mapping_file),
         config_file: path_to_string(&config.config_file),
         auth_file: path_to_string(&config.auth_file),
+        favorites_file: path_to_string(&config.favorites_file),
         trash_dir: path_to_string(&config.trash_dir),
         static_dir: path_to_string(&config.static_dir),
         cors_allowed_origins: config.cors_allowed_origins.clone(),
@@ -103,6 +106,7 @@ pub async fn build(config: AppConfig) -> Result<Router, AppError> {
         mapping_store,
         auth_store,
         auth: AuthService::default(),
+        favorites,
         trash,
         audit,
         limits,

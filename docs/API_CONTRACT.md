@@ -151,6 +151,84 @@
 }
 ```
 
+## 文件夹收藏
+
+收藏夹只保存文件夹快捷入口，不创建真实目录、软链接或额外挂载点。后端持久化到 `data/favorites.json`，默认列表请求不访问磁盘；只有显式 `check=true` 时才检查目标目录是否仍存在。
+
+收藏项会保存 `mountId` 和相对挂载根的 `relativePath`。如果挂载显示路径被修改，但挂载 `id` 不变，后端会按当前挂载路径返回新的 `path`。
+
+### `GET /api/favorites`
+
+返回收藏夹列表，按 `order`、创建时间和 `id` 排序。
+
+查询参数：
+
+- `check=true`：检查收藏目录是否仍存在，并返回 `missing` 字段；默认不检查，避免无意义磁盘访问。
+
+```json
+[
+  {
+    "id": "uuid",
+    "mountId": 1,
+    "mountPath": "/files",
+    "relativePath": "photos/2026",
+    "path": "/files/photos/2026",
+    "name": "2026 照片",
+    "order": 10,
+    "createdAt": "2026-06-25T12:00:00Z",
+    "missing": false
+  }
+]
+```
+
+未传 `check=true` 时不返回 `missing` 字段。
+
+### `POST /api/favorites`
+
+新增文件夹收藏。`path` 必须指向已存在的目录，会复用现有路径解析规则，禁止越界路径和应用内部回收站目录。重复收藏同一挂载下同一相对路径会返回 `409 CONFLICT`。
+
+```json
+{
+  "path": "/files/photos/2026",
+  "name": "2026 照片",
+  "order": 10
+}
+```
+
+`name` 和 `order` 可省略；省略名称时使用目录名，省略排序时自动追加到列表末尾。
+
+### `PATCH /api/favorites/{id}`
+
+修改收藏夹名称或排序。
+
+```json
+{
+  "name": "照片归档",
+  "order": 20
+}
+```
+
+成功返回更新后的收藏项。
+
+### `POST /api/favorites/reorder`
+
+批量调整排序。请求中的 `id` 必须全部存在，否则返回 `404 NOT_FOUND`，不会保存部分排序。
+
+```json
+{
+  "items": [
+    { "id": "uuid-1", "order": 10 },
+    { "id": "uuid-2", "order": 20 }
+  ]
+}
+```
+
+成功返回 `200` 空响应体。
+
+### `DELETE /api/favorites/{id}`
+
+移除收藏项，不影响真实文件夹。成功返回 `204`。
+
 ## 文件元数据和目录浏览
 
 ### `GET /api/file`

@@ -80,6 +80,7 @@ fn readiness_file_system_checks(settings: &RuntimeSettings) -> Vec<ReadinessChec
     vec![
         check_file_parent_writable("configStore", &settings.config_file),
         check_file_parent_writable("authStore", &settings.auth_file),
+        check_file_parent_writable("favoritesStore", &settings.favorites_file),
         check_file_parent_writable("mappingStore", &settings.mapping_file),
         check_directory_writable("trash", &settings.trash_dir),
         check_file_parent_writable("audit", &settings.audit_file),
