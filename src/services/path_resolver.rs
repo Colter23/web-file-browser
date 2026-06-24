@@ -8,7 +8,7 @@ use std::{
 use crate::{
     error::AppError,
     models::{FileInfo, FolderData, FolderNode, PathMapping},
-    services::reserved,
+    services::{path_display::display_path, reserved},
 };
 
 mod listing;
@@ -289,7 +289,7 @@ fn build_snapshot_sync(mut mappings: Vec<PathMapping>) -> Result<Arc<MappingSnap
         let root_path = Path::new(&mapping.folder_path)
             .canonicalize()
             .map_err(|_| AppError::bad_request(format!("查无此路径: {}", mapping.folder_path)))?;
-        mapping.folder_path = root_path.to_string_lossy().to_string();
+        mapping.folder_path = display_path(&root_path);
         mounts.push(MountEntry {
             mapping: mapping.clone(),
             mount_parts: mapping_parts(&mapping.mount_path),

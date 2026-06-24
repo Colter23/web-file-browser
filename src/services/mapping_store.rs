@@ -4,7 +4,10 @@ use tokio::sync::RwLock;
 use crate::{
     error::AppError,
     models::{FolderNode, PathMapping, ReorderMappingsRequest},
-    services::path_resolver::MappingSnapshot,
+    services::{
+        path_display::{display_path, has_windows_extended_prefix},
+        path_resolver::MappingSnapshot,
+    },
 };
 
 #[derive(Clone)]
@@ -20,14 +23,22 @@ impl MappingStore {
             tokio::fs::create_dir_all(parent).await?;
         }
 
-        let mappings = match tokio::fs::read_to_string(&file_path).await {
+        let loaded_mappings = match tokio::fs::read_to_string(&file_path).await {
             Ok(text) if text.trim().is_empty() => Vec::new(),
             Ok(text) => serde_json::from_str(&text)?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
             Err(error) => return Err(error.into()),
         };
 
-        let snapshot = MappingSnapshot::build(sorted_mappings(&mappings)).await?;
+        let snapshot = MappingSnapshot::build(sorted_mappings(&loaded_mappings)).await?;
+        let mappings = snapshot.mappings.clone();
+        if loaded_mappings
+            .iter()
+            .any(|mapping| has_windows_extended_prefix(&mapping.folder_path))
+        {
+            let text = serde_json::to_vec_pretty(&mappings)?;
+            tokio::fs::write(&file_path, text).await?;
+        }
 
         Ok(Self {
             file_path: Arc::new(file_path),
@@ -164,7 +175,7 @@ async fn normalize_mapping(mut mapping: PathMapping) -> Result<PathMapping, AppE
         )));
     }
 
-    mapping.folder_path = folder_path.to_string_lossy().to_string();
+    mapping.folder_path = display_path(&folder_path);
     mapping.remark = Some(mapping.remark.unwrap_or_default());
     mapping.order = Some(mapping.order.unwrap_or(0));
     Ok(mapping)

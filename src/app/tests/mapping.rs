@@ -79,6 +79,28 @@ async fn mapping_reorder_rejects_unknown_id() {
     assert_eq!(after[0]["order"], 10);
 }
 
+#[tokio::test]
+async fn mapping_paths_do_not_expose_windows_extended_prefix() {
+    let (root, app) = test_app("mapping-display-path").await;
+    let files_dir = root.path().join("files");
+    tokio::fs::create_dir_all(&files_dir).await.unwrap();
+
+    let cookie = login_cookie(&app).await;
+    create_mapping_with_order(&app, &cookie, "/files", &files_dir, 10).await;
+
+    let persisted_text = tokio::fs::read_to_string(root.path().join("data/mappings.json"))
+        .await
+        .unwrap();
+    let persisted: Value = serde_json::from_str(&persisted_text).unwrap();
+    assert_no_windows_extended_prefix(&persisted[0]["folderPath"]);
+
+    let mappings = get_json(&app, &cookie, "/api/mapping").await;
+    assert_no_windows_extended_prefix(&mappings[0]["folderPath"]);
+
+    let root_node = get_json(&app, &cookie, "/api/mapping/root").await;
+    assert_no_windows_extended_prefix(&root_node["children"][0]["realPath"]);
+}
+
 async fn create_mapping_with_order(
     app: &Router,
     cookie: &str,
@@ -105,4 +127,12 @@ async fn create_mapping_with_order(
 
     assert_eq!(response.status(), StatusCode::CREATED);
     json_body(response).await.as_i64().unwrap()
+}
+
+fn assert_no_windows_extended_prefix(value: &Value) {
+    let path = value.as_str().unwrap();
+    assert!(
+        !path.starts_with("\\\\?\\"),
+        "不应向配置或接口暴露 Windows 扩展路径前缀: {path}"
+    );
 }

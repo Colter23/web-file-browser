@@ -235,8 +235,7 @@ impl SearchService {
         }
         let item = tokio::task::spawn_blocking(move || {
             let resolved = resolve_existing_sync(&snapshot, &virtual_path)?;
-            let root = PathBuf::from(&resolved.mapping.folder_path);
-            search_result_from_path(&resolved.mapping, &root, &resolved.real_path)
+            search_result_from_path(&resolved.mapping, &resolved.mount_root, &resolved.real_path)
         })
         .await??;
 
