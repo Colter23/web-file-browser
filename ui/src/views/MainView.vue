@@ -491,7 +491,7 @@ const treeNodeToFolderEntry = (node: Pick<FileTreeData, "path" | "name">): Explo
   modified: ""
 });
 
-const dropEntriesToTreeFolder = ({entries, target, action}: {entries: ExplorerEntry[]; target: {path: string; name: string}; action: "copy" | "move"}) => {
+const dropEntriesToPathFolder = ({entries, target, action}: {entries: ExplorerEntry[]; target: {path: string; name: string}; action: "copy" | "move"}) => {
   void dropEntriesToFolder({
     entries,
     action,
@@ -601,6 +601,7 @@ const signOut = async () => {
           @navigate-up="navigateUp"
           @refresh="refreshCurrent(true)"
           @breadcrumb-navigate="handleBreadcrumbNavigate"
+          @breadcrumb-drop="dropEntriesToPathFolder"
           @update:search-text="updateSearchText"
           @search-enter="focusExplorer"
           @search-escape="handleSearchEscape"
@@ -611,7 +612,7 @@ const signOut = async () => {
           :tree-data="treeData"
           :load-data="handleLoad"
           :current-path="fileStore.currentPath"
-          @drop-entries="dropEntriesToTreeFolder"
+          @drop-entries="dropEntriesToPathFolder"
           @open-new-tab="openTreeFolderInNewTab"
           @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)" />
 

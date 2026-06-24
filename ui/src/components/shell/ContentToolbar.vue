@@ -3,12 +3,21 @@ import type {ComponentPublicInstance} from "vue";
 import {ref} from "vue";
 import Breadcrumb from "../Breadcrumb.vue";
 import Icon from "../Icon.vue";
+import type {ExplorerEntry} from "../explorer/types.ts";
 
 type BreadcrumbExpose = {
   focusInput: () => void;
 }
 
 type NavigateComplete = (navigated: boolean) => void;
+type BreadcrumbDropPayload = {
+  entries: ExplorerEntry[];
+  target: {
+    path: string;
+    name: string;
+  };
+  action: "copy" | "move";
+}
 
 defineProps<{
   canNavigateBack: boolean;
@@ -28,6 +37,7 @@ const emit = defineEmits<{
   (e: "navigate-up"): void;
   (e: "refresh"): void;
   (e: "breadcrumb-navigate", path: string, complete?: NavigateComplete): void;
+  (e: "breadcrumb-drop", payload: BreadcrumbDropPayload): void;
   (e: "update:search-text", value: string): void;
   (e: "search-enter"): void;
   (e: "search-escape"): void;
@@ -55,7 +65,11 @@ defineExpose({
     <button class="nav-button" title="刷新 (F5 / Ctrl+R)" @click="emit('refresh')">
       <icon icon="action.refresh" size="large" />
     </button>
-    <breadcrumb ref="breadcrumbRef" @navigate="(path, complete) => emit('breadcrumb-navigate', path, complete)"></breadcrumb>
+    <breadcrumb
+        ref="breadcrumbRef"
+        @navigate="(path, complete) => emit('breadcrumb-navigate', path, complete)"
+        @drop-entries="payload => emit('breadcrumb-drop', payload)">
+    </breadcrumb>
     <label class="search-box" :class="{active: isFiltering}">
       <input
           :ref="setSearchInputRef"
