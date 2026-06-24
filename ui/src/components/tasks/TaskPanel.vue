@@ -120,7 +120,7 @@ watch(() => props.cancelConfirm.visible, async visible => {
 </script>
 
 <template>
-  <div class="task-panel">
+  <section class="task-panel" aria-label="后台任务">
     <div class="task-panel-header">
       <div class="min-w-0">
         <p class="task-panel-title">后台任务 · {{ taskSummaryText }}</p>
@@ -192,16 +192,18 @@ watch(() => props.cancelConfirm.visible, async visible => {
         </button>
       </div>
     </section>
-  </div>
+  </section>
 </template>
 
 <style scoped lang="postcss">
 @reference "tailwindcss";
 
 .task-panel {
-  @apply flex max-h-72 shrink-0 flex-col gap-2 overflow-hidden border-b px-3 py-2;
+  @apply absolute right-3 top-3 z-20 flex w-[min(38rem,calc(100%-1.5rem))] flex-col gap-2 overflow-hidden rounded-lg border px-3 py-2 shadow-2xl backdrop-blur;
+  max-height: min(32rem, calc(100% - 1.5rem));
   border-color: var(--app-border-soft);
-  background: var(--app-panel-solid);
+  background: color-mix(in srgb, var(--app-panel-solid) 96%, transparent);
+  box-shadow: var(--app-menu-shadow);
 }
 
 .task-panel-header {
@@ -269,7 +271,7 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-list {
-  @apply flex flex-col gap-2 overflow-auto pr-1;
+  @apply flex min-h-0 flex-col gap-2 overflow-auto pr-1;
 }
 
 .task-cancel-confirm {
@@ -338,7 +340,7 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-row {
-  @apply grid min-h-16 grid-cols-[minmax(9rem,1.1fr)_minmax(10rem,1.2fr)_minmax(14rem,1.5fr)_4rem] items-center gap-x-3 gap-y-2 rounded border px-3 py-2 text-sm;
+  @apply grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 rounded border px-3 py-2 text-sm;
   border-color: var(--app-border-soft);
   background: var(--app-panel-muted);
 }
@@ -353,7 +355,7 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-id {
-  @apply truncate text-xs;
+  @apply min-w-0 truncate text-xs;
   color: var(--app-text-subtle);
 }
 
@@ -387,7 +389,7 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-progress {
-  @apply flex min-w-0 items-center gap-2;
+  @apply col-span-2 flex min-w-0 items-center gap-2;
 }
 
 .task-progress-track {
@@ -406,12 +408,12 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-current {
-  @apply truncate text-xs;
+  @apply col-span-2 truncate text-xs;
   color: var(--app-text-subtle);
 }
 
 .task-meta {
-  @apply flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs;
+  @apply col-span-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs;
   color: var(--app-text-muted);
 }
 
@@ -420,7 +422,7 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-error-list {
-  @apply col-span-3 flex min-w-0 flex-col gap-1 rounded border px-2 py-1 text-xs;
+  @apply col-span-2 flex min-w-0 flex-col gap-1 rounded border px-2 py-1 text-xs;
   border-color: var(--app-danger-border);
   background: var(--app-danger-soft);
   color: var(--app-danger-text);
@@ -431,7 +433,7 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-cancel {
-  @apply h-8 rounded border px-2 text-sm disabled:cursor-not-allowed;
+  @apply col-start-2 row-start-1 h-8 justify-self-end rounded border px-2 text-sm disabled:cursor-not-allowed;
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);
   color: var(--app-text-muted);

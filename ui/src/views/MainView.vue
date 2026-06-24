@@ -666,20 +666,6 @@ const signOut = async () => {
             @toggle-preview="togglePreviewFromShortcut" />
         <input ref="uploadInput" class="hidden" type="file" multiple @change="uploadChanged">
 
-        <task-panel
-            v-if="taskPanelVisible"
-            :tasks="tasks"
-            :loading="tasksLoading"
-            :message="taskMessage"
-            :last-updated-at="taskLastUpdatedAt"
-            :cancel-confirm="taskCancelConfirm"
-            @refresh="loadTasks()"
-            @close="closeTaskPanelAndFocus"
-            @cancel="cancelTaskById"
-            @close-cancel="closeTaskCancelConfirm"
-            @confirm-cancel="submitTaskCancelConfirm">
-        </task-panel>
-
         <div class="browser-area" :class="{previewing: previewPanelVisible, resizingPreview: previewPaneResizing}" :style="browserAreaStyle">
           <div
               class="browser-main"
@@ -726,6 +712,19 @@ const signOut = async () => {
                 v-if="uploadDropActive || uploadDropUploading"
                 :title="uploadDropTitle"
                 :subtitle="uploadDropSubtitle" />
+            <task-panel
+                v-if="taskPanelVisible"
+                :tasks="tasks"
+                :loading="tasksLoading"
+                :message="taskMessage"
+                :last-updated-at="taskLastUpdatedAt"
+                :cancel-confirm="taskCancelConfirm"
+                @refresh="loadTasks()"
+                @close="closeTaskPanelAndFocus"
+                @cancel="cancelTaskById"
+                @close-cancel="closeTaskCancelConfirm"
+                @confirm-cancel="submitTaskCancelConfirm">
+            </task-panel>
             <operation-panel
                 ref="operationPanelRef"
                 :state="operationPanel"
