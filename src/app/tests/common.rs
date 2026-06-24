@@ -46,7 +46,7 @@ pub(super) async fn test_app_with_config(
         port: 0,
         mapping_file: root.path().join("data/mappings.json"),
         config_file: root.path().join("data/config.json"),
-        initial_admin_password: Some("test-password".to_string()),
+        auth_file: root.path().join("data/auth.json"),
         trash_dir: root.path().join("data/trash"),
         static_dir: root.path().join("static"),
         cors_allowed_origins: Vec::new(),
@@ -81,6 +81,41 @@ pub(super) async fn test_app_with_config(
 }
 
 pub(super) async fn login_cookie(app: &Router) -> String {
+    let setup_response = app
+        .clone()
+        .oneshot(json_request(
+            Method::POST,
+            "/api/auth/setup",
+            None,
+            json!({ "password": "test-password" }),
+        ))
+        .await
+        .unwrap();
+
+    match setup_response.status() {
+        StatusCode::OK => {
+            let setup_cookie = setup_response
+                .headers()
+                .get(SET_COOKIE)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string();
+            let logout_response = app
+                .clone()
+                .oneshot(empty_request_with_cookie(
+                    Method::POST,
+                    "/api/auth/logout",
+                    &setup_cookie,
+                ))
+                .await
+                .unwrap();
+            assert_eq!(logout_response.status(), StatusCode::OK);
+        }
+        StatusCode::CONFLICT => {}
+        status => panic!("首次设置密码接口返回了非预期状态: {status}"),
+    }
+
     let response = app
         .clone()
         .oneshot(json_request(

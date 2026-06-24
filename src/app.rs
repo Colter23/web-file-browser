@@ -18,16 +18,16 @@ use crate::{
     models::RuntimeSettings,
     routes,
     services::{
-        audit::AuditService, auth::AuthService, mapping_store::MappingStore,
-        request_limits::RequestLimits, search::SearchService, settings::SettingsStore,
-        tasks::TaskService, trash::TrashService,
+        audit::AuditService, auth::AuthService, auth_store::AuthStore, mapping_store::MappingStore,
+        request_limits::RequestLimits, search::SearchService, tasks::TaskService,
+        trash::TrashService,
     },
 };
 
 #[derive(Clone)]
 pub struct AppState {
     pub mapping_store: MappingStore,
-    pub settings: SettingsStore,
+    pub auth_store: AuthStore,
     pub auth: AuthService,
     pub trash: TrashService,
     pub audit: AuditService,
@@ -39,11 +39,7 @@ pub struct AppState {
 
 pub async fn build(config: AppConfig) -> Result<Router, AppError> {
     let mapping_store = MappingStore::load(config.mapping_file.clone()).await?;
-    let settings = SettingsStore::load(
-        config.config_file.clone(),
-        config.initial_admin_password.clone(),
-    )
-    .await?;
+    let auth_store = AuthStore::load(config.auth_file.clone()).await?;
     let trash = TrashService::load(
         config.trash_dir.clone(),
         config.trash_retention_days,
@@ -72,6 +68,7 @@ pub async fn build(config: AppConfig) -> Result<Router, AppError> {
         port: config.port,
         mapping_file: path_to_string(&config.mapping_file),
         config_file: path_to_string(&config.config_file),
+        auth_file: path_to_string(&config.auth_file),
         trash_dir: path_to_string(&config.trash_dir),
         static_dir: path_to_string(&config.static_dir),
         cors_allowed_origins: config.cors_allowed_origins.clone(),
@@ -99,12 +96,12 @@ pub async fn build(config: AppConfig) -> Result<Router, AppError> {
         trash_retention_days: config.trash_retention_days,
         trash_max_bytes: config.trash_max_bytes,
         conflict_policy: config.conflict_policy,
-        auth_configured: settings.has_admin_password().await,
+        auth_configured: auth_store.has_admin_password().await,
     };
 
     let state = Arc::new(AppState {
         mapping_store,
-        settings,
+        auth_store,
         auth: AuthService::default(),
         trash,
         audit,

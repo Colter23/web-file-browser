@@ -60,13 +60,10 @@ async fn readiness(State(state): State<Arc<AppState>>) -> (StatusCode, Json<Read
 async fn readiness_checks(state: &AppState) -> Vec<ReadinessCheck> {
     let mut checks = Vec::new();
 
-    checks.push(if state.settings.has_admin_password().await {
+    checks.push(if state.auth_store.has_admin_password().await {
         readiness_ok("auth", "管理员密码已初始化")
     } else {
-        readiness_error(
-            "auth",
-            "管理员密码尚未初始化，请设置 WEB_FILE_BROWSER_ADMIN_PASSWORD 后重启服务",
-        )
+        readiness_ok("auth", "管理员密码尚未初始化，等待首次进入 Web 界面设置")
     });
     let settings = state.runtime_settings.clone();
     match tokio::task::spawn_blocking(move || readiness_file_system_checks(&settings)).await {
@@ -82,6 +79,7 @@ async fn readiness_checks(state: &AppState) -> Vec<ReadinessCheck> {
 fn readiness_file_system_checks(settings: &RuntimeSettings) -> Vec<ReadinessCheck> {
     vec![
         check_file_parent_writable("configStore", &settings.config_file),
+        check_file_parent_writable("authStore", &settings.auth_file),
         check_file_parent_writable("mappingStore", &settings.mapping_file),
         check_directory_writable("trash", &settings.trash_dir),
         check_file_parent_writable("audit", &settings.audit_file),

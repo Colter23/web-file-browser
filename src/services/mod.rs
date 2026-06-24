@@ -1,12 +1,12 @@
 pub mod audit;
 pub mod auth;
+pub mod auth_store;
 pub mod conflict;
 pub mod file_ops;
 pub mod mapping_store;
 pub mod path_resolver;
 pub mod request_limits;
 pub mod search;
-pub mod settings;
 pub mod task_io;
 pub mod tasks;
 pub mod transfer;

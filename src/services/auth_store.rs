@@ -6,45 +6,38 @@ use argon2::{
 };
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::sync::RwLock;
 
 use crate::error::AppError;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AppSettings {
+pub struct AuthSettings {
     #[serde(default)]
     pub admin_password_hash: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
 }
 
 #[derive(Clone)]
-pub struct SettingsStore {
+pub struct AuthStore {
     file_path: Arc<PathBuf>,
-    settings: Arc<RwLock<AppSettings>>,
+    settings: Arc<RwLock<AuthSettings>>,
 }
 
-impl SettingsStore {
-    pub async fn load(
-        file_path: PathBuf,
-        initial_admin_password: Option<String>,
-    ) -> Result<Self, AppError> {
+impl AuthStore {
+    pub async fn load(file_path: PathBuf) -> Result<Self, AppError> {
         if let Some(parent) = file_path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
 
-        let mut settings = match tokio::fs::read_to_string(&file_path).await {
-            Ok(text) if text.trim().is_empty() => AppSettings::default(),
+        let settings = match tokio::fs::read_to_string(&file_path).await {
+            Ok(text) if text.trim().is_empty() => AuthSettings::default(),
             Ok(text) => serde_json::from_str(&text)?,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => AppSettings::default(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => AuthSettings::default(),
             Err(error) => return Err(error.into()),
         };
-
-        if settings.admin_password_hash.is_none()
-            && let Some(password) = initial_admin_password.filter(|password| !password.is_empty())
-        {
-            settings.admin_password_hash = Some(hash_password(password).await?);
-            save_settings(&file_path, &settings).await?;
-        }
 
         Ok(Self {
             file_path: Arc::new(file_path),
@@ -68,11 +61,12 @@ impl SettingsStore {
         let hash = hash_password(password).await?;
         let mut settings = self.settings.write().await;
         settings.admin_password_hash = Some(hash);
+        settings.updated_at = Some(current_time_text());
         save_settings(&self.file_path, &settings).await
     }
 }
 
-async fn save_settings(file_path: &PathBuf, settings: &AppSettings) -> Result<(), AppError> {
+async fn save_settings(file_path: &PathBuf, settings: &AuthSettings) -> Result<(), AppError> {
     if let Some(parent) = file_path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
@@ -99,4 +93,48 @@ fn verify_password(hash: String, password: String) -> Result<bool, AppError> {
     Ok(Argon2::default()
         .verify_password(password.as_bytes(), &parsed_hash)
         .is_ok())
+}
+
+fn current_time_text() -> String {
+    OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .unwrap_or_else(|_| OffsetDateTime::now_utc().unix_timestamp().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AuthStore;
+
+    #[tokio::test]
+    async fn auth_store_writes_hash_without_plaintext_password() {
+        let dir = temp_dir("web-file-browser-auth-store-test");
+        let file = dir.join("auth.json");
+        let store = AuthStore::load(file.clone()).await.unwrap();
+
+        store
+            .set_admin_password("test-password".to_string())
+            .await
+            .unwrap();
+
+        let text = tokio::fs::read_to_string(&file).await.unwrap();
+        assert!(text.contains("adminPasswordHash"));
+        assert!(!text.contains("test-password"));
+        assert!(store.has_admin_password().await);
+        assert!(
+            store
+                .verify_admin_password("test-password".to_string())
+                .await
+                .unwrap()
+        );
+
+        tokio::fs::remove_dir_all(dir).await.unwrap();
+    }
+
+    fn temp_dir(prefix: &str) -> std::path::PathBuf {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("{prefix}-{nonce}"))
+    }
 }

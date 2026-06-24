@@ -11,13 +11,14 @@ use std::sync::Arc;
 use crate::{
     app::AppState,
     error::AppError,
-    models::{ChangePasswordRequest, LoginRequest, SessionResponse},
+    models::{ChangePasswordRequest, LoginRequest, SessionResponse, SetupPasswordRequest},
     services::auth::{clear_session_cookie_value, extract_session_token, session_cookie_value},
 };
 
 pub fn public_auth_routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/auth/login", post(login))
+        .route("/auth/setup", post(setup_password))
         .route("/auth/session", get(session))
 }
 
@@ -48,14 +49,12 @@ async fn login(
     State(state): State<Arc<AppState>>,
     Json(request): Json<LoginRequest>,
 ) -> Result<(HeaderMap, Json<SessionResponse>), AppError> {
-    if !state.settings.has_admin_password().await {
-        return Err(AppError::conflict(
-            "管理员密码尚未初始化，请设置 WEB_FILE_BROWSER_ADMIN_PASSWORD 后重启服务",
-        ));
+    if !state.auth_store.has_admin_password().await {
+        return Err(AppError::conflict("管理员密码尚未初始化，请先完成首次设置"));
     }
 
     if !state
-        .settings
+        .auth_store
         .verify_admin_password(request.password)
         .await?
     {
@@ -64,6 +63,39 @@ async fn login(
 
     let token = state.auth.create_session().await;
     audit_ignore(&state, "login", None, None).await;
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        SET_COOKIE,
+        HeaderValue::from_str(&session_cookie_value(&token))
+            .map_err(|error| AppError::internal(format!("生成会话 Cookie 失败: {error}")))?,
+    );
+
+    Ok((
+        headers,
+        Json(SessionResponse {
+            authenticated: true,
+            auth_configured: true,
+        }),
+    ))
+}
+
+async fn setup_password(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<SetupPasswordRequest>,
+) -> Result<(HeaderMap, Json<SessionResponse>), AppError> {
+    validate_setup_password(&request)?;
+    if state.auth_store.has_admin_password().await {
+        return Err(AppError::conflict("管理员密码已经初始化，请直接登录"));
+    }
+
+    state
+        .auth_store
+        .set_admin_password(request.password)
+        .await?;
+    state.auth.clear_sessions().await;
+    let token = state.auth.create_session().await;
+    audit_ignore(&state, "setupPassword", None, None).await;
+
     let mut headers = HeaderMap::new();
     headers.insert(
         SET_COOKIE,
@@ -112,7 +144,7 @@ async fn change_password(
     validate_new_password(&request)?;
 
     if !state
-        .settings
+        .auth_store
         .verify_admin_password(request.current_password)
         .await?
     {
@@ -120,7 +152,7 @@ async fn change_password(
     }
 
     state
-        .settings
+        .auth_store
         .set_admin_password(request.new_password)
         .await?;
     state.auth.clear_sessions().await;
@@ -156,6 +188,13 @@ fn validate_new_password(request: &ChangePasswordRequest) -> Result<(), AppError
     Ok(())
 }
 
+fn validate_setup_password(request: &SetupPasswordRequest) -> Result<(), AppError> {
+    if request.password.chars().count() < 8 {
+        return Err(AppError::bad_request("管理员密码长度不能少于 8 个字符"));
+    }
+    Ok(())
+}
+
 async fn audit_ignore(state: &AppState, action: &str, path: Option<&str>, detail: Option<&str>) {
     if let Err(error) = state.audit.record("admin", action, path, detail).await {
         tracing::warn!("写入审计日志失败: {error}");
@@ -167,7 +206,7 @@ async fn session(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Json
         Some(token) => state.auth.is_valid(&token).await,
         None => false,
     };
-    let auth_configured = state.settings.has_admin_password().await;
+    let auth_configured = state.auth_store.has_admin_password().await;
 
     Json(SessionResponse {
         authenticated,
@@ -178,7 +217,9 @@ async fn session(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Json
 #[cfg(test)]
 mod tests {
     use crate::{
-        error::AppError, models::ChangePasswordRequest, routes::auth::validate_new_password,
+        error::AppError,
+        models::{ChangePasswordRequest, SetupPasswordRequest},
+        routes::auth::{validate_new_password, validate_setup_password},
     };
 
     #[test]
@@ -208,6 +249,16 @@ mod tests {
         let error = validate_new_password(&ChangePasswordRequest {
             current_password: "same-password".to_string(),
             new_password: "same-password".to_string(),
+        })
+        .unwrap_err();
+
+        assert!(matches!(error, AppError::BadRequest(_)));
+    }
+
+    #[test]
+    fn rejects_short_setup_password() {
+        let error = validate_setup_password(&SetupPasswordRequest {
+            password: "short".to_string(),
         })
         .unwrap_err();
 

@@ -27,7 +27,7 @@ Dockerfile 使用三阶段构建：
 cp env.example .env
 ```
 
-修改 `.env` 中的管理员初始密码和 UID/GID：
+修改 `.env` 中的 UID/GID：
 
 ```bash
 id -u
@@ -47,15 +47,62 @@ chown -R "$(id -u):$(id -g)" data files
 docker compose up -d --build
 ```
 
+可选：把常用运行配置写入 `data/config.json`，避免 `.env` 越来越长：
+
+```json
+{
+  "server": {
+    "bind": "0.0.0.0",
+    "port": 8080
+  },
+  "limits": {
+    "maxUploadBytes": null,
+    "maxDirPageSize": 2000,
+    "maxDirConcurrency": 4,
+    "maxTransferConcurrency": 8,
+    "maxIpConcurrency": 16
+  },
+  "editor": {
+    "maxEditBytes": 2097152,
+    "editableExtensions": [],
+    "editableMimeTypes": []
+  },
+  "tasks": {
+    "maxConcurrency": 2,
+    "historyLimit": 200,
+    "speedLimitBytesPerSec": null
+  },
+  "archive": {
+    "maxExtractBytes": null,
+    "maxExtractFiles": null,
+    "maxExtractDepth": 64
+  },
+  "index": {
+    "enabled": false,
+    "rebuildOnStartup": false,
+    "scanDelayMs": 2
+  },
+  "audit": {
+    "maxBytes": 10485760,
+    "retentionFiles": 8
+  },
+  "trash": {
+    "retentionDays": null,
+    "maxBytes": null
+  },
+  "conflictPolicy": "autoRename"
+}
+```
+
 打开：
 
 ```text
 http://服务器IP:8080
 ```
 
-首次启动时，`WEB_FILE_BROWSER_ADMIN_PASSWORD` 会用于初始化管理员密码哈希。`data/config.json` 已经存在管理员密码哈希后，后续启动不会用环境变量覆盖密码。
+首次启动后打开 Web 页面，按提示设置单管理员密码。后端只会把 Argon2 哈希写入 `data/auth.json`，不会保存明文密码。需要重置密码时，停止容器，删除 `data/auth.json`，再启动容器并重新进入 Web 页面设置。
 
-镜像内置 Docker `HEALTHCHECK`，会通过 `web-file-browser --healthcheck` 访问容器内的 `http://127.0.0.1:8080/api/ready`。如果管理员密码没有初始化，或 `/app/data`、回收站、审计日志目录、静态文件目录不可用，容器会显示为 `unhealthy`。
+镜像内置 Docker `HEALTHCHECK`，会通过 `web-file-browser --healthcheck` 访问容器内的 `http://127.0.0.1:8080/api/ready`。管理员密码尚未初始化时仍视为就绪，便于首次进入 Web 页面完成设置；如果 `/app/data`、认证哈希、映射、回收站、审计日志目录或静态文件目录不可用，容器会显示为 `unhealthy`。
 
 ## 自动冒烟验证
 
@@ -71,7 +118,7 @@ bash scripts/docker-smoke.sh
 
 - `/api/ready` 就绪检查。
 - 前端静态入口托管。
-- 单管理员登录。
+- 首次设置单管理员密码并登录。
 - 创建 `/mnt/files` 挂载。
 - 新建文件、读取 ETag、`If-Match` 保存和下载校验。
 - 上传文件。
@@ -145,9 +192,12 @@ Compose 示例默认挂载：
 `/app/data` 保存运行时数据：
 
 - `config.json`
+- `auth.json`
 - `mappings.json`
 - `trash/`
 - `audit.jsonl`
+
+`config.json` 是运行配置，可手动编辑；`auth.json` 是认证状态文件，通常不需要手动修改。
 
 `/mnt/files` 是业务文件目录示例。进入管理界面新增挂载时，`folderPath` 可以填写 `/mnt/files`。
 
@@ -178,7 +228,6 @@ chown -R "$WEB_FILE_BROWSER_UID:$WEB_FILE_BROWSER_GID" data files
 
 ## 常用环境变量
 
-- `WEB_FILE_BROWSER_ADMIN_PASSWORD`：首次启动初始化管理员密码。
 - `WEB_FILE_BROWSER_CORS_ORIGINS`：允许跨域访问的可信来源，默认空表示同源，不支持 `*`。
 - `WEB_FILE_BROWSER_TRUST_PROXY_HEADERS`：是否信任 `X-Forwarded-For`，默认 `false`；仅在容器只通过可信反向代理访问时启用。
 - `WEB_FILE_BROWSER_CONFLICT_POLICY`：冲突策略，默认 `autoRename`。
@@ -213,6 +262,7 @@ WEB_FILE_BROWSER_TRUST_PROXY_HEADERS=true
 基础备份至少包含：
 
 - `data/config.json`
+- `data/auth.json`
 - `data/mappings.json`
 - `data/trash/`
 - `data/audit.jsonl`
@@ -237,7 +287,7 @@ docker compose build --pull
 docker compose up -d
 ```
 
-如果新增环境变量，先更新 `.env`。配置和认证仍以 `data/config.json` 为准。
+如果新增环境变量，先更新 `.env`。运行配置默认以 `data/config.json` 为准，认证哈希保存在 `data/auth.json`。
 
 ## 性能注意
 

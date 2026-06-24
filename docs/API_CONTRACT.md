@@ -5,7 +5,7 @@
 ## 通用约定
 
 - API 前缀为 `/api`，前端默认同源调用，不需要额外配置 base URL。
-- 除 `GET /api/`、`GET /api/health`、`GET /api/ready`、`POST /api/auth/login`、`GET /api/auth/session` 外，其余接口默认要求登录。
+- 除 `GET /api/`、`GET /api/health`、`GET /api/ready`、`POST /api/auth/setup`、`POST /api/auth/login`、`GET /api/auth/session` 外，其余接口默认要求登录。
 - 认证使用 Cookie：登录成功后后端写入 `wfb_session`，前端请求需要带凭据。
 - 错误响应统一为 `{ "code": "...", "message": "..." }`，错误码详见 [API_ERRORS.md](API_ERRORS.md)。
 - 路径参数 `{path...}` 使用虚拟路径去掉开头 `/` 后的部分，例如虚拟路径 `/files/a.txt` 对应 `/api/file/files/a.txt`。
@@ -15,6 +15,29 @@
 - 时间字段当前多为 Unix 秒字符串或 RFC3339 字符串，前端展示时应按字段语义转换，不要假设所有时间格式相同。
 
 ## 认证
+
+### `POST /api/auth/setup`
+
+仅在管理员密码尚未初始化时可用。前端应先调用 `GET /api/auth/session`，当 `authConfigured=false` 时展示首次设置密码页面。
+
+请求：
+
+```json
+{
+  "password": "管理员密码"
+}
+```
+
+成功返回 `200`，并通过 `Set-Cookie` 写入会话：
+
+```json
+{
+  "authenticated": true,
+  "authConfigured": true
+}
+```
+
+常见错误：`400 BAD_REQUEST` 密码长度少于 8 个字符，`409 CONFLICT` 管理员密码已经初始化。后端只把 Argon2 哈希保存到 `data/auth.json`，不会保存明文密码。
 
 ### `POST /api/auth/login`
 
@@ -35,7 +58,7 @@
 }
 ```
 
-常见错误：`401 UNAUTHORIZED` 密码错误，`409 CONFLICT` 管理员密码未初始化。
+常见错误：`401 UNAUTHORIZED` 密码错误，`409 CONFLICT` 管理员密码未初始化。未初始化时前端应转到首次设置页面并调用 `POST /api/auth/setup`。
 
 ### `POST /api/auth/logout`
 
@@ -54,8 +77,8 @@
 
 ```json
 {
-  "authenticated": true,
-  "authConfigured": true
+  "authenticated": false,
+  "authConfigured": false
 }
 ```
 
@@ -558,7 +581,7 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
 
 ### `GET /api/ready`
 
-就绪检查，公开访问。失败时返回 `503`，但仍返回 JSON。
+就绪检查，公开访问。目录或关键文件父目录不可用时返回 `503`，但仍返回 JSON。管理员密码尚未初始化时仍返回 `200`，`auth` 检查项会提示等待首次设置，便于前端完成初始化流程。
 
 ```json
 {
@@ -569,6 +592,11 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
       "name": "auth",
       "status": "ok",
       "message": "管理员密码已初始化"
+    },
+    {
+      "name": "authStore",
+      "status": "ok",
+      "message": "目录可写"
     }
   ]
 }

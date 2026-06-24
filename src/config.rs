@@ -1,11 +1,14 @@
-use std::{env, net::SocketAddr, path::PathBuf};
+use std::{env, fs, net::SocketAddr, path::PathBuf};
 
-use crate::models::ConflictPolicy;
+use serde::Deserialize;
+
+use crate::{error::AppError, models::ConflictPolicy};
 
 const DEFAULT_BIND_ADDRESS: &str = "0.0.0.0";
 const DEFAULT_PORT: u16 = 8080;
 const DEFAULT_MAPPING_FILE: &str = "data/mappings.json";
 const DEFAULT_CONFIG_FILE: &str = "data/config.json";
+const DEFAULT_AUTH_FILE: &str = "data/auth.json";
 const DEFAULT_TRASH_DIR: &str = "data/trash";
 const DEFAULT_STATIC_DIR: &str = "ui/dist";
 const DEFAULT_TRUST_PROXY_HEADERS: bool = false;
@@ -31,7 +34,7 @@ pub struct AppConfig {
     pub port: u16,
     pub mapping_file: PathBuf,
     pub config_file: PathBuf,
-    pub initial_admin_password: Option<String>,
+    pub auth_file: PathBuf,
     pub trash_dir: PathBuf,
     pub static_dir: PathBuf,
     pub cors_allowed_origins: Vec<String>,
@@ -62,197 +65,517 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
-    pub fn from_env() -> Self {
-        let bind_address =
-            env::var("WEB_FILE_BROWSER_BIND").unwrap_or_else(|_| DEFAULT_BIND_ADDRESS.to_string());
-        let port = env::var("PORT")
-            .ok()
-            .and_then(|port| port.parse().ok())
-            .unwrap_or(DEFAULT_PORT);
-        let mapping_file = env::var("WEB_FILE_BROWSER_MAPPING_FILE")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from(DEFAULT_MAPPING_FILE));
-        let config_file = env::var("WEB_FILE_BROWSER_CONFIG_FILE")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from(DEFAULT_CONFIG_FILE));
-        let initial_admin_password = env::var("WEB_FILE_BROWSER_ADMIN_PASSWORD")
-            .ok()
-            .filter(|password| !password.is_empty());
-        let trash_dir = env::var("WEB_FILE_BROWSER_TRASH_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from(DEFAULT_TRASH_DIR));
-        let static_dir = env::var("WEB_FILE_BROWSER_STATIC_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from(DEFAULT_STATIC_DIR));
-        let cors_allowed_origins = env::var("WEB_FILE_BROWSER_CORS_ORIGINS")
-            .ok()
-            .map(|value| split_env_list(&value))
-            .unwrap_or_default();
-        let trust_proxy_headers = env_bool(
-            "WEB_FILE_BROWSER_TRUST_PROXY_HEADERS",
-            DEFAULT_TRUST_PROXY_HEADERS,
-        );
-        let max_edit_bytes = env::var("WEB_FILE_BROWSER_MAX_EDIT_BYTES")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .filter(|value| *value > 0)
-            .unwrap_or(DEFAULT_MAX_EDIT_BYTES);
-        let editable_extensions = env::var("WEB_FILE_BROWSER_EDITABLE_EXTENSIONS")
-            .ok()
-            .map(|value| normalize_extension_list(&value))
-            .unwrap_or_default();
-        let editable_mime_types = env::var("WEB_FILE_BROWSER_EDITABLE_MIME_TYPES")
-            .ok()
-            .map(|value| normalize_mime_list(&value))
-            .unwrap_or_default();
-        let max_upload_bytes = env::var("WEB_FILE_BROWSER_MAX_UPLOAD_BYTES")
-            .ok()
-            .and_then(|value| value.parse().ok());
-        let max_dir_page_size = env::var("WEB_FILE_BROWSER_MAX_DIR_PAGE_SIZE")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .filter(|value| *value > 0)
-            .unwrap_or(DEFAULT_MAX_DIR_PAGE_SIZE);
-        let audit_file = env::var("WEB_FILE_BROWSER_AUDIT_FILE")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from(DEFAULT_AUDIT_FILE));
-        let audit_max_bytes =
-            env_optional_positive_u64("WEB_FILE_BROWSER_AUDIT_MAX_BYTES", DEFAULT_AUDIT_MAX_BYTES);
-        let audit_retention_files = env_usize_allow_zero(
-            "WEB_FILE_BROWSER_AUDIT_RETENTION_FILES",
-            DEFAULT_AUDIT_RETENTION_FILES,
-        );
-        let max_dir_concurrency = env_usize(
-            "WEB_FILE_BROWSER_MAX_DIR_CONCURRENCY",
-            DEFAULT_MAX_DIR_CONCURRENCY,
-        );
-        let max_transfer_concurrency = env_usize(
-            "WEB_FILE_BROWSER_MAX_TRANSFER_CONCURRENCY",
-            DEFAULT_MAX_TRANSFER_CONCURRENCY,
-        );
-        let max_ip_concurrency = env_usize(
-            "WEB_FILE_BROWSER_MAX_IP_CONCURRENCY",
-            DEFAULT_MAX_IP_CONCURRENCY,
-        );
-        let max_task_concurrency = env_usize(
-            "WEB_FILE_BROWSER_MAX_TASK_CONCURRENCY",
-            DEFAULT_MAX_TASK_CONCURRENCY,
-        );
-        let task_history_limit = env_usize(
-            "WEB_FILE_BROWSER_TASK_HISTORY_LIMIT",
-            DEFAULT_TASK_HISTORY_LIMIT,
-        );
-        let task_speed_limit_bytes_per_sec =
-            env::var("WEB_FILE_BROWSER_TASK_SPEED_LIMIT_BYTES_PER_SEC")
-                .ok()
-                .and_then(|value| value.parse().ok())
-                .filter(|value| *value > 0);
-        let max_extract_bytes = env::var("WEB_FILE_BROWSER_MAX_EXTRACT_BYTES")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .filter(|value| *value > 0);
-        let max_extract_files = env::var("WEB_FILE_BROWSER_MAX_EXTRACT_FILES")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .filter(|value| *value > 0);
-        let max_extract_depth = env_usize(
-            "WEB_FILE_BROWSER_MAX_EXTRACT_DEPTH",
-            DEFAULT_MAX_EXTRACT_DEPTH,
-        );
-        let index_enabled = env_bool("WEB_FILE_BROWSER_INDEX_ENABLED", DEFAULT_INDEX_ENABLED);
-        let index_rebuild_on_startup = env_bool(
-            "WEB_FILE_BROWSER_INDEX_REBUILD_ON_STARTUP",
-            DEFAULT_INDEX_REBUILD_ON_STARTUP,
-        );
-        let index_scan_delay_ms = env::var("WEB_FILE_BROWSER_INDEX_SCAN_DELAY_MS")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or(DEFAULT_INDEX_SCAN_DELAY_MS);
-        let trash_retention_days = env::var("WEB_FILE_BROWSER_TRASH_RETENTION_DAYS")
-            .ok()
-            .and_then(|value| value.parse().ok());
-        let trash_max_bytes = env::var("WEB_FILE_BROWSER_TRASH_MAX_BYTES")
-            .ok()
-            .and_then(|value| value.parse().ok());
-        let conflict_policy = env::var("WEB_FILE_BROWSER_CONFLICT_POLICY")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or(DEFAULT_CONFLICT_POLICY);
-
-        Self {
-            bind_address,
-            port,
-            mapping_file,
-            config_file,
-            initial_admin_password,
-            trash_dir,
-            static_dir,
-            cors_allowed_origins,
-            trust_proxy_headers,
-            max_edit_bytes,
-            editable_extensions,
-            editable_mime_types,
-            max_upload_bytes,
-            max_dir_page_size,
-            audit_file,
-            audit_max_bytes,
-            audit_retention_files,
-            max_dir_concurrency,
-            max_transfer_concurrency,
-            max_ip_concurrency,
-            max_task_concurrency,
-            task_history_limit,
-            task_speed_limit_bytes_per_sec,
-            max_extract_bytes,
-            max_extract_files,
-            max_extract_depth,
-            index_enabled,
-            index_rebuild_on_startup,
-            index_scan_delay_ms,
-            trash_retention_days,
-            trash_max_bytes,
-            conflict_policy,
-        }
+    pub fn load() -> Result<Self, AppError> {
+        let config_file = env_config_file();
+        let file_config = RuntimeConfigFile::read(&config_file)?;
+        let mut config = Self::defaults(config_file);
+        config.apply_file(file_config);
+        config.apply_env();
+        Ok(config)
     }
 
     pub fn socket_addr(&self) -> Result<SocketAddr, std::net::AddrParseError> {
         format!("{}:{}", self.bind_address, self.port).parse()
     }
+
+    fn defaults(config_file: PathBuf) -> Self {
+        Self {
+            bind_address: DEFAULT_BIND_ADDRESS.to_string(),
+            port: DEFAULT_PORT,
+            mapping_file: PathBuf::from(DEFAULT_MAPPING_FILE),
+            config_file,
+            auth_file: PathBuf::from(DEFAULT_AUTH_FILE),
+            trash_dir: PathBuf::from(DEFAULT_TRASH_DIR),
+            static_dir: PathBuf::from(DEFAULT_STATIC_DIR),
+            cors_allowed_origins: Vec::new(),
+            trust_proxy_headers: DEFAULT_TRUST_PROXY_HEADERS,
+            max_edit_bytes: DEFAULT_MAX_EDIT_BYTES,
+            editable_extensions: Vec::new(),
+            editable_mime_types: Vec::new(),
+            max_upload_bytes: None,
+            max_dir_page_size: DEFAULT_MAX_DIR_PAGE_SIZE,
+            audit_file: PathBuf::from(DEFAULT_AUDIT_FILE),
+            audit_max_bytes: Some(DEFAULT_AUDIT_MAX_BYTES),
+            audit_retention_files: DEFAULT_AUDIT_RETENTION_FILES,
+            max_dir_concurrency: DEFAULT_MAX_DIR_CONCURRENCY,
+            max_transfer_concurrency: DEFAULT_MAX_TRANSFER_CONCURRENCY,
+            max_ip_concurrency: DEFAULT_MAX_IP_CONCURRENCY,
+            max_task_concurrency: DEFAULT_MAX_TASK_CONCURRENCY,
+            task_history_limit: DEFAULT_TASK_HISTORY_LIMIT,
+            task_speed_limit_bytes_per_sec: None,
+            max_extract_bytes: None,
+            max_extract_files: None,
+            max_extract_depth: DEFAULT_MAX_EXTRACT_DEPTH,
+            index_enabled: DEFAULT_INDEX_ENABLED,
+            index_rebuild_on_startup: DEFAULT_INDEX_REBUILD_ON_STARTUP,
+            index_scan_delay_ms: DEFAULT_INDEX_SCAN_DELAY_MS,
+            trash_retention_days: None,
+            trash_max_bytes: None,
+            conflict_policy: DEFAULT_CONFLICT_POLICY,
+        }
+    }
+
+    fn apply_file(&mut self, file_config: RuntimeConfigFile) {
+        if let Some(server) = file_config.server {
+            assign(&mut self.bind_address, server.bind);
+            assign(&mut self.port, server.port);
+            assign(&mut self.static_dir, server.static_dir);
+            assign(&mut self.cors_allowed_origins, server.cors_allowed_origins);
+            assign(&mut self.trust_proxy_headers, server.trust_proxy_headers);
+        }
+
+        if let Some(storage) = file_config.storage {
+            assign(&mut self.mapping_file, storage.mapping_file);
+            assign(&mut self.auth_file, storage.auth_file);
+            assign(&mut self.trash_dir, storage.trash_dir);
+            assign(&mut self.audit_file, storage.audit_file);
+        }
+
+        if let Some(limits) = file_config.limits {
+            assign(&mut self.max_upload_bytes, limits.max_upload_bytes);
+            assign_positive(&mut self.max_dir_page_size, limits.max_dir_page_size);
+            assign_positive(&mut self.max_dir_concurrency, limits.max_dir_concurrency);
+            assign_positive(
+                &mut self.max_transfer_concurrency,
+                limits.max_transfer_concurrency,
+            );
+            assign_positive(&mut self.max_ip_concurrency, limits.max_ip_concurrency);
+        }
+
+        if let Some(editor) = file_config.editor {
+            assign_positive(&mut self.max_edit_bytes, editor.max_edit_bytes);
+            assign(
+                &mut self.editable_extensions,
+                editor.editable_extensions.map(normalize_extension_values),
+            );
+            assign(
+                &mut self.editable_mime_types,
+                editor.editable_mime_types.map(normalize_mime_values),
+            );
+        }
+
+        if let Some(tasks) = file_config.tasks {
+            assign_positive(&mut self.max_task_concurrency, tasks.max_concurrency);
+            assign_positive(&mut self.task_history_limit, tasks.history_limit);
+            assign_positive_option(
+                &mut self.task_speed_limit_bytes_per_sec,
+                tasks.speed_limit_bytes_per_sec,
+            );
+        }
+
+        if let Some(archive) = file_config.archive {
+            assign_positive_option(&mut self.max_extract_bytes, archive.max_extract_bytes);
+            assign_positive_option(&mut self.max_extract_files, archive.max_extract_files);
+            assign_positive(&mut self.max_extract_depth, archive.max_extract_depth);
+        }
+
+        if let Some(index) = file_config.index {
+            assign(&mut self.index_enabled, index.enabled);
+            assign(&mut self.index_rebuild_on_startup, index.rebuild_on_startup);
+            assign(&mut self.index_scan_delay_ms, index.scan_delay_ms);
+        }
+
+        if let Some(trash) = file_config.trash {
+            assign_positive_option(&mut self.trash_retention_days, trash.retention_days);
+            assign_positive_option(&mut self.trash_max_bytes, trash.max_bytes);
+        }
+
+        if let Some(audit) = file_config.audit {
+            assign_zero_disables(&mut self.audit_max_bytes, audit.max_bytes);
+            assign(&mut self.audit_retention_files, audit.retention_files);
+        }
+
+        assign(&mut self.conflict_policy, file_config.conflict_policy);
+    }
+
+    fn apply_env(&mut self) {
+        assign_env_string(&mut self.bind_address, "WEB_FILE_BROWSER_BIND");
+        assign_env_u16(&mut self.port, "PORT");
+        assign_env_path(&mut self.mapping_file, "WEB_FILE_BROWSER_MAPPING_FILE");
+        assign_env_path(&mut self.auth_file, "WEB_FILE_BROWSER_AUTH_FILE");
+        assign_env_path(&mut self.trash_dir, "WEB_FILE_BROWSER_TRASH_DIR");
+        assign_env_path(&mut self.static_dir, "WEB_FILE_BROWSER_STATIC_DIR");
+        assign_env_list(
+            &mut self.cors_allowed_origins,
+            "WEB_FILE_BROWSER_CORS_ORIGINS",
+            split_env_list,
+        );
+        assign_env_bool(
+            &mut self.trust_proxy_headers,
+            "WEB_FILE_BROWSER_TRUST_PROXY_HEADERS",
+        );
+        assign_env_u64_positive(&mut self.max_edit_bytes, "WEB_FILE_BROWSER_MAX_EDIT_BYTES");
+        assign_env_list(
+            &mut self.editable_extensions,
+            "WEB_FILE_BROWSER_EDITABLE_EXTENSIONS",
+            normalize_extension_list,
+        );
+        assign_env_list(
+            &mut self.editable_mime_types,
+            "WEB_FILE_BROWSER_EDITABLE_MIME_TYPES",
+            normalize_mime_list,
+        );
+        assign_env_option_u64(
+            &mut self.max_upload_bytes,
+            "WEB_FILE_BROWSER_MAX_UPLOAD_BYTES",
+        );
+        assign_env_usize_positive(
+            &mut self.max_dir_page_size,
+            "WEB_FILE_BROWSER_MAX_DIR_PAGE_SIZE",
+        );
+        assign_env_path(&mut self.audit_file, "WEB_FILE_BROWSER_AUDIT_FILE");
+        assign_env_zero_disables_u64(
+            &mut self.audit_max_bytes,
+            "WEB_FILE_BROWSER_AUDIT_MAX_BYTES",
+        );
+        assign_env_usize(
+            &mut self.audit_retention_files,
+            "WEB_FILE_BROWSER_AUDIT_RETENTION_FILES",
+        );
+        assign_env_usize_positive(
+            &mut self.max_dir_concurrency,
+            "WEB_FILE_BROWSER_MAX_DIR_CONCURRENCY",
+        );
+        assign_env_usize_positive(
+            &mut self.max_transfer_concurrency,
+            "WEB_FILE_BROWSER_MAX_TRANSFER_CONCURRENCY",
+        );
+        assign_env_usize_positive(
+            &mut self.max_ip_concurrency,
+            "WEB_FILE_BROWSER_MAX_IP_CONCURRENCY",
+        );
+        assign_env_usize_positive(
+            &mut self.max_task_concurrency,
+            "WEB_FILE_BROWSER_MAX_TASK_CONCURRENCY",
+        );
+        assign_env_usize_positive(
+            &mut self.task_history_limit,
+            "WEB_FILE_BROWSER_TASK_HISTORY_LIMIT",
+        );
+        assign_env_option_u64(
+            &mut self.task_speed_limit_bytes_per_sec,
+            "WEB_FILE_BROWSER_TASK_SPEED_LIMIT_BYTES_PER_SEC",
+        );
+        assign_env_option_u64(
+            &mut self.max_extract_bytes,
+            "WEB_FILE_BROWSER_MAX_EXTRACT_BYTES",
+        );
+        assign_env_option_usize(
+            &mut self.max_extract_files,
+            "WEB_FILE_BROWSER_MAX_EXTRACT_FILES",
+        );
+        assign_env_usize_positive(
+            &mut self.max_extract_depth,
+            "WEB_FILE_BROWSER_MAX_EXTRACT_DEPTH",
+        );
+        assign_env_bool(&mut self.index_enabled, "WEB_FILE_BROWSER_INDEX_ENABLED");
+        assign_env_bool(
+            &mut self.index_rebuild_on_startup,
+            "WEB_FILE_BROWSER_INDEX_REBUILD_ON_STARTUP",
+        );
+        assign_env_u64(
+            &mut self.index_scan_delay_ms,
+            "WEB_FILE_BROWSER_INDEX_SCAN_DELAY_MS",
+        );
+        assign_env_option_u64(
+            &mut self.trash_retention_days,
+            "WEB_FILE_BROWSER_TRASH_RETENTION_DAYS",
+        );
+        assign_env_option_u64(
+            &mut self.trash_max_bytes,
+            "WEB_FILE_BROWSER_TRASH_MAX_BYTES",
+        );
+        assign_env_conflict_policy(
+            &mut self.conflict_policy,
+            "WEB_FILE_BROWSER_CONFLICT_POLICY",
+        );
+    }
 }
 
-fn env_usize(name: &str, default: usize) -> usize {
-    env::var(name)
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(default)
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeConfigFile {
+    #[serde(default)]
+    server: Option<ServerConfigFile>,
+    #[serde(default)]
+    storage: Option<StorageConfigFile>,
+    #[serde(default)]
+    limits: Option<LimitsConfigFile>,
+    #[serde(default)]
+    editor: Option<EditorConfigFile>,
+    #[serde(default)]
+    tasks: Option<TaskConfigFile>,
+    #[serde(default)]
+    archive: Option<ArchiveConfigFile>,
+    #[serde(default)]
+    index: Option<IndexConfigFile>,
+    #[serde(default)]
+    trash: Option<TrashConfigFile>,
+    #[serde(default)]
+    audit: Option<AuditConfigFile>,
+    #[serde(default)]
+    conflict_policy: Option<ConflictPolicy>,
 }
 
-fn env_usize_allow_zero(name: &str, default: usize) -> usize {
-    env::var(name)
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(default)
-}
+impl RuntimeConfigFile {
+    fn read(path: &PathBuf) -> Result<Self, AppError> {
+        let text = match fs::read_to_string(path) {
+            Ok(text) if text.trim().is_empty() => return Ok(Self::default()),
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Self::default());
+            }
+            Err(error) => return Err(error.into()),
+        };
 
-fn env_optional_positive_u64(name: &str, default: u64) -> Option<u64> {
-    env::var(name)
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .map(|value| if value == 0 { None } else { Some(value) })
-        .unwrap_or(Some(default))
-}
-
-fn env_bool(name: &str, default: bool) -> bool {
-    env::var(name)
-        .ok()
-        .map(|value| {
-            matches!(
-                value.as_str(),
-                "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"
-            )
+        serde_json::from_str(&text).map_err(|error| {
+            AppError::internal(format!(
+                "读取运行配置文件失败: {}，请检查 JSON 格式: {error}",
+                path.display()
+            ))
         })
-        .unwrap_or(default)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ServerConfigFile {
+    #[serde(default, alias = "bindAddress")]
+    bind: Option<String>,
+    #[serde(default)]
+    port: Option<u16>,
+    #[serde(default)]
+    static_dir: Option<PathBuf>,
+    #[serde(default)]
+    cors_allowed_origins: Option<Vec<String>>,
+    #[serde(default)]
+    trust_proxy_headers: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StorageConfigFile {
+    #[serde(default)]
+    mapping_file: Option<PathBuf>,
+    #[serde(default)]
+    auth_file: Option<PathBuf>,
+    #[serde(default)]
+    trash_dir: Option<PathBuf>,
+    #[serde(default)]
+    audit_file: Option<PathBuf>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LimitsConfigFile {
+    #[serde(default)]
+    max_upload_bytes: Option<Option<u64>>,
+    #[serde(default)]
+    max_dir_page_size: Option<usize>,
+    #[serde(default)]
+    max_dir_concurrency: Option<usize>,
+    #[serde(default)]
+    max_transfer_concurrency: Option<usize>,
+    #[serde(default)]
+    max_ip_concurrency: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EditorConfigFile {
+    #[serde(default)]
+    max_edit_bytes: Option<u64>,
+    #[serde(default)]
+    editable_extensions: Option<Vec<String>>,
+    #[serde(default)]
+    editable_mime_types: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TaskConfigFile {
+    #[serde(default)]
+    max_concurrency: Option<usize>,
+    #[serde(default)]
+    history_limit: Option<usize>,
+    #[serde(default)]
+    speed_limit_bytes_per_sec: Option<Option<u64>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ArchiveConfigFile {
+    #[serde(default)]
+    max_extract_bytes: Option<Option<u64>>,
+    #[serde(default)]
+    max_extract_files: Option<Option<usize>>,
+    #[serde(default)]
+    max_extract_depth: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IndexConfigFile {
+    #[serde(default)]
+    enabled: Option<bool>,
+    #[serde(default)]
+    rebuild_on_startup: Option<bool>,
+    #[serde(default)]
+    scan_delay_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TrashConfigFile {
+    #[serde(default)]
+    retention_days: Option<Option<u64>>,
+    #[serde(default)]
+    max_bytes: Option<Option<u64>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AuditConfigFile {
+    #[serde(default)]
+    max_bytes: Option<Option<u64>>,
+    #[serde(default)]
+    retention_files: Option<usize>,
+}
+
+fn env_config_file() -> PathBuf {
+    env::var("WEB_FILE_BROWSER_CONFIG_FILE")
+        .or_else(|_| env::var("WEB_FILE_BROWSER_CONFIG"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(DEFAULT_CONFIG_FILE))
+}
+
+fn assign<T>(target: &mut T, value: Option<T>) {
+    if let Some(value) = value {
+        *target = value;
+    }
+}
+
+fn assign_positive<T>(target: &mut T, value: Option<T>)
+where
+    T: PartialOrd + From<u8>,
+{
+    if let Some(value) = value.filter(|value| *value > T::from(0)) {
+        *target = value;
+    }
+}
+
+fn assign_positive_option<T>(target: &mut Option<T>, value: Option<Option<T>>)
+where
+    T: PartialOrd + From<u8>,
+{
+    if let Some(value) = value {
+        *target = value.filter(|value| *value > T::from(0));
+    }
+}
+
+fn assign_zero_disables(target: &mut Option<u64>, value: Option<Option<u64>>) {
+    if let Some(value) = value {
+        *target = value.and_then(|value| if value == 0 { None } else { Some(value) });
+    }
+}
+
+fn assign_env_string(target: &mut String, name: &str) {
+    if let Ok(value) = env::var(name)
+        && !value.is_empty()
+    {
+        *target = value;
+    }
+}
+
+fn assign_env_path(target: &mut PathBuf, name: &str) {
+    if let Ok(value) = env::var(name)
+        && !value.is_empty()
+    {
+        *target = PathBuf::from(value);
+    }
+}
+
+fn assign_env_u16(target: &mut u16, name: &str) {
+    if let Ok(value) = env::var(name).unwrap_or_default().parse()
+        && value > 0
+    {
+        *target = value;
+    }
+}
+
+fn assign_env_u64(target: &mut u64, name: &str) {
+    if let Ok(value) = env::var(name).unwrap_or_default().parse() {
+        *target = value;
+    }
+}
+
+fn assign_env_u64_positive(target: &mut u64, name: &str) {
+    if let Ok(value) = env::var(name).unwrap_or_default().parse()
+        && value > 0
+    {
+        *target = value;
+    }
+}
+
+fn assign_env_usize(target: &mut usize, name: &str) {
+    if let Ok(value) = env::var(name).unwrap_or_default().parse() {
+        *target = value;
+    }
+}
+
+fn assign_env_usize_positive(target: &mut usize, name: &str) {
+    if let Ok(value) = env::var(name).unwrap_or_default().parse()
+        && value > 0
+    {
+        *target = value;
+    }
+}
+
+fn assign_env_option_u64(target: &mut Option<u64>, name: &str) {
+    if let Ok(value) = env::var(name) {
+        *target = value.parse().ok().filter(|value| *value > 0);
+    }
+}
+
+fn assign_env_option_usize(target: &mut Option<usize>, name: &str) {
+    if let Ok(value) = env::var(name) {
+        *target = value.parse().ok().filter(|value| *value > 0);
+    }
+}
+
+fn assign_env_zero_disables_u64(target: &mut Option<u64>, name: &str) {
+    if let Ok(value) = env::var(name)
+        && let Ok(value) = value.parse()
+    {
+        *target = if value == 0 { None } else { Some(value) };
+    }
+}
+
+fn assign_env_bool(target: &mut bool, name: &str) {
+    if let Ok(value) = env::var(name) {
+        *target = matches!(
+            value.as_str(),
+            "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"
+        );
+    }
+}
+
+fn assign_env_list(
+    target: &mut Vec<String>,
+    name: &str,
+    normalize: impl FnOnce(&str) -> Vec<String>,
+) {
+    if let Ok(value) = env::var(name) {
+        *target = normalize(&value);
+    }
+}
+
+fn assign_env_conflict_policy(target: &mut ConflictPolicy, name: &str) {
+    if let Ok(value) = env::var(name)
+        && let Ok(value) = value.parse()
+    {
+        *target = value;
+    }
 }
 
 fn split_env_list(value: &str) -> Vec<String> {
@@ -265,7 +588,11 @@ fn split_env_list(value: &str) -> Vec<String> {
 }
 
 fn normalize_extension_list(value: &str) -> Vec<String> {
-    split_env_list(value)
+    normalize_extension_values(split_env_list(value))
+}
+
+fn normalize_extension_values(values: Vec<String>) -> Vec<String> {
+    values
         .into_iter()
         .map(|value| value.trim_start_matches('.').trim().to_ascii_lowercase())
         .filter(|value| !value.is_empty())
@@ -273,7 +600,11 @@ fn normalize_extension_list(value: &str) -> Vec<String> {
 }
 
 fn normalize_mime_list(value: &str) -> Vec<String> {
-    split_env_list(value)
+    normalize_mime_values(split_env_list(value))
+}
+
+fn normalize_mime_values(values: Vec<String>) -> Vec<String> {
+    values
         .into_iter()
         .map(|value| value.to_ascii_lowercase())
         .filter(|value| {
@@ -287,7 +618,7 @@ fn normalize_mime_list(value: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_extension_list, normalize_mime_list, split_env_list};
+    use super::{RuntimeConfigFile, normalize_extension_list, normalize_mime_list, split_env_list};
 
     #[test]
     fn splits_comma_separated_env_list() {
@@ -313,6 +644,29 @@ mod tests {
         assert_eq!(
             normalize_mime_list(" Text/*, application/json, broken, image/ "),
             vec!["text/*".to_string(), "application/json".to_string()]
+        );
+    }
+
+    #[test]
+    fn runtime_config_file_accepts_nested_config() {
+        let config: RuntimeConfigFile = serde_json::from_str(
+            r#"{
+                "server": { "bind": "127.0.0.1", "port": 18080 },
+                "storage": { "authFile": "data/auth.json" },
+                "editor": { "editableExtensions": [".TXT", "md"] },
+                "conflictPolicy": "reject"
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.server.unwrap().port, Some(18080));
+        assert_eq!(
+            config.editor.unwrap().editable_extensions.unwrap(),
+            vec![".TXT".to_string(), "md".to_string()]
+        );
+        assert_eq!(
+            config.conflict_policy,
+            Some(crate::models::ConflictPolicy::Reject)
         );
     }
 }

@@ -203,6 +203,7 @@ async fn ready_endpoint_reports_runtime_readiness() {
     for name in [
         "auth",
         "configStore",
+        "authStore",
         "mappingStore",
         "trash",
         "audit",
@@ -214,11 +215,8 @@ async fn ready_endpoint_reports_runtime_readiness() {
 }
 
 #[tokio::test]
-async fn ready_endpoint_fails_when_admin_password_missing() {
-    let (_root, app) = test_app_with_config("ready-missing-password-api", |config| {
-        config.initial_admin_password = None;
-    })
-    .await;
+async fn ready_endpoint_stays_ready_when_waiting_for_first_password_setup() {
+    let (_root, app) = test_app("ready-waiting-auth-setup-api").await;
 
     let response = app
         .oneshot(empty_request(Method::GET, "/api/ready"))
@@ -227,15 +225,15 @@ async fn ready_endpoint_fails_when_admin_password_missing() {
     let status = response.status();
     let body = json_body(response).await;
 
-    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
-    assert_eq!(body["status"], "notReady");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["status"], "ok");
     let auth = body["checks"]
         .as_array()
         .unwrap()
         .iter()
         .find(|check| check["name"] == "auth")
         .unwrap();
-    assert_eq!(auth["status"], "error");
+    assert_eq!(auth["status"], "ok");
     assert!(
         auth["message"]
             .as_str()

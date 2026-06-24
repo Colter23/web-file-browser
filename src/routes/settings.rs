@@ -9,6 +9,6 @@ pub fn settings_routes() -> Router<Arc<AppState>> {
 
 async fn get_settings(State(state): State<Arc<AppState>>) -> Json<RuntimeSettings> {
     let mut settings = state.runtime_settings.clone();
-    settings.auth_configured = state.settings.has_admin_password().await;
+    settings.auth_configured = state.auth_store.has_admin_password().await;
     Json(settings)
 }

@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing_subscriber::fmt::init();
 
-    let config = AppConfig::from_env();
+    let config = AppConfig::load()?;
     let address = config.socket_addr()?;
     let app = app::build(config).await?;
     let listener = TcpListener::bind(address).await?;
@@ -39,11 +39,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn run_healthcheck() -> Result<(), Box<dyn std::error::Error>> {
-    let port = env::var("PORT")
-        .ok()
-        .and_then(|port| port.parse().ok())
-        .unwrap_or(8080);
-    let address = SocketAddr::from(([127, 0, 0, 1], port));
+    let config = AppConfig::load()?;
+    let address = SocketAddr::from(([127, 0, 0, 1], config.port));
     let timeout = Duration::from_secs(2);
     let mut stream = TcpStream::connect_timeout(&address, timeout)?;
     stream.set_read_timeout(Some(timeout))?;

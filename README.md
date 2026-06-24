@@ -18,14 +18,34 @@ cargo run
 
 默认监听 `http://localhost:8080`。
 
+运行配置优先级为：默认值 < `data/config.json` < 环境变量。日常部署建议把多数运行参数写进 `data/config.json`，环境变量只用于 Docker 覆盖端口、UID/GID 或临时调试。
+
+最小 `data/config.json` 示例：
+
+```json
+{
+  "server": {
+    "bind": "0.0.0.0",
+    "port": 8080
+  },
+  "limits": {
+    "maxDirPageSize": 2000,
+    "maxUploadBytes": null
+  },
+  "conflictPolicy": "autoRename"
+}
+```
+
+认证状态单独保存在 `data/auth.json`。首次进入 Web 页面且尚未设置密码时，前端应引导用户设置单管理员密码；后端只保存 Argon2 哈希。重置密码时停止服务，删除 `data/auth.json`，重启后重新进入 Web 页面设置即可。
+
 可用环境变量：
 
 - `PORT`：服务端口，默认 `8080`
 - `WEB_FILE_BROWSER_BIND`：监听地址，默认 `0.0.0.0`
 - `WEB_FILE_BROWSER_MAPPING_FILE`：路径映射文件，默认 `data/mappings.json`
-- `WEB_FILE_BROWSER_CONFIG_FILE`：应用配置文件，默认 `data/config.json`
+- `WEB_FILE_BROWSER_CONFIG_FILE`：运行配置文件，默认 `data/config.json`
+- `WEB_FILE_BROWSER_AUTH_FILE`：认证哈希文件，默认 `data/auth.json`
 - `WEB_FILE_BROWSER_TRASH_DIR`：自管回收站目录，默认 `data/trash`
-- `WEB_FILE_BROWSER_ADMIN_PASSWORD`：首次启动时初始化管理员密码
 - `WEB_FILE_BROWSER_STATIC_DIR`：前端静态资源目录，默认 `ui/dist`
 - `WEB_FILE_BROWSER_CORS_ORIGINS`：允许跨域访问的可信来源，逗号分隔，默认空表示只支持同源
 - `WEB_FILE_BROWSER_TRUST_PROXY_HEADERS`：是否信任 `X-Forwarded-For`，默认 `false`；仅在服务只通过可信反向代理访问时启用
@@ -53,15 +73,6 @@ cargo run
 - `WEB_FILE_BROWSER_TRASH_MAX_BYTES`：回收站总大小上限，默认不限制
 - `WEB_FILE_BROWSER_CONFLICT_POLICY`：文件冲突策略，支持 `autoRename`、`reject`、`overwrite`，默认 `autoRename`
 
-首次启用认证时建议这样启动：
-
-```powershell
-$env:WEB_FILE_BROWSER_ADMIN_PASSWORD="change-me"
-cargo run
-```
-
-密码只会以 Argon2 哈希写入 `data/config.json`。配置文件已经存在管理员密码哈希后，后续启动不再读取该环境变量覆盖密码。
-
 ## 前端开发
 
 ```powershell
@@ -80,14 +91,14 @@ cp env.example .env
 docker compose up -d --build
 ```
 
-首次启动前请修改 `.env` 中的 `WEB_FILE_BROWSER_ADMIN_PASSWORD`。默认数据卷是 `./data:/app/data`，业务文件示例目录是 `./files:/mnt/files`。
+首次启动后请打开 Web 页面完成管理员密码设置。默认数据卷是 `./data:/app/data`，业务文件示例目录是 `./files:/mnt/files`。
 在 Linux Docker 环境中可以运行 `scripts/docker-smoke.sh` 做自动冒烟验证。脚本会使用 `.smoke/docker` 临时目录，覆盖前端静态托管、登录、挂载、编辑保存、下载、上传、zip/tar.gz 压缩和解压、删除/恢复和指标接口；默认端口为 `18080`，运行结束后会清理容器和临时数据。
 需要验证更接近真实规模的目录和传输场景时，可以运行 `scripts/docker-perf-smoke.sh`。脚本默认创建 1 万个目录项、上传下载 64 MiB 文件，并验证 Range、在线编辑保护、tar.gz 压缩解压、回收站恢复和指标接口；默认端口为 `18081`。该脚本已在真实 Linux Docker 环境按默认参数通过。
 
 ## 后端结构
 
 - `src/main.rs`：启动入口
-- `src/config.rs`：环境变量和启动配置
+- `src/config.rs`：运行配置文件、环境变量和启动配置
 - `src/app.rs`：Axum 应用组装、CORS、静态资源托管
 - `src/error.rs`：统一错误响应
 - `src/models.rs`：接口模型
@@ -97,6 +108,7 @@ docker compose up -d --build
 ## 已实现接口
 
 - `GET /api/`
+- `POST /api/auth/setup`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
 - `GET /api/auth/session`
@@ -143,6 +155,7 @@ docker compose up -d --build
 - `POST /api/trash/empty`
 
 路径映射会保存到 `data/mappings.json`。
+运行配置默认读取 `data/config.json`；认证哈希保存到 `data/auth.json`。
 `GET /api/file/{path...}` 只返回目录或文件元数据；文件内容读取请使用 `GET /api/content/{path...}`。
 目录元数据默认分页，支持 `offset`、`limit`、`detail=basic|full`、`sort=name|modified|size`、`order=asc|desc`、`type=all|file|folder`、`includeHidden=true` 和 `includeTotal=true` 查询参数。默认不统计 `folderTotal/fileTotal`，以减少大目录额外开销；请求 `includeTotal=true` 时才返回总数。分页请求会返回 `hasMore`。按名称排序的轻量目录读取只保留当前页所需的排序窗口，不把整页之外的条目长期留在内存中。
 `GET /api/file/{path...}` 元数据响应会返回 `ETag` 和可用时的 `Last-Modified`；条件请求支持 `If-None-Match` 和 `If-Modified-Since`，缓存命中时返回 `304`。默认 `detail=basic` 的目录 `Last-Modified` 来自目录自身修改时间，不为了响应头额外 `stat` 子项；没有 `If-None-Match` 且 `If-Modified-Since` 命中时，会跳过目录 JSON 序列化。
@@ -163,9 +176,9 @@ docker compose up -d --build
 创建、保存、上传、移动、删除、恢复和后台任务输出会对内存索引做轻量增量更新；复制文件夹和解压目录只刷新输出根路径，不会为了索引递归扫描全部子项。
 挂载创建、更新和删除会清理相关挂载的内存索引，避免旧映射结果残留；不会自动扫描新挂载目录。
 搜索查询分页只克隆当前页结果；最近文件查询也不会先克隆整个索引再排序。
-登录后可通过 `POST /api/auth/password` 修改单管理员密码；修改成功后旧会话会失效，当前请求会获得新会话。服务端会话与 Cookie 一样默认 7 天有效，登录、鉴权和指标统计会懒清理过期会话。
+未初始化管理员密码时，`GET /api/auth/session` 会返回 `authConfigured=false`，前端应展示首次设置页面并调用 `POST /api/auth/setup`。登录后可通过 `POST /api/auth/password` 修改单管理员密码；修改成功后旧会话会失效，当前请求会获得新会话。服务端会话与 Cookie 一样默认 7 天有效，登录、鉴权和指标统计会懒清理过期会话。
 默认不开放跨域 CORS；只有 `WEB_FILE_BROWSER_CORS_ORIGINS` 显式配置的来源才能带凭据跨域访问 API。
-`GET /api/health` 是轻量存活检查，只确认进程可响应；`GET /api/ready` 是就绪检查，会验证管理员密码是否已初始化，以及配置、映射、回收站、审计和静态文件目录是否可用。
+`GET /api/health` 是轻量存活检查，只确认进程可响应；`GET /api/ready` 是就绪检查，会验证配置、认证哈希、映射、回收站、审计和静态文件目录是否可用。管理员密码尚未初始化时仍返回就绪，便于首次进入 Web 页面完成设置。
 审计日志默认写入 append-only JSONL，达到 `WEB_FILE_BROWSER_AUDIT_MAX_BYTES` 后会在下一条审计写入前轮转为 `audit.<时间戳>.jsonl`。旧轮转文件只在发生新轮转后按 `WEB_FILE_BROWSER_AUDIT_RETENTION_FILES` 清理，不在启动时扫描审计目录。`POST /api/audit/cleanup` 可主动清理旧轮转文件，并会写入一条轻量审计记录。
 `GET /api/metrics` 返回轻量内存指标快照：映射数量、活跃会话、任务状态汇总、目录扫描/文件传输/IP 并发占用、回收站条目数量和搜索索引状态；默认不递归估算回收站大小，避免指标接口触发额外磁盘遍历。单 IP 并发保护会顺手清理空闲 IP 记录，`trackedIps` 只反映仍有活跃请求的限流记录。
 API 错误响应统一为 `{ "code": "...", "message": "..." }`，稳定错误码和前端处理建议见 [docs/API_ERRORS.md](docs/API_ERRORS.md)。

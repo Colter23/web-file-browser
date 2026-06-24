@@ -37,6 +37,7 @@ ENV WEB_FILE_BROWSER_BIND=0.0.0.0 \
     WEB_FILE_BROWSER_STATIC_DIR=/app/ui/dist \
     WEB_FILE_BROWSER_MAPPING_FILE=/app/data/mappings.json \
     WEB_FILE_BROWSER_CONFIG_FILE=/app/data/config.json \
+    WEB_FILE_BROWSER_AUTH_FILE=/app/data/auth.json \
     WEB_FILE_BROWSER_TRASH_DIR=/app/data/trash \
     WEB_FILE_BROWSER_AUDIT_FILE=/app/data/audit.jsonl
 

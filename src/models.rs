@@ -170,6 +170,12 @@ pub struct LoginRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SetupPasswordRequest {
+    pub password: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChangePasswordRequest {
     pub current_password: String,
     pub new_password: String,
@@ -189,6 +195,7 @@ pub struct RuntimeSettings {
     pub port: u16,
     pub mapping_file: String,
     pub config_file: String,
+    pub auth_file: String,
     pub trash_dir: String,
     pub static_dir: String,
     pub cors_allowed_origins: Vec<String>,

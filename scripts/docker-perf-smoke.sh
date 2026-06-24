@@ -143,12 +143,8 @@ mkdir -p "${SMOKE_ROOT}/data" "${SMOKE_ROOT}/files"
 
 cat >"${ENV_FILE}" <<EOF
 WEB_FILE_BROWSER_PORT=${PORT}
-WEB_FILE_BROWSER_ADMIN_PASSWORD=${ADMIN_PASSWORD}
 WEB_FILE_BROWSER_UID=${WEB_FILE_BROWSER_UID:-$(id -u)}
 WEB_FILE_BROWSER_GID=${WEB_FILE_BROWSER_GID:-$(id -g)}
-WEB_FILE_BROWSER_CONFLICT_POLICY=autoRename
-WEB_FILE_BROWSER_INDEX_ENABLED=false
-WEB_FILE_BROWSER_INDEX_REBUILD_ON_STARTUP=false
 EOF
 
 cat >"${OVERRIDE_FILE}" <<EOF
@@ -165,8 +161,14 @@ compose up -d --build
 log "等待 /api/ready 就绪"
 wait_ready
 
-log "登录并创建 /mnt/files 挂载"
+log "首次设置管理员密码、登录并创建 /mnt/files 挂载"
 LOGIN_PAYLOAD=$(jq -n --arg password "${ADMIN_PASSWORD}" '{password: $password}')
+curl -fsS \
+  -c "${COOKIE_JAR}" \
+  -H "Content-Type: application/json" \
+  -d "${LOGIN_PAYLOAD}" \
+  "${BASE_URL}/api/auth/setup" >/dev/null
+
 curl -fsS \
   -c "${COOKIE_JAR}" \
   -H "Content-Type: application/json" \
