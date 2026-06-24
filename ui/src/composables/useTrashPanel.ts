@@ -6,6 +6,7 @@ import type {
   TrashRecord,
   TrashRestoreResponse
 } from "../class.ts";
+import type {TrashConfirmState} from "../components/trash/types.ts";
 
 type ConflictPolicy = RuntimeSettings["conflictPolicy"];
 type TrashSelectOptions = {
@@ -24,6 +25,14 @@ type TrashPanelOptions = {
   showError: (error: unknown, fallback: string, title?: string) => void;
   onRestored?: (response: TrashRestoreResponse) => void | Promise<void>;
 }
+
+const emptyTrashConfirm = (): TrashConfirmState => ({
+  visible: false,
+  kind: null,
+  records: [],
+  submitting: false,
+  error: ""
+});
 
 export const useTrashPanel = ({
   listTrashRecords,
@@ -44,6 +53,7 @@ export const useTrashPanel = ({
   const selectedId = ref("");
   const selectedIds = ref<string[]>([]);
   const selectionAnchorId = ref("");
+  const confirm = ref<TrashConfirmState>(emptyTrashConfirm());
 
   const selectedIdSet = computed(() => new Set(selectedIds.value));
   const selectedRecords = computed(() => records.value.filter(record => selectedIdSet.value.has(record.id)));
@@ -104,6 +114,7 @@ export const useTrashPanel = ({
   const close = () => {
     visible.value = false;
     message.value = "";
+    resetConfirm();
   }
 
   const toggle = async () => {
@@ -156,6 +167,15 @@ export const useTrashPanel = ({
     selectionAnchorId.value = "";
   }
 
+  const resetConfirm = () => {
+    confirm.value = emptyTrashConfirm();
+  }
+
+  const closeConfirm = () => {
+    if (confirm.value.submitting) return;
+    resetConfirm();
+  }
+
   const restoreSelected = async () => {
     const recordsToRestore = [...selectedRecords.value];
     if (!recordsToRestore.length || actionLoading.value) return;
@@ -179,38 +199,53 @@ export const useTrashPanel = ({
   const deleteSelected = async () => {
     const recordsToDelete = [...selectedRecords.value];
     if (!recordsToDelete.length || actionLoading.value) return;
-    const confirmText = recordsToDelete.length === 1
-        ? `永久删除 ${recordsToDelete[0].originalVirtualPath}？此操作无法撤销。`
-        : `永久删除选中的 ${recordsToDelete.length} 项？此操作无法撤销。`;
-    if (!window.confirm(confirmText)) return;
-    actionLoading.value = true;
-    message.value = "";
-    try {
-      const response = recordsToDelete.length === 1
-          ? await deleteSingleRecord(recordsToDelete[0])
-          : await deleteTrashRecords(recordsToDelete.map(record => record.id));
-      message.value = trashBatchPurgeMessage(response);
-      await load(true);
-    } catch (error) {
-      showError(error, "永久删除回收站项目失败", "永久删除失败");
-    } finally {
-      actionLoading.value = false;
-    }
+    confirm.value = {
+      visible: true,
+      kind: "delete",
+      records: recordsToDelete,
+      submitting: false,
+      error: ""
+    };
   }
 
   const empty = async () => {
     if (!hasRecords.value || actionLoading.value) return;
-    if (!window.confirm("清空回收站？此操作无法撤销。")) return;
+    confirm.value = {
+      visible: true,
+      kind: "empty",
+      records: [],
+      submitting: false,
+      error: ""
+    };
+  }
+
+  const submitConfirm = async () => {
+    if (!confirm.value.visible || !confirm.value.kind || confirm.value.submitting || actionLoading.value) return;
+    confirm.value.submitting = true;
+    confirm.value.error = "";
     actionLoading.value = true;
     message.value = "";
     try {
-      const response = await emptyTrash();
-      message.value = response.removed > 0 ? `已清空 ${response.removed} 项` : "回收站已经是空的";
+      if (confirm.value.kind === "delete") {
+        const recordsToDelete = [...confirm.value.records];
+        if (!recordsToDelete.length) return;
+        const response = recordsToDelete.length === 1
+            ? await deleteSingleRecord(recordsToDelete[0])
+            : await deleteTrashRecords(recordsToDelete.map(record => record.id));
+        message.value = trashBatchPurgeMessage(response);
+      } else {
+        const response = await emptyTrash();
+        message.value = response.removed > 0 ? `已清空 ${response.removed} 项` : "回收站已经是空的";
+      }
+      resetConfirm();
       await load(true);
     } catch (error) {
-      showError(error, "清空回收站失败", "清空失败");
+      confirm.value.error = error instanceof Error ? error.message : confirm.value.kind === "delete"
+          ? "永久删除回收站项目失败"
+          : "清空回收站失败";
     } finally {
       actionLoading.value = false;
+      if (confirm.value.visible) confirm.value.submitting = false;
     }
   }
 
@@ -219,6 +254,7 @@ export const useTrashPanel = ({
     actionLoading.value = true;
     message.value = "";
     try {
+      resetConfirm();
       const response = await cleanupTrash();
       message.value = response.removed > 0 ? `已按策略清理 ${response.removed} 项` : "没有需要清理的项目";
       await load(true);
@@ -268,6 +304,7 @@ export const useTrashPanel = ({
     actionLoading,
     records,
     message,
+    confirm,
     selectedId,
     selectedIds,
     selectedRecords,
@@ -281,6 +318,8 @@ export const useTrashPanel = ({
     selectRecord,
     selectAllRecords,
     clearSelection,
+    closeConfirm,
+    submitConfirm,
     restoreSelected,
     deleteSelected,
     empty,

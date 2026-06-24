@@ -88,6 +88,10 @@ watch(() => props.records.length, async () => {
   await nextTick();
   panelRef.value?.focus({preventScroll: true});
 }, {once: true});
+
+defineExpose({
+  focus: () => panelRef.value?.focus({preventScroll: true})
+});
 </script>
 
 <template>

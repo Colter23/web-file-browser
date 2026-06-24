@@ -22,6 +22,7 @@ import ImageViewer from "../components/viewer/ImageViewer.vue";
 import PreviewPane from "../components/viewer/PreviewPane.vue";
 import TaskPanel from "../components/tasks/TaskPanel.vue";
 import TrashPanel from "../components/trash/TrashPanel.vue";
+import TrashConfirmPanel from "../components/trash/TrashConfirmPanel.vue";
 import TabStrip from "../components/tabs/TabStrip.vue";
 import OperationPanel from "../components/operations/OperationPanel.vue";
 import DeleteConfirmPanel from "../components/operations/DeleteConfirmPanel.vue";
@@ -162,6 +163,7 @@ const {
   actionLoading: trashActionLoading,
   records: trashRecords,
   message: trashMessage,
+  confirm: trashConfirm,
   selectedId: trashSelectedId,
   selectedIds: trashSelectedIds,
   selectedRecord: trashSelectedRecord,
@@ -170,6 +172,8 @@ const {
   close: closeTrashPanel,
   selectRecord: selectTrashRecord,
   selectAllRecords: selectAllTrashRecords,
+  closeConfirm: closeTrashConfirm,
+  submitConfirm: submitTrashConfirm,
   restoreSelected: restoreTrashSelected,
   deleteSelected: deleteTrashSelected,
   empty: emptyTrashPanel,
@@ -194,6 +198,8 @@ const explorerRef = ref<ExplorerExpose | null>(null);
 const contentToolbarRef = ref<ContentToolbarExpose | null>(null);
 const operationPanelRef = ref<FocusablePanelExpose | null>(null);
 const deleteConfirmRef = ref<FocusablePanelExpose | null>(null);
+const trashPanelRef = ref<FocusablePanelExpose | null>(null);
+const trashConfirmRef = ref<FocusablePanelExpose | null>(null);
 const propertiesPanelRef = ref<FocusablePanelExpose | null>(null);
 const uploadInput = ref<HTMLInputElement | null>(null);
 
@@ -536,6 +542,15 @@ refreshCurrentHandler = shellActions.refreshCurrent;
 
 watch(() => fileStore.showEditor, (showEditor) => {
   if (showEditor) closePanels();
+});
+
+watch(() => trashConfirm.value.visible, async (visible, wasVisible) => {
+  await nextTick();
+  if (visible) {
+    trashConfirmRef.value?.focus();
+  } else if (wasVisible && trashPanelVisible.value) {
+    trashPanelRef.value?.focus();
+  }
 });
 
 const {
@@ -901,6 +916,7 @@ const signOut = async () => {
             </task-panel>
             <trash-panel
                 v-if="trashPanelVisible"
+                ref="trashPanelRef"
                 :records="trashRecords"
                 :selected-id="trashSelectedId"
                 :selected-ids="trashSelectedIds"
@@ -930,6 +946,12 @@ const signOut = async () => {
                 @close="closeDeleteConfirmAndFocus"
                 @update:permanent="value => deleteConfirm.permanent = value"
                 @submit="submitDeleteConfirm" />
+            <trash-confirm-panel
+                ref="trashConfirmRef"
+                :state="trashConfirm"
+                :total-count="trashRecords.length"
+                @close="closeTrashConfirm"
+                @submit="submitTrashConfirm" />
             <properties-panel
                 ref="propertiesPanelRef"
                 :visible="propertiesPanel.visible"
