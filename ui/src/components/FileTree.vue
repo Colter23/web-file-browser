@@ -169,7 +169,9 @@ const navigateNode = async (node: FileTreeData) => {
 }
 
 const closeContextMenu = () => {
+  const path = contextMenu.value.path;
   contextMenu.value.visible = false;
+  if (path) void focusPath(path);
 }
 
 const openContextMenu = async (node: FileTreeData, event: MouseEvent) => {
@@ -180,6 +182,18 @@ const openContextMenu = async (node: FileTreeData, event: MouseEvent) => {
     visible: true,
     x: event.clientX,
     y: event.clientY,
+    path: normalizePathText(node.path)
+  };
+}
+
+const openKeyboardContextMenu = async (node: FileTreeData) => {
+  await focusPath(node.path);
+  const row = rowElement(node.path);
+  const rect = row?.getBoundingClientRect();
+  contextMenu.value = {
+    visible: true,
+    x: rect ? rect.left + Math.min(rect.width - 8, 28) : window.innerWidth / 2,
+    y: rect ? rect.top + Math.min(rect.height - 4, rect.height / 2) : window.innerHeight / 2,
     path: normalizePathText(node.path)
   };
 }
@@ -322,6 +336,12 @@ const handleNodeKeyDown = async (node: FileTreeData, event: KeyboardEvent) => {
   const path = normalizePathText(node.path);
   const item = visibleNodes.value.find(visibleNode => visibleNode.path === path);
   if (!item) return;
+
+  if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+    event.preventDefault();
+    await openKeyboardContextMenu(node);
+    return;
+  }
 
   if (event.key === "ArrowDown") {
     event.preventDefault();
