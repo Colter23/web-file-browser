@@ -121,4 +121,9 @@ defineExpose({
 .operation-primary:hover {
   background: var(--app-accent-strong);
 }
+
+.operation-primary:focus-visible {
+  @apply outline-none;
+  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
 </style>

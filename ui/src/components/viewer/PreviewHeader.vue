@@ -71,4 +71,10 @@ const emit = defineEmits<{
 .preview-header button:hover:not(:disabled) {
   background: var(--app-accent-hover, #eff6ff);
 }
+
+.preview-header button:focus-visible {
+  @apply outline-none;
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
 </style>

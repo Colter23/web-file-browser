@@ -929,8 +929,13 @@ const signOut = async () => {
 }
 
 .preview-resizer:hover::after,
+.preview-resizer:focus-visible::after,
 .browser-area.resizingPreview .preview-resizer::after {
   background: var(--app-accent, #2563eb);
+}
+
+.preview-resizer:focus-visible {
+  @apply outline-none;
 }
 
 </style>

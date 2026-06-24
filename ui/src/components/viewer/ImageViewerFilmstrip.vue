@@ -77,6 +77,12 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.25));
 }
 
+.image-viewer-thumb:focus-visible {
+  @apply outline-none opacity-100;
+  border-color: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent, #2563eb) 45%, rgba(255, 255, 255, 0.25));
+}
+
 .image-viewer-thumb img {
   @apply h-full w-full rounded object-cover;
 }

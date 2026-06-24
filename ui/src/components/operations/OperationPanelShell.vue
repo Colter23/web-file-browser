@@ -134,6 +134,12 @@ defineExpose({
   color: var(--app-text);
 }
 
+.operation-shell-close:focus-visible {
+  @apply outline-none;
+  background: var(--app-control-hover);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
 .operation-shell-actions {
   @apply flex justify-end gap-2 pt-1;
 }

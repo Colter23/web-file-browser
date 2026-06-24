@@ -256,6 +256,12 @@ watch(() => props.cancelConfirm.visible, async visible => {
   background: var(--app-accent-hover, #eff6ff);
 }
 
+.task-icon-button:focus-visible {
+  @apply outline-none;
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
 .task-empty {
   @apply flex h-16 items-center justify-center rounded border border-dashed text-sm;
   border-color: var(--app-border-soft);
@@ -323,6 +329,12 @@ watch(() => props.cancelConfirm.visible, async visible => {
 
 .task-cancel-primary:hover:not(:disabled) {
   background: var(--app-warning-strong);
+}
+
+.task-cancel-secondary:focus-visible,
+.task-cancel-primary:focus-visible {
+  @apply outline-none;
+  box-shadow: 0 0 0 3px var(--app-warning-ring);
 }
 
 .task-row {
@@ -428,6 +440,12 @@ watch(() => props.cancelConfirm.visible, async visible => {
 .task-cancel:hover:not(:disabled) {
   background: var(--app-danger-soft);
   color: var(--app-danger);
+}
+
+.task-cancel:focus-visible {
+  @apply outline-none;
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
 }
 
 .task-cancel:disabled {

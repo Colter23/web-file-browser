@@ -106,6 +106,12 @@ const filmstripTitle = computed(() => props.showFilmstrip ? "隐藏缩略图 (T)
   @apply cursor-not-allowed border-white/10 bg-white/5 opacity-35 hover:border-white/10 hover:bg-white/5;
 }
 
+.image-viewer-actions button:focus-visible {
+  @apply outline-none;
+  border-color: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent, #2563eb) 45%, rgba(255, 255, 255, 0.25));
+}
+
 .image-viewer-actions button.active {
   @apply text-white;
   border-color: color-mix(in srgb, var(--app-accent-border, #bfdbfe) 80%, transparent);

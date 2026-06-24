@@ -43,6 +43,12 @@ defineProps<{
   background: var(--app-accent-hover, #eff6ff);
 }
 
+:slotted(button:focus-visible) {
+  outline: none;
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
 :slotted(button.active) {
   border-color: var(--app-accent-border, #bfdbfe);
   background: var(--app-accent-soft, #eff6ff);

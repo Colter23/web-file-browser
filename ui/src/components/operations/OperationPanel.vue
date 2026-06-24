@@ -144,6 +144,11 @@ defineExpose({
   background: var(--app-control-hover);
 }
 
+.operation-segmented button:focus-visible {
+  @apply relative z-10 outline-none;
+  box-shadow: inset 0 0 0 1px var(--app-accent, #2563eb), 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
 .operation-segmented button.active {
   background: var(--app-accent, #2563eb);
   color: var(--app-accent-contrast);
@@ -183,5 +188,11 @@ defineExpose({
 
 .operation-primary:hover:not(:disabled) {
   background: var(--app-accent-strong);
+}
+
+.operation-secondary:focus-visible,
+.operation-primary:focus-visible {
+  @apply outline-none;
+  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
 }
 </style>

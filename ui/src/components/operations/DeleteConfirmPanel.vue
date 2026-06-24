@@ -120,4 +120,10 @@ defineExpose({
 .delete-confirm-primary:hover:not(:disabled) {
   background: var(--app-danger-strong);
 }
+
+.operation-secondary:focus-visible,
+.delete-confirm-primary:focus-visible {
+  @apply outline-none;
+  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
 </style>
