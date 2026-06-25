@@ -153,7 +153,7 @@ const expandNode = async (node: FileTreeData) => {
 const toggleNode = async (node: FileTreeData) => {
   if (node.isFile || isLoading(node.path)) return;
   const path = normalizePathText(node.path);
-  if (path !== "/" && isExpanded(path) && node.children !== undefined) {
+  if (isExpanded(path) && node.children !== undefined) {
     setExpanded(path, false);
     return;
   }
@@ -401,7 +401,7 @@ const handleNodeKeyDown = async (node: FileTreeData, event: KeyboardEvent) => {
 
   if (event.key === "ArrowLeft") {
     event.preventDefault();
-    if (path !== "/" && isExpanded(path) && node.children !== undefined) {
+    if (isExpanded(path) && node.children !== undefined) {
       setExpanded(path, false);
       await focusPath(path);
       return;

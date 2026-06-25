@@ -258,9 +258,14 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
           :aria-expanded="!collapsed"
           :title="collapsed ? '展开收藏夹' : '折叠收藏夹'"
           @click="toggleCollapsed">
-        <icon icon="action.down" class="favorite-caret icon-motion-caret" :class="{'is-collapsed': collapsed}" />
-        <icon icon="action.favorite" />
-        <span>收藏夹</span>
+        <span class="favorite-title-spacer" aria-hidden="true"></span>
+        <span class="favorite-caret-slot" aria-hidden="true">
+          <icon icon="action.down" class="favorite-caret icon-motion-caret" :class="{'is-collapsed': collapsed}" size="0.86rem" />
+        </span>
+        <span class="favorite-header-icon" aria-hidden="true">
+          <icon icon="action.favorite" size="1.05rem" />
+        </span>
+        <span class="favorite-title">收藏夹</span>
       </button>
       <button class="favorite-refresh" :disabled="loading" title="刷新收藏夹" @click="emit('refresh')">
         <icon class="icon-motion-spin" :class="{'is-spinning': loading}" icon="action.refresh" />
@@ -356,7 +361,7 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
 @reference "tailwindcss";
 
 .favorite-panel {
-  @apply flex shrink-0 flex-col border-b px-1 pb-2;
+  @apply flex shrink-0 flex-col border-b pb-2;
   border-color: var(--app-border-soft);
 }
 
@@ -365,33 +370,53 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
 }
 
 .favorite-header {
-  @apply flex h-7 items-center justify-between gap-2 px-1;
-  color: var(--app-text-subtle);
+  @apply flex h-7 w-full items-center rounded-sm border border-transparent pr-1;
+  color: var(--app-text-muted);
 }
 
 .favorite-collapse {
-  @apply flex h-6 min-w-0 items-center gap-1.5 rounded border border-transparent bg-transparent px-0.5 text-[0.72rem] font-medium;
+  @apply flex h-full min-w-0 flex-1 items-center rounded-sm border border-transparent bg-transparent pr-2 text-[13px] font-medium text-left;
+  padding-left: 0.125rem;
   color: inherit;
 }
 
-.favorite-collapse span {
+.favorite-title {
   @apply truncate;
 }
 
-.favorite-caret {
-  color: var(--app-text-disabled);
+.favorite-title-spacer {
+  @apply block h-full w-0.5 shrink-0;
 }
 
-.favorite-refresh {
-  @apply inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-transparent;
+.favorite-caret-slot,
+.favorite-header-icon {
+  @apply inline-flex h-5 w-5 shrink-0 items-center justify-center;
+}
+
+.favorite-caret-slot {
+  @apply mr-0.5 rounded-sm;
+}
+
+.favorite-header-icon {
+  @apply mr-1.5;
+  color: var(--app-accent, #2563eb);
+}
+
+.favorite-caret {
   color: var(--app-text-subtle);
 }
 
-.favorite-collapse:hover,
+.favorite-refresh {
+  @apply inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border border-transparent;
+  color: var(--app-text-subtle);
+}
+
+.favorite-header:hover,
+.favorite-header:focus-within,
 .favorite-refresh:hover:not(:disabled),
 .favorite-refresh:focus-visible {
   background: var(--app-control-hover);
-  color: var(--app-accent, #2563eb);
+  color: var(--app-text);
 }
 
 .favorite-collapse:focus-visible,

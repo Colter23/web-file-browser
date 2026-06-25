@@ -57,7 +57,7 @@ const handleToggle = (event: MouseEvent) => {
   <div class="tree-node-wrap" role="none">
     <div
         class="tree-node"
-        :class="{active, loading, dropTarget}"
+        :class="{active, loading, dropTarget, root: normalizedPath === '/'}"
         :style="nodeStyle"
         role="treeitem"
         :tabindex="focused ? 0 : -1"
@@ -82,8 +82,8 @@ const handleToggle = (event: MouseEvent) => {
           title="展开或折叠"
           @pointerdown.prevent
           @click.stop="handleToggle">
-        <icon v-if="loading" class="icon-motion-spin is-spinning" icon="action.refresh" size="0.8rem" />
-        <icon v-else class="icon-motion-caret" icon="action.down" size="0.72rem" />
+        <icon v-if="loading" class="icon-motion-spin is-spinning" icon="action.refresh" size="0.86rem" />
+        <icon v-else class="icon-motion-caret" icon="action.down" size="0.86rem" />
       </button>
       <span class="node-icon" aria-hidden="true">
         <file-type-icon v-if="normalizedPath === '/'" kind="home" size="1.05rem" />
@@ -198,6 +198,10 @@ const handleToggle = (event: MouseEvent) => {
 }
 
 .tree-node.active .node-icon {
+  color: var(--app-accent, #2563eb);
+}
+
+.tree-node.root .node-icon {
   color: var(--app-accent, #2563eb);
 }
 
