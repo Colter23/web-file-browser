@@ -13,7 +13,7 @@ export type FileEntryLike = {
   file?: FileInfo;
 }
 
-export type EntryPreviewKind = "image" | "text" | "audio" | "video" | "unknown";
+export type EntryPreviewKind = "image" | "text" | "audio" | "video" | "pdf" | "unknown";
 
 export type FileEntryIconKind =
   | "home"
@@ -57,6 +57,7 @@ export const imageFileExtensions = ["apng", "avif", "bmp", "gif", "ico", "jpeg",
 export const textLikeFileExtensions = ["txt", "log", "md", "json", "yaml", "yml", "toml", "xml", "csv"];
 export const audioFileExtensions = ["mp3", "wav", "ogg", "flac", "m4a", "aac"];
 export const videoFileExtensions = ["mp4", "webm", "mov", "mkv", "avi"];
+export const pdfFileExtensions = ["pdf"];
 export const archiveFileExtensions = ["zip", "rar", "7z", "tar", "gz", "tgz"];
 export const codeFileExtensions = ["c", "cc", "cpp", "cs", "css", "go", "h", "hpp", "html", "java", "js", "jsx", "kt", "kts", "php", "py", "rs", "scss", "sh", "sql", "swift", "ts", "tsx", "vue"];
 export const configFileExtensions = ["conf", "config", "env", "ini", "properties", "toml", "yaml", "yml"];
@@ -75,6 +76,7 @@ const imageExtensionSet = normalizedExtensionSet(imageFileExtensions);
 const textLikeExtensionSet = normalizedExtensionSet(textLikeFileExtensions);
 const audioExtensionSet = normalizedExtensionSet(audioFileExtensions);
 const videoExtensionSet = normalizedExtensionSet(videoFileExtensions);
+const pdfExtensionSet = normalizedExtensionSet(pdfFileExtensions);
 const archiveExtensionSet = normalizedExtensionSet(archiveFileExtensions);
 const codeExtensionSet = normalizedExtensionSet(codeFileExtensions);
 const configExtensionSet = normalizedExtensionSet(configFileExtensions);
@@ -118,11 +120,17 @@ export const isVideoEntry = (entry: FileEntryLike | null | undefined) => {
   return videoExtensionSet.has(normalizeEntryExtension(entry));
 }
 
+export const isPdfEntry = (entry: FileEntryLike | null | undefined) => {
+  if (!entry || entry.type !== "file") return false;
+  return pdfExtensionSet.has(normalizeEntryExtension(entry));
+}
+
 export const entryPreviewKind = (entry: FileEntryLike | null | undefined, editableExtensions: readonly string[] = []): EntryPreviewKind => {
   if (!entry || entry.type !== "file") return "unknown";
   if (isImageEntry(entry)) return "image";
   if (isAudioEntry(entry)) return "audio";
   if (isVideoEntry(entry)) return "video";
+  if (isPdfEntry(entry)) return "pdf";
   if (isTextLikeEntry(entry, editableExtensions)) return "text";
   return "unknown";
 }
@@ -132,6 +140,7 @@ export const entryPreviewTypeText = (kind: EntryPreviewKind) => ({
   text: "文本",
   audio: "音频",
   video: "视频",
+  pdf: "PDF",
   unknown: "文件"
 }[kind]);
 
@@ -178,7 +187,7 @@ export const fileEntryIconKind = (entry: FileEntryLike, editableExtensions: read
   if (imageExtensionSet.has(extension)) return "image";
   if (audioExtensionSet.has(extension)) return "audio";
   if (videoExtensionSet.has(extension)) return "video";
-  if (extension === "pdf") return "pdf";
+  if (pdfExtensionSet.has(extension)) return "pdf";
   if (spreadsheetExtensionSet.has(extension)) return "spreadsheet";
   if (presentationExtensionSet.has(extension)) return "presentation";
   if (documentExtensionSet.has(extension)) return "document";

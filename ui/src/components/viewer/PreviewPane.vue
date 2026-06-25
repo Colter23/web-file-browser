@@ -8,6 +8,7 @@ import {entryMetaRows, entryPreviewKind, entryPreviewTypeText, isEditableEntry} 
 import PreviewHeader from "./PreviewHeader.vue";
 import PreviewImageView from "./PreviewImageView.vue";
 import PreviewMetaList from "./PreviewMetaList.vue";
+import PreviewPdfView from "./PreviewPdfView.vue";
 import PreviewTextView from "./PreviewTextView.vue";
 import PreviewVideoView from "./PreviewVideoView.vue";
 import type {PreviewKind} from "./types.ts";
@@ -71,6 +72,7 @@ const downloadPreview = () => {
   <preview-image-view v-if="entry && previewKind === 'image'" :entry="entry" @open-image="emit('open-image', $event)" />
   <preview-text-view v-else-if="entry && previewKind === 'text'" :entry="entry" :reload-key="reloadKey" @notice="emit('notice', $event)" />
   <preview-video-view v-else-if="entry && previewKind === 'video'" :entry="entry" @open-video="emit('open-video', $event)" />
+  <preview-pdf-view v-else-if="entry && previewKind === 'pdf'" :entry="entry" :reload-key="reloadKey" />
   <div v-else class="preview-body" :class="previewKind">
     <div v-if="!entry" class="preview-placeholder muted">
       <icon :icon="emptyIconName" size="3rem" />

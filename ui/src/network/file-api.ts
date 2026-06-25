@@ -255,3 +255,11 @@ export const downloadUrl = (path: string): string => {
     const base = config.BASE_URL.replace(/\/$/, "")
     return `${base}${pathUrl("/api/download", path)}`
 }
+
+export const fileContentUrl = (path: string, options: {cacheKey?: string | number} = {}): string => {
+    const base = config.BASE_URL.replace(/\/$/, "")
+    const url = `${base}${pathUrl("/api/content", path)}`
+    if (options.cacheKey === undefined) return url
+    const query = new URLSearchParams({_: String(options.cacheKey)})
+    return `${url}?${query.toString()}`
+}
