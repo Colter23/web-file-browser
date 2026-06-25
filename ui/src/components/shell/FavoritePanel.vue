@@ -70,6 +70,14 @@ const setFavoriteButtonRef = (favoriteId: string, element: unknown) => {
   }
 }
 
+const setRenameEditRef = (element: unknown) => {
+  renameEditRef.value = element instanceof HTMLElement ? element : null;
+}
+
+const setRenameInputRef = (element: unknown) => {
+  renameInputRef.value = element instanceof HTMLInputElement ? element : null;
+}
+
 const focusFavoriteButton = async (favoriteId: string) => {
   await nextTick();
   favoriteButtonRefs.get(favoriteId)?.focus({preventScroll: true});
@@ -383,13 +391,13 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
               <small>{{ favorite.missing ? "目录缺失" : favorite.path }}</small>
             </span>
           </button>
-          <div v-else ref="renameEditRef" class="favorite-edit">
+          <div v-else :ref="setRenameEditRef" class="favorite-edit">
             <span class="favorite-icon" aria-hidden="true">
               <icon v-if="favorite.missing" icon="action.warning" />
               <file-type-icon v-else kind="folder" />
             </span>
             <input
-                ref="renameInputRef"
+                :ref="setRenameInputRef"
                 v-model="renameDraft"
                 class="favorite-rename-input"
                 type="text"
