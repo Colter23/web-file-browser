@@ -247,7 +247,7 @@ onBeforeUnmount(() => {
             <div class="preference-heading">
               <span>颜色模式</span>
             </div>
-            <div class="segmented-group three-columns" role="radiogroup" aria-label="颜色模式">
+            <div class="segmented-group" role="radiogroup" aria-label="颜色模式">
               <button
                   v-for="option in colorModeOptions"
                   :key="option.value"
@@ -268,11 +268,11 @@ onBeforeUnmount(() => {
             <div class="preference-heading">
               <span>图标样式</span>
             </div>
-            <div class="option-wrap" role="radiogroup" aria-label="图标样式">
+            <div class="segmented-group" role="radiogroup" aria-label="图标样式">
               <button
                   v-for="option in iconStyleOptions"
                   :key="option.value"
-                  class="option-chip icon-style-option"
+                  class="segmented-option icon-style-option"
                   :class="{active: appearanceStore.iconStyle === option.value}"
                   role="radio"
                   type="button"
@@ -280,7 +280,7 @@ onBeforeUnmount(() => {
                   :aria-checked="appearanceStore.iconStyle === option.value"
                   @click="selectIconStyle(option.value)">
                 <span class="style-preview-frame">
-                  <icon class="style-preview-icon" icon="file.folder" size="large" :icon-style="option.value" />
+                  <icon class="style-preview-icon" icon="file.folder" size="1.15rem" :icon-style="option.value" />
                 </span>
                 <span>{{ option.label }}</span>
               </button>
@@ -291,7 +291,7 @@ onBeforeUnmount(() => {
             <div class="preference-heading">
               <span>图标着色</span>
             </div>
-            <div class="segmented-group two-columns" role="radiogroup" aria-label="图标着色">
+            <div class="segmented-group" role="radiogroup" aria-label="图标着色">
               <button
                   v-for="option in fileIconPaletteOptions"
                   :key="option.value"
@@ -446,7 +446,6 @@ onBeforeUnmount(() => {
 
 .command-item:hover,
 .segmented-option:hover,
-.option-chip:hover,
 .accent-button:hover,
 .submenu-back:hover {
   background: var(--app-accent-hover, #eff6ff);
@@ -454,7 +453,6 @@ onBeforeUnmount(() => {
 
 .command-item.active,
 .segmented-option.active,
-.option-chip.active,
 .accent-button.active {
   background: var(--app-accent-selected, #dbeafe);
   color: var(--app-accent-strong, #1d4ed8);
@@ -463,7 +461,6 @@ onBeforeUnmount(() => {
 
 .command-item:focus-visible,
 .segmented-option:focus-visible,
-.option-chip:focus-visible,
 .accent-button:focus-visible,
 .submenu-back:focus-visible {
   @apply outline-none;
@@ -521,68 +518,54 @@ onBeforeUnmount(() => {
 }
 
 .segmented-group {
-  @apply grid gap-1 rounded-lg border p-0.5;
+  @apply grid w-full gap-0.5 rounded-md border p-0.5;
+  grid-template-columns: repeat(auto-fit, minmax(5.75rem, 1fr));
   border-color: color-mix(in srgb, var(--app-border) 54%, transparent);
-  background: var(--app-control);
-}
-
-.segmented-group.three-columns {
-  @apply grid-cols-3;
-}
-
-.segmented-group.two-columns {
-  @apply grid-cols-2;
+  background: var(--app-control-solid);
 }
 
 .segmented-option {
-  @apply min-w-0 rounded-md px-2 py-1.5 text-center text-xs font-medium;
+  @apply inline-flex min-h-[2.15rem] min-w-0 items-center justify-center gap-1.5 rounded px-2 py-2 text-center text-xs font-medium;
   color: var(--app-text-muted);
+  transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .mode-option,
 .palette-option {
-  @apply flex items-center justify-center gap-1.5;
+  @apply w-full;
 }
 
 .option-icon {
   color: var(--app-text-subtle);
 }
 
-.mode-option.active .option-icon,
-.palette-option.active .option-icon {
-  color: var(--app-accent-strong, #1d4ed8);
-}
-
 .palette-option.palette-category .option-icon {
-  color: #d97706;
+  color: #2563eb;
 }
 
 .palette-option.palette-accent .option-icon {
   color: var(--app-accent, #2563eb);
 }
 
-.segmented-option.active,
-.option-chip.active {
+.segmented-option.active {
   @apply font-semibold;
+  background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast, #fff);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--app-accent, #2563eb) 24%, transparent);
 }
 
-.option-wrap {
-  @apply grid grid-cols-[repeat(auto-fit,minmax(5.75rem,1fr))] gap-1;
-}
-
-.option-chip {
-  @apply flex min-w-0 items-center justify-center gap-2 rounded-lg border px-2 py-1.5 text-center text-xs font-medium;
-  border-color: color-mix(in srgb, var(--app-border) 54%, transparent);
-  background: var(--app-control);
-  color: var(--app-text-muted);
+.segmented-option.active .option-icon,
+.segmented-option.active .style-preview-frame {
+  color: currentColor;
 }
 
 .style-preview-frame {
-  @apply grid h-6 w-6 place-items-center;
+  @apply grid h-5 w-5 place-items-center;
   color: #d97706;
 }
 
 .style-preview-icon {
+  @apply block;
   filter: drop-shadow(0 1px 0 color-mix(in srgb, white 50%, transparent));
 }
 
