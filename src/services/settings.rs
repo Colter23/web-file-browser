@@ -11,12 +11,16 @@ use uuid::Uuid;
 use crate::{
     config::{
         AppConfig, ArchiveConfigFile, AuditConfigFile, EditorConfigFile, IndexConfigFile,
-        LimitsConfigFile, RuntimeConfigFile, TaskConfigFile, TrashConfigFile,
-        normalize_extension_values, normalize_mime_values,
+        LimitsConfigFile, RuntimeConfigFile, ServerConfigFile, StorageConfigFile, TaskConfigFile,
+        TrashConfigFile, normalize_extension_values, normalize_mime_values,
     },
     error::AppError,
-    models::{RuntimeSettings, RuntimeSettingsPatch, SettingsResponse, StartupSettings},
+    models::{
+        RuntimeSettings, RuntimeSettingsPatch, SettingsResponse, StartupSettings,
+        StartupSettingsPatch,
+    },
 };
+use tokio::sync::Mutex;
 
 const RESTART_REQUIRED_FIELDS: &[&str] = &[
     "startup.bindAddress",
@@ -139,9 +143,11 @@ const STARTUP_ENV_FIELDS: &[(&str, &[&str])] = &[
 pub struct SettingsService {
     config_file: Arc<PathBuf>,
     runtime: Arc<RwLock<RuntimeSettings>>,
-    startup: Arc<StartupSettings>,
+    startup: Arc<RwLock<StartupSettings>>,
+    active_startup: Arc<StartupSettings>,
     env_locked: Arc<BTreeSet<String>>,
     restart_required_fields: Arc<Vec<String>>,
+    write_lock: Arc<Mutex<()>>,
 }
 
 impl SettingsService {
@@ -149,7 +155,8 @@ impl SettingsService {
         Self {
             config_file: Arc::new(config.config_file.clone()),
             runtime: Arc::new(RwLock::new(config.runtime_settings())),
-            startup: Arc::new(config.startup_settings()),
+            startup: Arc::new(RwLock::new(config.startup_settings())),
+            active_startup: Arc::new(config.startup_settings()),
             env_locked: Arc::new(env_locked_fields()),
             restart_required_fields: Arc::new(
                 RESTART_REQUIRED_FIELDS
@@ -157,6 +164,7 @@ impl SettingsService {
                     .map(|field| (*field).to_string())
                     .collect(),
             ),
+            write_lock: Arc::new(Mutex::new(())),
         }
     }
 
@@ -164,17 +172,27 @@ impl SettingsService {
         self.runtime.read().await.clone()
     }
 
-    pub fn startup(&self) -> StartupSettings {
-        (*self.startup).clone()
+    pub async fn startup(&self) -> StartupSettings {
+        self.startup.read().await.clone()
+    }
+
+    pub fn active_startup(&self) -> StartupSettings {
+        (*self.active_startup).clone()
     }
 
     pub async fn response(&self, auth_configured: bool) -> SettingsResponse {
+        let startup = self.startup().await;
+        let active_startup = self.active_startup();
+        let restart_pending_fields = restart_pending_fields(&startup, &active_startup);
         SettingsResponse {
             runtime: self.runtime().await,
-            startup: self.startup(),
+            startup,
+            active_startup,
             auth_configured,
             env_locked: self.env_locked.iter().cloned().collect(),
             restart_required_fields: self.restart_required_fields.as_ref().clone(),
+            restart_pending: !restart_pending_fields.is_empty(),
+            restart_pending_fields,
         }
     }
 
@@ -182,23 +200,53 @@ impl SettingsService {
         &self,
         patch: RuntimeSettingsPatch,
     ) -> Result<RuntimeSettings, AppError> {
-        self.ensure_not_env_locked(&patch)?;
+        let _guard = self.write_lock.lock().await;
+        self.ensure_runtime_not_env_locked(&patch)?;
         let mut next = self.runtime().await;
-        apply_patch(&mut next, patch)?;
+        apply_runtime_patch(&mut next, patch)?;
         self.write_runtime_config(&next).await?;
         *self.runtime.write().await = next.clone();
         Ok(next)
     }
 
-    pub async fn reload_runtime(&self) -> Result<RuntimeSettings, AppError> {
+    pub async fn patch_startup(
+        &self,
+        patch: StartupSettingsPatch,
+    ) -> Result<StartupSettings, AppError> {
+        let _guard = self.write_lock.lock().await;
+        self.ensure_startup_not_env_locked(&patch)?;
+        let mut next = self.startup().await;
+        apply_startup_patch(&mut next, patch)?;
+        self.write_startup_config(&next).await?;
         let config = AppConfig::load_from_file(self.config_file.as_ref().clone())?;
-        let next = config.runtime_settings();
-        *self.runtime.write().await = next.clone();
+        let next = config.startup_settings();
+        *self.startup.write().await = next.clone();
         Ok(next)
     }
 
-    fn ensure_not_env_locked(&self, patch: &RuntimeSettingsPatch) -> Result<(), AppError> {
+    pub async fn reload(&self) -> Result<RuntimeSettings, AppError> {
+        let _guard = self.write_lock.lock().await;
+        let config = AppConfig::load_from_file(self.config_file.as_ref().clone())?;
+        let next = config.runtime_settings();
+        let startup = config.startup_settings();
+        *self.runtime.write().await = next.clone();
+        *self.startup.write().await = startup;
+        Ok(next)
+    }
+
+    fn ensure_runtime_not_env_locked(&self, patch: &RuntimeSettingsPatch) -> Result<(), AppError> {
         for field in touched_runtime_fields(patch) {
+            if self.env_locked.contains(field) {
+                return Err(AppError::conflict(format!(
+                    "配置 {field} 由环境变量控制，请删除环境变量后重启"
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    fn ensure_startup_not_env_locked(&self, patch: &StartupSettingsPatch) -> Result<(), AppError> {
+        for field in touched_startup_fields(patch) {
             if self.env_locked.contains(field) {
                 return Err(AppError::conflict(format!(
                     "配置 {field} 由环境变量控制，请删除环境变量后重启"
@@ -213,9 +261,15 @@ impl SettingsService {
         fill_runtime_config(&mut config, runtime);
         write_config_atomic(&self.config_file, &config).await
     }
+
+    async fn write_startup_config(&self, startup: &StartupSettings) -> Result<(), AppError> {
+        let mut config = RuntimeConfigFile::read(&self.config_file)?;
+        fill_startup_config(&mut config, startup);
+        write_config_atomic(&self.config_file, &config).await
+    }
 }
 
-fn apply_patch(
+fn apply_runtime_patch(
     settings: &mut RuntimeSettings,
     patch: RuntimeSettingsPatch,
 ) -> Result<(), AppError> {
@@ -285,6 +339,51 @@ fn apply_patch(
     Ok(())
 }
 
+fn apply_startup_patch(
+    settings: &mut StartupSettings,
+    patch: StartupSettingsPatch,
+) -> Result<(), AppError> {
+    if patch.config_file.is_some() {
+        return Err(AppError::bad_request(
+            "配置文件路径不支持在线修改，请通过 WEB_FILE_BROWSER_CONFIG_FILE 指定后重启",
+        ));
+    }
+    if let Some(value) = patch.bind_address {
+        settings.bind_address = non_blank(value, "监听地址")?;
+    }
+    if let Some(value) = patch.port {
+        settings.port = positive_u16(value, "端口")?;
+    }
+    if let Some(value) = patch.mapping_file {
+        settings.mapping_file = non_blank_path(value, "挂载配置文件")?;
+    }
+    if let Some(value) = patch.auth_file {
+        settings.auth_file = non_blank_path(value, "认证文件")?;
+    }
+    if let Some(value) = patch.favorites_file {
+        settings.favorites_file = non_blank_path(value, "收藏文件")?;
+    }
+    if let Some(value) = patch.trash_dir {
+        settings.trash_dir = non_blank_path(value, "回收站目录")?;
+    }
+    if let Some(value) = patch.static_dir {
+        settings.static_dir = non_blank_path(value, "静态文件目录")?;
+    }
+    if let Some(value) = patch.cors_allowed_origins {
+        settings.cors_allowed_origins = validate_cors_origins(value)?;
+    }
+    if let Some(value) = patch.trust_proxy_headers {
+        settings.trust_proxy_headers = value;
+    }
+    if let Some(value) = patch.audit_file {
+        settings.audit_file = non_blank_path(value, "审计文件")?;
+    }
+    if let Some(value) = patch.index_rebuild_on_startup {
+        settings.index_rebuild_on_startup = value;
+    }
+    Ok(())
+}
+
 fn fill_runtime_config(config: &mut RuntimeConfigFile, runtime: &RuntimeSettings) {
     config.limits = Some(LimitsConfigFile {
         max_upload_bytes: Some(runtime.max_upload_bytes),
@@ -326,6 +425,29 @@ fn fill_runtime_config(config: &mut RuntimeConfigFile, runtime: &RuntimeSettings
         max_bytes: Some(runtime.trash_max_bytes),
     });
     config.conflict_policy = Some(runtime.conflict_policy);
+}
+
+fn fill_startup_config(config: &mut RuntimeConfigFile, startup: &StartupSettings) {
+    config.server = Some(ServerConfigFile {
+        bind: Some(startup.bind_address.clone()),
+        port: Some(startup.port),
+        static_dir: Some(PathBuf::from(&startup.static_dir)),
+        cors_allowed_origins: Some(startup.cors_allowed_origins.clone()),
+        trust_proxy_headers: Some(startup.trust_proxy_headers),
+    });
+    config.storage = Some(StorageConfigFile {
+        mapping_file: Some(PathBuf::from(&startup.mapping_file)),
+        auth_file: Some(PathBuf::from(&startup.auth_file)),
+        favorites_file: Some(PathBuf::from(&startup.favorites_file)),
+        trash_dir: Some(PathBuf::from(&startup.trash_dir)),
+        audit_file: Some(PathBuf::from(&startup.audit_file)),
+    });
+    let index = config.index.take().unwrap_or_default();
+    config.index = Some(IndexConfigFile {
+        enabled: index.enabled,
+        rebuild_on_startup: Some(startup.index_rebuild_on_startup),
+        scan_delay_ms: index.scan_delay_ms,
+    });
 }
 
 async fn write_config_atomic(path: &Path, config: &RuntimeConfigFile) -> Result<(), AppError> {
@@ -469,6 +591,114 @@ fn touched_runtime_fields(patch: &RuntimeSettingsPatch) -> Vec<&'static str> {
     fields
 }
 
+fn touched_startup_fields(patch: &StartupSettingsPatch) -> Vec<&'static str> {
+    let mut fields = Vec::new();
+    push_if(
+        &mut fields,
+        patch.bind_address.is_some(),
+        "startup.bindAddress",
+    );
+    push_if(&mut fields, patch.port.is_some(), "startup.port");
+    push_if(
+        &mut fields,
+        patch.mapping_file.is_some(),
+        "startup.mappingFile",
+    );
+    push_if(
+        &mut fields,
+        patch.config_file.is_some(),
+        "startup.configFile",
+    );
+    push_if(&mut fields, patch.auth_file.is_some(), "startup.authFile");
+    push_if(
+        &mut fields,
+        patch.favorites_file.is_some(),
+        "startup.favoritesFile",
+    );
+    push_if(&mut fields, patch.trash_dir.is_some(), "startup.trashDir");
+    push_if(&mut fields, patch.static_dir.is_some(), "startup.staticDir");
+    push_if(
+        &mut fields,
+        patch.cors_allowed_origins.is_some(),
+        "startup.corsAllowedOrigins",
+    );
+    push_if(
+        &mut fields,
+        patch.trust_proxy_headers.is_some(),
+        "startup.trustProxyHeaders",
+    );
+    push_if(&mut fields, patch.audit_file.is_some(), "startup.auditFile");
+    push_if(
+        &mut fields,
+        patch.index_rebuild_on_startup.is_some(),
+        "startup.indexRebuildOnStartup",
+    );
+    fields
+}
+
+fn restart_pending_fields(
+    startup: &StartupSettings,
+    active_startup: &StartupSettings,
+) -> Vec<String> {
+    let mut fields = Vec::new();
+    push_if(
+        &mut fields,
+        startup.bind_address != active_startup.bind_address,
+        "startup.bindAddress",
+    );
+    push_if(
+        &mut fields,
+        startup.port != active_startup.port,
+        "startup.port",
+    );
+    push_if(
+        &mut fields,
+        startup.mapping_file != active_startup.mapping_file,
+        "startup.mappingFile",
+    );
+    push_if(
+        &mut fields,
+        startup.auth_file != active_startup.auth_file,
+        "startup.authFile",
+    );
+    push_if(
+        &mut fields,
+        startup.favorites_file != active_startup.favorites_file,
+        "startup.favoritesFile",
+    );
+    push_if(
+        &mut fields,
+        startup.trash_dir != active_startup.trash_dir,
+        "startup.trashDir",
+    );
+    push_if(
+        &mut fields,
+        startup.static_dir != active_startup.static_dir,
+        "startup.staticDir",
+    );
+    push_if(
+        &mut fields,
+        startup.cors_allowed_origins != active_startup.cors_allowed_origins,
+        "startup.corsAllowedOrigins",
+    );
+    push_if(
+        &mut fields,
+        startup.trust_proxy_headers != active_startup.trust_proxy_headers,
+        "startup.trustProxyHeaders",
+    );
+    push_if(
+        &mut fields,
+        startup.audit_file != active_startup.audit_file,
+        "startup.auditFile",
+    );
+    push_if(
+        &mut fields,
+        startup.index_rebuild_on_startup != active_startup.index_rebuild_on_startup,
+        "startup.indexRebuildOnStartup",
+    );
+    fields.into_iter().map(str::to_string).collect()
+}
+
 fn push_if(fields: &mut Vec<&'static str>, touched: bool, field: &'static str) {
     if touched {
         fields.push(field);
@@ -506,12 +736,50 @@ fn positive_usize(value: usize, name: &str) -> Result<usize, AppError> {
     }
 }
 
+fn positive_u16(value: u16, name: &str) -> Result<u16, AppError> {
+    if value == 0 {
+        Err(AppError::bad_request(format!("{name}必须大于 0")))
+    } else {
+        Ok(value)
+    }
+}
+
 fn positive_optional_u64(value: Option<u64>, name: &str) -> Result<Option<u64>, AppError> {
     value.map(|value| positive_u64(value, name)).transpose()
 }
 
 fn positive_optional_usize(value: Option<usize>, name: &str) -> Result<Option<usize>, AppError> {
     value.map(|value| positive_usize(value, name)).transpose()
+}
+
+fn non_blank(value: String, name: &str) -> Result<String, AppError> {
+    let value = value.trim().to_string();
+    if value.is_empty() {
+        Err(AppError::bad_request(format!("{name}不能为空")))
+    } else {
+        Ok(value)
+    }
+}
+
+fn non_blank_path(value: String, name: &str) -> Result<String, AppError> {
+    non_blank(value, name)
+}
+
+fn validate_cors_origins(values: Vec<String>) -> Result<Vec<String>, AppError> {
+    values
+        .into_iter()
+        .map(|value| non_blank(value, "CORS 来源"))
+        .filter(|value| value.as_ref().is_ok_and(|value| !value.is_empty()))
+        .map(|value| {
+            let value = value?;
+            if value == "*" {
+                return Err(AppError::bad_request(
+                    "CORS 来源不支持 *，请显式填写可信来源",
+                ));
+            }
+            Ok(value)
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -573,10 +841,56 @@ mod tests {
         )
         .unwrap();
 
-        let runtime = service.reload_runtime().await.unwrap();
+        let runtime = service.reload().await.unwrap();
 
         assert_eq!(runtime.max_dir_page_size, 9);
         assert_eq!(runtime.conflict_policy, ConflictPolicy::Reject);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn patch_startup_writes_config_without_changing_active_startup() {
+        let root = temp_dir("settings-startup-patch");
+        let config_path = root.join("data/config.json");
+        let mut config = AppConfig::load_from_file(config_path.clone()).unwrap();
+        config.config_file = config_path.clone();
+        config.port = 8080;
+        let service = SettingsService::new(&config);
+
+        let patch: StartupSettingsPatch = serde_json::from_value(json!({
+            "bindAddress": "127.0.0.1",
+            "port": 18080,
+            "staticDir": "ui-custom/dist",
+            "trustProxyHeaders": true,
+            "indexRebuildOnStartup": true
+        }))
+        .unwrap();
+
+        let startup = service.patch_startup(patch).await.unwrap();
+
+        assert_eq!(startup.bind_address, "127.0.0.1");
+        assert_eq!(startup.port, 18080);
+        assert_eq!(startup.static_dir, "ui-custom/dist");
+        assert!(startup.trust_proxy_headers);
+        assert!(startup.index_rebuild_on_startup);
+        assert_eq!(service.active_startup().port, 8080);
+
+        let response = service.response(false).await;
+        assert!(response.restart_pending);
+        assert!(
+            response
+                .restart_pending_fields
+                .contains(&"startup.port".to_string())
+        );
+
+        let text = fs::read_to_string(config_path).await.unwrap();
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(value["server"]["bind"], "127.0.0.1");
+        assert_eq!(value["server"]["port"], 18080);
+        assert_eq!(value["server"]["staticDir"], "ui-custom/dist");
+        assert_eq!(value["server"]["trustProxyHeaders"], true);
+        assert_eq!(value["index"]["rebuildOnStartup"], true);
 
         let _ = std::fs::remove_dir_all(root);
     }
@@ -591,7 +905,7 @@ mod tests {
         }))
         .unwrap();
 
-        let error = apply_patch(&mut settings, patch).unwrap_err();
+        let error = apply_runtime_patch(&mut settings, patch).unwrap_err();
 
         assert!(matches!(error, AppError::BadRequest(_)));
     }

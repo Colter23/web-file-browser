@@ -715,7 +715,7 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
 
 ### `GET /api/settings`
 
-返回设置快照。`runtime` 是可在线编辑并热生效的运行配置；`startup` 是启动期只读配置，修改后需要重启。`envLocked` 中的字段由环境变量控制，不能通过设置接口覆盖。
+返回设置快照。`runtime` 是可在线编辑并热生效的运行配置；`startup` 是已保存、下次启动生效的启动配置；`activeStartup` 是当前进程正在使用的启动配置。`envLocked` 中的字段由环境变量控制，不能通过设置接口覆盖。
 
 ```json
 {
@@ -756,18 +756,34 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
     "auditFile": "data/audit.jsonl",
     "indexRebuildOnStartup": false
   },
+  "activeStartup": {
+    "bindAddress": "0.0.0.0",
+    "port": 8080,
+    "mappingFile": "data/mappings.json",
+    "configFile": "data/config.json",
+    "authFile": "data/auth.json",
+    "favoritesFile": "data/favorites.json",
+    "trashDir": "data/trash",
+    "staticDir": "ui/dist",
+    "corsAllowedOrigins": [],
+    "trustProxyHeaders": false,
+    "auditFile": "data/audit.jsonl",
+    "indexRebuildOnStartup": false
+  },
   "authConfigured": true,
   "envLocked": [],
   "restartRequiredFields": [
     "startup.bindAddress",
     "startup.port"
-  ]
+  ],
+  "restartPending": false,
+  "restartPendingFields": []
 }
 ```
 
 ### `PATCH /api/settings`
 
-在线修改运行配置，成功后写入 `data/config.json` 并更新内存快照。只接受 `runtime` 字段；提交 `startup` 会返回 `400`。如果字段出现在 `envLocked` 中，返回 `409`。
+在线修改配置，成功后写入 `data/config.json`。`runtime` 会更新内存快照并对后续请求热生效；`startup` 只保存为下次启动配置，不改变当前进程。`startup.configFile` 不支持在线修改；如果字段出现在 `envLocked` 中，返回 `409`。
 
 ```json
 {
@@ -775,15 +791,21 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
     "maxUploadBytes": 104857600,
     "maxDirPageSize": 1000,
     "conflictPolicy": "reject"
+  },
+  "startup": {
+    "bindAddress": "0.0.0.0",
+    "port": 8080,
+    "staticDir": "ui/dist",
+    "indexRebuildOnStartup": false
   }
 }
 ```
 
-返回值与 `GET /api/settings` 相同。新的配置只保证对后续请求和后续任务生效；已开始的上传、下载、后台任务继续使用开始时的配置。
+返回值与 `GET /api/settings` 相同。`runtime` 新配置只保证对后续请求和后续任务生效；已开始的上传、下载、后台任务继续使用开始时的配置。`startup` 修改后 `restartPending` 会变为 `true`，重启服务后才会进入 `activeStartup`。
 
 ### `POST /api/settings/reload`
 
-手动从 `config.json` 重新加载可热生效运行配置，并应用环境变量覆盖。不监听文件变化，不在请求热路径读取配置文件。
+手动从 `config.json` 重新加载配置，并应用环境变量覆盖。`runtime` 会热生效；`startup` 只刷新下次启动配置，不改变当前进程。不监听文件变化，不在请求热路径读取配置文件。
 
 ### `GET /api/health`
 

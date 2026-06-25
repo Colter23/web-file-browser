@@ -227,7 +227,7 @@ pub struct RuntimeSettings {
     pub conflict_policy: ConflictPolicy,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartupSettings {
     pub bind_address: String,
@@ -249,9 +249,12 @@ pub struct StartupSettings {
 pub struct SettingsResponse {
     pub runtime: RuntimeSettings,
     pub startup: StartupSettings,
+    pub active_startup: StartupSettings,
     pub auth_configured: bool,
     pub env_locked: Vec<String>,
     pub restart_required_fields: Vec<String>,
+    pub restart_pending: bool,
+    pub restart_pending_fields: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -260,7 +263,7 @@ pub struct UpdateSettingsRequest {
     #[serde(default)]
     pub runtime: Option<RuntimeSettingsPatch>,
     #[serde(default)]
-    pub startup: Option<serde_json::Value>,
+    pub startup: Option<StartupSettingsPatch>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -308,6 +311,35 @@ pub struct RuntimeSettingsPatch {
     pub trash_max_bytes: Option<Option<u64>>,
     #[serde(default)]
     pub conflict_policy: Option<ConflictPolicy>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StartupSettingsPatch {
+    #[serde(default)]
+    pub bind_address: Option<String>,
+    #[serde(default)]
+    pub port: Option<u16>,
+    #[serde(default)]
+    pub mapping_file: Option<String>,
+    #[serde(default)]
+    pub config_file: Option<String>,
+    #[serde(default)]
+    pub auth_file: Option<String>,
+    #[serde(default)]
+    pub favorites_file: Option<String>,
+    #[serde(default)]
+    pub trash_dir: Option<String>,
+    #[serde(default)]
+    pub static_dir: Option<String>,
+    #[serde(default)]
+    pub cors_allowed_origins: Option<Vec<String>>,
+    #[serde(default)]
+    pub trust_proxy_headers: Option<bool>,
+    #[serde(default)]
+    pub audit_file: Option<String>,
+    #[serde(default)]
+    pub index_rebuild_on_startup: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

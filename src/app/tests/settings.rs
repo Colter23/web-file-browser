@@ -33,6 +33,7 @@ async fn settings_patch_updates_upload_limit_and_persists_config() {
     assert_eq!(body["runtime"]["maxDirPageSize"], 20);
     assert_eq!(body["runtime"]["editableExtensions"], json!(["txt", "md"]));
     assert_eq!(body["runtime"]["conflictPolicy"], "reject");
+    assert_eq!(body["restartPending"], false);
     assert!(
         body["startup"]["configFile"]
             .as_str()
@@ -94,8 +95,8 @@ async fn settings_reload_reads_config_file_and_applies_runtime() {
 }
 
 #[tokio::test]
-async fn settings_patch_rejects_startup_fields() {
-    let (_root, app) = test_app("settings-startup-reject-api").await;
+async fn settings_patch_saves_startup_fields_for_next_restart() {
+    let (root, app) = test_app("settings-startup-patch-api").await;
     let cookie = login_cookie(&app).await;
 
     let response = app
@@ -106,7 +107,63 @@ async fn settings_patch_rejects_startup_fields() {
             Some(&cookie),
             json!({
                 "startup": {
-                    "port": 18080
+                    "bindAddress": "127.0.0.1",
+                    "port": 18080,
+                    "staticDir": "ui-custom/dist",
+                    "corsAllowedOrigins": ["http://localhost:5173"],
+                    "trustProxyHeaders": true,
+                    "indexRebuildOnStartup": true
+                }
+            }),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(body["startup"]["bindAddress"], "127.0.0.1");
+    assert_eq!(body["startup"]["port"], 18080);
+    assert_eq!(body["startup"]["staticDir"], "ui-custom/dist");
+    assert_eq!(body["startup"]["trustProxyHeaders"], true);
+    assert_eq!(body["startup"]["indexRebuildOnStartup"], true);
+    assert_eq!(body["activeStartup"]["port"], 0);
+    assert_eq!(body["activeStartup"]["trustProxyHeaders"], false);
+    assert_eq!(body["restartPending"], true);
+    assert!(
+        body["restartPendingFields"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("startup.port"))
+    );
+
+    let text = fs::read_to_string(root.path().join("data/config.json")).unwrap();
+    let persisted: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(persisted["server"]["bind"], "127.0.0.1");
+    assert_eq!(persisted["server"]["port"], 18080);
+    assert_eq!(persisted["server"]["staticDir"], "ui-custom/dist");
+    assert_eq!(
+        persisted["server"]["corsAllowedOrigins"],
+        json!(["http://localhost:5173"])
+    );
+    assert_eq!(persisted["server"]["trustProxyHeaders"], true);
+    assert_eq!(persisted["index"]["rebuildOnStartup"], true);
+}
+
+#[tokio::test]
+async fn settings_patch_rejects_config_file_field() {
+    let (_root, app) = test_app("settings-config-file-reject-api").await;
+    let cookie = login_cookie(&app).await;
+
+    let response = app
+        .clone()
+        .oneshot(json_request(
+            Method::PATCH,
+            "/api/settings",
+            Some(&cookie),
+            json!({
+                "startup": {
+                    "configFile": "data/other-config.json"
                 }
             }),
         ))

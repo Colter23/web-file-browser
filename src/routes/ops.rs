@@ -65,7 +65,7 @@ async fn readiness_checks(state: &AppState) -> Vec<ReadinessCheck> {
     } else {
         readiness_ok("auth", "管理员密码尚未初始化，等待首次进入 Web 界面设置")
     });
-    let settings = state.settings.startup();
+    let settings = state.settings.active_startup();
     match tokio::task::spawn_blocking(move || readiness_file_system_checks(&settings)).await {
         Ok(mut file_system_checks) => checks.append(&mut file_system_checks),
         Err(error) => checks.push(readiness_error(
