@@ -34,6 +34,7 @@ import {
   FolderOpen,
   FolderPlus,
   Grid2X2,
+  GripVertical,
   History,
   House,
   Image,
@@ -123,6 +124,7 @@ const lucideIcons: Record<string, Component> = {
   "action.next": ChevronRight,
   "action.up": ChevronUp,
   "action.down": ChevronDown,
+  "action.drag-handle": GripVertical,
   "action.tools": Wrench,
 
   "appearance.system": Monitor,

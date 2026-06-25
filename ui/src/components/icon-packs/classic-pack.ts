@@ -46,6 +46,7 @@ const classicSymbolIcons: Record<string, string> = {
   "action.next": "icon-back_android",
   "action.up": "icon-back_android",
   "action.down": "icon-unfold",
+  "action.drag-handle": "icon-listview",
   "action.tools": "icon-wrench",
 
   "view.details": "icon-view-list",

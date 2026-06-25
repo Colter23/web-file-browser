@@ -27,13 +27,16 @@ import {
   getSettings,
   rebuildIndex,
   reloadSettings,
+  reorderMappings,
   updateMapping,
   updateSettings
 } from "../network/api";
 import Icon from "../components/Icon.vue";
+import OperationPanelShell from "../components/operations/OperationPanelShell.vue";
 import {formatEntryDate} from "../utils/file-entry.ts";
 
 type SettingsMessageKind = "success" | "error" | "warning";
+type MappingDialogMode = "create" | "edit";
 
 interface RuntimeSettingsForm {
   maxEditBytes: string;
@@ -90,6 +93,14 @@ const indexActionLoading = ref(false);
 const metricsLoading = ref(false);
 const auditCleanupLoading = ref(false);
 const mappingSavingId = ref<number | null>(null);
+const mappingRefreshing = ref(false);
+const mappingReorderLoading = ref(false);
+const mappingDialogOpen = ref(false);
+const mappingDialogMode = ref<MappingDialogMode>("create");
+const mappingDeleteTarget = ref<PathMapping | null>(null);
+const draggingMappingId = ref<number | null>(null);
+const dragOverMappingId = ref<number | null>(null);
+const dragOverPlacement = ref<"before" | "after">("before");
 const message = ref("");
 const messageKind = ref<SettingsMessageKind>("error");
 
@@ -150,9 +161,9 @@ const navItems = [
   {id: "overview", label: "概览", icon: "action.properties"},
   {id: "mappings", label: "挂载目录", icon: "file.folder"},
   {id: "index", label: "搜索索引", icon: "action.search"},
-  {id: "security", label: "安全", icon: "icon-password"},
   {id: "runtime", label: "运行配置", icon: "action.tools"},
-  {id: "startup", label: "启动配置", icon: "action.settings"}
+  {id: "startup", label: "启动配置", icon: "action.settings"},
+  {id: "security", label: "安全", icon: "icon-password"}
 ] as const;
 
 type SettingsPageId = typeof navItems[number]["id"];
@@ -203,6 +214,23 @@ const startupDirty = computed(() => {
 });
 const settingsDirty = computed(() => runtimeDirty.value || startupDirty.value);
 const canSaveSettings = computed(() => Boolean(settingsSnapshot.value) && settingsDirty.value && !saving.value);
+const sortedMappings = computed(() => [...mappings.value].sort((left, right) => {
+  const orderDelta = (left.order ?? 0) - (right.order ?? 0);
+  if (orderDelta !== 0) return orderDelta;
+  return left.mountPath.localeCompare(right.mountPath, "zh-Hans-CN");
+}));
+const writableMappingCount = computed(() => mappings.value.filter(mapping => mapping.writable).length);
+const readonlyMappingCount = computed(() => mappings.value.length - writableMappingCount.value);
+const nextMappingOrder = computed(() => {
+  if (!mappings.value.length) return 10;
+  return Math.max(...mappings.value.map(mapping => mapping.order ?? 0)) + 10;
+});
+const mappingBusy = computed(() => loading.value || mappingRefreshing.value || mappingReorderLoading.value || mappingSavingId.value != null);
+const mappingDialogTitle = computed(() => mappingDialogMode.value === "edit" ? "修改挂载" : "添加挂载");
+const mappingDialogSubtitle = computed(() => mappingDialogMode.value === "edit"
+    ? "调整虚拟路径、目录和读写权限。"
+    : "把本地或容器目录显示为一个虚拟路径。");
+const mappingDialogSubmitText = computed(() => mappingDialogMode.value === "edit" ? "保存修改" : "添加挂载");
 
 const selectSettingsPage = (id: SettingsPageId) => {
   activeSettingsPage.value = id;
@@ -214,6 +242,9 @@ const load = async () => {
   try {
     const [mappingData, settingData] = await Promise.all([getMappings(), getSettings()]);
     mappings.value = mappingData;
+    if (!mappingForm.mountPath && !mappingForm.folderPath && !mappingForm.remark && mappingForm.order === 0) {
+      mappingForm.order = nextMappingOrder.value;
+    }
     applySettingsSnapshot(settingData);
     await Promise.all([loadIndexStatus(false), loadMetrics(false)]);
   } catch (error) {
@@ -271,11 +302,44 @@ const syncStartupForm = (startup: StartupSettings) => {
 }
 
 const resetMappingForm = () => {
+  mappingForm.id = undefined;
   mappingForm.mountPath = "";
   mappingForm.folderPath = "";
   mappingForm.remark = "";
-  mappingForm.order = 0;
+  mappingForm.order = nextMappingOrder.value;
   mappingForm.writable = true;
+}
+
+const openMappingDialog = () => {
+  resetMappingForm();
+  mappingDialogMode.value = "create";
+  mappingDialogOpen.value = true;
+}
+
+const openEditMappingDialog = (mapping: PathMapping) => {
+  mappingForm.id = mapping.id;
+  mappingForm.mountPath = mapping.mountPath;
+  mappingForm.folderPath = mapping.folderPath;
+  mappingForm.remark = mapping.remark ?? "";
+  mappingForm.order = mapping.order ?? 0;
+  mappingForm.writable = mapping.writable;
+  mappingDialogMode.value = "edit";
+  mappingDialogOpen.value = true;
+}
+
+const closeMappingDialog = () => {
+  if (mappingBusy.value) return;
+  mappingDialogOpen.value = false;
+}
+
+const openMappingDeleteConfirm = (mapping: PathMapping) => {
+  if (mappingBusy.value) return;
+  mappingDeleteTarget.value = mapping;
+}
+
+const closeMappingDeleteConfirm = () => {
+  if (mappingBusy.value) return;
+  mappingDeleteTarget.value = null;
 }
 
 const resetPasswordForm = () => {
@@ -306,6 +370,25 @@ const parseListInput = (value: string) => value
     .split(/[\n,，]/)
     .map(item => item.trim())
     .filter(Boolean);
+const normalizeMountPath = (value: string) => {
+  const normalized = value.trim().replace(/\\/g, "/").replace(/\/{2,}/g, "/");
+  if (!normalized) return "";
+  return normalized.startsWith("/") ? normalized : `/${normalized}`;
+}
+const buildMappingPayload = (mapping: PathMapping): PathMapping => {
+  const order = Number(mapping.order ?? 0);
+  const payload: PathMapping = {
+    mountPath: normalizeMountPath(mapping.mountPath),
+    folderPath: mapping.folderPath.trim(),
+    remark: mapping.remark?.trim() ?? "",
+    order: Number.isFinite(order) ? order : 0,
+    writable: Boolean(mapping.writable)
+  };
+  if (mapping.id != null) payload.id = mapping.id;
+  if (!payload.mountPath) throw new Error("需要填写虚拟路径");
+  if (!payload.folderPath) throw new Error("需要填写本地或容器目录");
+  return payload;
+}
 
 const parseInteger = (value: string, label: string, min = 1, max = Number.MAX_SAFE_INTEGER) => {
   const text = value.trim();
@@ -624,45 +707,123 @@ const requestAuditCleanup = async () => {
   }
 }
 
-const addMapping = async () => {
-  message.value = "";
+const loadMappings = async (showResult = true) => {
+  mappingRefreshing.value = true;
   try {
-    await createMapping({...mappingForm});
-    resetMappingForm();
-    const mappingData = await getMappings();
-    mappings.value = mappingData;
-    showSuccess("挂载目录已添加");
+    mappings.value = await getMappings();
+    if (!mappingForm.mountPath && !mappingForm.folderPath && !mappingForm.remark) {
+      mappingForm.order = nextMappingOrder.value;
+    }
+    if (showResult) showSuccess("挂载目录已刷新");
   } catch (error) {
-    showError(error, "添加挂载失败");
+    showError(error, "刷新挂载目录失败");
+  } finally {
+    mappingRefreshing.value = false;
   }
 }
 
-const saveMapping = async (mapping: PathMapping) => {
-  if (mapping.id == null) return;
+const submitMappingDialog = async () => {
   message.value = "";
-  mappingSavingId.value = mapping.id;
+  const payload = buildMappingPayload(mappingForm);
+  const editing = mappingDialogMode.value === "edit";
+  if (editing && payload.id == null) return;
+  mappingSavingId.value = payload.id ?? -1;
   try {
-    await updateMapping(mapping.id, mapping);
-    mappings.value = await getMappings();
-    showSuccess("挂载目录已保存");
+    if (editing) {
+      await updateMapping(payload.id as number, payload);
+    } else {
+      await createMapping(payload);
+    }
+    resetMappingForm();
+    mappingDialogOpen.value = false;
+    await loadMappings(false);
+    showSuccess(editing ? "挂载目录已保存" : "挂载目录已添加");
   } catch (error) {
-    showError(error, "保存挂载失败");
+    showError(error, editing ? "保存挂载失败" : "添加挂载失败");
   } finally {
     mappingSavingId.value = null;
   }
 }
 
-const removeMapping = async (mapping: PathMapping) => {
-  if (mapping.id == null) return;
-  if (!window.confirm(`删除挂载 ${mapping.mountPath}？`)) return;
+const confirmRemoveMapping = async () => {
+  const mapping = mappingDeleteTarget.value;
+  if (!mapping || mapping.id == null) return;
   message.value = "";
+  mappingSavingId.value = mapping.id;
   try {
     await deleteMapping(mapping.id);
-    mappings.value = await getMappings();
+    mappingDeleteTarget.value = null;
+    await loadMappings(false);
     showSuccess("挂载目录已删除");
   } catch (error) {
     showError(error, "删除挂载失败");
+  } finally {
+    mappingSavingId.value = null;
   }
+}
+
+const commitMappingOrder = async (nextMappings: PathMapping[], activeId: number) => {
+  const items = nextMappings
+      .filter(item => item.id != null)
+      .map((item, index) => ({id: item.id as number, order: (index + 1) * 10}));
+
+  message.value = "";
+  mappingSavingId.value = activeId;
+  mappingReorderLoading.value = true;
+  try {
+    await reorderMappings(items);
+    await loadMappings(false);
+  } catch (error) {
+    showError(error, "调整挂载顺序失败");
+  } finally {
+    mappingSavingId.value = null;
+    mappingReorderLoading.value = false;
+  }
+}
+
+const handleMappingDragStart = (mapping: PathMapping, event: DragEvent) => {
+  if (mapping.id == null || mappingBusy.value) {
+    event.preventDefault();
+    return;
+  }
+  draggingMappingId.value = mapping.id;
+  event.dataTransfer?.setData("text/plain", String(mapping.id));
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+}
+
+const updateMappingDragPlacement = (mapping: PathMapping, event: DragEvent) => {
+  if (mapping.id == null || draggingMappingId.value == null || draggingMappingId.value === mapping.id) return;
+  event.preventDefault();
+  const row = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  const rect = row?.getBoundingClientRect();
+  dragOverMappingId.value = mapping.id;
+  dragOverPlacement.value = rect && event.clientY > rect.top + rect.height / 2 ? "after" : "before";
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+}
+
+const handleMappingDrop = async (mapping: PathMapping, event: DragEvent) => {
+  updateMappingDragPlacement(mapping, event);
+  const sourceId = draggingMappingId.value;
+  const targetId = mapping.id;
+  const placement = dragOverPlacement.value;
+  draggingMappingId.value = null;
+  dragOverMappingId.value = null;
+  if (sourceId == null || targetId == null || sourceId === targetId) return;
+
+  const nextMappings = [...sortedMappings.value];
+  const sourceIndex = nextMappings.findIndex(item => item.id === sourceId);
+  const targetIndex = nextMappings.findIndex(item => item.id === targetId);
+  if (sourceIndex < 0 || targetIndex < 0) return;
+  const [source] = nextMappings.splice(sourceIndex, 1);
+  const targetIndexAfterRemove = nextMappings.findIndex(item => item.id === targetId);
+  const insertIndex = placement === "after" ? targetIndexAfterRemove + 1 : targetIndexAfterRemove;
+  nextMappings.splice(insertIndex, 0, source);
+  await commitMappingOrder(nextMappings, sourceId);
+}
+
+const handleMappingDragEnd = () => {
+  draggingMappingId.value = null;
+  dragOverMappingId.value = null;
 }
 
 const savePassword = async () => {
@@ -1088,38 +1249,173 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
               <p class="eyebrow">Mounts</p>
               <h2>挂载目录</h2>
             </div>
-          </div>
-
-          <form class="mapping-form" @submit.prevent="addMapping">
-            <input v-model="mappingForm.mountPath" placeholder="/repo" required>
-            <input v-model="mappingForm.folderPath" placeholder="D:\\Files" required>
-            <input v-model="mappingForm.remark" placeholder="备注">
-            <input v-model.number="mappingForm.order" type="number" placeholder="排序">
-            <label class="check-field">
-              <input v-model="mappingForm.writable" type="checkbox">
-              <span>可写</span>
-            </label>
-            <button class="primary-button" type="submit">
-              <Icon icon="action.add" />
-              添加
-            </button>
-          </form>
-
-          <div class="mapping-list">
-            <div v-for="mapping in mappings" :key="mapping.id" class="mapping-row">
-              <input v-model="mapping.mountPath" aria-label="挂载路径">
-              <input v-model="mapping.folderPath" aria-label="真实路径">
-              <input v-model="mapping.remark" aria-label="备注">
-              <input v-model.number="mapping.order" type="number" aria-label="排序">
-              <label class="check-field">
-                <input v-model="mapping.writable" type="checkbox">
-                <span>可写</span>
-              </label>
-              <button class="plain-button" :disabled="mappingSavingId === mapping.id" @click="saveMapping(mapping)">保存</button>
-              <button class="danger-button" @click="removeMapping(mapping)">删除</button>
+            <div class="panel-actions">
+              <button class="plain-button" :disabled="mappingBusy" @click="loadMappings(true)">
+                <Icon class="icon-motion-spin" :class="{'is-spinning': mappingRefreshing}" icon="action.refresh" />
+                刷新
+              </button>
+              <button class="primary-button" :disabled="mappingBusy" @click="openMappingDialog">
+                <Icon icon="action.add" />
+                添加挂载
+              </button>
             </div>
-            <div v-if="!mappings.length && !loading" class="empty">暂无挂载目录</div>
           </div>
+
+          <div class="mapping-summary">
+            <div>
+              <span>挂载数量</span>
+              <strong>{{ mappings.length }}</strong>
+            </div>
+            <div>
+              <span>可写目录</span>
+              <strong>{{ writableMappingCount }}</strong>
+            </div>
+            <div>
+              <span>只读目录</span>
+              <strong>{{ readonlyMappingCount }}</strong>
+            </div>
+            <div>
+              <span>配置文件</span>
+              <strong>{{ startupSettings?.mappingFile || "未读取" }}</strong>
+            </div>
+          </div>
+
+          <div class="mapping-list-heading">
+            <div>
+              <strong>当前挂载</strong>
+              <span>按显示顺序排列，修改后点击保存生效</span>
+            </div>
+            <span>{{ mappings.length }} 项</span>
+          </div>
+
+          <div class="mapping-table" role="table" aria-label="当前挂载目录">
+            <div class="mapping-table-head" role="row">
+              <span>顺序</span>
+              <span>虚拟路径</span>
+              <span>本地/容器目录</span>
+              <span>备注</span>
+              <span>权限</span>
+              <span>操作</span>
+            </div>
+            <div
+                v-for="mapping in sortedMappings"
+                :key="mapping.id"
+                class="mapping-table-row"
+                :class="{
+                  readonly: !mapping.writable,
+                  dragging: draggingMappingId === mapping.id,
+                  'drop-before': dragOverMappingId === mapping.id && dragOverPlacement === 'before',
+                  'drop-after': dragOverMappingId === mapping.id && dragOverPlacement === 'after'
+                }"
+                role="row"
+                @dragover="updateMappingDragPlacement(mapping, $event)"
+                @drop="handleMappingDrop(mapping, $event)">
+              <div
+                  class="mapping-handle-cell"
+                  title="拖动调整顺序"
+                  :draggable="!mappingBusy"
+                  @dragstart="handleMappingDragStart(mapping, $event)"
+                  @dragend="handleMappingDragEnd">
+                <Icon icon="action.drag-handle" />
+              </div>
+              <div class="mapping-cell primary" :title="mapping.mountPath">
+                <strong>{{ mapping.mountPath }}</strong>
+              </div>
+              <div class="mapping-cell" :title="mapping.folderPath">
+                <span>{{ mapping.folderPath }}</span>
+              </div>
+              <div class="mapping-cell" :class="{muted: !mapping.remark}" :title="mapping.remark || '无备注'">
+                <span>{{ mapping.remark || "无备注" }}</span>
+              </div>
+              <div class="mapping-access-cell">
+                <span class="access-badge" :class="{readonly: !mapping.writable}">
+                  {{ mapping.writable ? "可写" : "只读" }}
+                </span>
+              </div>
+              <div class="mapping-row-actions">
+                <button class="plain-button" :disabled="mappingBusy" @click="openEditMappingDialog(mapping)">
+                  <Icon icon="action.edit" />
+                  修改
+                </button>
+                <button class="danger-button" :disabled="mappingBusy" @click="openMappingDeleteConfirm(mapping)">
+                  <Icon icon="action.trash" />
+                  删除
+                </button>
+              </div>
+            </div>
+            <div v-if="!mappings.length && !loading" class="mapping-empty">
+              <Icon icon="file.folder" />
+              <strong>暂无挂载目录</strong>
+              <span>添加第一个挂载后会显示在文件树根目录。</span>
+            </div>
+          </div>
+
+          <operation-panel-shell
+              v-if="mappingDialogOpen"
+              as="form"
+              icon="action.new-folder"
+              :title="mappingDialogTitle"
+              :subtitle="mappingDialogSubtitle"
+              width="properties"
+              @close="closeMappingDialog"
+              @submit="submitMappingDialog">
+              <div class="mapping-dialog-body">
+                <label class="setting-field wide">
+                  <span>虚拟路径</span>
+                  <input v-model="mappingForm.mountPath" placeholder="/files" required>
+                </label>
+                <label class="setting-field wide">
+                  <span>本地/容器目录</span>
+                  <input v-model="mappingForm.folderPath" placeholder="D:\\Files 或 /mnt/files" required>
+                </label>
+                <label class="setting-field wide">
+                  <span>备注</span>
+                  <input v-model="mappingForm.remark" placeholder="可选">
+                </label>
+                <label class="switch-field">
+                  <input v-model="mappingForm.writable" type="checkbox">
+                  <span class="switch-track"><span></span></span>
+                  <span class="switch-copy">
+                    <strong>允许写入</strong>
+                    <small>关闭后上传、编辑、删除等写操作会被阻止</small>
+                  </span>
+                </label>
+              </div>
+              <template #actions>
+                <button class="plain-button" type="button" :disabled="mappingBusy" @click="closeMappingDialog">取消</button>
+                <button class="primary-button" :disabled="mappingBusy" type="submit">
+                  <Icon :icon="mappingDialogMode === 'edit' ? 'action.save' : 'action.add'" />
+                  {{ mappingDialogSubmitText }}
+                </button>
+              </template>
+          </operation-panel-shell>
+
+          <operation-panel-shell
+              v-if="mappingDeleteTarget"
+              icon="action.delete"
+              variant="red"
+              width="delete"
+              title="删除挂载？"
+              :subtitle="`将移除 ${mappingDeleteTarget.mountPath} 的挂载配置，不会删除真实目录。`"
+              @close="closeMappingDeleteConfirm">
+            <div class="mapping-delete-summary">
+              <div>
+                <span>虚拟路径</span>
+                <strong>{{ mappingDeleteTarget.mountPath }}</strong>
+              </div>
+              <div>
+                <span>本地/容器目录</span>
+                <strong>{{ mappingDeleteTarget.folderPath }}</strong>
+              </div>
+            </div>
+            <template #actions>
+              <button class="plain-button" type="button" :disabled="mappingBusy" @click="closeMappingDeleteConfirm">取消</button>
+              <button class="danger-button" type="button" :disabled="mappingBusy" @click="confirmRemoveMapping">
+                <Icon icon="action.trash" />
+                确认删除
+              </button>
+            </template>
+          </operation-panel-shell>
         </section>
 
         <section v-if="activeSettingsPage === 'index'" id="index" class="settings-panel">
@@ -1525,22 +1821,236 @@ select:disabled {
   @apply min-w-0 truncate;
 }
 
-.mapping-form,
-.mapping-row,
 .password-form {
   @apply grid gap-2 items-center;
 }
 
-.mapping-form {
-  grid-template-columns: 1fr 1.5fr 1fr 5.5rem 5rem 5.5rem;
+.mapping-summary {
+  @apply mb-4 grid gap-3;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.mapping-list {
-  @apply mt-3 grid gap-2;
+.mapping-summary > div {
+  @apply min-w-0 rounded-md border px-3 py-2;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-muted);
 }
 
-.mapping-row {
-  grid-template-columns: 1fr 1.5fr 1fr 5.5rem 5rem 4.75rem 4.75rem;
+.mapping-summary span {
+  @apply block truncate text-xs;
+  color: var(--app-text-subtle);
+}
+
+.mapping-summary strong {
+  @apply mt-1 block truncate text-sm font-semibold;
+  color: var(--app-text);
+}
+
+.mapping-list-heading strong {
+  @apply block truncate text-sm font-semibold;
+  color: var(--app-text);
+}
+
+.mapping-list-heading span {
+  @apply block truncate text-xs;
+  color: var(--app-text-subtle);
+}
+
+.mapping-list-heading {
+  @apply mb-2 flex min-w-0 items-end justify-between gap-3 px-1;
+}
+
+.mapping-list-heading > span {
+  @apply shrink-0 text-xs;
+}
+
+.mapping-table {
+  @apply min-w-0 overflow-x-auto rounded-md border;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-muted);
+}
+
+.mapping-table-head,
+.mapping-table-row {
+  @apply grid min-w-[54rem] items-center gap-2;
+  grid-template-columns: 4.75rem minmax(8rem, 0.8fr) minmax(13rem, 1.4fr) minmax(8rem, 0.7fr) 6.5rem 11rem;
+}
+
+.mapping-table-head {
+  @apply min-h-11 border-b px-3 py-3 text-xs font-semibold;
+  border-color: var(--app-divider);
+  color: var(--app-text-subtle);
+  background: var(--app-panel-solid);
+}
+
+.mapping-table-row {
+  @apply relative border-b px-3 py-2 transition last:border-b-0;
+  border-color: var(--app-divider);
+  background: var(--app-control-solid);
+}
+
+.mapping-table-row.dragging {
+  @apply opacity-55;
+}
+
+.mapping-table-row.drop-before::before,
+.mapping-table-row.drop-after::after {
+  @apply absolute left-0 right-0 h-0.5;
+  content: "";
+  background: var(--app-accent, #2563eb);
+}
+
+.mapping-table-row.drop-before::before {
+  top: 0;
+}
+
+.mapping-table-row.drop-after::after {
+  bottom: 0;
+}
+
+.mapping-table-row:hover {
+  background: var(--app-control);
+}
+
+.mapping-table-row.readonly {
+  box-shadow: inset 3px 0 0 var(--app-warning);
+}
+
+.mapping-handle-cell {
+  @apply flex h-8 w-8 cursor-grab items-center justify-center rounded-md;
+  color: var(--app-text-subtle);
+}
+
+.mapping-handle-cell:active {
+  @apply cursor-grabbing;
+}
+
+.mapping-cell {
+  @apply min-w-0 truncate text-sm;
+  color: var(--app-text-muted);
+}
+
+.mapping-cell span {
+  @apply truncate;
+}
+
+.mapping-cell strong {
+  @apply truncate font-semibold;
+  color: var(--app-text);
+}
+
+.mapping-cell.muted {
+  color: var(--app-text-subtle);
+}
+
+.access-badge {
+  @apply inline-flex h-7 items-center rounded-full px-2.5 text-xs font-semibold;
+  background: var(--app-success-soft);
+  color: var(--app-success-text);
+}
+
+.access-badge.readonly {
+  background: var(--app-warning-soft);
+  color: var(--app-warning-text);
+}
+
+.mapping-access-cell {
+  @apply flex min-w-0 items-center gap-2;
+}
+
+.mapping-row-actions {
+  @apply flex items-center justify-end gap-2;
+}
+
+.mapping-row-actions .plain-button,
+.mapping-row-actions .danger-button {
+  @apply px-2.5;
+}
+
+.mapping-dialog-body {
+  @apply grid gap-3;
+}
+
+.switch-field {
+  @apply flex cursor-pointer items-start gap-3 rounded-md border p-3 transition;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+}
+
+.switch-field:hover {
+  background: var(--app-control-hover);
+}
+
+.switch-field input {
+  @apply sr-only;
+}
+
+.switch-track {
+  @apply mt-0.5 flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition;
+  background: var(--app-control-hover);
+}
+
+.switch-track span {
+  @apply h-4 w-4 rounded-full transition;
+  background: var(--app-panel-solid);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--app-shadow, rgba(15, 23, 42, 0.2)) 28%, transparent);
+}
+
+.switch-field input:checked + .switch-track {
+  background: var(--app-accent, #2563eb);
+}
+
+.switch-field input:checked + .switch-track span {
+  transform: translateX(1rem);
+}
+
+.switch-field:focus-within {
+  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
+.switch-copy {
+  @apply flex min-w-0 flex-col gap-1 text-xs;
+  color: var(--app-text-subtle);
+}
+
+.switch-copy strong {
+  @apply text-sm font-medium;
+  color: var(--app-text);
+}
+
+.mapping-delete-summary {
+  @apply grid gap-2 rounded-md border p-3 text-xs;
+  border-color: var(--app-danger-border);
+  background: var(--app-danger-soft);
+  color: var(--app-danger-text);
+}
+
+.mapping-delete-summary div {
+  @apply grid min-w-0 gap-1;
+}
+
+.mapping-delete-summary span {
+  @apply font-medium;
+}
+
+.mapping-delete-summary strong {
+  @apply truncate text-sm;
+}
+
+.mapping-empty {
+  @apply grid place-items-center gap-1 rounded-md border border-dashed p-8 text-center;
+  border-color: var(--app-border-soft);
+  color: var(--app-text-subtle);
+}
+
+.mapping-empty .icon {
+  @apply mb-1 h-10 w-10;
+  color: var(--app-accent, #2563eb);
+}
+
+.mapping-empty strong {
+  @apply text-sm;
+  color: var(--app-text);
 }
 
 .check-field {
@@ -1698,10 +2208,10 @@ select:disabled {
     grid-template-columns: 1fr;
   }
 
-  .mapping-form,
-  .mapping-row {
+  .mapping-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
 }
 
 @media (max-width: 760px) {
@@ -1728,8 +2238,7 @@ select:disabled {
 
   .form-grid,
   .status-grid,
-  .mapping-form,
-  .mapping-row,
+  .mapping-summary,
   .password-form,
   .pending-row {
     grid-template-columns: 1fr;
