@@ -56,8 +56,8 @@ const updateRenameDraft = (event: Event) => {
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) emit("update:renameDraft", target.value);
 }
 
-const estimateRenameWidth = (text: string) => {
-  const units = Array.from(text || " ").reduce((total, char) => {
+const estimateTextUnits = (text: string) => {
+  return Array.from(text || " ").reduce((total, char) => {
     const code = char.codePointAt(0) ?? 0;
     if (code >= 0x2e80 && code <= 0x9fff) return total + 2;
     if (code >= 0xac00 && code <= 0xd7af) return total + 2;
@@ -66,7 +66,28 @@ const estimateRenameWidth = (text: string) => {
     if ("mwMW@#%&".includes(char)) return total + 1.35;
     return total + 1;
   }, 0);
+}
+
+const estimateRenameWidth = (text: string) => {
+  const units = estimateTextUnits(text);
   return Math.max(2.5, Math.min(96, units + 1.25));
+}
+
+const estimateRenameRows = (text: string, maxLineUnits: number) => {
+  const units = estimateTextUnits(text);
+  const safeLineUnits = Math.max(maxLineUnits - 0.5, 1);
+  return Math.max(1, Math.min(6, Math.ceil(units / safeLineUnits)));
+}
+
+const estimateFloatingRename = (text: string, mode: ExplorerViewMode, iconSize: ExplorerIconSize) => {
+  const units = estimateTextUnits(text);
+  const maxWidth = mode === "tiles"
+      ? iconSize === "large" ? 22 : 20
+      : iconSize === "large" ? 18 : iconSize === "small" ? 12 : 14;
+  const minWidth = mode === "tiles" ? 10 : 8;
+  const width = Math.min(Math.max(units + 1.5, minWidth), maxWidth);
+  const rows = estimateRenameRows(text, width);
+  return {width, rows};
 }
 
 const highlightedNameSegments = computed(() => {
@@ -93,8 +114,21 @@ const highlightedNameSegments = computed(() => {
 });
 
 const renameControlStyle = computed(() => {
-  if (!props.renaming || props.viewMode !== "details") return undefined;
-  return {"--rename-input-width": `${estimateRenameWidth(props.renameDraft || props.entry.name)}ch`};
+  if (!props.renaming) return undefined;
+  const text = props.renameDraft || props.entry.name;
+  if (props.viewMode === "details" || props.viewMode === "list") {
+    return {"--rename-input-width": `${estimateRenameWidth(text)}ch`};
+  }
+  const floating = estimateFloatingRename(text, props.viewMode, props.iconSize);
+  return {
+    "--rename-input-width": `${floating.width}ch`
+  };
+});
+
+const renameTextareaRows = computed(() => {
+  if (!props.renaming || (props.viewMode !== "icons" && props.viewMode !== "tiles")) return 1;
+  const text = props.renameDraft || props.entry.name;
+  return estimateFloatingRename(text, props.viewMode, props.iconSize).rows;
 });
 </script>
 
@@ -133,13 +167,13 @@ const renameControlStyle = computed(() => {
       </div>
       <div class="entry-main">
         <textarea
-            v-if="renaming && viewMode === 'icons'"
+            v-if="renaming && (viewMode === 'icons' || viewMode === 'tiles')"
             :ref="element => emit('rename-input-ref', element)"
             :value="renameDraft"
-            class="entry-rename-input entry-rename-textarea"
+            class="entry-rename-input entry-rename-textarea entry-rename-floating"
             :style="renameControlStyle"
             :disabled="renameSubmitting"
-            rows="3"
+            :rows="renameTextareaRows"
             spellcheck="false"
             @input="updateRenameDraft"
             @click.stop
@@ -230,27 +264,19 @@ const renameControlStyle = computed(() => {
 }
 
 .entry-item.view-icons {
-  @apply flex h-32 flex-col items-center justify-start gap-2 p-2 text-center;
+  @apply flex h-32 flex-col items-center justify-start gap-1.5 px-2 pb-3 pt-2 text-center;
 }
 
 .entry-item.view-icons[data-renaming="true"] {
-  @apply z-10 h-auto min-h-32;
+  @apply z-20;
 }
 
 .entry-item.view-icons.explorer-size-small {
   @apply h-24;
 }
 
-.entry-item.view-icons.explorer-size-small[data-renaming="true"] {
-  @apply h-auto min-h-24;
-}
-
 .entry-item.view-icons.explorer-size-large {
   @apply h-40;
-}
-
-.entry-item.view-icons.explorer-size-large[data-renaming="true"] {
-  @apply h-auto min-h-40;
 }
 
 .entry-item.view-tiles {
@@ -323,11 +349,11 @@ const renameControlStyle = computed(() => {
 }
 
 .entry-item.view-icons .entry-main {
-  @apply w-full flex-none flex-col gap-0;
+  @apply w-full flex-none flex-col items-center gap-1;
 }
 
 .entry-item.view-tiles .entry-main {
-  @apply flex-col items-start gap-0 self-end;
+  @apply flex-col items-start gap-1 self-end;
 }
 
 .entry-item.view-details .entry-main,
@@ -336,7 +362,11 @@ const renameControlStyle = computed(() => {
 }
 
 .entry-name {
-  @apply block w-full min-w-0 max-w-full truncate;
+  @apply block min-w-0 max-w-full truncate;
+}
+
+.entry-item.view-list .entry-name {
+  @apply w-auto;
 }
 
 .entry-name .match {
@@ -361,12 +391,12 @@ const renameControlStyle = computed(() => {
 
 .entry-item.view-details .entry-rename-input,
 .entry-item.view-list .entry-rename-input {
-  @apply h-6 w-full;
+  @apply h-6 w-full px-2.5;
 }
 
 .entry-item.view-details .entry-rename-input {
   width: min(var(--rename-input-width, 100%), 100%);
-  min-width: 2.5ch;
+  min-width: 4ch;
   max-width: 100%;
 }
 
@@ -378,34 +408,69 @@ const renameControlStyle = computed(() => {
 }
 
 .entry-item.view-tiles .entry-rename-input {
-  @apply h-6 w-full max-w-full;
+  @apply h-auto w-auto max-w-full;
+}
+
+.entry-item.view-icons .entry-rename-input,
+.entry-item.view-tiles .entry-rename-input {
+  @apply absolute z-30 resize-none whitespace-pre-wrap break-words;
+  background: var(--app-control-solid);
+  overflow: hidden;
 }
 
 .entry-item.view-icons .entry-rename-input {
-  @apply mx-auto w-full resize-none text-center;
-  min-height: 3.75rem;
-  max-height: 5.25rem;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
+  left: 50%;
+  bottom: 0.35rem;
+  transform: translateX(-50%);
+  text-align: center;
+  width: min(var(--rename-input-width, 12ch), calc(100% - 1rem));
+  min-width: 8ch;
+  max-width: calc(100% - 1rem);
 }
 
-.entry-item.view-icons.explorer-size-small .entry-rename-input {
-  min-height: 2.75rem;
-  max-height: 3.75rem;
+.entry-item.view-tiles .entry-rename-input {
+  left: calc(3.5rem + 0.75rem);
+  bottom: 0.35rem;
+  text-align: left;
+  width: min(var(--rename-input-width, 16ch), calc(100% - 4.25rem));
+  min-width: 10ch;
+  max-width: calc(100% - 4.25rem);
 }
 
-.entry-item.view-icons.explorer-size-large .entry-rename-input {
-  min-height: 4.5rem;
-  max-height: 6.25rem;
+.entry-item.view-icons .entry-rename-input,
+.entry-item.view-tiles .entry-rename-input {
+  box-sizing: border-box;
+}
+
+.entry-item.view-icons .entry-rename-input {
+  padding-inline: 0.75rem;
+  padding-block: 0.4rem;
+}
+
+.entry-item.view-tiles .entry-rename-input {
+  padding-inline: 0.75rem;
+  padding-block: 0.4rem;
 }
 
 .entry-rename-textarea {
   scrollbar-width: thin;
 }
 
+@supports (field-sizing: content) {
+  .entry-item.view-icons .entry-rename-input,
+  .entry-item.view-tiles .entry-rename-input {
+    width: auto;
+    field-sizing: content;
+  }
+}
+
 .entry-item.view-icons .entry-name {
-  @apply line-clamp-2 whitespace-normal break-all;
+  @apply line-clamp-2 whitespace-normal break-all leading-tight;
+}
+
+.entry-item.view-icons[data-renaming="true"] .entry-meta,
+.entry-item.view-tiles[data-renaming="true"] .entry-tile-meta {
+  @apply opacity-0;
 }
 
 .entry-meta,
@@ -437,5 +502,20 @@ const renameControlStyle = computed(() => {
 
 .entry-tile-meta {
   @apply col-start-2 self-start;
+}
+
+.entry-item.view-list .entry-main {
+  @apply grid min-w-0 items-center gap-x-2;
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+
+.entry-item.view-list .entry-meta {
+  @apply shrink-0 whitespace-nowrap;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.entry-item.view-icons .entry-meta {
+  @apply text-[11px] leading-none;
 }
 </style>
