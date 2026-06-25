@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, nextTick, watch} from "vue";
+import {computed, nextTick, onBeforeUnmount, watch} from "vue";
 import {useFileStore} from "../../store";
 import {useDetailsColumns} from "../../composables/useDetailsColumns.ts";
 import {useExplorerContextMenu} from "../../composables/useExplorerContextMenu.ts";
@@ -35,6 +35,7 @@ import type {DetailsColumnKey, ExplorerEntry} from "./types.ts";
 type RenamePayload = {
   entry: ExplorerEntry;
   name: string;
+  complete?: (success: boolean) => void;
 }
 
 type DropEntriesPayload = {
@@ -101,8 +102,23 @@ const props = withDefaults(defineProps<{
 })
 
 const fileStore = useFileStore();
+const SLOW_RENAME_DELAY_MS = 560;
+let delayedRenameTimer: number | undefined;
+let delayedRenamePath = "";
+
+const clearDelayedRename = () => {
+  if (delayedRenameTimer !== undefined) {
+    window.clearTimeout(delayedRenameTimer);
+    delayedRenameTimer = undefined;
+  }
+  delayedRenamePath = "";
+}
+
 let closeContextMenuHandler = () => {};
-const closeContextMenu = () => closeContextMenuHandler();
+const closeContextMenu = () => {
+  clearDelayedRename();
+  closeContextMenuHandler();
+}
 
 const {
   viewportRef,
@@ -284,7 +300,17 @@ const {
   ensureEntrySelected,
   closeContextMenu,
   focusViewport,
-  submitRename: payload => emit("rename", payload)
+  submitRename: payload => new Promise<boolean>(resolve => {
+    let completed = false;
+    emit("rename", {
+      ...payload,
+      complete: success => {
+        if (completed) return;
+        completed = true;
+        resolve(success);
+      }
+    });
+  })
 });
 
 const {
@@ -482,6 +508,7 @@ const selectPathForRename = async (path: string) => {
 }
 
 const activateViewport = (event: MouseEvent) => {
+  clearDelayedRename();
   if (consumeMarqueeClickSuppression(event)) {
     event.preventDefault();
     return;
@@ -492,6 +519,50 @@ const activateViewport = (event: MouseEvent) => {
 }
 
 const primarySelected = () => firstSelectedEntry();
+
+const selectEntryFromPointer = (entry: ExplorerEntry, event: MouseEvent) => {
+  clearDelayedRename();
+  selectEntry(entry, event);
+}
+
+const canSlowClickRename = (event: MouseEvent) => {
+  return event.button === 0
+      && event.detail === 1
+      && !event.altKey
+      && !event.ctrlKey
+      && !event.metaKey
+      && !event.shiftKey
+      && !selectionBox.active
+      && !renamingPath.value;
+}
+
+const handleEntryNameClick = (event: MouseEvent, entry: ExplorerEntry) => {
+  clearDelayedRename();
+  if (!canSlowClickRename(event)
+      || selectedPaths.value.length !== 1
+      || selectedPaths.value[0] !== entry.path
+      || focusedPath.value !== entry.path) {
+    selectEntry(entry, event);
+    return;
+  }
+
+  closeContextMenu();
+  focusViewport();
+  delayedRenamePath = entry.path;
+  delayedRenameTimer = window.setTimeout(() => {
+    delayedRenameTimer = undefined;
+    if (delayedRenamePath !== entry.path
+        || renamingPath.value
+        || selectedPaths.value.length !== 1
+        || selectedPaths.value[0] !== entry.path
+        || focusedPath.value !== entry.path) {
+      clearDelayedRename();
+      return;
+    }
+    delayedRenamePath = "";
+    startRename(entry);
+  }, SLOW_RENAME_DELAY_MS);
+}
 
 
 const {
@@ -607,18 +678,41 @@ const {handleKeyDown} = useExplorerKeyboard({
 });
 
 const handleAuxClick = (event: MouseEvent, entry: ExplorerEntry) => {
+  clearDelayedRename();
   if (event.button !== 1 || entry.type !== "folder") return;
   event.preventDefault();
   ensureEntrySelected(entry);
   openEntryInNewTab(entry);
 }
 
+const openEntryFromPointer = (entry: ExplorerEntry) => {
+  clearDelayedRename();
+  void openEntry(entry);
+}
+
+const openEntryContextMenu = (event: MouseEvent, entry: ExplorerEntry) => {
+  clearDelayedRename();
+  openContextMenu(event, entry);
+}
+
+const beginEntryDragFromPointer = (event: DragEvent, entry: ExplorerEntry) => {
+  clearDelayedRename();
+  beginEntryDrag(event, entry);
+}
+
+const handleExplorerKeyDown = (event: KeyboardEvent) => {
+  if (!renamingPath.value) clearDelayedRename();
+  void handleKeyDown(event);
+}
+
+onBeforeUnmount(clearDelayedRename);
+
 useExplorerLifecycle({
   initialize: async () => {
     fileStore.ensureActiveTab();
     await loadFolder(fileStore.currentPath || "/");
   },
-  handleKeyDown,
+  handleKeyDown: handleExplorerKeyDown,
   closeContextMenu,
   handleSelectionMove,
   finishMarqueeSelection,
@@ -724,15 +818,16 @@ defineExpose({
             :size-text="formatSize(entry.size)"
             :tile-meta-text="`${formatDate(entry.modified)} · ${formatSize(entry.size)}`"
             :search-highlight-text="searchKeyword"
-            @select="selectEntry(entry, $event)"
+            @select="selectEntryFromPointer(entry, $event)"
+            @name-click="handleEntryNameClick($event, entry)"
             @aux-click="handleAuxClick($event, entry)"
-            @open="openEntry(entry)"
-            @drag-start="beginEntryDrag($event, entry)"
+            @open="openEntryFromPointer(entry)"
+            @drag-start="beginEntryDragFromPointer($event, entry)"
             @drag-end="resetEntryDrag"
             @drag-over="dragOverEntry($event, entry)"
             @drag-leave="dragLeaveEntry($event, entry)"
             @drop="dropOnEntry($event, entry)"
-            @context-menu="openContextMenu($event, entry)"
+            @context-menu="openEntryContextMenu($event, entry)"
             @thumbnail-error="handleThumbnailError(entry)"
             @rename-input-ref="element => setRenameInputRef(entry.path, element)"
             @update:rename-draft="renameDraft = $event"

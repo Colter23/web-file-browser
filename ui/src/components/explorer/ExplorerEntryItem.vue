@@ -35,6 +35,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   (e: "select", event: MouseEvent): void;
+  (e: "name-click", event: MouseEvent): void;
   (e: "aux-click", event: MouseEvent): void;
   (e: "open"): void;
   (e: "drag-start", event: DragEvent): void;
@@ -52,7 +53,20 @@ const emit = defineEmits<{
 
 const updateRenameDraft = (event: Event) => {
   const target = event.target;
-  if (target instanceof HTMLInputElement) emit("update:renameDraft", target.value);
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) emit("update:renameDraft", target.value);
+}
+
+const estimateRenameWidth = (text: string) => {
+  const units = Array.from(text || " ").reduce((total, char) => {
+    const code = char.codePointAt(0) ?? 0;
+    if (code >= 0x2e80 && code <= 0x9fff) return total + 2;
+    if (code >= 0xac00 && code <= 0xd7af) return total + 2;
+    if (code >= 0xff00 && code <= 0xffef) return total + 2;
+    if ("ilI|.,;:'`!".includes(char)) return total + 0.45;
+    if ("mwMW@#%&".includes(char)) return total + 1.35;
+    return total + 1;
+  }, 0);
+  return Math.max(2.5, Math.min(96, units + 1.25));
 }
 
 const highlightedNameSegments = computed(() => {
@@ -77,6 +91,11 @@ const highlightedNameSegments = computed(() => {
   if (cursor < name.length) segments.push({text: name.slice(cursor), matched: false});
   return segments.length ? segments : [{text: name, matched: false}];
 });
+
+const renameControlStyle = computed(() => {
+  if (!props.renaming || props.viewMode !== "details") return undefined;
+  return {"--rename-input-width": `${estimateRenameWidth(props.renameDraft || props.entry.name)}ch`};
+});
 </script>
 
 <template>
@@ -90,6 +109,7 @@ const highlightedNameSegments = computed(() => {
       :aria-selected="selected"
       :tabindex="focused ? 0 : -1"
       :draggable="!renaming"
+      :data-renaming="renaming ? 'true' : undefined"
       @click.stop="emit('select', $event)"
       @auxclick.stop="emit('aux-click', $event)"
       @dblclick.stop="emit('open')"
@@ -112,12 +132,31 @@ const highlightedNameSegments = computed(() => {
         <file-type-icon v-else :kind="iconKind" />
       </div>
       <div class="entry-main">
+        <textarea
+            v-if="renaming && viewMode === 'icons'"
+            :ref="element => emit('rename-input-ref', element)"
+            :value="renameDraft"
+            class="entry-rename-input entry-rename-textarea"
+            :style="renameControlStyle"
+            :disabled="renameSubmitting"
+            rows="3"
+            spellcheck="false"
+            @input="updateRenameDraft"
+            @click.stop
+            @mousedown.stop
+            @dblclick.stop
+            @keydown.enter.prevent="emit('commit-rename')"
+            @keydown.esc.prevent.stop="emit('cancel-rename')"
+            @blur="emit('commit-rename')"></textarea>
         <input
-            v-if="renaming"
+            v-else-if="renaming"
             :ref="element => emit('rename-input-ref', element)"
             :value="renameDraft"
             class="entry-rename-input"
+            :style="renameControlStyle"
             :disabled="renameSubmitting"
+            autocomplete="off"
+            spellcheck="false"
             @input="updateRenameDraft"
             @click.stop
             @mousedown.stop
@@ -125,7 +164,7 @@ const highlightedNameSegments = computed(() => {
             @keydown.enter.prevent="emit('commit-rename')"
             @keydown.esc.prevent.stop="emit('cancel-rename')"
             @blur="emit('commit-rename')">
-        <span v-else class="entry-name">
+        <span v-else class="entry-name" @click.stop="emit('name-click', $event)">
           <span
               v-for="(segment, index) in highlightedNameSegments"
               :key="`${index}-${segment.text}`"
@@ -194,12 +233,24 @@ const highlightedNameSegments = computed(() => {
   @apply flex h-32 flex-col items-center justify-start gap-2 p-2 text-center;
 }
 
+.entry-item.view-icons[data-renaming="true"] {
+  @apply z-10 h-auto min-h-32;
+}
+
 .entry-item.view-icons.explorer-size-small {
   @apply h-24;
 }
 
+.entry-item.view-icons.explorer-size-small[data-renaming="true"] {
+  @apply h-auto min-h-24;
+}
+
 .entry-item.view-icons.explorer-size-large {
   @apply h-40;
+}
+
+.entry-item.view-icons.explorer-size-large[data-renaming="true"] {
+  @apply h-auto min-h-40;
 }
 
 .entry-item.view-tiles {
@@ -268,15 +319,20 @@ const highlightedNameSegments = computed(() => {
 }
 
 .entry-main {
-  @apply flex min-w-0 items-center gap-2;
+  @apply flex min-w-0 flex-1 items-center gap-2;
 }
 
 .entry-item.view-icons .entry-main {
-  @apply flex-col gap-0;
+  @apply w-full flex-none flex-col gap-0;
 }
 
 .entry-item.view-tiles .entry-main {
   @apply flex-col items-start gap-0 self-end;
+}
+
+.entry-item.view-details .entry-main,
+.entry-item.view-list .entry-main {
+  @apply min-w-0 flex-1;
 }
 
 .entry-name {
@@ -295,21 +351,57 @@ const highlightedNameSegments = computed(() => {
 }
 
 .entry-rename-input {
-  @apply h-6 min-w-0 rounded border px-1 text-sm outline-none;
+  @apply min-w-0 rounded-sm border px-1 text-sm leading-5 outline-none;
   background: var(--app-control-solid);
   color: var(--app-text);
   border-color: var(--app-accent, #2563eb);
-  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+  box-shadow: 0 0 0 1px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+  user-select: text;
 }
 
 .entry-item.view-details .entry-rename-input,
-.entry-item.view-list .entry-rename-input,
+.entry-item.view-list .entry-rename-input {
+  @apply h-6 w-full;
+}
+
+.entry-item.view-details .entry-rename-input {
+  width: min(var(--rename-input-width, 100%), 100%);
+  min-width: 2.5ch;
+  max-width: 100%;
+}
+
+@supports (field-sizing: content) {
+  .entry-item.view-details .entry-rename-input {
+    width: auto;
+    field-sizing: content;
+  }
+}
+
 .entry-item.view-tiles .entry-rename-input {
-  @apply w-full;
+  @apply h-6 w-full max-w-full;
 }
 
 .entry-item.view-icons .entry-rename-input {
-  @apply w-full text-center;
+  @apply mx-auto w-full resize-none text-center;
+  min-height: 3.75rem;
+  max-height: 5.25rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.entry-item.view-icons.explorer-size-small .entry-rename-input {
+  min-height: 2.75rem;
+  max-height: 3.75rem;
+}
+
+.entry-item.view-icons.explorer-size-large .entry-rename-input {
+  min-height: 4.5rem;
+  max-height: 6.25rem;
+}
+
+.entry-rename-textarea {
+  scrollbar-width: thin;
 }
 
 .entry-item.view-icons .entry-name {

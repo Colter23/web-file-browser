@@ -7,15 +7,19 @@ type RenamePayload = {
   name: string;
 }
 
+type MaybePromise<T = unknown> = T | Promise<T>;
+
 type ExplorerRenameOptions = {
   entryByPath: (path: string) => ExplorerEntry | undefined;
   ensureEntrySelected: (entry: ExplorerEntry) => void;
   closeContextMenu: () => void;
   focusViewport: () => void;
-  submitRename: (payload: RenamePayload) => void;
+  submitRename: (payload: RenamePayload) => MaybePromise<boolean | void>;
 }
 
-const selectRenameText = (input: HTMLInputElement, entry: ExplorerEntry) => {
+type RenameEditElement = HTMLInputElement | HTMLTextAreaElement;
+
+const selectRenameText = (input: RenameEditElement, entry: ExplorerEntry) => {
   if (entry.type === "folder") {
     input.select();
     return;
@@ -28,8 +32,10 @@ const selectRenameText = (input: HTMLInputElement, entry: ExplorerEntry) => {
 }
 
 const resolveInputElement = (element: Element | ComponentPublicInstance | null) => {
-  if (element instanceof HTMLInputElement) return element;
-  if (element && "$el" in element && element.$el instanceof HTMLInputElement) return element.$el;
+  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) return element;
+  if (element && "$el" in element && (element.$el instanceof HTMLInputElement || element.$el instanceof HTMLTextAreaElement)) {
+    return element.$el;
+  }
   return null;
 }
 
@@ -37,7 +43,14 @@ export const useExplorerRename = ({entryByPath, ensureEntrySelected, closeContex
   const renamingPath = ref("");
   const renameDraft = ref("");
   const renameSubmitting = ref(false);
-  const renameInputRefs = new Map<string, HTMLInputElement>();
+  const renameInputRefs = new Map<string, RenameEditElement>();
+
+  const focusRenameInput = async (entry: ExplorerEntry, selectText = true) => {
+    await nextTick();
+    const input = renameInputRefs.get(entry.path);
+    input?.focus({preventScroll: true});
+    if (input && selectText) selectRenameText(input, entry);
+  }
 
   const setRenameInputRef = (path: string, element: Element | ComponentPublicInstance | null) => {
     const input = resolveInputElement(element);
@@ -54,11 +67,7 @@ export const useExplorerRename = ({entryByPath, ensureEntrySelected, closeContex
     closeContextMenu();
     renamingPath.value = entry.path;
     renameDraft.value = entry.name;
-    nextTick(() => {
-      const input = renameInputRefs.get(entry.path);
-      input?.focus();
-      if (input) selectRenameText(input, entry);
-    });
+    void focusRenameInput(entry);
   }
 
   const cancelRename = () => {
@@ -78,9 +87,15 @@ export const useExplorerRename = ({entryByPath, ensureEntrySelected, closeContex
     }
     renameSubmitting.value = true;
     try {
-      submitRename({entry, name: nextName});
+      const accepted = await submitRename({entry, name: nextName});
+      if (accepted === false) {
+        renameSubmitting.value = false;
+        await focusRenameInput(entry);
+        return;
+      }
       renamingPath.value = "";
       renameDraft.value = "";
+      void nextTick(focusViewport);
     } finally {
       renameSubmitting.value = false;
     }

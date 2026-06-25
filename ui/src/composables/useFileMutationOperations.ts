@@ -16,6 +16,7 @@ import {joinPath, parentPath} from "../utils/file-path.ts";
 export type RenamePayload = {
   entry: ExplorerEntry;
   name: string;
+  complete?: (success: boolean) => void;
 }
 
 type FileMutationOperationsOptions = {
@@ -110,7 +111,7 @@ export const useFileMutationOperations = ({
     startExplorerRename();
   }
 
-  const renameSelected = async ({entry, name}: RenamePayload) => {
+  const renameSelected = async ({entry, name, complete}: RenamePayload) => {
     const nextName = name.trim();
     if (!nextName || nextName === entry.name) return;
     try {
@@ -119,8 +120,10 @@ export const useFileMutationOperations = ({
       await refreshCurrent();
       const selected = await selectPath(renamed.path);
       if (!selected) showNotice("已重命名，但当前页未找到该项目，请刷新或调整排序后查看。", "warning");
+      complete?.(true);
     } catch (error) {
       showError(error, "重命名失败", "重命名失败");
+      complete?.(false);
     }
   }
 
