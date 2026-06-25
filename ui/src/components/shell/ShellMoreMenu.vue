@@ -411,7 +411,7 @@ onBeforeUnmount(() => {
 .menu-view-forward-leave-active,
 .menu-view-back-enter-active,
 .menu-view-back-leave-active {
-  transition: opacity 0.16s ease, transform 0.18s ease;
+  transition: opacity 0.08s ease, transform 0.1s ease;
 }
 
 .menu-view-forward-enter-from,
@@ -578,8 +578,7 @@ onBeforeUnmount(() => {
 }
 
 .style-preview-frame {
-  @apply grid h-6 w-6 place-items-center rounded-md;
-  background: color-mix(in srgb, var(--app-accent) 9%, transparent);
+  @apply grid h-6 w-6 place-items-center;
   color: #d97706;
 }
 
