@@ -3,6 +3,7 @@ import {computed, nextTick, ref} from "vue";
 import type {FavoriteItem} from "../../class.ts";
 import {readBooleanStorage, writeBooleanStorage} from "../../utils/safe-storage.ts";
 import {normalizePathText} from "../../utils/file-path.ts";
+import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
 import Icon from "../Icon.vue";
 import FileTypeIcon from "../FileTypeIcon.vue";
 import type {ShellNoticeKind} from "./types.ts";
@@ -31,11 +32,14 @@ const emit = defineEmits<{
 const collapsed = ref(readBooleanStorage(collapsedStorageKey, false));
 const renamingFavoriteId = ref("");
 const renameDraft = ref("");
+const renameEditRef = ref<HTMLElement | null>(null);
 const renameInputRef = ref<HTMLInputElement | null>(null);
+const removingFavoriteId = ref("");
 const draggingFavoriteId = ref("");
 const dropTargetId = ref("");
 const dropPlacement = ref<FavoriteDropPlacement | "">("");
 const favoriteButtonRefs = new Map<string, HTMLElement>();
+const removeConfirmButtonRefs = new Map<string, HTMLButtonElement>();
 const contextMenu = ref({
   visible: false,
   x: 0,
@@ -54,6 +58,7 @@ const contextFavorite = computed(() => {
 const toggleCollapsed = () => {
   collapsed.value = !collapsed.value;
   writeBooleanStorage(collapsedStorageKey, collapsed.value);
+  clearRemoveConfirm();
   closeContextMenu();
 }
 
@@ -70,11 +75,52 @@ const focusFavoriteButton = async (favoriteId: string) => {
   favoriteButtonRefs.get(favoriteId)?.focus({preventScroll: true});
 }
 
+const focusRemoveConfirmButton = async (favoriteId: string) => {
+  await nextTick();
+  removeConfirmButtonRefs.get(favoriteId)?.focus({preventScroll: true});
+}
+
 const emitNotice = (message: string, kind: ShellNoticeKind = "info", title = "收藏夹") => {
   emit("notice", {message, kind, title});
 }
 
+const isRemoveConfirming = (favorite: FavoriteItem) => removingFavoriteId.value === favorite.id;
+
+const clearRemoveConfirm = () => {
+  removingFavoriteId.value = "";
+}
+
+const setRemoveConfirmButtonRef = (favoriteId: string, element: unknown) => {
+  if (element instanceof HTMLButtonElement) {
+    removeConfirmButtonRefs.set(favoriteId, element);
+  } else {
+    removeConfirmButtonRefs.delete(favoriteId);
+  }
+}
+
+const startRemoveConfirm = async (favorite: FavoriteItem) => {
+  clearRemoveConfirm();
+  removingFavoriteId.value = favorite.id;
+  await focusRemoveConfirmButton(favorite.id);
+}
+
+const cancelRemoveConfirm = async (favoriteId = removingFavoriteId.value) => {
+  if (!favoriteId) {
+    clearRemoveConfirm();
+    return;
+  }
+  clearRemoveConfirm();
+  await focusFavoriteButton(favoriteId);
+}
+
+const confirmRemove = (favorite: FavoriteItem) => {
+  if (!isRemoveConfirming(favorite)) return;
+  clearRemoveConfirm();
+  emit("remove", favorite);
+}
+
 const handleOpen = (favorite: FavoriteItem) => {
+  clearRemoveConfirm();
   if (favorite.missing) {
     emitNotice("该收藏目录已经缺失，请检查或移除收藏项。", "warning");
     return;
@@ -83,6 +129,7 @@ const handleOpen = (favorite: FavoriteItem) => {
 }
 
 const handleOpenNewTab = (favorite: FavoriteItem) => {
+  clearRemoveConfirm();
   if (favorite.missing) {
     emitNotice("该收藏目录已经缺失，请检查或移除收藏项。", "warning");
     return;
@@ -91,6 +138,7 @@ const handleOpenNewTab = (favorite: FavoriteItem) => {
 }
 
 const startRename = async (favorite: FavoriteItem) => {
+  clearRemoveConfirm();
   closeContextMenu();
   renamingFavoriteId.value = favorite.id;
   renameDraft.value = favorite.name;
@@ -121,6 +169,19 @@ const commitRename = (favorite: FavoriteItem) => {
   cancelRename();
 }
 
+useOutsidePointerDown({
+  refs: [renameEditRef],
+  enabled: () => Boolean(renamingFavoriteId.value),
+  onOutsidePointerDown: () => {
+    const favorite = props.favorites.find(item => item.id === renamingFavoriteId.value);
+    if (favorite) {
+      commitRename(favorite);
+    } else {
+      cancelRename();
+    }
+  }
+});
+
 const closeContextMenu = () => {
   const favoriteId = contextMenu.value.favoriteId;
   contextMenu.value.visible = false;
@@ -128,6 +189,7 @@ const closeContextMenu = () => {
 }
 
 const openContextMenuAt = (favorite: FavoriteItem, x: number, y: number) => {
+  clearRemoveConfirm();
   contextMenu.value = {
     visible: true,
     x,
@@ -175,23 +237,27 @@ const copyFavoritePath = async (favorite: FavoriteItem) => {
 
 const contextOpen = () => {
   if (!contextFavorite.value) return;
+  clearRemoveConfirm();
   closeContextMenu();
   handleOpen(contextFavorite.value);
 }
 
 const contextOpenNewTab = () => {
   if (!contextFavorite.value) return;
+  clearRemoveConfirm();
   closeContextMenu();
   handleOpenNewTab(contextFavorite.value);
 }
 
 const contextRename = () => {
   if (!contextFavorite.value) return;
+  clearRemoveConfirm();
   void startRename(contextFavorite.value);
 }
 
 const contextCopyPath = () => {
   if (!contextFavorite.value) return;
+  clearRemoveConfirm();
   const favorite = contextFavorite.value;
   closeContextMenu();
   void copyFavoritePath(favorite);
@@ -200,8 +266,8 @@ const contextCopyPath = () => {
 const contextRemove = () => {
   if (!contextFavorite.value) return;
   const favorite = contextFavorite.value;
-  closeContextMenu();
-  emit("remove", favorite);
+  contextMenu.value.visible = false;
+  void startRemoveConfirm(favorite);
 }
 
 const clearDropState = () => {
@@ -211,11 +277,16 @@ const clearDropState = () => {
 }
 
 const handleDragStart = (event: DragEvent, favorite: FavoriteItem) => {
+  if (isRemoveConfirming(favorite)) {
+    event.preventDefault();
+    return;
+  }
   const target = event.target;
   if (target instanceof HTMLElement && target.closest(".favorite-action, .favorite-rename-input")) {
     event.preventDefault();
     return;
   }
+  clearRemoveConfirm();
   closeContextMenu();
   draggingFavoriteId.value = favorite.id;
   if (event.dataTransfer) {
@@ -283,12 +354,13 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
             :class="{
               active: isActive(favorite),
               missing: favorite.missing,
+              confirmingRemove: isRemoveConfirming(favorite),
               dragging: draggingFavoriteId === favorite.id,
               dropBefore: dropTargetId === favorite.id && dropPlacement === 'before',
               dropAfter: dropTargetId === favorite.id && dropPlacement === 'after'
             }"
             role="listitem"
-            draggable="true"
+            :draggable="renamingFavoriteId !== favorite.id && !isRemoveConfirming(favorite)"
             @dragstart="handleDragStart($event, favorite)"
             @dragover="handleDragOver($event, favorite)"
             @drop="handleDrop($event, favorite)"
@@ -297,6 +369,7 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
               v-if="renamingFavoriteId !== favorite.id"
               :ref="element => setFavoriteButtonRef(favorite.id, element)"
               class="favorite-open"
+              :disabled="isRemoveConfirming(favorite)"
               :title="favorite.path"
               @click="handleOpen(favorite)"
               @auxclick.middle.prevent="handleOpenNewTab(favorite)"
@@ -310,7 +383,7 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
               <small>{{ favorite.missing ? "目录缺失" : favorite.path }}</small>
             </span>
           </button>
-          <div v-else class="favorite-edit">
+          <div v-else ref="renameEditRef" class="favorite-edit">
             <span class="favorite-icon" aria-hidden="true">
               <icon v-if="favorite.missing" icon="action.warning" />
               <file-type-icon v-else kind="folder" />
@@ -326,14 +399,26 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
                 @keydown.esc.prevent.stop="cancelRename"
                 @blur="commitRename(favorite)">
           </div>
-          <span v-if="renamingFavoriteId !== favorite.id" class="favorite-actions">
+          <span v-if="renamingFavoriteId !== favorite.id && !isRemoveConfirming(favorite)" class="favorite-actions">
             <button class="favorite-action" title="在新标签页中打开" @click.stop="handleOpenNewTab(favorite)">
               <icon icon="action.open-new-tab" />
             </button>
             <button class="favorite-action" title="重命名收藏项" @click.stop="startRename(favorite)">
               <icon icon="action.rename" />
             </button>
-            <button class="favorite-action" title="从收藏夹移除" @click.stop="emit('remove', favorite)">
+            <button class="favorite-action danger" title="从收藏夹移除" @click.stop="startRemoveConfirm(favorite)">
+              <icon icon="action.close" />
+            </button>
+          </span>
+          <span v-else-if="isRemoveConfirming(favorite)" class="favorite-remove-confirm" @keydown.esc.prevent.stop="cancelRemoveConfirm(favorite.id)">
+            <button
+                :ref="element => setRemoveConfirmButtonRef(favorite.id, element)"
+                class="favorite-action confirm"
+                title="确认移除收藏项"
+                @click.stop="confirmRemove(favorite)">
+              <icon icon="action.trash" />
+            </button>
+            <button class="favorite-action cancel" title="取消移除" @click.stop="cancelRemoveConfirm(favorite.id)">
               <icon icon="action.close" />
             </button>
           </span>
@@ -469,6 +554,11 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
   color: inherit;
 }
 
+.favorite-open:disabled {
+  @apply cursor-default opacity-100;
+  color: inherit;
+}
+
 .favorite-edit {
   @apply grid h-full min-w-0 grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-1.5;
 }
@@ -481,6 +571,11 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
   border-color: var(--app-accent-border, #bfdbfe);
   background: var(--app-accent-selected, #dceeff);
   color: color-mix(in srgb, var(--app-accent, #2563eb) 62%, var(--app-text));
+}
+
+.favorite-row.confirmingRemove {
+  border-color: var(--app-danger-border);
+  background: var(--app-danger-soft);
 }
 
 .favorite-row.missing {
@@ -524,6 +619,10 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
   @apply hidden shrink-0 items-center gap-0.5;
 }
 
+.favorite-remove-confirm {
+  @apply inline-flex shrink-0 items-center gap-0.5;
+}
+
 .favorite-row:hover .favorite-actions,
 .favorite-row:focus-within .favorite-actions {
   @apply inline-flex;
@@ -537,6 +636,27 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
 .favorite-action:hover {
   background: var(--app-control-hover);
   color: var(--app-accent, #2563eb);
+}
+
+.favorite-action.danger:hover {
+  background: var(--app-danger-soft);
+  color: var(--app-danger);
+}
+
+.favorite-action.confirm {
+  border-color: var(--app-danger-border);
+  background: color-mix(in srgb, var(--app-danger) 12%, transparent);
+  color: var(--app-danger);
+}
+
+.favorite-action.confirm:hover,
+.favorite-action.confirm:focus-visible {
+  background: var(--app-danger);
+  color: var(--app-danger-contrast);
+}
+
+.favorite-action.cancel:hover {
+  color: var(--app-text);
 }
 
 .favorite-empty {
