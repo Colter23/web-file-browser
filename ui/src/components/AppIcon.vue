@@ -3,6 +3,7 @@ import {computed, shallowRef, useAttrs, watch} from "vue";
 import {useAppearanceStore} from "../store/appearance.ts";
 import {resolveAppIcon} from "./icon-registry.ts";
 import type {AppIconDefinition} from "./icon-packs/types.ts";
+import type {AppIconStyle} from "../class.ts";
 
 type IconSize = string | "large" | "small" | "normal";
 
@@ -10,6 +11,7 @@ const props = withDefaults(defineProps<{
   icon: string;
   color?: string;
   size?: IconSize;
+  iconStyle?: AppIconStyle;
   strokeWidth?: number;
 }>(), {
   size: "normal",
@@ -26,7 +28,7 @@ defineOptions({
 });
 
 watch(
-    () => [appearanceStore.iconStyle, props.icon] as const,
+    () => [props.iconStyle ?? appearanceStore.iconStyle, props.icon] as const,
     async ([style, icon]) => {
       const runId = ++resolveRunId;
       const nextIcon = await resolveAppIcon(style, icon);
