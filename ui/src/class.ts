@@ -93,11 +93,31 @@ export interface SearchResponse {
 
 
 export type LoadData = (node: FileTreeData, options?: {navigate?: boolean; focusExplorer?: boolean; refresh?: boolean}) => Promise<boolean>
+
+export type MappingRootNode = MappingVirtualNode | MappingRealNode;
+
+export interface MappingVirtualNode {
+    type: "virtual";
+    name: string;
+    path: string;
+    children: MappingRootNode[];
+}
+
+export interface MappingRealNode {
+    type: "real";
+    name: string;
+    path: string;
+    realPath: string;
+}
+
 export interface FileTreeData {
     path: string;
     name: string;
     isFile?: boolean;
-    children?: FileTreeData[]
+    children?: FileTreeData[];
+    virtual?: boolean;
+    mappingId?: number;
+    mappingOrder?: number;
 }
 
 export interface FavoriteItem {
@@ -148,6 +168,11 @@ export interface PathMapping {
     remark?: string;
     order?: number;
     writable: boolean;
+}
+
+export interface ReorderMappingItem {
+    id: number;
+    order: number;
 }
 
 export interface SessionResponse {

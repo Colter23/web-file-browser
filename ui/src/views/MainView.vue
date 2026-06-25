@@ -13,11 +13,14 @@ import {
   emptyTrash,
   getIndexStatus,
   getFolderData,
+  getMappingRoot,
+  getMappings,
   listFavorites,
   listTasks,
   listTrashRecords,
   logout,
   reorderFavorites,
+  reorderMappings,
   restoreTrashRecords,
   restoreTrashRecord,
   updateFavorite,
@@ -444,8 +447,11 @@ const scheduleTabHoverSwitch = (tabId: string) => {
   }, 650);
 }
 
-const {treeData, loadRoot, handleLoad, refreshPath: refreshTreePath} = useFileTreeLoader({
+const {treeData, loadRoot, handleLoad, reorderMount, refreshPath: refreshTreePath} = useFileTreeLoader({
   getFolderData,
+  getMappings,
+  getMappingRoot,
+  reorderMappings,
   navigateToPath,
   showError: showErrorNotice
 });
@@ -853,6 +859,7 @@ const signOut = async () => {
           :favorites-loading="favoritesLoading"
           :favorite-paths="favoritePaths"
           @drop-entries="dropEntriesToPathFolder"
+          @reorder-mount="payload => reorderMount(payload.source, payload.target, payload.placement)"
           @open-new-tab="openTreeFolderInNewTab"
           @open-favorite="openFavorite"
           @open-favorite-new-tab="openFavoriteInNewTab"

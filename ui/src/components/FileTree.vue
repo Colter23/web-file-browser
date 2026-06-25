@@ -20,22 +20,29 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "drop-entries", payload: {entries: ExplorerEntry[]; target: FileTreeData; action: "copy" | "move"}): void;
+  (e: "reorder-mount", payload: {source: FileTreeData; target: FileTreeData; placement: TreeMountDropPlacement}): void;
   (e: "open-new-tab", node: FileTreeData): void;
   (e: "add-favorite", node: FileTreeData): void;
   (e: "remove-favorite", path: string): void;
   (e: "notice", payload: {message: string; kind?: "info" | "success" | "warning" | "error"; title?: string}): void;
 }>();
 
+type TreeMountDropPlacement = "before" | "after";
+
 const expandedPaths = ref<Set<string>>(new Set(["/"]));
 const loadingPaths = ref<Set<string>>(new Set());
 const focusedPath = ref("/");
 const treeRef = ref<HTMLElement | null>(null);
 const dropTargetPath = ref("");
+const draggingTreePath = ref("");
+const treeReorderTargetPath = ref("");
+const treeReorderPlacement = ref<TreeMountDropPlacement | "">("");
 const contextMenu = ref<{visible: boolean; x: number; y: number; path: string}>({visible: false, x: 0, y: 0, path: ""});
 const activePath = computed(() => normalizePathText(props.currentPath || "/"));
 let syncToken = 0;
 let dropExpandTimer = 0;
 let dropExpandPath = "";
+const treeMountDragMime = "application/x-web-file-browser-tree-mount";
 
 type VisibleTreeNode = {
   node: FileTreeData;
@@ -111,6 +118,25 @@ const rowElement = (path: string) => {
   const normalized = normalizePathText(path);
   return Array.from(treeRef.value?.querySelectorAll<HTMLElement>(".tree-node") ?? [])
       .find(item => item.dataset.treePath === normalized) ?? null;
+}
+
+const parentPathOfVisibleNode = (path: string) => {
+  const normalized = normalizePathText(path);
+  return visibleNodes.value.find(item => item.path === normalized)?.parentPath ?? null;
+}
+
+const isMountReorderDrag = (event: DragEvent) => {
+  return Boolean(draggingTreePath.value)
+      || Array.from(event.dataTransfer?.types ?? []).includes(treeMountDragMime);
+}
+
+const canReorderMountNode = (source: FileTreeData | null, target: FileTreeData | null) => {
+  if (!source || !target) return false;
+  const sourcePath = normalizePathText(source.path);
+  const targetPath = normalizePathText(target.path);
+  if (sourcePath === targetPath) return false;
+  if (typeof source.mappingId !== "number" || typeof target.mappingId !== "number") return false;
+  return parentPathOfVisibleNode(sourcePath) === parentPathOfVisibleNode(targetPath);
 }
 
 const revealPath = async (path: string, focus = false) => {
@@ -281,9 +307,20 @@ const clearDropExpandTimer = () => {
   dropExpandPath = "";
 }
 
+const clearTreeReorderTarget = () => {
+  treeReorderTargetPath.value = "";
+  treeReorderPlacement.value = "";
+}
+
 const clearTreeDropTarget = () => {
   dropTargetPath.value = "";
   clearDropExpandTimer();
+  clearTreeReorderTarget();
+}
+
+const clearTreeDragState = () => {
+  draggingTreePath.value = "";
+  clearTreeDropTarget();
 }
 
 const canDropOnNode = (node: FileTreeData, entries: ExplorerEntry[]) => {
@@ -305,7 +342,42 @@ const scheduleDropExpand = (node: FileTreeData) => {
   }, 650);
 }
 
+const handleNodeDragStart = (node: FileTreeData, event: DragEvent) => {
+  if (typeof node.mappingId !== "number" || normalizePathText(node.path) === "/") {
+    event.preventDefault();
+    return;
+  }
+  closeContextMenu();
+  draggingTreePath.value = normalizePathText(node.path);
+  clearTreeReorderTarget();
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData(treeMountDragMime, draggingTreePath.value);
+    event.dataTransfer.setData("text/plain", draggingTreePath.value);
+  }
+}
+
+const handleNodeDragEnd = () => {
+  clearTreeDragState();
+}
+
 const handleNodeDragOver = (node: FileTreeData, event: DragEvent) => {
+  if (isMountReorderDrag(event)) {
+    const source = findNodeByPath(props.data, draggingTreePath.value);
+    if (!canReorderMountNode(source, node)) {
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
+      clearTreeReorderTarget();
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    treeReorderTargetPath.value = normalizePathText(node.path);
+    treeReorderPlacement.value = event.clientY > rect.top + rect.height / 2 ? "after" : "before";
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    return;
+  }
+
   if (!hasInternalEntryDragData(event.dataTransfer) || node.isFile) return;
   const entries = getActiveInternalEntryDragEntries();
   if (!canDropOnNode(node, entries)) {
@@ -322,6 +394,13 @@ const handleNodeDragOver = (node: FileTreeData, event: DragEvent) => {
 
 const handleNodeDragLeave = (node: FileTreeData, event: DragEvent) => {
   const path = normalizePathText(node.path);
+  if (treeReorderTargetPath.value === path) {
+    const target = rowElement(path);
+    const related = event.relatedTarget;
+    if (related instanceof Node && target?.contains(related)) return;
+    clearTreeReorderTarget();
+    return;
+  }
   if (dropTargetPath.value !== path) return;
   const target = rowElement(path);
   const related = event.relatedTarget;
@@ -336,6 +415,17 @@ const handleTreeDragLeave = (event: DragEvent) => {
 }
 
 const handleNodeDrop = (node: FileTreeData, event: DragEvent) => {
+  if (isMountReorderDrag(event)) {
+    event.preventDefault();
+    event.stopPropagation();
+    const source = findNodeByPath(props.data, draggingTreePath.value);
+    if (canReorderMountNode(source, node) && treeReorderPlacement.value) {
+      emit("reorder-mount", {source: source!, target: node, placement: treeReorderPlacement.value});
+    }
+    clearTreeDragState();
+    return;
+  }
+
   if (!hasInternalEntryDragData(event.dataTransfer)) return;
   event.preventDefault();
   event.stopPropagation();
@@ -343,7 +433,7 @@ const handleNodeDrop = (node: FileTreeData, event: DragEvent) => {
   if (canDropOnNode(node, entries)) {
     emit("drop-entries", {entries, target: node, action: isCopyDrop(event) ? "copy" : "move"});
   }
-  clearTreeDropTarget();
+  clearTreeDragState();
 }
 
 const handleNodeFocus = (node: FileTreeData) => {
@@ -452,7 +542,7 @@ watch([() => props.currentPath, () => props.data], () => {
 </script>
 
 <template>
-  <div ref="treeRef" class="file-tree" role="tree" aria-label="文件树" tabindex="-1" @keydown="handleTreeKeyDown" @dragleave="handleTreeDragLeave" @dragend="clearTreeDropTarget" @drop="clearTreeDropTarget">
+  <div ref="treeRef" class="file-tree" role="tree" aria-label="文件树" tabindex="-1" @keydown="handleTreeKeyDown" @dragleave="handleTreeDragLeave" @dragend="clearTreeDragState" @drop="clearTreeDragState">
     <template v-if="data.length">
       <file-tree-node
           v-for="file in data"
@@ -463,12 +553,17 @@ watch([() => props.currentPath, () => props.data], () => {
           :expanded-paths="expandedPaths"
           :loading-paths="loadingPaths"
           :drop-target-path="dropTargetPath"
+          :dragging-tree-path="draggingTreePath"
+          :reorder-target-path="treeReorderTargetPath"
+          :reorder-placement="treeReorderPlacement"
           :favorite-paths="favoritePaths"
           :load-data="loadData"
           @toggle="toggleNode"
           @navigate="navigateNode"
           @node-focus="handleNodeFocus"
           @node-context-menu="openContextMenu"
+          @node-drag-start="handleNodeDragStart"
+          @node-drag-end="handleNodeDragEnd"
           @node-drag-over="handleNodeDragOver"
           @node-drag-leave="handleNodeDragLeave"
           @node-drop="handleNodeDrop" />

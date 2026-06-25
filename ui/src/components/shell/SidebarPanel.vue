@@ -15,6 +15,7 @@ defineProps<{
 
 defineEmits<{
   (e: "drop-entries", payload: {entries: ExplorerEntry[]; target: FileTreeData; action: "copy" | "move"}): void;
+  (e: "reorder-mount", payload: {source: FileTreeData; target: FileTreeData; placement: "before" | "after"}): void;
   (e: "open-new-tab", node: FileTreeData): void;
   (e: "open-favorite", favorite: FavoriteItem): void;
   (e: "open-favorite-new-tab", favorite: FavoriteItem): void;
@@ -47,6 +48,7 @@ defineEmits<{
         :current-path="currentPath"
         :favorite-paths="favoritePaths"
         @drop-entries="payload => $emit('drop-entries', payload)"
+        @reorder-mount="payload => $emit('reorder-mount', payload)"
         @open-new-tab="node => $emit('open-new-tab', node)"
         @add-favorite="node => $emit('add-favorite', node)"
         @remove-favorite="path => $emit('remove-favorite-path', path)"

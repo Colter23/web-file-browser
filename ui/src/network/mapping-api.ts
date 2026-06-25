@@ -1,8 +1,12 @@
 import network from "../network";
-import {PathMapping} from "../class";
+import type {MappingRootNode, PathMapping, ReorderMappingItem} from "../class";
 
 export const getMappings = async (): Promise<PathMapping[]> => {
     return (await network.get("/api/mapping")).data
+}
+
+export const getMappingRoot = async (): Promise<MappingRootNode | null> => {
+    return (await network.get("/api/mapping/root")).data
 }
 
 export const createMapping = async (mapping: PathMapping): Promise<number> => {
@@ -15,4 +19,8 @@ export const updateMapping = async (id: number, mapping: PathMapping): Promise<v
 
 export const deleteMapping = async (id: number): Promise<void> => {
     await network.delete(`/api/mapping/${id}`)
+}
+
+export const reorderMappings = async (items: ReorderMappingItem[]): Promise<void> => {
+    await network.post("/api/mapping/reorder", {items})
 }

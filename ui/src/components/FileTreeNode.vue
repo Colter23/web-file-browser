@@ -13,6 +13,9 @@ const props = withDefaults(defineProps<{
   expandedPaths: Set<string>;
   loadingPaths: Set<string>;
   dropTargetPath: string;
+  draggingTreePath: string;
+  reorderTargetPath: string;
+  reorderPlacement: "before" | "after" | "";
   favoritePaths: string[];
   loadData: LoadData;
 }>(), {
@@ -24,6 +27,8 @@ const emit = defineEmits<{
   (e: "navigate", node: FileTreeData): void;
   (e: "node-focus", node: FileTreeData): void;
   (e: "node-context-menu", node: FileTreeData, event: MouseEvent): void;
+  (e: "node-drag-start", node: FileTreeData, event: DragEvent): void;
+  (e: "node-drag-end", node: FileTreeData, event: DragEvent): void;
   (e: "node-drag-over", node: FileTreeData, event: DragEvent): void;
   (e: "node-drag-leave", node: FileTreeData, event: DragEvent): void;
   (e: "node-drop", node: FileTreeData, event: DragEvent): void;
@@ -35,8 +40,13 @@ const focused = computed(() => normalizedPath.value === normalizePathText(props.
 const expanded = computed(() => props.expandedPaths.has(normalizedPath.value));
 const loading = computed(() => props.loadingPaths.has(normalizedPath.value));
 const dropTarget = computed(() => Boolean(props.dropTargetPath) && normalizedPath.value === normalizePathText(props.dropTargetPath));
+const dragging = computed(() => Boolean(props.draggingTreePath) && normalizedPath.value === normalizePathText(props.draggingTreePath));
+const dropBefore = computed(() => props.reorderPlacement === "before" && normalizedPath.value === normalizePathText(props.reorderTargetPath));
+const dropAfter = computed(() => props.reorderPlacement === "after" && normalizedPath.value === normalizePathText(props.reorderTargetPath));
 const favorite = computed(() => props.favoritePaths.some(path => normalizePathText(path) === normalizedPath.value));
+const reorderable = computed(() => typeof props.data.mappingId === "number" && normalizedPath.value !== "/");
 const hasChildren = computed(() => Boolean(props.data.children?.length));
+const rootPlaceholder = computed(() => normalizedPath.value === "/" && props.data.children !== undefined && !hasChildren.value);
 const nodeStyle = computed(() => ({"--tree-depth": props.deep}));
 
 const handleRowClick = (event: MouseEvent) => {
@@ -51,16 +61,26 @@ const handleToggle = (event: MouseEvent) => {
   emit("node-focus", props.data);
   emit("toggle", props.data);
 }
+
+const handleDragStart = (event: DragEvent) => {
+  const target = event.target;
+  if (!reorderable.value || (target instanceof HTMLElement && target.closest(".fold-button"))) {
+    event.preventDefault();
+    return;
+  }
+  emit("node-drag-start", props.data, event);
+}
 </script>
 
 <template>
   <div class="tree-node-wrap" role="none">
     <div
         class="tree-node"
-        :class="{active, loading, dropTarget, root: normalizedPath === '/'}"
+        :class="{active, loading, dropTarget, dragging, dropBefore, dropAfter, root: normalizedPath === '/'}"
         :style="nodeStyle"
         role="treeitem"
         :tabindex="focused ? 0 : -1"
+        :draggable="reorderable"
         :data-tree-path="normalizedPath"
         :aria-selected="active"
         :aria-expanded="expanded"
@@ -68,6 +88,8 @@ const handleToggle = (event: MouseEvent) => {
         @click="handleRowClick"
         @focus="emit('node-focus', data)"
         @contextmenu.prevent.stop="emit('node-context-menu', data, $event)"
+        @dragstart="handleDragStart"
+        @dragend="emit('node-drag-end', data, $event)"
         @dragover="emit('node-drag-over', data, $event)"
         @dragleave="emit('node-drag-leave', data, $event)"
         @drop="emit('node-drop', data, $event)">
@@ -75,8 +97,8 @@ const handleToggle = (event: MouseEvent) => {
       <button
           type="button"
           class="fold-button"
-          :class="{expanded, placeholder: normalizedPath === '/' && !hasChildren}"
-          :disabled="loading || (normalizedPath === '/' && !hasChildren)"
+          :class="{expanded, placeholder: rootPlaceholder}"
+          :disabled="loading || rootPlaceholder"
           tabindex="-1"
           aria-hidden="true"
           title="展开或折叠"
@@ -106,12 +128,17 @@ const handleToggle = (event: MouseEvent) => {
           :expanded-paths="expandedPaths"
           :loading-paths="loadingPaths"
           :drop-target-path="dropTargetPath"
+          :dragging-tree-path="draggingTreePath"
+          :reorder-target-path="reorderTargetPath"
+          :reorder-placement="reorderPlacement"
           :favorite-paths="favoritePaths"
           :load-data="loadData"
           @toggle="node => emit('toggle', node)"
           @navigate="node => emit('navigate', node)"
           @node-focus="node => emit('node-focus', node)"
           @node-context-menu="(node, event) => emit('node-context-menu', node, event)"
+          @node-drag-start="(node, event) => emit('node-drag-start', node, event)"
+          @node-drag-end="(node, event) => emit('node-drag-end', node, event)"
           @node-drag-over="(node, event) => emit('node-drag-over', node, event)"
           @node-drag-leave="(node, event) => emit('node-drag-leave', node, event)"
           @node-drop="(node, event) => emit('node-drop', node, event)" />
@@ -135,6 +162,18 @@ const handleToggle = (event: MouseEvent) => {
 
 .tree-node:hover {
   background: var(--app-accent-hover, #eaf4ff);
+}
+
+.tree-node.dragging {
+  @apply opacity-50;
+}
+
+.tree-node.dropBefore {
+  box-shadow: inset 0 2px 0 var(--app-accent, #2563eb);
+}
+
+.tree-node.dropAfter {
+  box-shadow: inset 0 -2px 0 var(--app-accent, #2563eb);
 }
 
 .tree-node:focus-visible {
