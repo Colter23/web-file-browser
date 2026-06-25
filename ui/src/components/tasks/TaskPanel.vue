@@ -135,7 +135,8 @@ defineExpose({
 </script>
 
 <template>
-  <section ref="panelRef" class="task-panel" :class="{'is-dragging': dragging}" :style="panelStyle" aria-label="后台任务" tabindex="-1">
+  <teleport to="body">
+    <section ref="panelRef" class="task-panel" :class="{'is-dragging': dragging}" :style="panelStyle" aria-label="后台任务" tabindex="-1">
     <div class="task-panel-header" title="拖动移动任务面板" @pointerdown="startDrag" @dblclick="resetPosition">
       <div class="min-w-0">
         <p class="task-panel-title">后台任务 · {{ taskSummaryText }}</p>
@@ -214,14 +215,17 @@ defineExpose({
         </button>
       </div>
     </section>
-  </section>
+    </section>
+  </teleport>
 </template>
 
 <style scoped lang="postcss">
 @reference "tailwindcss";
 
 .task-panel {
-  @apply fixed left-1/2 top-1/2 z-40 flex -translate-x-1/2 -translate-y-1/2 flex-col gap-2 overflow-hidden rounded-lg border px-3 py-2 shadow-2xl outline-none backdrop-blur;
+  @apply fixed z-40 flex flex-col gap-2 overflow-hidden rounded-lg border px-3 py-2 shadow-2xl outline-none backdrop-blur;
+  left: 0;
+  top: 0;
   width: min(38rem, calc(100vw - 1.5rem));
   max-height: min(32rem, calc(100vh - 1.5rem));
   border-color: var(--app-border-soft);

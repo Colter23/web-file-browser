@@ -1,4 +1,4 @@
-import {computed, onBeforeUnmount, onMounted, ref} from "vue";
+import {computed, nextTick, onBeforeUnmount, onMounted, ref} from "vue";
 import type {Ref, StyleValue} from "vue";
 
 type Point = {
@@ -8,6 +8,7 @@ type Point = {
 
 type DraggablePanelOptions = {
   panelRef: Ref<HTMLElement | null>;
+  initialYRatio?: number;
   padding?: number;
 }
 
@@ -18,11 +19,12 @@ const isInteractiveTarget = (target: EventTarget | null) => {
   return Boolean(target.closest(interactiveSelector));
 }
 
-export const useDraggablePanel = ({panelRef, padding = 12}: DraggablePanelOptions) => {
+export const useDraggablePanel = ({panelRef, initialYRatio = 0.45, padding = 12}: DraggablePanelOptions) => {
   const position = ref<Point | null>(null);
   const dragging = ref(false);
   let offsetX = 0;
   let offsetY = 0;
+  let initialPositionFrame: number | undefined;
 
   const clampToViewport = (point: Point): Point => {
     const rect = panelRef.value?.getBoundingClientRect();
@@ -37,13 +39,42 @@ export const useDraggablePanel = ({panelRef, padding = 12}: DraggablePanelOption
   }
 
   const panelStyle = computed<StyleValue>(() => {
-    if (!position.value) return {};
+    if (!position.value) return {
+      visibility: "hidden",
+      translate: "none",
+      transform: "none"
+    };
     return {
       left: `${position.value.x}px`,
       top: `${position.value.y}px`,
+      translate: "none",
+      visibility: "visible",
       transform: "none"
     };
   });
+
+  const placeInitialPosition = () => {
+    const panel = panelRef.value;
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    position.value = clampToViewport({
+      x: (window.innerWidth - rect.width) / 2,
+      y: window.innerHeight * initialYRatio - rect.height / 2
+    });
+  }
+
+  const scheduleInitialPosition = async () => {
+    await nextTick();
+    if (typeof window.requestAnimationFrame !== "function") {
+      placeInitialPosition();
+      return;
+    }
+    if (initialPositionFrame) window.cancelAnimationFrame(initialPositionFrame);
+    initialPositionFrame = window.requestAnimationFrame(() => {
+      initialPositionFrame = undefined;
+      placeInitialPosition();
+    });
+  }
 
   const handlePointerMove = (event: PointerEvent) => {
     if (!dragging.value) return;
@@ -78,19 +109,24 @@ export const useDraggablePanel = ({panelRef, padding = 12}: DraggablePanelOption
   }
 
   const resetPosition = () => {
-    position.value = null;
+    placeInitialPosition();
   }
 
   const handleWindowResize = () => {
-    if (!position.value) return;
+    if (!position.value) {
+      placeInitialPosition();
+      return;
+    }
     position.value = clampToViewport(position.value);
   }
 
   onMounted(() => {
+    void scheduleInitialPosition();
     window.addEventListener("resize", handleWindowResize);
   });
 
   onBeforeUnmount(() => {
+    if (initialPositionFrame) window.cancelAnimationFrame(initialPositionFrame);
     finishDrag();
     window.removeEventListener("resize", handleWindowResize);
   });

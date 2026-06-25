@@ -155,15 +155,16 @@ defineExpose({
 </script>
 
 <template>
-  <section
-      ref="panelRef"
-      class="trash-panel"
-      :class="{'is-dragging': dragging}"
-      :style="panelStyle"
-      aria-label="回收站"
-      tabindex="-1"
-      @keydown="handleKeydown"
-      @keydown.esc.prevent.stop="emit('close')">
+  <teleport to="body">
+    <section
+        ref="panelRef"
+        class="trash-panel"
+        :class="{'is-dragging': dragging}"
+        :style="panelStyle"
+        aria-label="回收站"
+        tabindex="-1"
+        @keydown="handleKeydown"
+        @keydown.esc.prevent.stop="emit('close')">
     <div class="trash-panel-header" title="拖动移动回收站面板" @pointerdown="startDrag" @dblclick="resetPosition">
       <div class="trash-title">
         <span class="trash-icon"><icon icon="action.trash" /></span>
@@ -243,14 +244,17 @@ defineExpose({
         </div>
       </div>
     </div>
-  </section>
+    </section>
+  </teleport>
 </template>
 
 <style scoped lang="postcss">
 @reference "tailwindcss";
 
 .trash-panel {
-  @apply fixed left-1/2 top-1/2 z-40 flex -translate-x-1/2 -translate-y-1/2 flex-col gap-3 overflow-hidden rounded-lg border p-3 shadow-2xl outline-none backdrop-blur;
+  @apply fixed z-40 flex flex-col gap-3 overflow-hidden rounded-lg border p-3 shadow-2xl outline-none backdrop-blur;
+  left: 0;
+  top: 0;
   width: min(56rem, calc(100vw - 1.5rem));
   max-height: min(36rem, calc(100vh - 1.5rem));
   border-color: var(--app-border-soft);

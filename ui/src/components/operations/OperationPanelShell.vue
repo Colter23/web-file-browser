@@ -44,38 +44,42 @@ defineExpose({
 </script>
 
 <template>
-  <component
-      :is="as"
-      ref="shellRef"
-      :class="shellClass"
-      :style="panelStyle"
-      :tabindex="tabindex"
-      @submit.prevent="emit('submit')"
-      @keydown.esc.prevent.stop="emit('close')">
-    <div class="operation-shell-header" title="拖动移动面板" @pointerdown="startDrag" @dblclick="resetPosition">
-      <div :class="iconClass">
-        <icon :icon="icon" />
+  <teleport to="body">
+    <component
+        :is="as"
+        ref="shellRef"
+        :class="shellClass"
+        :style="panelStyle"
+        :tabindex="tabindex"
+        @submit.prevent="emit('submit')"
+        @keydown.esc.prevent.stop="emit('close')">
+      <div class="operation-shell-header" title="拖动移动面板" @pointerdown="startDrag" @dblclick="resetPosition">
+        <div :class="iconClass">
+          <icon :icon="icon" />
+        </div>
+        <div class="operation-shell-title">
+          <strong>{{ title }}</strong>
+          <span>{{ subtitle }}</span>
+        </div>
+        <button type="button" class="operation-shell-close" title="关闭" @click="emit('close')">
+          <icon icon="action.close" />
+        </button>
       </div>
-      <div class="operation-shell-title">
-        <strong>{{ title }}</strong>
-        <span>{{ subtitle }}</span>
+      <slot />
+      <div v-if="$slots.actions" class="operation-shell-actions">
+        <slot name="actions" />
       </div>
-      <button type="button" class="operation-shell-close" title="关闭" @click="emit('close')">
-        <icon icon="action.close" />
-      </button>
-    </div>
-    <slot />
-    <div v-if="$slots.actions" class="operation-shell-actions">
-      <slot name="actions" />
-    </div>
-  </component>
+    </component>
+  </teleport>
 </template>
 
 <style scoped lang="postcss">
 @reference "tailwindcss";
 
 .operation-shell {
-  @apply fixed left-1/2 top-1/2 z-50 flex -translate-x-1/2 -translate-y-1/2 flex-col gap-3 overflow-hidden rounded-lg border p-4 text-sm shadow-2xl outline-none;
+  @apply fixed z-50 flex flex-col gap-3 overflow-hidden rounded-lg border p-4 text-sm shadow-2xl outline-none;
+  left: 0;
+  top: 0;
   max-height: calc(100vh - 2rem);
   border-color: var(--app-border-soft);
   background: var(--app-panel-solid);
