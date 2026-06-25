@@ -4,6 +4,7 @@ import type {ExplorerEntry} from "../explorer/types.ts";
 import type {ShellNoticePayload} from "../shell/types.ts";
 import {downloadUrl} from "../../network/api.ts";
 import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
+import {readBooleanStorage, writeBooleanStorage} from "../../utils/safe-storage.ts";
 import Icon from "../Icon.vue";
 
 const props = defineProps<{
@@ -25,6 +26,7 @@ const loading = ref(false);
 const error = ref("");
 const pageFullscreen = ref(false);
 const browserFullscreen = ref(false);
+const autoPlay = ref(readBooleanStorage("explorer.videoViewer.autoPlay", false));
 
 const currentEntry = computed(() => props.visible ? props.entry : null);
 const sourceUrl = computed(() => currentEntry.value ? downloadUrl(currentEntry.value.path) : "");
@@ -40,6 +42,7 @@ const canShowPrevious = computed(() => currentIndex.value > 0);
 const canShowNext = computed(() => currentIndex.value >= 0 && currentIndex.value < props.entries.length - 1);
 const pageFullscreenTitle = computed(() => pageFullscreen.value ? "退出网页全屏 (F)" : "网页全屏 (F)");
 const browserFullscreenTitle = computed(() => browserFullscreen.value ? "退出浏览器全屏" : "浏览器全屏");
+const autoPlayTitle = computed(() => autoPlay.value ? "关闭自动播放" : "开启自动播放");
 
 const subtitle = computed(() => {
   const entry = props.entry;
@@ -70,6 +73,7 @@ const prepareEntry = async () => {
   error.value = "";
   await nextTick();
   videoRef.value?.load();
+  if (autoPlay.value) void playCurrentVideo();
   await focusViewer();
 }
 
@@ -106,6 +110,24 @@ const toggleBrowserFullscreen = async () => {
 
 const downloadCurrent = () => {
   if (props.entry) emit("download", props.entry);
+}
+
+const playCurrentVideo = async () => {
+  try {
+    await videoRef.value?.play();
+  } catch {
+    emit("notice", {
+      kind: "warning",
+      title: "无法自动播放",
+      message: "浏览器阻止了本次自动播放，可手动点击视频控件继续播放。"
+    });
+  }
+}
+
+const toggleAutoPlay = () => {
+  autoPlay.value = !autoPlay.value;
+  writeBooleanStorage("explorer.videoViewer.autoPlay", autoPlay.value);
+  if (autoPlay.value) void playCurrentVideo();
 }
 
 const handleReady = () => {
@@ -183,6 +205,10 @@ onBeforeUnmount(() => {
           <button title="下一个视频" :disabled="!canShowNext" @click="showAdjacent(1)">
             <icon icon="action.next" color="currentColor" />
           </button>
+          <button class="text-action" :title="autoPlayTitle" :class="{active: autoPlay}" @click="toggleAutoPlay">
+            <icon icon="view.video" color="currentColor" />
+            <span>自动播放</span>
+          </button>
           <button :title="pageFullscreenTitle" :class="{active: pageFullscreen}" @click="togglePageFullscreen">
             <icon icon="action.fullscreen" color="currentColor" />
           </button>
@@ -202,7 +228,7 @@ onBeforeUnmount(() => {
             ref="videoRef"
             :src="sourceUrl"
             controls
-            autoplay
+            :autoplay="autoPlay"
             playsinline
             preload="metadata"
             @loadedmetadata="handleReady"
@@ -249,6 +275,10 @@ onBeforeUnmount(() => {
 
 .video-viewer-actions button {
   @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-white/30 bg-white/15 px-2 text-sm font-medium text-white shadow-sm hover:border-white/45 hover:bg-white/25;
+}
+
+.video-viewer-actions button.text-action {
+  @apply gap-1.5 px-3 text-xs;
 }
 
 .video-viewer-actions button:disabled {
