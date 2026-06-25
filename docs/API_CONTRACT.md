@@ -791,6 +791,20 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
 }
 ```
 
+## 审计日志维护
+
+### `POST /api/audit/cleanup`
+
+主动清理超过保留数量的旧轮转审计文件，并记录一条轻量审计事件。不会删除当前正在写入的审计文件。
+
+成功返回：
+
+```json
+{
+  "removed": 2
+}
+```
+
 ## 前端对接建议
 
 - 目录页默认请求 `detail=basic&limit=合理页大小`，只有需要完整排序或属性面板时再请求 `detail=full`。

@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import {computed, onMounted, reactive, ref} from "vue";
 import {useRouter} from "vue-router";
-import type {IndexStatus, MetricsResponse, PathMapping, RuntimeSettings} from "../class";
+import type {HealthResponse, IndexStatus, MetricsResponse, PathMapping, ReadinessResponse, RuntimeSettings} from "../class";
 import {
   cancelIndexRebuild,
   changePassword,
+  cleanupAudit,
   createMapping,
   deleteMapping,
+  getHealth,
   getIndexStatus,
   getMappings,
   getMetrics,
+  getReadiness,
   getSettings,
   rebuildIndex,
   updateMapping
@@ -29,10 +32,13 @@ const mappings = ref<PathMapping[]>([]);
 const settings = ref<RuntimeSettings | null>(null);
 const indexStatus = ref<IndexStatus | null>(null);
 const metrics = ref<MetricsResponse | null>(null);
+const health = ref<HealthResponse | null>(null);
+const readiness = ref<ReadinessResponse | null>(null);
 const loading = ref(false);
 const indexLoading = ref(false);
 const indexActionLoading = ref(false);
 const metricsLoading = ref(false);
+const auditCleanupLoading = ref(false);
 const message = ref("");
 const messageKind = ref<"success" | "error">("error");
 
@@ -117,6 +123,22 @@ const indexStateClass = (status: IndexStatus | null) => {
   }[status.state] ?? "idle";
 }
 
+const serviceStatusText = (status?: string | null) => {
+  if (!status) return "未知";
+  return {
+    ok: "正常",
+    notReady: "未就绪",
+    error: "异常"
+  }[status] ?? status;
+}
+
+const serviceStatusClass = (status?: string | null) => {
+  if (!status) return "disabled";
+  if (status === "ok") return "ok";
+  if (status === "notReady") return "warning";
+  return "error";
+}
+
 const optionalDateText = (value?: string | null) => value ? formatEntryDate(value) : "-";
 
 const indexEntryCountText = (value?: number) => Number.isFinite(value) ? `${value} 项` : "-";
@@ -166,10 +188,19 @@ const loadIndexStatus = async (showFailure = true) => {
 const loadMetrics = async (showFailure = true) => {
   metricsLoading.value = true;
   try {
-    metrics.value = await getMetrics();
+    const [metricsData, healthData, readinessData] = await Promise.all([
+      getMetrics(),
+      getHealth(),
+      getReadiness()
+    ]);
+    metrics.value = metricsData;
+    health.value = healthData;
+    readiness.value = readinessData;
     if (metrics.value.index) indexStatus.value = metrics.value.index;
   } catch (error) {
     metrics.value = null;
+    health.value = null;
+    readiness.value = null;
     if (showFailure) showError(error, "加载运行状态失败");
   } finally {
     metricsLoading.value = false;
@@ -203,6 +234,21 @@ const requestIndexCancel = async () => {
     showError(error, "取消索引重建失败");
   } finally {
     indexActionLoading.value = false;
+  }
+}
+
+const requestAuditCleanup = async () => {
+  if (auditCleanupLoading.value) return;
+  message.value = "";
+  auditCleanupLoading.value = true;
+  try {
+    const result = await cleanupAudit();
+    showSuccess(result.removed > 0 ? `已清理 ${result.removed} 个审计轮转文件` : "没有需要清理的审计轮转文件");
+    await loadMetrics(false);
+  } catch (error) {
+    showError(error, "清理审计日志失败");
+  } finally {
+    auditCleanupLoading.value = false;
   }
 }
 
@@ -376,10 +422,37 @@ const savePassword = async () => {
       <section class="panel metrics-panel">
         <div class="section-heading">
           <h2>运行状态</h2>
-          <button class="plain-button" :disabled="metricsLoading" @click="loadMetrics(true)">刷新状态</button>
+          <div class="panel-actions">
+            <button class="plain-button" :disabled="metricsLoading" @click="loadMetrics(true)">刷新状态</button>
+            <button class="plain-button" :disabled="auditCleanupLoading" @click="requestAuditCleanup">清理审计轮转</button>
+          </div>
         </div>
         <div v-if="metricsLoading && !metrics" class="empty">正在加载运行状态...</div>
         <template v-else>
+          <div class="service-summary">
+            <section class="service-card" aria-label="服务存活">
+              <div>
+                <span>服务存活</span>
+                <strong class="status-pill" :class="serviceStatusClass(health?.status)">{{ serviceStatusText(health?.status) }}</strong>
+              </div>
+              <small>版本 {{ health?.version ?? "-" }}</small>
+            </section>
+            <section class="service-card readiness-card" aria-label="服务就绪">
+              <div>
+                <span>服务就绪</span>
+                <strong class="status-pill" :class="serviceStatusClass(readiness?.status)">{{ serviceStatusText(readiness?.status) }}</strong>
+              </div>
+              <small>版本 {{ readiness?.version ?? "-" }}</small>
+              <div v-if="readiness?.checks?.length" class="readiness-checks">
+                <div v-for="check in readiness.checks" :key="check.name" class="readiness-check">
+                  <span class="check-dot" :class="serviceStatusClass(check.status)"></span>
+                  <strong>{{ check.name }}</strong>
+                  <span>{{ check.message }}</span>
+                </div>
+              </div>
+            </section>
+          </div>
+
           <div class="metrics-summary">
             <div class="metric-tile">
               <span>挂载</span>
@@ -614,6 +687,94 @@ h2 {
   box-shadow: 0 0 0 3px var(--app-accent-soft, #eff6ff), 0 0 0 5px var(--app-accent-border, #bfdbfe);
 }
 
+.service-summary {
+  @apply grid gap-3;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+
+.service-card {
+  @apply min-w-0 rounded-md border p-3;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-muted);
+}
+
+.service-card > div:first-child {
+  @apply flex min-w-0 items-center justify-between gap-3;
+}
+
+.service-card span,
+.service-card small {
+  @apply text-xs;
+  color: var(--app-text-subtle);
+}
+
+.service-card small {
+  @apply mt-2 block;
+}
+
+.status-pill {
+  @apply inline-flex h-7 shrink-0 items-center rounded-full px-3 text-xs font-semibold;
+  background: var(--app-panel-solid);
+  color: var(--app-text-muted);
+}
+
+.status-pill.ok {
+  background: var(--app-success-soft);
+  color: var(--app-success-text);
+}
+
+.status-pill.warning {
+  background: var(--app-accent-soft);
+  color: var(--app-accent);
+}
+
+.status-pill.error {
+  background: var(--app-danger-soft);
+  color: var(--app-danger-text);
+}
+
+.status-pill.disabled {
+  background: var(--app-panel-solid);
+  color: var(--app-text-subtle);
+}
+
+.readiness-checks {
+  @apply mt-3 grid gap-1.5;
+}
+
+.readiness-check {
+  @apply grid min-w-0 items-center gap-2 rounded px-2 py-1 text-xs;
+  grid-template-columns: 0.5rem 6.5rem minmax(0, 1fr);
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
+}
+
+.readiness-check strong,
+.readiness-check span:last-child {
+  @apply min-w-0 truncate;
+}
+
+.readiness-check strong {
+  color: var(--app-text);
+}
+
+.check-dot {
+  @apply h-2 w-2 rounded-full;
+  background: var(--app-text-subtle);
+}
+
+.check-dot.ok {
+  background: var(--app-success);
+}
+
+.check-dot.warning {
+  background: var(--app-accent);
+}
+
+.check-dot.error {
+  background: var(--app-danger);
+}
+
 .metrics-summary {
   @apply grid overflow-hidden rounded-md border;
   border-color: var(--app-border-soft);
@@ -841,6 +1002,7 @@ dd {
   .mapping-row,
   .password-form,
   .preference-row,
+  .service-summary,
   .metrics-summary,
   .metrics-grid {
     grid-template-columns: 1fr;

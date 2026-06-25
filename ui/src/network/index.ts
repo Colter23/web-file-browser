@@ -55,6 +55,10 @@ const get = async (url: string, config?: AxiosRequestConfig): Promise<AxiosRespo
     return await instance.get(url, config)
 }
 
+const head = async (url: string, config?: AxiosRequestConfig): Promise<AxiosResponse> => {
+    return await instance.head(url, config)
+}
+
 const post = async (url: string, data: unknown = {}, config?: AxiosRequestConfig): Promise<AxiosResponse> => {
     return await instance.post(url, data, config)
 }
@@ -74,6 +78,7 @@ const del = async (url: string, config?: AxiosRequestConfig): Promise<AxiosRespo
 export default {
     instance,
     get,
+    head,
     post,
     put,
     patch,

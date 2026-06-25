@@ -1,4 +1,4 @@
-import type {HealthResponse, MetricsResponse, ReadinessResponse} from "../class";
+import type {AuditCleanupResponse, HealthResponse, MetricsResponse, ReadinessResponse} from "../class";
 import network from "../network";
 
 export const getMetrics = async (): Promise<MetricsResponse> => {
@@ -12,6 +12,13 @@ export const getHealth = async (): Promise<HealthResponse> => {
 }
 
 export const getReadiness = async (): Promise<ReadinessResponse> => {
-    const response = await network.get("/api/ready");
+    const response = await network.get("/api/ready", {
+        validateStatus: status => (status >= 200 && status < 300) || status === 503
+    });
+    return response.data;
+}
+
+export const cleanupAudit = async (): Promise<AuditCleanupResponse> => {
+    const response = await network.post("/api/audit/cleanup");
     return response.data;
 }

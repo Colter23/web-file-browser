@@ -363,3 +363,7 @@ export interface ReadinessCheck {
 export interface ReadinessResponse extends HealthResponse {
     checks: ReadinessCheck[];
 }
+
+export interface AuditCleanupResponse {
+    removed: number;
+}

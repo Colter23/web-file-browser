@@ -14,6 +14,15 @@ export type FolderRequestOptions = {
     forceRefresh?: boolean;
 }
 
+export type FileHeaderInfo = {
+    contentType?: string;
+    contentLength?: number;
+    etag?: string;
+    lastModified?: string;
+    acceptRanges?: string;
+    contentRange?: string;
+}
+
 type FolderCacheEntry = {
     data: FolderData;
     etag?: string;
@@ -154,6 +163,28 @@ export const getFolderData = async (path: string = "", params: FolderQueryParams
     return response.data
 }
 
+const contentLengthValue = (value?: string): number | undefined => {
+    if (!value) return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+const fileHeaderInfo = (headers: Record<string, unknown>): FileHeaderInfo => ({
+    contentType: headerValue(headers, "content-type"),
+    contentLength: contentLengthValue(headerValue(headers, "content-length")),
+    etag: headerValue(headers, "etag"),
+    lastModified: headerValue(headers, "last-modified"),
+    acceptRanges: headerValue(headers, "accept-ranges"),
+    contentRange: headerValue(headers, "content-range")
+})
+
+export const headFileContent = async (path: string = "", mode: "raw" | "edit" = "raw"): Promise<FileHeaderInfo> => {
+    const response = await network.head(pathUrl("/api/content", path), {
+        params: mode === "raw" ? undefined : {mode}
+    });
+    return fileHeaderInfo(response.headers as Record<string, unknown>);
+}
+
 export const getFile = async (path: string = ""): Promise<FileContentResponse> => {
     const res = await network.get(pathUrl("/api/content", path), {
         params: {mode: "edit"},
@@ -205,10 +236,15 @@ export const deleteEntry = async (path: string, permanent = false): Promise<File
 
 export const uploadFiles = async (path: string, files: FileList | File[]): Promise<UploadResponse> => {
     const form = new FormData()
-    Array.from(files).forEach(file => form.append("files", file, file.name))
+    Array.from(files).forEach(file => form.append("file", file, file.name))
     const response = (await network.post(pathUrl("/api/upload", path), form)).data
     invalidateFolderDataCache(path, {includeAncestors: true});
     return response
+}
+
+export const headDownloadFile = async (path: string): Promise<FileHeaderInfo> => {
+    const response = await network.head(pathUrl("/api/download", path));
+    return fileHeaderInfo(response.headers as Record<string, unknown>);
 }
 
 export const downloadFile = async (path: string): Promise<Blob> => {
