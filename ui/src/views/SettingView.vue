@@ -1,7 +1,18 @@
 <script setup lang="ts">
 import {computed, onMounted, reactive, ref} from "vue";
 import {useRouter} from "vue-router";
-import type {HealthResponse, IndexStatus, MetricsResponse, PathMapping, ReadinessResponse, RuntimeSettings} from "../class";
+import type {
+  HealthResponse,
+  IndexStatus,
+  MetricsResponse,
+  PathMapping,
+  ReadinessResponse,
+  RuntimeSettings,
+  RuntimeSettingsPatch,
+  SettingsResponse,
+  StartupSettings,
+  StartupSettingsPatch
+} from "../class";
 import {
   cancelIndexRebuild,
   changePassword,
@@ -15,53 +26,187 @@ import {
   getReadiness,
   getSettings,
   rebuildIndex,
-  updateMapping
+  reloadSettings,
+  updateMapping,
+  updateSettings
 } from "../network/api";
-import {
-  accentColorOptions,
-  colorModeOptions,
-  fileIconPaletteOptions,
-  iconStyleOptions,
-  useAppearanceStore
-} from "../store/appearance.ts";
-import {formatEntryDate, formatEntrySize} from "../utils/file-entry.ts";
+import Icon from "../components/Icon.vue";
+import {formatEntryDate} from "../utils/file-entry.ts";
+
+type SettingsMessageKind = "success" | "error" | "warning";
+
+interface RuntimeSettingsForm {
+  maxEditBytes: string;
+  editableExtensions: string;
+  editableMimeTypes: string;
+  maxUploadBytes: string;
+  maxDirPageSize: string;
+  maxDirConcurrency: string;
+  maxTransferConcurrency: string;
+  maxIpConcurrency: string;
+  maxTaskConcurrency: string;
+  taskHistoryLimit: string;
+  taskSpeedLimitBytesPerSec: string;
+  maxExtractBytes: string;
+  maxExtractFiles: string;
+  maxExtractDepth: string;
+  indexEnabled: boolean;
+  indexScanDelayMs: string;
+  auditMaxBytes: string;
+  auditRetentionFiles: string;
+  trashRetentionDays: string;
+  trashMaxBytes: string;
+  conflictPolicy: RuntimeSettings["conflictPolicy"];
+}
+
+interface StartupSettingsForm {
+  bindAddress: string;
+  port: string;
+  mappingFile: string;
+  configFile: string;
+  authFile: string;
+  favoritesFile: string;
+  trashDir: string;
+  staticDir: string;
+  corsAllowedOrigins: string;
+  trustProxyHeaders: boolean;
+  auditFile: string;
+  indexRebuildOnStartup: boolean;
+}
 
 const router = useRouter();
-const appearanceStore = useAppearanceStore();
+
 const mappings = ref<PathMapping[]>([]);
-const settings = ref<RuntimeSettings | null>(null);
+const settingsSnapshot = ref<SettingsResponse | null>(null);
 const indexStatus = ref<IndexStatus | null>(null);
 const metrics = ref<MetricsResponse | null>(null);
 const health = ref<HealthResponse | null>(null);
 const readiness = ref<ReadinessResponse | null>(null);
 const loading = ref(false);
+const saving = ref(false);
+const reloadingSettings = ref(false);
 const indexLoading = ref(false);
 const indexActionLoading = ref(false);
 const metricsLoading = ref(false);
 const auditCleanupLoading = ref(false);
+const mappingSavingId = ref<number | null>(null);
 const message = ref("");
-const messageKind = ref<"success" | "error">("error");
+const messageKind = ref<SettingsMessageKind>("error");
 
-const form = reactive<PathMapping>({
+const mappingForm = reactive<PathMapping>({
   mountPath: "",
   folderPath: "",
   remark: "",
   order: 0,
   writable: true
-})
+});
 
 const passwordForm = reactive({
   currentPassword: "",
   newPassword: "",
   confirmPassword: ""
-})
+});
 
+const runtimeForm = reactive<RuntimeSettingsForm>({
+  maxEditBytes: "",
+  editableExtensions: "",
+  editableMimeTypes: "",
+  maxUploadBytes: "",
+  maxDirPageSize: "",
+  maxDirConcurrency: "",
+  maxTransferConcurrency: "",
+  maxIpConcurrency: "",
+  maxTaskConcurrency: "",
+  taskHistoryLimit: "",
+  taskSpeedLimitBytesPerSec: "",
+  maxExtractBytes: "",
+  maxExtractFiles: "",
+  maxExtractDepth: "",
+  indexEnabled: false,
+  indexScanDelayMs: "",
+  auditMaxBytes: "",
+  auditRetentionFiles: "",
+  trashRetentionDays: "",
+  trashMaxBytes: "",
+  conflictPolicy: "autoRename"
+});
+
+const startupForm = reactive<StartupSettingsForm>({
+  bindAddress: "",
+  port: "",
+  mappingFile: "",
+  configFile: "",
+  authFile: "",
+  favoritesFile: "",
+  trashDir: "",
+  staticDir: "",
+  corsAllowedOrigins: "",
+  trustProxyHeaders: false,
+  auditFile: "",
+  indexRebuildOnStartup: false
+});
+
+const navItems = [
+  {id: "overview", label: "概览", icon: "action.properties"},
+  {id: "mappings", label: "挂载目录", icon: "file.folder"},
+  {id: "index", label: "搜索索引", icon: "action.search"},
+  {id: "security", label: "安全", icon: "icon-password"},
+  {id: "runtime", label: "运行配置", icon: "action.tools"},
+  {id: "startup", label: "启动配置", icon: "action.settings"}
+] as const;
+
+type SettingsPageId = typeof navItems[number]["id"];
+
+const conflictPolicyOptions: {value: RuntimeSettings["conflictPolicy"]; label: string; description: string}[] = [
+  {value: "autoRename", label: "自动重命名", description: "发生冲突时自动追加序号"},
+  {value: "reject", label: "拒绝", description: "冲突时取消本次写入"},
+  {value: "overwrite", label: "覆盖", description: "冲突时覆盖已有内容"}
+];
+
+const startupFieldLabels: Record<keyof StartupSettings, string> = {
+  bindAddress: "监听地址",
+  port: "端口",
+  mappingFile: "挂载配置文件",
+  configFile: "配置文件",
+  authFile: "认证文件",
+  favoritesFile: "收藏文件",
+  trashDir: "回收站目录",
+  staticDir: "静态文件目录",
+  corsAllowedOrigins: "CORS 来源",
+  trustProxyHeaders: "信任代理来源头",
+  auditFile: "审计日志文件",
+  indexRebuildOnStartup: "启动时重建索引"
+};
+
+const runtimeSettings = computed(() => settingsSnapshot.value?.runtime ?? null);
+const startupSettings = computed(() => settingsSnapshot.value?.startup ?? null);
+const activeStartupSettings = computed(() => settingsSnapshot.value?.activeStartup ?? null);
+const activeSettingsPage = ref<SettingsPageId>("overview");
+const activeNavItem = computed(() => navItems.find(item => item.id === activeSettingsPage.value) ?? navItems[0]);
+const envLockedSet = computed(() => new Set(settingsSnapshot.value?.envLocked ?? []));
+const restartPendingSet = computed(() => new Set(settingsSnapshot.value?.restartPendingFields ?? []));
+const taskMetrics = computed(() => metrics.value?.tasks);
+const limitMetrics = computed(() => metrics.value?.limits);
 const indexBusy = computed(() => indexLoading.value || indexActionLoading.value);
 const indexBuilding = computed(() => indexStatus.value?.state === "building");
 const canRebuildIndex = computed(() => Boolean(indexStatus.value?.enabled) && !indexBusy.value && !indexBuilding.value);
 const canCancelIndex = computed(() => Boolean(indexStatus.value?.enabled) && !indexBusy.value && indexBuilding.value);
-const taskMetrics = computed(() => metrics.value?.tasks);
-const limitMetrics = computed(() => metrics.value?.limits);
+const runtimeDirty = computed(() => {
+  const runtime = runtimeSettings.value;
+  if (!runtime) return false;
+  return runtimeFormSignature() !== runtimeSettingsSignature(runtime);
+});
+const startupDirty = computed(() => {
+  const startup = startupSettings.value;
+  if (!startup) return false;
+  return startupFormSignature() !== startupSettingsSignature(startup);
+});
+const settingsDirty = computed(() => runtimeDirty.value || startupDirty.value);
+const canSaveSettings = computed(() => Boolean(settingsSnapshot.value) && settingsDirty.value && !saving.value);
+
+const selectSettingsPage = (id: SettingsPageId) => {
+  activeSettingsPage.value = id;
+}
 
 const load = async () => {
   loading.value = true;
@@ -69,7 +214,7 @@ const load = async () => {
   try {
     const [mappingData, settingData] = await Promise.all([getMappings(), getSettings()]);
     mappings.value = mappingData;
-    settings.value = settingData;
+    applySettingsSnapshot(settingData);
     await Promise.all([loadIndexStatus(false), loadMetrics(false)]);
   } catch (error) {
     showError(error, "加载设置失败");
@@ -80,87 +225,63 @@ const load = async () => {
 
 onMounted(load);
 
-const resetForm = () => {
-  form.mountPath = "";
-  form.folderPath = "";
-  form.remark = "";
-  form.order = 0;
-  form.writable = true;
+const applySettingsSnapshot = (snapshot: SettingsResponse) => {
+  settingsSnapshot.value = snapshot;
+  syncRuntimeForm(snapshot.runtime);
+  syncStartupForm(snapshot.startup);
 }
 
-const conflictPolicyText = (policy: RuntimeSettings["conflictPolicy"]) => {
-  return {
-    autoRename: "自动重命名",
-    reject: "拒绝",
-    overwrite: "覆盖"
-  }[policy] ?? policy;
+const syncRuntimeForm = (runtime: RuntimeSettings) => {
+  runtimeForm.maxEditBytes = numberText(runtime.maxEditBytes);
+  runtimeForm.editableExtensions = listInputText(runtime.editableExtensions);
+  runtimeForm.editableMimeTypes = listInputText(runtime.editableMimeTypes);
+  runtimeForm.maxUploadBytes = optionalNumberText(runtime.maxUploadBytes);
+  runtimeForm.maxDirPageSize = numberText(runtime.maxDirPageSize);
+  runtimeForm.maxDirConcurrency = numberText(runtime.maxDirConcurrency);
+  runtimeForm.maxTransferConcurrency = numberText(runtime.maxTransferConcurrency);
+  runtimeForm.maxIpConcurrency = numberText(runtime.maxIpConcurrency);
+  runtimeForm.maxTaskConcurrency = numberText(runtime.maxTaskConcurrency);
+  runtimeForm.taskHistoryLimit = numberText(runtime.taskHistoryLimit);
+  runtimeForm.taskSpeedLimitBytesPerSec = optionalNumberText(runtime.taskSpeedLimitBytesPerSec);
+  runtimeForm.maxExtractBytes = optionalNumberText(runtime.maxExtractBytes);
+  runtimeForm.maxExtractFiles = optionalNumberText(runtime.maxExtractFiles);
+  runtimeForm.maxExtractDepth = numberText(runtime.maxExtractDepth);
+  runtimeForm.indexEnabled = runtime.indexEnabled;
+  runtimeForm.indexScanDelayMs = numberText(runtime.indexScanDelayMs);
+  runtimeForm.auditMaxBytes = optionalNumberText(runtime.auditMaxBytes);
+  runtimeForm.auditRetentionFiles = numberText(runtime.auditRetentionFiles);
+  runtimeForm.trashRetentionDays = optionalNumberText(runtime.trashRetentionDays);
+  runtimeForm.trashMaxBytes = optionalNumberText(runtime.trashMaxBytes);
+  runtimeForm.conflictPolicy = runtime.conflictPolicy;
 }
 
-const corsOriginsText = (origins: RuntimeSettings["corsAllowedOrigins"]) => {
-  return origins.length ? origins.join("，") : "同源";
+const syncStartupForm = (startup: StartupSettings) => {
+  startupForm.bindAddress = startup.bindAddress;
+  startupForm.port = numberText(startup.port);
+  startupForm.mappingFile = startup.mappingFile;
+  startupForm.configFile = startup.configFile;
+  startupForm.authFile = startup.authFile;
+  startupForm.favoritesFile = startup.favoritesFile;
+  startupForm.trashDir = startup.trashDir;
+  startupForm.staticDir = startup.staticDir;
+  startupForm.corsAllowedOrigins = listInputText(startup.corsAllowedOrigins);
+  startupForm.trustProxyHeaders = startup.trustProxyHeaders;
+  startupForm.auditFile = startup.auditFile;
+  startupForm.indexRebuildOnStartup = startup.indexRebuildOnStartup;
 }
 
-const listText = (values: string[]) => {
-  return values.length ? values.join("，") : "不限制";
+const resetMappingForm = () => {
+  mappingForm.mountPath = "";
+  mappingForm.folderPath = "";
+  mappingForm.remark = "";
+  mappingForm.order = 0;
+  mappingForm.writable = true;
 }
 
-const indexStateText = (status: IndexStatus | null) => {
-  if (!status) return "未知";
-  if (!status.enabled || status.state === "disabled") return "未启用";
-  return {
-    idle: "空闲",
-    building: "重建中",
-    error: "异常"
-  }[status.state] ?? status.state;
-}
-
-const indexStateClass = (status: IndexStatus | null) => {
-  if (!status || !status.enabled || status.state === "disabled") return "disabled";
-  return {
-    idle: "idle",
-    building: "building",
-    error: "error"
-  }[status.state] ?? "idle";
-}
-
-const serviceStatusText = (status?: string | null) => {
-  if (!status) return "未知";
-  return {
-    ok: "正常",
-    notReady: "未就绪",
-    error: "异常"
-  }[status] ?? status;
-}
-
-const serviceStatusClass = (status?: string | null) => {
-  if (!status) return "disabled";
-  if (status === "ok") return "ok";
-  if (status === "notReady") return "warning";
-  return "error";
-}
-
-const optionalDateText = (value?: string | null) => value ? formatEntryDate(value) : "-";
-
-const indexEntryCountText = (value?: number) => Number.isFinite(value) ? `${value} 项` : "-";
-
-const isFiniteNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
-
-const countText = (value?: number) => isFiniteNumber(value) ? String(value) : "-";
-
-const bytesText = (value?: number) => formatEntrySize(value, "-");
-
-const optionalBytesText = (value?: number) => isFiniteNumber(value) && value > 0 ? formatEntrySize(value) : "不限制";
-
-const speedText = (value?: number) => `${formatEntrySize(value, "0 B")}/s`;
-
-const limitUsageText = (active?: number, limit?: number) => {
-  if (!isFiniteNumber(active) || !isFiniteNumber(limit)) return "-";
-  return `${active}/${limit}`;
-}
-
-const limitUsageRatio = (active?: number, limit?: number) => {
-  if (!isFiniteNumber(active) || !isFiniteNumber(limit) || !limit) return "0%";
-  return `${Math.min(100, Math.max(0, active / limit * 100))}%`;
+const resetPasswordForm = () => {
+  passwordForm.currentPassword = "";
+  passwordForm.newPassword = "";
+  passwordForm.confirmPassword = "";
 }
 
 const showError = (error: unknown, fallback: string) => {
@@ -171,6 +292,257 @@ const showError = (error: unknown, fallback: string) => {
 const showSuccess = (text: string) => {
   messageKind.value = "success";
   message.value = text;
+}
+
+const showWarning = (text: string) => {
+  messageKind.value = "warning";
+  message.value = text;
+}
+
+const numberText = (value?: number | null) => value == null ? "" : String(value);
+const optionalNumberText = (value?: number | null) => value == null ? "" : String(value);
+const listInputText = (values: string[]) => values.join("\n");
+const parseListInput = (value: string) => value
+    .split(/[\n,，]/)
+    .map(item => item.trim())
+    .filter(Boolean);
+
+const parseInteger = (value: string, label: string, min = 1, max = Number.MAX_SAFE_INTEGER) => {
+  const text = value.trim();
+  const number = Number(text);
+  if (!text || !Number.isInteger(number) || number < min || number > max) {
+    throw new Error(`${label}需要填写 ${min}${max === Number.MAX_SAFE_INTEGER ? " 以上" : `-${max}`} 的整数`);
+  }
+  return number;
+}
+
+const parseOptionalInteger = (value: string, label: string, min = 1) => {
+  const text = value.trim();
+  if (!text) return null;
+  return parseInteger(text, label, min);
+}
+
+const arraysEqual = (left: string[], right: string[]) => left.length === right.length && left.every((item, index) => item === right[index]);
+const isRuntimeLocked = (field: keyof RuntimeSettingsPatch) => envLockedSet.value.has(`runtime.${String(field)}`);
+const isStartupLocked = (field: keyof StartupSettingsPatch) => envLockedSet.value.has(`startup.${String(field)}`);
+const isStartupPending = (field: keyof StartupSettings) => restartPendingSet.value.has(`startup.${String(field)}`);
+
+const runtimeFormSignature = () => JSON.stringify({
+  maxEditBytes: runtimeForm.maxEditBytes.trim(),
+  editableExtensions: parseListInput(runtimeForm.editableExtensions),
+  editableMimeTypes: parseListInput(runtimeForm.editableMimeTypes),
+  maxUploadBytes: runtimeForm.maxUploadBytes.trim(),
+  maxDirPageSize: runtimeForm.maxDirPageSize.trim(),
+  maxDirConcurrency: runtimeForm.maxDirConcurrency.trim(),
+  maxTransferConcurrency: runtimeForm.maxTransferConcurrency.trim(),
+  maxIpConcurrency: runtimeForm.maxIpConcurrency.trim(),
+  maxTaskConcurrency: runtimeForm.maxTaskConcurrency.trim(),
+  taskHistoryLimit: runtimeForm.taskHistoryLimit.trim(),
+  taskSpeedLimitBytesPerSec: runtimeForm.taskSpeedLimitBytesPerSec.trim(),
+  maxExtractBytes: runtimeForm.maxExtractBytes.trim(),
+  maxExtractFiles: runtimeForm.maxExtractFiles.trim(),
+  maxExtractDepth: runtimeForm.maxExtractDepth.trim(),
+  indexEnabled: runtimeForm.indexEnabled,
+  indexScanDelayMs: runtimeForm.indexScanDelayMs.trim(),
+  auditMaxBytes: runtimeForm.auditMaxBytes.trim(),
+  auditRetentionFiles: runtimeForm.auditRetentionFiles.trim(),
+  trashRetentionDays: runtimeForm.trashRetentionDays.trim(),
+  trashMaxBytes: runtimeForm.trashMaxBytes.trim(),
+  conflictPolicy: runtimeForm.conflictPolicy
+});
+
+const runtimeSettingsSignature = (runtime: RuntimeSettings) => JSON.stringify({
+  maxEditBytes: numberText(runtime.maxEditBytes),
+  editableExtensions: runtime.editableExtensions,
+  editableMimeTypes: runtime.editableMimeTypes,
+  maxUploadBytes: optionalNumberText(runtime.maxUploadBytes),
+  maxDirPageSize: numberText(runtime.maxDirPageSize),
+  maxDirConcurrency: numberText(runtime.maxDirConcurrency),
+  maxTransferConcurrency: numberText(runtime.maxTransferConcurrency),
+  maxIpConcurrency: numberText(runtime.maxIpConcurrency),
+  maxTaskConcurrency: numberText(runtime.maxTaskConcurrency),
+  taskHistoryLimit: numberText(runtime.taskHistoryLimit),
+  taskSpeedLimitBytesPerSec: optionalNumberText(runtime.taskSpeedLimitBytesPerSec),
+  maxExtractBytes: optionalNumberText(runtime.maxExtractBytes),
+  maxExtractFiles: optionalNumberText(runtime.maxExtractFiles),
+  maxExtractDepth: numberText(runtime.maxExtractDepth),
+  indexEnabled: runtime.indexEnabled,
+  indexScanDelayMs: numberText(runtime.indexScanDelayMs),
+  auditMaxBytes: optionalNumberText(runtime.auditMaxBytes),
+  auditRetentionFiles: numberText(runtime.auditRetentionFiles),
+  trashRetentionDays: optionalNumberText(runtime.trashRetentionDays),
+  trashMaxBytes: optionalNumberText(runtime.trashMaxBytes),
+  conflictPolicy: runtime.conflictPolicy
+});
+
+const startupFormSignature = () => JSON.stringify({
+  bindAddress: startupForm.bindAddress.trim(),
+  port: startupForm.port.trim(),
+  mappingFile: startupForm.mappingFile.trim(),
+  configFile: startupForm.configFile.trim(),
+  authFile: startupForm.authFile.trim(),
+  favoritesFile: startupForm.favoritesFile.trim(),
+  trashDir: startupForm.trashDir.trim(),
+  staticDir: startupForm.staticDir.trim(),
+  corsAllowedOrigins: parseListInput(startupForm.corsAllowedOrigins),
+  trustProxyHeaders: startupForm.trustProxyHeaders,
+  auditFile: startupForm.auditFile.trim(),
+  indexRebuildOnStartup: startupForm.indexRebuildOnStartup
+});
+
+const startupSettingsSignature = (startup: StartupSettings) => JSON.stringify({
+  bindAddress: startup.bindAddress,
+  port: numberText(startup.port),
+  mappingFile: startup.mappingFile,
+  configFile: startup.configFile,
+  authFile: startup.authFile,
+  favoritesFile: startup.favoritesFile,
+  trashDir: startup.trashDir,
+  staticDir: startup.staticDir,
+  corsAllowedOrigins: startup.corsAllowedOrigins,
+  trustProxyHeaders: startup.trustProxyHeaders,
+  auditFile: startup.auditFile,
+  indexRebuildOnStartup: startup.indexRebuildOnStartup
+});
+
+const buildRuntimeDraft = (): RuntimeSettings => ({
+  maxEditBytes: parseInteger(runtimeForm.maxEditBytes, "编辑上限"),
+  editableExtensions: parseListInput(runtimeForm.editableExtensions),
+  editableMimeTypes: parseListInput(runtimeForm.editableMimeTypes),
+  maxUploadBytes: parseOptionalInteger(runtimeForm.maxUploadBytes, "上传上限"),
+  maxDirPageSize: parseInteger(runtimeForm.maxDirPageSize, "目录分页上限"),
+  maxDirConcurrency: parseInteger(runtimeForm.maxDirConcurrency, "目录并发"),
+  maxTransferConcurrency: parseInteger(runtimeForm.maxTransferConcurrency, "传输并发"),
+  maxIpConcurrency: parseInteger(runtimeForm.maxIpConcurrency, "单 IP 并发"),
+  maxTaskConcurrency: parseInteger(runtimeForm.maxTaskConcurrency, "任务并发"),
+  taskHistoryLimit: parseInteger(runtimeForm.taskHistoryLimit, "任务历史"),
+  taskSpeedLimitBytesPerSec: parseOptionalInteger(runtimeForm.taskSpeedLimitBytesPerSec, "任务限速"),
+  maxExtractBytes: parseOptionalInteger(runtimeForm.maxExtractBytes, "解压字节上限"),
+  maxExtractFiles: parseOptionalInteger(runtimeForm.maxExtractFiles, "解压条目上限"),
+  maxExtractDepth: parseInteger(runtimeForm.maxExtractDepth, "解压深度上限"),
+  indexEnabled: runtimeForm.indexEnabled,
+  indexScanDelayMs: parseInteger(runtimeForm.indexScanDelayMs, "索引扫描延迟", 0),
+  auditMaxBytes: parseOptionalInteger(runtimeForm.auditMaxBytes, "审计轮转大小"),
+  auditRetentionFiles: parseInteger(runtimeForm.auditRetentionFiles, "审计保留数量", 0),
+  trashRetentionDays: parseOptionalInteger(runtimeForm.trashRetentionDays, "回收站保留天数"),
+  trashMaxBytes: parseOptionalInteger(runtimeForm.trashMaxBytes, "回收站容量上限"),
+  conflictPolicy: runtimeForm.conflictPolicy
+});
+
+const buildStartupDraft = (): StartupSettings => ({
+  bindAddress: startupForm.bindAddress.trim(),
+  port: parseInteger(startupForm.port, "端口", 1, 65535),
+  mappingFile: startupForm.mappingFile.trim(),
+  configFile: startupForm.configFile.trim(),
+  authFile: startupForm.authFile.trim(),
+  favoritesFile: startupForm.favoritesFile.trim(),
+  trashDir: startupForm.trashDir.trim(),
+  staticDir: startupForm.staticDir.trim(),
+  corsAllowedOrigins: parseListInput(startupForm.corsAllowedOrigins),
+  trustProxyHeaders: startupForm.trustProxyHeaders,
+  auditFile: startupForm.auditFile.trim(),
+  indexRebuildOnStartup: startupForm.indexRebuildOnStartup
+});
+
+const buildRuntimePatch = (): RuntimeSettingsPatch => {
+  if (!runtimeSettings.value) return {};
+  const current = runtimeSettings.value;
+  const draft = buildRuntimeDraft();
+  const patch: RuntimeSettingsPatch = {};
+
+  if (!isRuntimeLocked("maxEditBytes") && draft.maxEditBytes !== current.maxEditBytes) patch.maxEditBytes = draft.maxEditBytes;
+  if (!isRuntimeLocked("editableExtensions") && !arraysEqual(draft.editableExtensions, current.editableExtensions)) patch.editableExtensions = draft.editableExtensions;
+  if (!isRuntimeLocked("editableMimeTypes") && !arraysEqual(draft.editableMimeTypes, current.editableMimeTypes)) patch.editableMimeTypes = draft.editableMimeTypes;
+  if (!isRuntimeLocked("maxUploadBytes") && draft.maxUploadBytes !== current.maxUploadBytes) patch.maxUploadBytes = draft.maxUploadBytes ?? null;
+  if (!isRuntimeLocked("maxDirPageSize") && draft.maxDirPageSize !== current.maxDirPageSize) patch.maxDirPageSize = draft.maxDirPageSize;
+  if (!isRuntimeLocked("maxDirConcurrency") && draft.maxDirConcurrency !== current.maxDirConcurrency) patch.maxDirConcurrency = draft.maxDirConcurrency;
+  if (!isRuntimeLocked("maxTransferConcurrency") && draft.maxTransferConcurrency !== current.maxTransferConcurrency) patch.maxTransferConcurrency = draft.maxTransferConcurrency;
+  if (!isRuntimeLocked("maxIpConcurrency") && draft.maxIpConcurrency !== current.maxIpConcurrency) patch.maxIpConcurrency = draft.maxIpConcurrency;
+  if (!isRuntimeLocked("maxTaskConcurrency") && draft.maxTaskConcurrency !== current.maxTaskConcurrency) patch.maxTaskConcurrency = draft.maxTaskConcurrency;
+  if (!isRuntimeLocked("taskHistoryLimit") && draft.taskHistoryLimit !== current.taskHistoryLimit) patch.taskHistoryLimit = draft.taskHistoryLimit;
+  if (!isRuntimeLocked("taskSpeedLimitBytesPerSec") && draft.taskSpeedLimitBytesPerSec !== current.taskSpeedLimitBytesPerSec) patch.taskSpeedLimitBytesPerSec = draft.taskSpeedLimitBytesPerSec ?? null;
+  if (!isRuntimeLocked("maxExtractBytes") && draft.maxExtractBytes !== current.maxExtractBytes) patch.maxExtractBytes = draft.maxExtractBytes ?? null;
+  if (!isRuntimeLocked("maxExtractFiles") && draft.maxExtractFiles !== current.maxExtractFiles) patch.maxExtractFiles = draft.maxExtractFiles ?? null;
+  if (!isRuntimeLocked("maxExtractDepth") && draft.maxExtractDepth !== current.maxExtractDepth) patch.maxExtractDepth = draft.maxExtractDepth;
+  if (!isRuntimeLocked("indexEnabled") && draft.indexEnabled !== current.indexEnabled) patch.indexEnabled = draft.indexEnabled;
+  if (!isRuntimeLocked("indexScanDelayMs") && draft.indexScanDelayMs !== current.indexScanDelayMs) patch.indexScanDelayMs = draft.indexScanDelayMs;
+  if (!isRuntimeLocked("auditMaxBytes") && draft.auditMaxBytes !== current.auditMaxBytes) patch.auditMaxBytes = draft.auditMaxBytes ?? null;
+  if (!isRuntimeLocked("auditRetentionFiles") && draft.auditRetentionFiles !== current.auditRetentionFiles) patch.auditRetentionFiles = draft.auditRetentionFiles;
+  if (!isRuntimeLocked("trashRetentionDays") && draft.trashRetentionDays !== current.trashRetentionDays) patch.trashRetentionDays = draft.trashRetentionDays ?? null;
+  if (!isRuntimeLocked("trashMaxBytes") && draft.trashMaxBytes !== current.trashMaxBytes) patch.trashMaxBytes = draft.trashMaxBytes ?? null;
+  if (!isRuntimeLocked("conflictPolicy") && draft.conflictPolicy !== current.conflictPolicy) patch.conflictPolicy = draft.conflictPolicy;
+
+  return patch;
+}
+
+const buildStartupPatch = (): StartupSettingsPatch => {
+  if (!startupSettings.value) return {};
+  const current = startupSettings.value;
+  const draft = buildStartupDraft();
+  const patch: StartupSettingsPatch = {};
+
+  if (!isStartupLocked("bindAddress") && draft.bindAddress !== current.bindAddress) patch.bindAddress = draft.bindAddress;
+  if (!isStartupLocked("port") && draft.port !== current.port) patch.port = draft.port;
+  if (!isStartupLocked("mappingFile") && draft.mappingFile !== current.mappingFile) patch.mappingFile = draft.mappingFile;
+  if (!isStartupLocked("authFile") && draft.authFile !== current.authFile) patch.authFile = draft.authFile;
+  if (!isStartupLocked("favoritesFile") && draft.favoritesFile !== current.favoritesFile) patch.favoritesFile = draft.favoritesFile;
+  if (!isStartupLocked("trashDir") && draft.trashDir !== current.trashDir) patch.trashDir = draft.trashDir;
+  if (!isStartupLocked("staticDir") && draft.staticDir !== current.staticDir) patch.staticDir = draft.staticDir;
+  if (!isStartupLocked("corsAllowedOrigins") && !arraysEqual(draft.corsAllowedOrigins, current.corsAllowedOrigins)) patch.corsAllowedOrigins = draft.corsAllowedOrigins;
+  if (!isStartupLocked("trustProxyHeaders") && draft.trustProxyHeaders !== current.trustProxyHeaders) patch.trustProxyHeaders = draft.trustProxyHeaders;
+  if (!isStartupLocked("auditFile") && draft.auditFile !== current.auditFile) patch.auditFile = draft.auditFile;
+  if (!isStartupLocked("indexRebuildOnStartup") && draft.indexRebuildOnStartup !== current.indexRebuildOnStartup) patch.indexRebuildOnStartup = draft.indexRebuildOnStartup;
+
+  return patch;
+}
+
+const saveSettings = async () => {
+  if (!canSaveSettings.value) return;
+  message.value = "";
+  saving.value = true;
+  try {
+    const runtime = buildRuntimePatch();
+    const startup = buildStartupPatch();
+    const request = {
+      ...(Object.keys(runtime).length ? {runtime} : {}),
+      ...(Object.keys(startup).length ? {startup} : {})
+    };
+    if (!Object.keys(request).length) {
+      showWarning("没有需要保存的配置");
+      return;
+    }
+    const next = await updateSettings(request);
+    applySettingsSnapshot(next);
+    showSuccess(next.restartPending ? "配置已保存，部分启动配置需要重启后生效" : "配置已保存");
+    await Promise.all([loadIndexStatus(false), loadMetrics(false)]);
+  } catch (error) {
+    showError(error, "保存配置失败");
+  } finally {
+    saving.value = false;
+  }
+}
+
+const requestReloadSettings = async () => {
+  if (reloadingSettings.value) return;
+  message.value = "";
+  reloadingSettings.value = true;
+  try {
+    const next = await reloadSettings();
+    applySettingsSnapshot(next);
+    showSuccess(next.restartPending ? "已从配置文件重载，启动配置仍需重启后进入当前进程" : "已从配置文件重载");
+    await Promise.all([loadIndexStatus(false), loadMetrics(false)]);
+  } catch (error) {
+    showError(error, "重载配置失败");
+  } finally {
+    reloadingSettings.value = false;
+  }
+}
+
+const resetSettingsForms = () => {
+  if (!settingsSnapshot.value) return;
+  syncRuntimeForm(settingsSnapshot.value.runtime);
+  syncStartupForm(settingsSnapshot.value.startup);
+  showWarning("已撤销未保存的配置改动");
 }
 
 const loadIndexStatus = async (showFailure = true) => {
@@ -255,9 +627,11 @@ const requestAuditCleanup = async () => {
 const addMapping = async () => {
   message.value = "";
   try {
-    await createMapping({...form});
-    resetForm();
-    await load();
+    await createMapping({...mappingForm});
+    resetMappingForm();
+    const mappingData = await getMappings();
+    mappings.value = mappingData;
+    showSuccess("挂载目录已添加");
   } catch (error) {
     showError(error, "添加挂载失败");
   }
@@ -266,11 +640,15 @@ const addMapping = async () => {
 const saveMapping = async (mapping: PathMapping) => {
   if (mapping.id == null) return;
   message.value = "";
+  mappingSavingId.value = mapping.id;
   try {
     await updateMapping(mapping.id, mapping);
-    await load();
+    mappings.value = await getMappings();
+    showSuccess("挂载目录已保存");
   } catch (error) {
     showError(error, "保存挂载失败");
+  } finally {
+    mappingSavingId.value = null;
   }
 }
 
@@ -280,16 +658,11 @@ const removeMapping = async (mapping: PathMapping) => {
   message.value = "";
   try {
     await deleteMapping(mapping.id);
-    await load();
+    mappings.value = await getMappings();
+    showSuccess("挂载目录已删除");
   } catch (error) {
     showError(error, "删除挂载失败");
   }
-}
-
-const resetPasswordForm = () => {
-  passwordForm.currentPassword = "";
-  passwordForm.newPassword = "";
-  passwordForm.confirmPassword = "";
 }
 
 const savePassword = async () => {
@@ -306,415 +679,638 @@ const savePassword = async () => {
     showError(error, "修改密码失败");
   }
 }
+
+const serviceStatusText = (status?: string | null) => {
+  if (!status) return "未知";
+  return {
+    ok: "正常",
+    notReady: "未就绪",
+    error: "异常"
+  }[status] ?? status;
+}
+
+const serviceStatusClass = (status?: string | null) => {
+  if (!status) return "disabled";
+  if (status === "ok") return "ok";
+  if (status === "notReady") return "warning";
+  return "error";
+}
+
+const indexStateText = (status: IndexStatus | null) => {
+  if (!status) return "未知";
+  if (!status.enabled || status.state === "disabled") return "未启用";
+  return {
+    idle: "空闲",
+    building: "重建中",
+    error: "异常"
+  }[status.state] ?? status.state;
+}
+
+const indexStateClass = (status: IndexStatus | null) => {
+  if (!status || !status.enabled || status.state === "disabled") return "disabled";
+  return {
+    idle: "idle",
+    building: "building",
+    error: "error"
+  }[status.state] ?? "idle";
+}
+
+const optionalDateText = (value?: string | null) => value ? formatEntryDate(value) : "-";
+const countText = (value?: number) => typeof value === "number" && Number.isFinite(value) ? String(value) : "-";
+
+const limitUsageText = (active?: number, limit?: number) => {
+  if (!Number.isFinite(active) || !Number.isFinite(limit)) return "-";
+  return `${active}/${limit}`;
+}
+
+const limitUsageRatio = (active?: number, limit?: number) => {
+  if (!Number.isFinite(active) || !Number.isFinite(limit) || !limit) return "0%";
+  return `${Math.min(100, Math.max(0, Number(active) / Number(limit) * 100))}%`;
+}
+
+const startupFieldName = (fieldPath: string) => {
+  const key = fieldPath.replace(/^startup\./, "") as keyof StartupSettings;
+  return startupFieldLabels[key] ?? fieldPath;
+}
+
+const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) => {
+  if (!source) return "-";
+  const key = fieldPath.replace(/^startup\./, "") as keyof StartupSettings;
+  const value = source[key];
+  if (Array.isArray(value)) return value.length ? value.join("，") : "同源";
+  if (typeof value === "boolean") return value ? "启用" : "关闭";
+  return String(value ?? "-");
+}
 </script>
 
 <template>
   <div class="settings-page">
-    <header>
-      <button class="ghost-button" @click="router.push('/')">返回</button>
-      <h1>设置</h1>
-      <button class="ghost-button" @click="load">刷新</button>
+    <header class="settings-topbar">
+      <button class="icon-button" title="返回文件浏览器" @click="router.push('/')">
+        <Icon icon="action.previous" />
+      </button>
+      <div class="settings-title">
+        <h1>设置</h1>
+        <span>{{ settingsSnapshot?.restartPending ? "有启动配置等待重启生效" : `当前：${activeNavItem.label}` }}</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="plain-button" :disabled="loading || saving" @click="load">
+          <Icon class="icon-motion-spin" :class="{'is-spinning': loading}" icon="action.refresh" />
+          刷新
+        </button>
+        <button class="plain-button" :disabled="reloadingSettings || saving" @click="requestReloadSettings">
+          <Icon class="icon-motion-spin" :class="{'is-spinning': reloadingSettings}" icon="action.refresh" />
+          重载配置
+        </button>
+        <button class="plain-button" :disabled="!settingsDirty || saving" @click="resetSettingsForms">
+          撤销
+        </button>
+        <button class="primary-button" :disabled="!canSaveSettings" @click="saveSettings">
+          <Icon icon="action.save" />
+          保存更改
+        </button>
+      </div>
     </header>
 
-    <main>
-      <section class="panel">
-        <h2>挂载目录</h2>
-        <form class="mapping-form" @submit.prevent="addMapping">
-          <input v-model="form.mountPath" placeholder="/repo" required>
-          <input v-model="form.folderPath" placeholder="D:\Files" required>
-          <input v-model="form.remark" placeholder="备注">
-          <input v-model.number="form.order" type="number" placeholder="排序">
-          <label class="check-field">
-            <input v-model="form.writable" type="checkbox">
-            <span>可写</span>
-          </label>
-          <button class="primary-button" type="submit">添加</button>
-        </form>
+    <main class="settings-shell">
+      <aside class="settings-sidebar" aria-label="设置分组">
+        <button
+            v-for="item in navItems"
+            :key="item.id"
+            type="button"
+            class="nav-item"
+            :class="{active: activeSettingsPage === item.id}"
+            @click="selectSettingsPage(item.id)">
+          <Icon :icon="item.icon" />
+          <span>{{ item.label }}</span>
+        </button>
+      </aside>
 
-        <div class="mapping-list">
-          <div v-for="mapping in mappings" :key="mapping.id" class="mapping-row">
-            <input v-model="mapping.mountPath">
-            <input v-model="mapping.folderPath">
-            <input v-model="mapping.remark">
-            <input v-model.number="mapping.order" type="number">
-            <label class="check-field">
-              <input v-model="mapping.writable" type="checkbox">
-              <span>可写</span>
-            </label>
-            <button class="plain-button" @click="saveMapping(mapping)">保存</button>
-            <button class="danger-button" @click="removeMapping(mapping)">删除</button>
-          </div>
-          <div v-if="!mappings.length && !loading" class="empty">暂无挂载目录</div>
+      <section class="settings-content">
+        <div v-if="message" class="message" :class="messageKind">
+          <span class="message-dot"></span>
+          <span>{{ message }}</span>
         </div>
-      </section>
 
-      <section class="panel" v-if="settings">
-        <h2>管理员密码</h2>
-        <form class="password-form" @submit.prevent="savePassword">
-          <input v-model="passwordForm.currentPassword" autocomplete="current-password" placeholder="当前密码" type="password" required>
-          <input v-model="passwordForm.newPassword" autocomplete="new-password" minlength="8" placeholder="新密码" type="password" required>
-          <input v-model="passwordForm.confirmPassword" autocomplete="new-password" minlength="8" placeholder="确认新密码" type="password" required>
-          <button class="primary-button" type="submit">更新密码</button>
-        </form>
-      </section>
+        <section v-if="activeSettingsPage === 'overview'" id="overview" class="settings-panel hero-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Overview</p>
+              <h2>服务概览</h2>
+            </div>
+            <div class="panel-actions">
+              <button class="plain-button" :disabled="metricsLoading" @click="loadMetrics(true)">
+                <Icon class="icon-motion-spin" :class="{'is-spinning': metricsLoading}" icon="action.refresh" />
+                刷新状态
+              </button>
+              <button class="plain-button" :disabled="auditCleanupLoading" @click="requestAuditCleanup">
+                <Icon icon="action.clean" />
+                清理审计轮转
+              </button>
+            </div>
+          </div>
 
-      <section class="panel appearance-panel">
-        <h2>外观偏好</h2>
-        <div class="preference-grid">
-          <div class="preference-row">
-            <span>亮暗模式</span>
-            <div class="segmented-control" role="group" aria-label="亮暗模式">
-              <button
-                  v-for="option in colorModeOptions"
-                  :key="option.value"
-                  type="button"
-                  :class="{active: appearanceStore.colorMode === option.value}"
-                  @click="appearanceStore.setColorMode(option.value)">
-                {{ option.label }}
-              </button>
+          <div v-if="settingsSnapshot?.restartPending" class="restart-banner">
+            <Icon icon="action.warning" />
+            <div>
+              <strong>启动配置已保存，但当前进程还在使用旧配置。</strong>
+              <span>重启服务后，下次启动配置会进入当前生效配置。</span>
             </div>
           </div>
-          <div class="preference-row">
-            <span>界面图标</span>
-            <div class="segmented-control" role="group" aria-label="界面图标">
-              <button
-                  v-for="option in iconStyleOptions"
-                  :key="option.value"
-                  type="button"
-                  :class="{active: appearanceStore.iconStyle === option.value}"
-                  @click="appearanceStore.setIconStyle(option.value)">
-                {{ option.label }}
-              </button>
-            </div>
-          </div>
-          <div class="preference-row">
-            <span>文件图标颜色</span>
-            <div class="segmented-control" role="group" aria-label="文件图标颜色">
-              <button
-                  v-for="option in fileIconPaletteOptions"
-                  :key="option.value"
-                  type="button"
-                  :class="{active: appearanceStore.fileIconPalette === option.value}"
-                  @click="appearanceStore.setFileIconPalette(option.value)">
-                {{ option.label }}
-              </button>
-            </div>
-          </div>
-          <div class="preference-row">
-            <span>主题色</span>
-            <div class="color-swatches" aria-label="主题色">
-              <button
-                  v-for="option in accentColorOptions"
-                  :key="option.value"
-                  type="button"
-                  class="color-swatch"
-                  :class="{active: appearanceStore.accentColor === option.value}"
-                  :title="option.label"
-                  :aria-label="option.label"
-                  :style="{backgroundColor: option.color}"
-                  @click="appearanceStore.setAccentColor(option.value)">
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      <section class="panel metrics-panel">
-        <div class="section-heading">
-          <h2>运行状态</h2>
-          <div class="panel-actions">
-            <button class="plain-button" :disabled="metricsLoading" @click="loadMetrics(true)">刷新状态</button>
-            <button class="plain-button" :disabled="auditCleanupLoading" @click="requestAuditCleanup">清理审计轮转</button>
-          </div>
-        </div>
-        <div v-if="metricsLoading && !metrics" class="empty">正在加载运行状态...</div>
-        <template v-else>
-          <div class="service-summary">
-            <section class="service-card" aria-label="服务存活">
-              <div>
-                <span>服务存活</span>
-                <strong class="status-pill" :class="serviceStatusClass(health?.status)">{{ serviceStatusText(health?.status) }}</strong>
-              </div>
+          <div class="status-grid">
+            <article class="status-tile">
+              <span>服务存活</span>
+              <strong class="status-pill" :class="serviceStatusClass(health?.status)">{{ serviceStatusText(health?.status) }}</strong>
               <small>版本 {{ health?.version ?? "-" }}</small>
-            </section>
-            <section class="service-card readiness-card" aria-label="服务就绪">
-              <div>
-                <span>服务就绪</span>
-                <strong class="status-pill" :class="serviceStatusClass(readiness?.status)">{{ serviceStatusText(readiness?.status) }}</strong>
-              </div>
-              <small>版本 {{ readiness?.version ?? "-" }}</small>
-              <div v-if="readiness?.checks?.length" class="readiness-checks">
-                <div v-for="check in readiness.checks" :key="check.name" class="readiness-check">
+            </article>
+            <article class="status-tile">
+              <span>服务就绪</span>
+              <strong class="status-pill" :class="serviceStatusClass(readiness?.status)">{{ serviceStatusText(readiness?.status) }}</strong>
+              <small>{{ readiness?.checks?.length ? `${readiness.checks.length} 项检查` : "暂无检查项" }}</small>
+            </article>
+            <article class="status-tile">
+              <span>挂载目录</span>
+              <strong>{{ countText(metrics?.mappings) }}</strong>
+              <small>页面已加载 {{ mappings.length }} 项</small>
+            </article>
+            <article class="status-tile">
+              <span>后台任务</span>
+              <strong>{{ countText(taskMetrics?.total) }}</strong>
+              <small>运行 {{ countText(taskMetrics?.running) }}，排队 {{ countText(taskMetrics?.queued) }}</small>
+            </article>
+          </div>
+
+          <div class="overview-grid">
+            <section class="inline-section">
+              <h3>就绪检查</h3>
+              <div v-if="readiness?.checks?.length" class="check-list">
+                <div v-for="check in readiness.checks" :key="check.name" class="check-row">
                   <span class="check-dot" :class="serviceStatusClass(check.status)"></span>
                   <strong>{{ check.name }}</strong>
                   <span>{{ check.message }}</span>
                 </div>
               </div>
-            </section>
-          </div>
-
-          <div class="metrics-summary">
-            <div class="metric-tile">
-              <span>挂载</span>
-              <strong>{{ countText(metrics?.mappings) }}</strong>
-            </div>
-            <div class="metric-tile">
-              <span>会话</span>
-              <strong>{{ countText(metrics?.activeSessions) }}</strong>
-            </div>
-            <div class="metric-tile">
-              <span>回收站</span>
-              <strong>{{ countText(metrics?.trashEntries) }}</strong>
-            </div>
-            <div class="metric-tile">
-              <span>后台任务</span>
-              <strong>{{ countText(taskMetrics?.total) }}</strong>
-            </div>
-          </div>
-
-          <div class="metrics-grid">
-            <section class="metric-section" aria-label="任务统计">
-              <h3>任务统计</h3>
-              <dl class="compact-meta">
-                <div><dt>运行 / 排队</dt><dd>{{ countText(taskMetrics?.running) }} / {{ countText(taskMetrics?.queued) }}</dd></div>
-                <div><dt>完成 / 失败 / 取消</dt><dd>{{ countText(taskMetrics?.completed) }} / {{ countText(taskMetrics?.failed) }} / {{ countText(taskMetrics?.cancelled) }}</dd></div>
-                <div><dt>错误数</dt><dd>{{ countText(taskMetrics?.errorsTotal) }}</dd></div>
-                <div><dt>已处理</dt><dd>{{ bytesText(taskMetrics?.processedBytes) }}</dd></div>
-                <div><dt>当前速度</dt><dd>{{ speedText(taskMetrics?.currentSpeedBytesPerSec) }}</dd></div>
-              </dl>
+              <p v-else class="empty-inline">暂无就绪检查信息</p>
             </section>
 
-            <section class="metric-section" aria-label="并发占用">
+            <section class="inline-section">
               <h3>并发占用</h3>
               <div class="limit-list">
                 <div class="limit-row">
-                  <div>
-                    <span>目录扫描</span>
-                    <strong>{{ limitUsageText(limitMetrics?.activeDirScans, limitMetrics?.dirScanLimit) }}</strong>
-                  </div>
+                  <div><span>目录扫描</span><strong>{{ limitUsageText(limitMetrics?.activeDirScans, limitMetrics?.dirScanLimit) }}</strong></div>
                   <span class="limit-bar"><span :style="{width: limitUsageRatio(limitMetrics?.activeDirScans, limitMetrics?.dirScanLimit)}"></span></span>
                 </div>
                 <div class="limit-row">
-                  <div>
-                    <span>文件传输</span>
-                    <strong>{{ limitUsageText(limitMetrics?.activeTransfers, limitMetrics?.transferLimit) }}</strong>
-                  </div>
+                  <div><span>文件传输</span><strong>{{ limitUsageText(limitMetrics?.activeTransfers, limitMetrics?.transferLimit) }}</strong></div>
                   <span class="limit-bar"><span :style="{width: limitUsageRatio(limitMetrics?.activeTransfers, limitMetrics?.transferLimit)}"></span></span>
                 </div>
                 <div class="limit-row">
-                  <div>
-                    <span>IP 请求</span>
-                    <strong>{{ limitUsageText(limitMetrics?.activeIpRequests, limitMetrics?.ipLimit) }}</strong>
-                  </div>
+                  <div><span>IP 请求</span><strong>{{ limitUsageText(limitMetrics?.activeIpRequests, limitMetrics?.ipLimit) }}</strong></div>
                   <span class="limit-bar"><span :style="{width: limitUsageRatio(limitMetrics?.activeIpRequests, limitMetrics?.ipLimit)}"></span></span>
-                </div>
-                <div class="limit-row tracked">
-                  <div>
-                    <span>已跟踪 IP</span>
-                    <strong>{{ countText(limitMetrics?.trackedIps) }}</strong>
-                  </div>
                 </div>
               </div>
             </section>
           </div>
-        </template>
-      </section>
+        </section>
 
-      <section class="panel index-panel">
-        <div class="section-heading">
-          <h2>搜索索引</h2>
-          <div class="panel-actions">
-            <button class="plain-button" :disabled="indexBusy" @click="loadIndexStatus(true)">刷新状态</button>
-            <button class="primary-button" :disabled="!canRebuildIndex" @click="requestIndexRebuild">重建索引</button>
-            <button v-if="indexBuilding" class="danger-button" :disabled="!canCancelIndex" @click="requestIndexCancel">取消重建</button>
+        <section v-if="activeSettingsPage === 'runtime'" id="runtime" class="settings-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Runtime</p>
+              <h2>运行配置</h2>
+            </div>
+            <span class="section-badge hot">保存后立即影响后续请求</span>
           </div>
-        </div>
-        <div class="index-status-line">
-          <span class="index-state" :class="indexStateClass(indexStatus)">{{ indexLoading ? "读取中" : indexStateText(indexStatus) }}</span>
-          <span>已索引 {{ indexEntryCountText(indexStatus?.indexedEntries) }}</span>
-        </div>
-        <dl class="index-meta">
-          <div><dt>上次开始</dt><dd>{{ optionalDateText(indexStatus?.lastStartedAt) }}</dd></div>
-          <div><dt>上次完成</dt><dd>{{ optionalDateText(indexStatus?.lastFinishedAt) }}</dd></div>
-          <div v-if="indexStatus?.lastError"><dt>错误</dt><dd>{{ indexStatus.lastError }}</dd></div>
-        </dl>
-      </section>
 
-      <section class="panel" v-if="settings">
-        <h2>服务配置</h2>
-        <dl>
-          <div><dt>监听地址</dt><dd>{{ settings.bindAddress }}:{{ settings.port }}</dd></div>
-          <div><dt>映射文件</dt><dd>{{ settings.mappingFile }}</dd></div>
-          <div><dt>配置文件</dt><dd>{{ settings.configFile }}</dd></div>
-          <div><dt>回收站</dt><dd>{{ settings.trashDir }}</dd></div>
-          <div><dt>静态目录</dt><dd>{{ settings.staticDir }}</dd></div>
-          <div><dt>CORS 来源</dt><dd>{{ corsOriginsText(settings.corsAllowedOrigins) }}</dd></div>
-          <div><dt>信任代理来源头</dt><dd>{{ settings.trustProxyHeaders ? "已启用" : "未启用" }}</dd></div>
-          <div><dt>编辑上限</dt><dd>{{ bytesText(settings.maxEditBytes) }}</dd></div>
-          <div><dt>可编辑扩展名</dt><dd>{{ listText(settings.editableExtensions) }}</dd></div>
-          <div><dt>可编辑 MIME</dt><dd>{{ listText(settings.editableMimeTypes) }}</dd></div>
-          <div><dt>上传上限</dt><dd>{{ optionalBytesText(settings.maxUploadBytes) }}</dd></div>
-          <div><dt>目录分页上限</dt><dd>{{ settings.maxDirPageSize }}</dd></div>
-          <div><dt>目录并发</dt><dd>{{ settings.maxDirConcurrency }}</dd></div>
-          <div><dt>传输并发</dt><dd>{{ settings.maxTransferConcurrency }}</dd></div>
-          <div><dt>IP 并发</dt><dd>{{ settings.maxIpConcurrency }}</dd></div>
-          <div><dt>任务并发</dt><dd>{{ settings.maxTaskConcurrency }}</dd></div>
-          <div><dt>任务历史</dt><dd>最近 {{ settings.taskHistoryLimit }} 条已结束任务</dd></div>
-          <div><dt>任务限速</dt><dd>{{ settings.taskSpeedLimitBytesPerSec ? speedText(settings.taskSpeedLimitBytesPerSec) : "不限制" }}</dd></div>
-          <div><dt>解压字节上限</dt><dd>{{ optionalBytesText(settings.maxExtractBytes) }}</dd></div>
-          <div><dt>解压条目上限</dt><dd>{{ settings.maxExtractFiles ? settings.maxExtractFiles : "不限制" }}</dd></div>
-          <div><dt>搜索索引</dt><dd>{{ settings.indexEnabled ? "已启用" : "未启用" }}</dd></div>
-          <div><dt>启动重建索引</dt><dd>{{ settings.indexRebuildOnStartup ? "启用" : "关闭" }}</dd></div>
-          <div><dt>审计日志</dt><dd>{{ settings.auditFile }}</dd></div>
-          <div><dt>审计轮转</dt><dd>{{ optionalBytesText(settings.auditMaxBytes) }}</dd></div>
-          <div><dt>审计保留</dt><dd>最近 {{ settings.auditRetentionFiles }} 个轮转文件</dd></div>
-          <div><dt>回收站保留</dt><dd>{{ settings.trashRetentionDays ? `${settings.trashRetentionDays} 天` : "不限制" }}</dd></div>
-          <div><dt>回收站容量</dt><dd>{{ optionalBytesText(settings.trashMaxBytes) }}</dd></div>
-          <div><dt>冲突策略</dt><dd>{{ conflictPolicyText(settings.conflictPolicy) }}</dd></div>
-          <div><dt>认证</dt><dd>{{ settings.authConfigured ? "已初始化" : "未初始化" }}</dd></div>
-        </dl>
-      </section>
+          <div class="setting-group">
+            <h3>编辑与上传</h3>
+            <div class="form-grid">
+              <label class="setting-field">
+                <span>编辑上限 <small>字节</small></span>
+                <input v-model="runtimeForm.maxEditBytes" type="number" min="1" :disabled="isRuntimeLocked('maxEditBytes')">
+              </label>
+              <label class="setting-field">
+                <span>上传上限 <small>空为不限制</small></span>
+                <input v-model="runtimeForm.maxUploadBytes" type="number" min="1" :disabled="isRuntimeLocked('maxUploadBytes')">
+              </label>
+              <label class="setting-field wide">
+                <span>可编辑扩展名 <small>每行一个，空为不限制</small></span>
+                <textarea v-model="runtimeForm.editableExtensions" :disabled="isRuntimeLocked('editableExtensions')" rows="4"></textarea>
+              </label>
+              <label class="setting-field wide">
+                <span>可编辑 MIME <small>每行一个，空为不限制</small></span>
+                <textarea v-model="runtimeForm.editableMimeTypes" :disabled="isRuntimeLocked('editableMimeTypes')" rows="4"></textarea>
+              </label>
+            </div>
+          </div>
 
-      <div v-if="message" class="message" :class="{success: messageKind === 'success'}">{{ message }}</div>
+          <div class="setting-group">
+            <h3>浏览与并发</h3>
+            <div class="form-grid">
+              <label class="setting-field">
+                <span>目录分页上限</span>
+                <input v-model="runtimeForm.maxDirPageSize" type="number" min="1" :disabled="isRuntimeLocked('maxDirPageSize')">
+              </label>
+              <label class="setting-field">
+                <span>目录扫描并发</span>
+                <input v-model="runtimeForm.maxDirConcurrency" type="number" min="1" :disabled="isRuntimeLocked('maxDirConcurrency')">
+              </label>
+              <label class="setting-field">
+                <span>文件传输并发</span>
+                <input v-model="runtimeForm.maxTransferConcurrency" type="number" min="1" :disabled="isRuntimeLocked('maxTransferConcurrency')">
+              </label>
+              <label class="setting-field">
+                <span>单 IP 并发</span>
+                <input v-model="runtimeForm.maxIpConcurrency" type="number" min="1" :disabled="isRuntimeLocked('maxIpConcurrency')">
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <h3>任务与压缩</h3>
+            <div class="form-grid">
+              <label class="setting-field">
+                <span>任务并发</span>
+                <input v-model="runtimeForm.maxTaskConcurrency" type="number" min="1" :disabled="isRuntimeLocked('maxTaskConcurrency')">
+              </label>
+              <label class="setting-field">
+                <span>任务历史</span>
+                <input v-model="runtimeForm.taskHistoryLimit" type="number" min="1" :disabled="isRuntimeLocked('taskHistoryLimit')">
+              </label>
+              <label class="setting-field">
+                <span>任务限速 <small>字节/秒，空为不限制</small></span>
+                <input v-model="runtimeForm.taskSpeedLimitBytesPerSec" type="number" min="1" :disabled="isRuntimeLocked('taskSpeedLimitBytesPerSec')">
+              </label>
+              <label class="setting-field">
+                <span>解压字节上限 <small>空为不限制</small></span>
+                <input v-model="runtimeForm.maxExtractBytes" type="number" min="1" :disabled="isRuntimeLocked('maxExtractBytes')">
+              </label>
+              <label class="setting-field">
+                <span>解压条目上限 <small>空为不限制</small></span>
+                <input v-model="runtimeForm.maxExtractFiles" type="number" min="1" :disabled="isRuntimeLocked('maxExtractFiles')">
+              </label>
+              <label class="setting-field">
+                <span>解压深度上限</span>
+                <input v-model="runtimeForm.maxExtractDepth" type="number" min="1" :disabled="isRuntimeLocked('maxExtractDepth')">
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <h3>搜索、审计与回收站</h3>
+            <div class="form-grid">
+              <label class="toggle-field">
+                <input v-model="runtimeForm.indexEnabled" type="checkbox" :disabled="isRuntimeLocked('indexEnabled')">
+                <span><strong>启用搜索索引</strong><small>影响后续索引任务</small></span>
+              </label>
+              <label class="setting-field">
+                <span>索引扫描延迟 <small>毫秒</small></span>
+                <input v-model="runtimeForm.indexScanDelayMs" type="number" min="0" :disabled="isRuntimeLocked('indexScanDelayMs')">
+              </label>
+              <label class="setting-field">
+                <span>审计轮转大小 <small>字节，空为不限制</small></span>
+                <input v-model="runtimeForm.auditMaxBytes" type="number" min="1" :disabled="isRuntimeLocked('auditMaxBytes')">
+              </label>
+              <label class="setting-field">
+                <span>审计保留数量</span>
+                <input v-model="runtimeForm.auditRetentionFiles" type="number" min="0" :disabled="isRuntimeLocked('auditRetentionFiles')">
+              </label>
+              <label class="setting-field">
+                <span>回收站保留天数 <small>空为不限制</small></span>
+                <input v-model="runtimeForm.trashRetentionDays" type="number" min="1" :disabled="isRuntimeLocked('trashRetentionDays')">
+              </label>
+              <label class="setting-field">
+                <span>回收站容量 <small>字节，空为不限制</small></span>
+                <input v-model="runtimeForm.trashMaxBytes" type="number" min="1" :disabled="isRuntimeLocked('trashMaxBytes')">
+              </label>
+              <label class="setting-field wide">
+                <span>默认冲突策略</span>
+                <select v-model="runtimeForm.conflictPolicy" :disabled="isRuntimeLocked('conflictPolicy')">
+                  <option v-for="option in conflictPolicyOptions" :key="option.value" :value="option.value">
+                    {{ option.label }} - {{ option.description }}
+                  </option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="activeSettingsPage === 'startup'" id="startup" class="settings-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Startup</p>
+              <h2>启动配置</h2>
+            </div>
+            <span class="section-badge" :class="{warning: settingsSnapshot?.restartPending}">
+              {{ settingsSnapshot?.restartPending ? "等待重启生效" : "下次启动配置" }}
+            </span>
+          </div>
+
+          <div v-if="settingsSnapshot?.restartPendingFields.length" class="pending-list">
+            <div v-for="field in settingsSnapshot.restartPendingFields" :key="field" class="pending-row">
+              <strong>{{ startupFieldName(field) }}</strong>
+              <span>当前：{{ startupFieldValue(field, activeStartupSettings) }}</span>
+              <span>下次：{{ startupFieldValue(field, startupSettings) }}</span>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <h3>服务与入口</h3>
+            <div class="form-grid">
+              <label class="setting-field" :class="{pending: isStartupPending('bindAddress')}">
+                <span>监听地址</span>
+                <input v-model="startupForm.bindAddress" :disabled="isStartupLocked('bindAddress')">
+              </label>
+              <label class="setting-field" :class="{pending: isStartupPending('port')}">
+                <span>端口</span>
+                <input v-model="startupForm.port" type="number" min="1" max="65535" :disabled="isStartupLocked('port')">
+              </label>
+              <label class="setting-field wide" :class="{pending: isStartupPending('staticDir')}">
+                <span>静态文件目录</span>
+                <input v-model="startupForm.staticDir" :disabled="isStartupLocked('staticDir')">
+              </label>
+              <label class="setting-field wide readonly-field">
+                <span>配置文件 <small>不支持在线修改</small></span>
+                <input v-model="startupForm.configFile" disabled>
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <h3>数据文件</h3>
+            <div class="form-grid">
+              <label class="setting-field wide" :class="{pending: isStartupPending('mappingFile')}">
+                <span>挂载配置文件</span>
+                <input v-model="startupForm.mappingFile" :disabled="isStartupLocked('mappingFile')">
+              </label>
+              <label class="setting-field wide" :class="{pending: isStartupPending('authFile')}">
+                <span>认证文件</span>
+                <input v-model="startupForm.authFile" :disabled="isStartupLocked('authFile')">
+              </label>
+              <label class="setting-field wide" :class="{pending: isStartupPending('favoritesFile')}">
+                <span>收藏文件</span>
+                <input v-model="startupForm.favoritesFile" :disabled="isStartupLocked('favoritesFile')">
+              </label>
+              <label class="setting-field wide" :class="{pending: isStartupPending('trashDir')}">
+                <span>回收站目录</span>
+                <input v-model="startupForm.trashDir" :disabled="isStartupLocked('trashDir')">
+              </label>
+              <label class="setting-field wide" :class="{pending: isStartupPending('auditFile')}">
+                <span>审计日志文件</span>
+                <input v-model="startupForm.auditFile" :disabled="isStartupLocked('auditFile')">
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <h3>网络与启动行为</h3>
+            <div class="form-grid">
+              <label class="setting-field wide" :class="{pending: isStartupPending('corsAllowedOrigins')}">
+                <span>CORS 来源 <small>每行一个，空为同源</small></span>
+                <textarea v-model="startupForm.corsAllowedOrigins" rows="4" :disabled="isStartupLocked('corsAllowedOrigins')"></textarea>
+              </label>
+              <label class="toggle-field" :class="{pending: isStartupPending('trustProxyHeaders')}">
+                <input v-model="startupForm.trustProxyHeaders" type="checkbox" :disabled="isStartupLocked('trustProxyHeaders')">
+                <span><strong>信任代理来源头</strong><small>位于反向代理后方时使用</small></span>
+              </label>
+              <label class="toggle-field" :class="{pending: isStartupPending('indexRebuildOnStartup')}">
+                <input v-model="startupForm.indexRebuildOnStartup" type="checkbox" :disabled="isStartupLocked('indexRebuildOnStartup')">
+                <span><strong>启动时重建索引</strong><small>下次启动时执行</small></span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="activeSettingsPage === 'mappings'" id="mappings" class="settings-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Mounts</p>
+              <h2>挂载目录</h2>
+            </div>
+          </div>
+
+          <form class="mapping-form" @submit.prevent="addMapping">
+            <input v-model="mappingForm.mountPath" placeholder="/repo" required>
+            <input v-model="mappingForm.folderPath" placeholder="D:\\Files" required>
+            <input v-model="mappingForm.remark" placeholder="备注">
+            <input v-model.number="mappingForm.order" type="number" placeholder="排序">
+            <label class="check-field">
+              <input v-model="mappingForm.writable" type="checkbox">
+              <span>可写</span>
+            </label>
+            <button class="primary-button" type="submit">
+              <Icon icon="action.add" />
+              添加
+            </button>
+          </form>
+
+          <div class="mapping-list">
+            <div v-for="mapping in mappings" :key="mapping.id" class="mapping-row">
+              <input v-model="mapping.mountPath" aria-label="挂载路径">
+              <input v-model="mapping.folderPath" aria-label="真实路径">
+              <input v-model="mapping.remark" aria-label="备注">
+              <input v-model.number="mapping.order" type="number" aria-label="排序">
+              <label class="check-field">
+                <input v-model="mapping.writable" type="checkbox">
+                <span>可写</span>
+              </label>
+              <button class="plain-button" :disabled="mappingSavingId === mapping.id" @click="saveMapping(mapping)">保存</button>
+              <button class="danger-button" @click="removeMapping(mapping)">删除</button>
+            </div>
+            <div v-if="!mappings.length && !loading" class="empty">暂无挂载目录</div>
+          </div>
+        </section>
+
+        <section v-if="activeSettingsPage === 'index'" id="index" class="settings-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Index</p>
+              <h2>搜索索引</h2>
+            </div>
+            <div class="panel-actions">
+              <button class="plain-button" :disabled="indexBusy" @click="loadIndexStatus(true)">
+                <Icon class="icon-motion-spin" :class="{'is-spinning': indexLoading}" icon="action.refresh" />
+                刷新状态
+              </button>
+              <button class="primary-button" :disabled="!canRebuildIndex" @click="requestIndexRebuild">重建索引</button>
+              <button v-if="indexBuilding" class="danger-button" :disabled="!canCancelIndex" @click="requestIndexCancel">取消重建</button>
+            </div>
+          </div>
+          <div class="index-summary">
+            <span class="index-state" :class="indexStateClass(indexStatus)">{{ indexLoading ? "读取中" : indexStateText(indexStatus) }}</span>
+            <span>已索引 {{ countText(indexStatus?.indexedEntries) }} 项</span>
+            <span>上次开始 {{ optionalDateText(indexStatus?.lastStartedAt) }}</span>
+            <span>上次完成 {{ optionalDateText(indexStatus?.lastFinishedAt) }}</span>
+          </div>
+          <p v-if="indexStatus?.lastError" class="error-text">{{ indexStatus.lastError }}</p>
+        </section>
+
+        <section v-if="activeSettingsPage === 'security'" id="security" class="settings-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Security</p>
+              <h2>管理员密码</h2>
+            </div>
+            <span class="section-badge">{{ settingsSnapshot?.authConfigured ? "已初始化" : "未初始化" }}</span>
+          </div>
+          <form class="password-form" @submit.prevent="savePassword">
+            <input v-model="passwordForm.currentPassword" autocomplete="current-password" placeholder="当前密码" type="password" required>
+            <input v-model="passwordForm.newPassword" autocomplete="new-password" minlength="8" placeholder="新密码" type="password" required>
+            <input v-model="passwordForm.confirmPassword" autocomplete="new-password" minlength="8" placeholder="确认新密码" type="password" required>
+            <button class="primary-button" type="submit">更新密码</button>
+          </form>
+        </section>
+      </section>
     </main>
   </div>
 </template>
 
 <style scoped lang="postcss">
 @reference "tailwindcss";
+
 .settings-page {
   @apply min-h-screen;
   background: var(--app-bg);
   color: var(--app-text);
 }
 
-header {
-  @apply h-14 border-b px-4 flex items-center justify-between;
+.settings-topbar {
+  @apply sticky top-0 z-30 flex h-14 items-center gap-3 border-b px-4;
   border-color: var(--app-border-soft);
-  background: var(--app-panel-solid);
+  background: color-mix(in srgb, var(--app-panel-solid) 94%, transparent);
+  backdrop-filter: blur(18px);
 }
 
-h1 {
-  @apply text-xl font-semibold
+.settings-title {
+  @apply min-w-0 flex-1;
 }
 
-main {
-  @apply p-4 flex flex-col gap-4
+.settings-title h1 {
+  @apply text-base font-semibold leading-tight;
 }
 
-.panel {
-  @apply border rounded-lg p-4 flex flex-col gap-4;
-  border-color: var(--app-border-soft);
-  background: var(--app-panel-solid);
+.settings-title span {
+  @apply block truncate text-xs;
+  color: var(--app-text-subtle);
 }
 
-h2 {
-  @apply text-base font-semibold
-}
-
-.section-heading {
-  @apply flex flex-wrap items-center justify-between gap-3;
-}
-
+.topbar-actions,
 .panel-actions {
-  @apply flex flex-wrap items-center gap-2;
+  @apply flex shrink-0 flex-wrap items-center gap-2;
 }
 
-.mapping-form,
-.mapping-row,
-.password-form {
-  @apply grid gap-2 items-center
+.settings-shell {
+  @apply grid gap-4 p-4;
+  grid-template-columns: 13rem minmax(0, 1fr);
 }
 
-.mapping-form {
-  grid-template-columns: 1fr 2fr 1fr 90px 90px 90px;
-}
-
-.mapping-row {
-  grid-template-columns: 1fr 2fr 1fr 90px 90px 80px 80px;
-}
-
-.password-form {
-  grid-template-columns: repeat(3, minmax(0, 1fr)) 100px;
-}
-
-.preference-grid {
-  @apply grid gap-3;
-}
-
-.preference-row {
-  @apply grid items-center gap-3;
-  grid-template-columns: 9rem minmax(0, 1fr);
-}
-
-.preference-row > span {
-  @apply text-sm font-medium;
-  color: var(--app-text-subtle);
-}
-
-.segmented-control {
-  @apply inline-flex w-fit rounded-md border p-0.5;
+.settings-sidebar {
+  @apply sticky top-[4.5rem] flex h-[calc(100vh-5.5rem)] flex-col gap-1 overflow-auto rounded-lg border p-2;
   border-color: var(--app-border-soft);
-  background: var(--app-panel-muted);
+  background: var(--app-panel-solid);
 }
 
-.segmented-control button {
-  @apply h-8 rounded px-3 text-sm font-medium;
-  color: var(--app-text-subtle);
+.nav-item {
+  @apply flex h-9 w-full items-center gap-2 rounded-md border-0 px-3 text-left text-sm font-medium no-underline outline-none transition;
+  background: transparent;
+  color: var(--app-text-muted);
 }
 
-.segmented-control button:hover {
+.nav-item:hover {
   background: var(--app-control-hover);
+  color: var(--app-text);
 }
 
-.segmented-control button.active {
-  background: var(--app-accent, #2563eb);
-  @apply shadow-sm;
-  color: var(--app-accent-contrast);
+.nav-item.active {
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
+  box-shadow: inset 3px 0 0 var(--app-accent, #2563eb);
 }
 
-.color-swatches {
-  @apply flex items-center gap-2;
+.settings-content {
+  @apply flex min-w-0 flex-col gap-4;
 }
 
-.color-swatch {
-  @apply h-7 w-7 rounded-full border-2 shadow ring-1 transition;
-  border-color: var(--app-panel-solid);
-  --tw-ring-color: var(--app-border);
+.settings-panel {
+  @apply scroll-mt-20 rounded-lg border p-4;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
+  box-shadow: 0 14px 36px color-mix(in srgb, var(--app-shadow, rgba(15, 23, 42, 0.12)) 16%, transparent);
 }
 
-.color-swatch.active {
-  box-shadow: 0 0 0 3px var(--app-accent-soft, #eff6ff), 0 0 0 5px var(--app-accent-border, #bfdbfe);
+.hero-panel {
+  background:
+      linear-gradient(135deg, var(--app-accent-tint), transparent 46%),
+      var(--app-panel-solid);
 }
 
-.service-summary {
+.panel-heading {
+  @apply mb-4 flex flex-wrap items-start justify-between gap-3;
+}
+
+.eyebrow {
+  @apply mb-1 text-[11px] font-semibold uppercase tracking-wide;
+  color: var(--app-accent, #2563eb);
+}
+
+.panel-heading h2 {
+  @apply text-base font-semibold;
+}
+
+.section-badge {
+  @apply inline-flex h-7 items-center rounded-full px-3 text-xs font-semibold;
+  background: var(--app-control-solid);
+  color: var(--app-text-muted);
+}
+
+.section-badge.hot {
+  background: var(--app-success-soft);
+  color: var(--app-success-text);
+}
+
+.section-badge.warning {
+  background: var(--app-warning-soft);
+  color: var(--app-warning-text);
+}
+
+.restart-banner {
+  @apply mb-4 flex items-start gap-3 rounded-md border px-3 py-2 text-sm;
+  border-color: var(--app-warning-border);
+  background: var(--app-warning-soft);
+  color: var(--app-warning-text);
+}
+
+.restart-banner strong,
+.restart-banner span {
+  @apply block;
+}
+
+.status-grid {
   @apply grid gap-3;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.service-card {
-  @apply min-w-0 rounded-md border p-3;
+.status-tile {
+  @apply min-w-0 rounded-md border px-3 py-2;
   border-color: var(--app-border-soft);
   background: var(--app-panel-muted);
 }
 
-.service-card > div:first-child {
-  @apply flex min-w-0 items-center justify-between gap-3;
-}
-
-.service-card span,
-.service-card small {
-  @apply text-xs;
+.status-tile > span,
+.status-tile small {
+  @apply block truncate text-xs;
   color: var(--app-text-subtle);
 }
 
-.service-card small {
-  @apply mt-2 block;
+.status-tile strong {
+  @apply mt-1 block truncate text-lg font-semibold;
+  color: var(--app-text);
 }
 
 .status-pill {
-  @apply inline-flex h-7 shrink-0 items-center rounded-full px-3 text-xs font-semibold;
-  background: var(--app-panel-solid);
+  @apply inline-flex h-7 w-fit max-w-full items-center rounded-full px-3 text-xs font-semibold;
+  background: var(--app-control-solid);
   color: var(--app-text-muted);
 }
 
@@ -724,8 +1320,8 @@ h2 {
 }
 
 .status-pill.warning {
-  background: var(--app-accent-soft);
-  color: var(--app-accent);
+  background: var(--app-warning-soft);
+  color: var(--app-warning-text);
 }
 
 .status-pill.error {
@@ -733,28 +1329,41 @@ h2 {
   color: var(--app-danger-text);
 }
 
-.status-pill.disabled {
-  background: var(--app-panel-solid);
-  color: var(--app-text-subtle);
+.overview-grid {
+  @apply mt-4 grid gap-4;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
-.readiness-checks {
-  @apply mt-3 grid gap-1.5;
+.inline-section {
+  @apply min-w-0 rounded-md border p-3;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-muted);
 }
 
-.readiness-check {
-  @apply grid min-w-0 items-center gap-2 rounded px-2 py-1 text-xs;
-  grid-template-columns: 0.5rem 6.5rem minmax(0, 1fr);
+.inline-section h3,
+.setting-group h3 {
+  @apply mb-3 text-sm font-semibold;
+  color: var(--app-text);
+}
+
+.check-list,
+.limit-list {
+  @apply grid gap-2;
+}
+
+.check-row {
+  @apply grid min-w-0 items-center gap-2 rounded px-2 py-1.5 text-xs;
+  grid-template-columns: 0.5rem 6rem minmax(0, 1fr);
   background: var(--app-control-solid);
   color: var(--app-text-muted);
 }
 
-.readiness-check strong,
-.readiness-check span:last-child {
+.check-row strong,
+.check-row span:last-child {
   @apply min-w-0 truncate;
 }
 
-.readiness-check strong {
+.check-row strong {
   color: var(--app-text);
 }
 
@@ -768,67 +1377,11 @@ h2 {
 }
 
 .check-dot.warning {
-  background: var(--app-accent);
+  background: var(--app-warning);
 }
 
 .check-dot.error {
   background: var(--app-danger);
-}
-
-.metrics-summary {
-  @apply grid overflow-hidden rounded-md border;
-  border-color: var(--app-border-soft);
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.metric-tile {
-  @apply flex min-w-0 items-center justify-between gap-3 border-r px-3 py-2;
-  border-color: var(--app-border-soft);
-  background: var(--app-panel-muted);
-}
-
-.metric-tile:last-child {
-  @apply border-r-0;
-}
-
-.metric-tile span,
-.limit-row span {
-  @apply truncate text-xs;
-  color: var(--app-text-subtle);
-}
-
-.metric-tile strong {
-  @apply shrink-0 text-base font-semibold;
-  color: var(--app-text);
-}
-
-.metrics-grid {
-  @apply grid gap-4;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-}
-
-.metric-section {
-  @apply min-w-0 rounded-md border p-3;
-  border-color: var(--app-border-soft);
-  background: var(--app-panel-muted);
-}
-
-.metric-section h3 {
-  @apply mb-3 text-sm font-semibold;
-  color: var(--app-text);
-}
-
-.compact-meta {
-  @apply gap-1;
-}
-
-.compact-meta div {
-  @apply py-0.5;
-  grid-template-columns: 7rem minmax(0, 1fr);
-}
-
-.limit-list {
-  @apply flex flex-col gap-3;
 }
 
 .limit-row {
@@ -836,7 +1389,11 @@ h2 {
 }
 
 .limit-row > div {
-  @apply flex min-w-0 items-center justify-between gap-3;
+  @apply flex min-w-0 items-center justify-between gap-3 text-xs;
+}
+
+.limit-row span {
+  color: var(--app-text-subtle);
 }
 
 .limit-row strong {
@@ -854,18 +1411,151 @@ h2 {
   background: var(--app-accent, #2563eb);
 }
 
-.limit-row.tracked {
-  @apply pt-1;
+.setting-group {
+  @apply border-t pt-4 first:border-t-0 first:pt-0;
+  border-color: var(--app-divider);
 }
 
-.index-status-line {
+.form-grid {
+  @apply grid gap-3;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.setting-field {
+  @apply grid min-w-0 gap-1.5;
+}
+
+.setting-field.wide {
+  @apply col-span-2;
+}
+
+.setting-field > span {
+  @apply text-sm font-medium;
+  color: var(--app-text-muted);
+}
+
+.setting-field small {
+  @apply ml-1 text-xs font-normal;
+  color: var(--app-text-subtle);
+}
+
+.setting-field.pending input,
+.setting-field.pending textarea,
+.setting-field.pending select,
+.toggle-field.pending {
+  border-color: var(--app-warning-border);
+  box-shadow: inset 3px 0 0 var(--app-warning);
+}
+
+input,
+textarea,
+select {
+  @apply min-w-0 rounded-md border px-2 text-sm outline-none;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+  color: var(--app-text);
+}
+
+input,
+select {
+  @apply h-9;
+}
+
+textarea {
+  @apply resize-y py-2;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.2));
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  @apply cursor-not-allowed opacity-70;
+  color: var(--app-text-subtle);
+}
+
+.readonly-field input {
+  background: var(--app-panel-muted);
+}
+
+.toggle-field {
+  @apply flex min-h-12 items-center gap-3 rounded-md border px-3 py-2;
+  border-color: var(--app-border-soft);
+  background: var(--app-control-solid);
+}
+
+.toggle-field input,
+.check-field input {
+  @apply h-4 w-4 shrink-0;
+}
+
+.toggle-field span {
+  @apply grid gap-0.5 text-sm;
+}
+
+.toggle-field strong {
+  @apply font-medium;
+  color: var(--app-text);
+}
+
+.toggle-field small {
+  @apply text-xs;
+  color: var(--app-text-subtle);
+}
+
+.pending-list {
+  @apply mb-4 grid gap-2 rounded-md border p-3;
+  border-color: var(--app-warning-border);
+  background: var(--app-warning-soft);
+}
+
+.pending-row {
+  @apply grid min-w-0 gap-2 text-xs;
+  grid-template-columns: 8rem minmax(0, 1fr) minmax(0, 1fr);
+  color: var(--app-warning-text);
+}
+
+.pending-row strong,
+.pending-row span {
+  @apply min-w-0 truncate;
+}
+
+.mapping-form,
+.mapping-row,
+.password-form {
+  @apply grid gap-2 items-center;
+}
+
+.mapping-form {
+  grid-template-columns: 1fr 1.5fr 1fr 5.5rem 5rem 5.5rem;
+}
+
+.mapping-list {
+  @apply mt-3 grid gap-2;
+}
+
+.mapping-row {
+  grid-template-columns: 1fr 1.5fr 1fr 5.5rem 5rem 4.75rem 4.75rem;
+}
+
+.check-field {
+  @apply flex h-9 items-center gap-2 text-sm;
+  color: var(--app-text-muted);
+}
+
+.index-summary {
   @apply flex flex-wrap items-center gap-3 text-sm;
   color: var(--app-text-muted);
 }
 
 .index-state {
   @apply inline-flex h-7 items-center rounded-full px-3 text-xs font-semibold;
-  background: var(--app-panel-muted);
+  background: var(--app-control-solid);
   color: var(--app-text-muted);
 }
 
@@ -876,7 +1566,7 @@ h2 {
 
 .index-state.building {
   background: var(--app-accent-soft);
-  color: var(--app-accent);
+  color: var(--app-accent, #2563eb);
 }
 
 .index-state.error {
@@ -884,41 +1574,36 @@ h2 {
   color: var(--app-danger-text);
 }
 
-.index-state.disabled {
-  background: var(--app-panel-muted);
+.index-state.disabled,
+.status-pill.disabled {
+  background: var(--app-control-solid);
   color: var(--app-text-subtle);
 }
 
-input {
-  @apply h-9 min-w-0 rounded-md border px-2 text-sm outline-none;
-  border-color: var(--app-border-soft);
+.error-text {
+  @apply mt-3 rounded-md border px-3 py-2 text-sm;
+  border-color: var(--app-danger-border);
+  background: var(--app-danger-soft);
+  color: var(--app-danger-text);
+}
+
+.icon-button,
+.primary-button,
+.plain-button,
+.danger-button {
+  @apply inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium outline-none transition;
+}
+
+.icon-button {
+  @apply w-9 px-0;
   background: var(--app-control-solid);
-  color: var(--app-text);
-}
-
-input:focus {
-  border-color: var(--app-accent, #2563eb);
-  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.2));
-}
-
-.check-field {
-  @apply h-9 flex items-center gap-2 text-sm;
   color: var(--app-text-muted);
 }
 
-.check-field input {
-  @apply h-4 w-4
-}
-
-.mapping-list {
-  @apply flex flex-col gap-2
-}
-
-.primary-button,
-.plain-button,
-.danger-button,
-.ghost-button {
-  @apply h-9 rounded-md px-3 text-sm font-medium
+.icon-button:hover,
+.plain-button:hover {
+  background: var(--app-control-hover);
+  color: var(--app-text);
 }
 
 .primary-button {
@@ -930,18 +1615,14 @@ input:focus {
   background: var(--app-accent-strong);
 }
 
-.plain-button,
-.ghost-button {
-  background: var(--app-panel-muted);
+.plain-button {
+  border: 1px solid var(--app-border-soft);
+  background: var(--app-control-solid);
   color: var(--app-text-muted);
 }
 
-.plain-button:hover,
-.ghost-button:hover {
-  background: var(--app-control-hover);
-}
-
 .danger-button {
+  border: 1px solid var(--app-danger-border);
   background: var(--app-danger-soft);
   color: var(--app-danger-text);
 }
@@ -950,45 +1631,40 @@ input:focus {
   background: color-mix(in srgb, var(--app-danger) 16%, var(--app-panel-solid));
 }
 
+.icon-button:focus-visible,
+.primary-button:focus-visible,
+.plain-button:focus-visible,
+.danger-button:focus-visible,
+.nav-item:focus-visible {
+  box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.2));
+}
+
+.icon-button:disabled,
 .primary-button:disabled,
 .plain-button:disabled,
-.danger-button:disabled,
-.ghost-button:disabled {
+.danger-button:disabled {
   @apply cursor-not-allowed opacity-50;
 }
 
-.empty {
+.empty,
+.empty-inline {
   @apply rounded-md border border-dashed px-3 py-6 text-center text-sm;
   border-color: var(--app-border-soft);
   color: var(--app-text-subtle);
 }
 
-dl {
-  @apply grid gap-2 text-sm
-}
-
-.index-meta {
-  @apply grid gap-2 text-sm;
-}
-
-dl div {
-  @apply grid gap-3;
-  grid-template-columns: 8rem minmax(0, 1fr);
-}
-
-dt {
-  color: var(--app-text-subtle);
-}
-
-dd {
-  @apply min-w-0 break-all
+.empty-inline {
+  @apply py-4;
 }
 
 .message {
-  @apply rounded-md border px-3 py-2 text-sm;
-  border-color: var(--app-danger-border);
-  background: var(--app-danger-soft);
-  color: var(--app-danger-text);
+  @apply sticky top-[4.75rem] z-20 flex items-center gap-2 rounded-md border px-3 py-2 text-sm;
+  box-shadow: var(--app-menu-shadow);
+}
+
+.message-dot {
+  @apply h-2 w-2 shrink-0 rounded-full;
+  background: currentColor;
 }
 
 .message.success {
@@ -997,23 +1673,74 @@ dd {
   color: var(--app-success-text);
 }
 
-@media (max-width: 900px) {
-  .mapping-form,
-  .mapping-row,
-  .password-form,
-  .preference-row,
-  .service-summary,
-  .metrics-summary,
-  .metrics-grid {
+.message.warning {
+  border-color: var(--app-warning-border);
+  background: var(--app-warning-soft);
+  color: var(--app-warning-text);
+}
+
+.message.error {
+  border-color: var(--app-danger-border);
+  background: var(--app-danger-soft);
+  color: var(--app-danger-text);
+}
+
+@media (max-width: 1120px) {
+  .settings-shell {
+    grid-template-columns: 11rem minmax(0, 1fr);
+  }
+
+  .status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overview-grid {
     grid-template-columns: 1fr;
   }
 
-  .metric-tile {
-    @apply border-r-0 border-b;
+  .mapping-form,
+  .mapping-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-topbar {
+    @apply h-auto flex-wrap py-2;
   }
 
-  .metric-tile:last-child {
-    @apply border-b-0;
+  .topbar-actions {
+    @apply w-full;
+  }
+
+  .settings-shell {
+    @apply p-3;
+    grid-template-columns: 1fr;
+  }
+
+  .settings-sidebar {
+    @apply static h-auto flex-row overflow-x-auto;
+  }
+
+  .nav-item {
+    @apply shrink-0;
+  }
+
+  .form-grid,
+  .status-grid,
+  .mapping-form,
+  .mapping-row,
+  .password-form,
+  .pending-row {
+    grid-template-columns: 1fr;
+  }
+
+  .setting-field.wide {
+    @apply col-span-1;
+  }
+
+  .message {
+    @apply static;
   }
 }
 </style>

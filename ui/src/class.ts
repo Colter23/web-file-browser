@@ -181,37 +181,96 @@ export interface SessionResponse {
 }
 
 export interface RuntimeSettings {
-    bindAddress: string;
-    port: number;
-    mappingFile: string;
-    configFile: string;
-    trashDir: string;
-    staticDir: string;
-    corsAllowedOrigins: string[];
-    trustProxyHeaders: boolean;
     maxEditBytes: number;
     editableExtensions: string[];
     editableMimeTypes: string[];
-    maxUploadBytes?: number;
+    maxUploadBytes?: number | null;
     maxDirPageSize: number;
     maxDirConcurrency: number;
     maxTransferConcurrency: number;
     maxIpConcurrency: number;
     maxTaskConcurrency: number;
     taskHistoryLimit: number;
-    taskSpeedLimitBytesPerSec?: number;
-    maxExtractBytes?: number;
-    maxExtractFiles?: number;
+    taskSpeedLimitBytesPerSec?: number | null;
+    maxExtractBytes?: number | null;
+    maxExtractFiles?: number | null;
+    maxExtractDepth: number;
     indexEnabled: boolean;
-    indexRebuildOnStartup: boolean;
     indexScanDelayMs: number;
-    auditFile: string;
-    auditMaxBytes?: number;
+    auditMaxBytes?: number | null;
     auditRetentionFiles: number;
-    trashRetentionDays?: number;
-    trashMaxBytes?: number;
+    trashRetentionDays?: number | null;
+    trashMaxBytes?: number | null;
     conflictPolicy: "autoRename" | "reject" | "overwrite";
+}
+
+export interface StartupSettings {
+    bindAddress: string;
+    port: number;
+    mappingFile: string;
+    configFile: string;
+    authFile: string;
+    favoritesFile: string;
+    trashDir: string;
+    staticDir: string;
+    corsAllowedOrigins: string[];
+    trustProxyHeaders: boolean;
+    auditFile: string;
+    indexRebuildOnStartup: boolean;
+}
+
+export interface SettingsResponse {
+    runtime: RuntimeSettings;
+    startup: StartupSettings;
+    activeStartup: StartupSettings;
     authConfigured: boolean;
+    envLocked: string[];
+    restartRequiredFields: string[];
+    restartPending: boolean;
+    restartPendingFields: string[];
+}
+
+export type RuntimeSettingsPatch = Partial<{
+    maxEditBytes: number;
+    editableExtensions: string[];
+    editableMimeTypes: string[];
+    maxUploadBytes: number | null;
+    maxDirPageSize: number;
+    maxDirConcurrency: number;
+    maxTransferConcurrency: number;
+    maxIpConcurrency: number;
+    maxTaskConcurrency: number;
+    taskHistoryLimit: number;
+    taskSpeedLimitBytesPerSec: number | null;
+    maxExtractBytes: number | null;
+    maxExtractFiles: number | null;
+    maxExtractDepth: number;
+    indexEnabled: boolean;
+    indexScanDelayMs: number;
+    auditMaxBytes: number | null;
+    auditRetentionFiles: number;
+    trashRetentionDays: number | null;
+    trashMaxBytes: number | null;
+    conflictPolicy: RuntimeSettings["conflictPolicy"];
+}>;
+
+export type StartupSettingsPatch = Partial<{
+    bindAddress: string;
+    port: number;
+    mappingFile: string;
+    authFile: string;
+    favoritesFile: string;
+    trashDir: string;
+    staticDir: string;
+    corsAllowedOrigins: string[];
+    trustProxyHeaders: boolean;
+    auditFile: string;
+    indexRebuildOnStartup: boolean;
+}>;
+
+export interface UpdateSettingsRequest {
+    runtime?: RuntimeSettingsPatch;
+    startup?: StartupSettingsPatch;
 }
 
 export interface FileOperationResponse {
