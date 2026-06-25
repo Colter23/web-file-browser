@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ExplorerTab} from "../../class";
 import type {TabContextMenuState, TabDropPlacement} from "./types.ts";
 import type {ExplorerEntry, ExplorerEntryPathDropPayload} from "../explorer/types.ts";
@@ -25,14 +25,35 @@ const props = defineProps<{
 }>();
 
 const tabButtonRefs = new Map<string, HTMLElement>();
+const tabStripRef = ref<HTMLElement | null>(null);
 const tabScrollRef = ref<HTMLElement | null>(null);
 const contextMenuRef = ref<HTMLElement | null>(null);
-const addButtonPinned = ref(false);
+const tabStripWidth = ref(0);
+const canScrollStart = ref(false);
+const canScrollEnd = ref(false);
 const entryDropTargetTabId = ref("");
 const addButtonDropTarget = ref(false);
 const {menuPosition: contextMenuPosition, placeMenu: placeContextMenu} = useViewportMenuPosition({menuRef: contextMenuRef});
 let tabScrollResizeObserver: ResizeObserver | null = null;
 let tabOverflowFrame = 0;
+
+const tabIdealWidth = 168;
+const tabMinWidth = 116;
+const tabGap = 8;
+const tabAddWidth = 36;
+const tabStripPaddingX = 8;
+
+const tabWidth = computed(() => {
+  const count = Math.max(1, props.tabs.length);
+  if (!tabStripWidth.value) return tabIdealWidth;
+  const availableWidth = Math.max(0, tabStripWidth.value - tabStripPaddingX - tabAddWidth - tabGap);
+  const fittedWidth = (availableWidth - Math.max(0, count - 1) * tabGap) / count;
+  return Math.round(Math.max(tabMinWidth, Math.min(tabIdealWidth, fittedWidth)));
+});
+
+const tabListStyle = computed(() => ({
+  "--tab-width": `${tabWidth.value}px`
+}));
 
 const setTabButtonRef = (tabId: string, element: unknown) => {
   if (element instanceof HTMLElement) {
@@ -54,9 +75,21 @@ const focusTabButton = async (tabId: string) => {
   button?.scrollIntoView({block: "nearest", inline: "nearest"});
 }
 
+const updateTabMetrics = () => {
+  tabStripWidth.value = tabStripRef.value?.clientWidth ?? 0;
+}
+
 const updateTabOverflow = () => {
+  updateTabMetrics();
   const scroll = tabScrollRef.value;
-  addButtonPinned.value = scroll ? scroll.scrollWidth - scroll.clientWidth > 1 : false;
+  if (!scroll) {
+    canScrollStart.value = false;
+    canScrollEnd.value = false;
+    return;
+  }
+  const maxScrollLeft = Math.max(0, scroll.scrollWidth - scroll.clientWidth);
+  canScrollStart.value = scroll.scrollLeft > 1;
+  canScrollEnd.value = maxScrollLeft > 1 && scroll.scrollLeft < maxScrollLeft - 1;
 }
 
 const scheduleTabOverflowUpdate = () => {
@@ -109,6 +142,15 @@ const handleWindowResize = () => {
   if (props.contextMenu.visible) void refreshContextMenu();
 }
 
+const handleTabScroll = () => {
+  scheduleTabOverflowUpdate();
+}
+
+const handleTabWheel = (event: WheelEvent) => {
+  scrollHorizontallyWithWheel(event);
+  scheduleTabOverflowUpdate();
+}
+
 const clearEntryDropTarget = () => {
   if (entryDropTargetTabId.value) emit("entry-drag-leave-tab", entryDropTargetTabId.value);
   entryDropTargetTabId.value = "";
@@ -123,9 +165,11 @@ onMounted(() => {
   window.addEventListener("resize", handleWindowResize);
   document.addEventListener("dragend", clearEntryDropTarget, true);
   document.addEventListener("drop", clearEntryDropTarget, true);
-  if (typeof ResizeObserver !== "undefined" && tabScrollRef.value) {
+  updateTabMetrics();
+  if (typeof ResizeObserver !== "undefined") {
     tabScrollResizeObserver = new ResizeObserver(scheduleTabOverflowUpdate);
-    tabScrollResizeObserver.observe(tabScrollRef.value);
+    if (tabStripRef.value) tabScrollResizeObserver.observe(tabStripRef.value);
+    if (tabScrollRef.value) tabScrollResizeObserver.observe(tabScrollRef.value);
   }
   scheduleTabOverflowUpdate();
 });
@@ -301,47 +345,57 @@ const handleAddDrop = (event: DragEvent) => {
 </script>
 
 <template>
-  <nav class="tab-strip" aria-label="目录标签">
-    <div ref="tabScrollRef" class="tab-scroll" @wheel="scrollHorizontallyWithWheel">
-      <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          :ref="element => setTabButtonRef(tab.id, element)"
-          class="tab-button"
-          :class="{
-            active: tab.id === activeTabId,
-            dragging: draggingTabId === tab.id,
-            dropBefore: dropTargetId === tab.id && dropPlacement === 'before',
-            dropAfter: dropTargetId === tab.id && dropPlacement === 'after',
-            entryDropTarget: entryDropTargetTabId === tab.id
-          }"
-          :title="`${tab.path} · Ctrl+Tab 切换 · 中键关闭`"
-          draggable="true"
-          @click="emit('activate-tab', tab.id)"
-          @auxclick="emit('tab-aux-click', $event, tab.id)"
-          @contextmenu="emit('tab-context-menu', $event, tab.id)"
-          @keydown="handleTabKeyDown($event, tab)"
-          @dragstart="emit('tab-drag-start', $event, tab.id)"
-          @dragover="handleTabDragOver($event, tab)"
-          @dragleave="handleTabDragLeave($event, tab)"
-          @drop="handleTabDrop($event, tab)"
-          @dragend="emit('tab-drag-end')">
-        <icon icon="file.folder" />
-        <span>{{ tab.title }}</span>
-        <span class="tab-close" title="关闭标签页 (Ctrl+W)" @click="emit('close-tab', $event, tab.id)">
-          <icon icon="action.close" size="small" />
-        </span>
-      </button>
-      <button
-          :class="['tab-add', {pinned: addButtonPinned, entryDropTarget: addButtonDropTarget}]"
-          title="新建标签页 (Ctrl+T)"
-          @click="emit('new-tab')"
-          @dragover="handleAddDragOver"
-          @dragleave="handleAddDragLeave"
-          @drop="handleAddDrop">
-        <icon icon="action.add" />
-      </button>
+  <nav ref="tabStripRef" class="tab-strip" aria-label="目录标签">
+    <div
+        class="tab-scroll-frame"
+        :class="{canScrollStart, canScrollEnd}">
+      <div
+          ref="tabScrollRef"
+          class="tab-scroll"
+          @scroll="handleTabScroll"
+          @wheel="handleTabWheel">
+        <transition-group name="tab-motion" tag="div" class="tab-list" :style="tabListStyle">
+          <button
+              v-for="tab in tabs"
+              :key="tab.id"
+              :ref="element => setTabButtonRef(tab.id, element)"
+              class="tab-button"
+              :class="{
+                active: tab.id === activeTabId,
+                dragging: draggingTabId === tab.id,
+                dropBefore: dropTargetId === tab.id && dropPlacement === 'before',
+                dropAfter: dropTargetId === tab.id && dropPlacement === 'after',
+                entryDropTarget: entryDropTargetTabId === tab.id
+              }"
+              :title="`${tab.path} · Ctrl+Tab 切换 · 中键关闭`"
+              draggable="true"
+              @click="emit('activate-tab', tab.id)"
+              @auxclick="emit('tab-aux-click', $event, tab.id)"
+              @contextmenu="emit('tab-context-menu', $event, tab.id)"
+              @keydown="handleTabKeyDown($event, tab)"
+              @dragstart="emit('tab-drag-start', $event, tab.id)"
+              @dragover="handleTabDragOver($event, tab)"
+              @dragleave="handleTabDragLeave($event, tab)"
+              @drop="handleTabDrop($event, tab)"
+              @dragend="emit('tab-drag-end')">
+            <icon icon="file.folder" />
+            <span>{{ tab.title }}</span>
+            <span class="tab-close" title="关闭标签页 (Ctrl+W)" @click="emit('close-tab', $event, tab.id)">
+              <icon icon="action.close" size="small" />
+            </span>
+          </button>
+        </transition-group>
+      </div>
     </div>
+    <button
+        :class="['tab-add', {entryDropTarget: addButtonDropTarget}]"
+        title="新建标签页 (Ctrl+T)"
+        @click="emit('new-tab')"
+        @dragover="handleAddDragOver"
+        @dragleave="handleAddDragLeave"
+        @drop="handleAddDrop">
+      <icon icon="action.add" />
+    </button>
   </nav>
 
   <div
@@ -373,8 +427,36 @@ const handleAddDrop = (event: DragEvent) => {
   background: var(--app-panel);
 }
 
+.tab-scroll-frame {
+  @apply relative h-full min-w-0 overflow-hidden;
+  flex: 0 1 auto;
+  max-width: max(0px, calc(100% - 2.75rem));
+}
+
+.tab-scroll-frame::before,
+.tab-scroll-frame::after {
+  content: "";
+  @apply pointer-events-none absolute bottom-0 top-0 z-10 w-7 opacity-0 transition-opacity duration-150;
+}
+
+.tab-scroll-frame::before {
+  @apply left-0;
+  background: linear-gradient(90deg, var(--app-panel) 0%, color-mix(in srgb, var(--app-panel) 72%, transparent) 42%, transparent 100%);
+}
+
+.tab-scroll-frame::after {
+  @apply right-0;
+  background: linear-gradient(270deg, var(--app-panel) 0%, color-mix(in srgb, var(--app-panel) 72%, transparent) 42%, transparent 100%);
+}
+
+.tab-scroll-frame.canScrollStart::before,
+.tab-scroll-frame.canScrollEnd::after {
+  @apply opacity-100;
+}
+
 .tab-scroll {
-  @apply flex h-full min-w-0 grow items-center gap-2 overflow-x-auto overflow-y-hidden;
+  @apply h-full min-w-0 overflow-x-auto overflow-y-hidden;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
   scrollbar-gutter: stable;
 }
@@ -383,11 +465,29 @@ const handleAddDrop = (event: DragEvent) => {
   display: none;
 }
 
+.tab-list {
+  @apply relative flex h-full items-center gap-2;
+  width: max-content;
+}
+
 .tab-button {
-  @apply relative inline-flex h-9 min-w-32 max-w-52 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm shadow-sm;
+  @apply relative inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm shadow-sm;
+  width: var(--tab-width, 10.5rem);
+  min-width: var(--tab-width, 10.5rem);
+  max-width: var(--tab-width, 10.5rem);
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);
   color: var(--app-text);
+  transition:
+      width 0.16s ease,
+      min-width 0.16s ease,
+      max-width 0.16s ease,
+      opacity 0.16s ease,
+      transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+      border-color 0.14s ease,
+      background 0.14s ease,
+      color 0.14s ease,
+      box-shadow 0.14s ease;
 }
 
 .tab-button:hover {
@@ -469,15 +569,40 @@ const handleAddDrop = (event: DragEvent) => {
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);
   color: var(--app-text-muted);
-  z-index: 2;
-}
-
-.tab-add.pinned {
-  @apply sticky right-0;
+  transition: border-color 0.14s ease, background 0.14s ease, color 0.14s ease, transform 0.16s ease, box-shadow 0.14s ease;
 }
 
 .tab-add:hover {
   background: var(--app-accent-hover, #eff6ff);
+}
+
+.tab-add:active {
+  transform: scale(0.96);
+}
+
+.tab-motion-enter-active,
+.tab-motion-leave-active {
+  transition:
+      opacity 0.16s ease,
+      transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.tab-motion-enter-from {
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+}
+
+.tab-motion-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.96);
+}
+
+.tab-motion-leave-active {
+  @apply absolute;
+}
+
+.tab-motion-move {
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .tab-context-menu {
