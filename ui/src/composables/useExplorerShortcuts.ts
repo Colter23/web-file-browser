@@ -197,11 +197,6 @@ export const useExplorerShortcuts = ({
         void closeActiveTab();
         return;
       }
-      if (key === "tab") {
-        event.preventDefault();
-        void switchRelativeTab(event.shiftKey ? -1 : 1);
-        return;
-      }
       if (key === "pageup" || key === "pagedown") {
         event.preventDefault();
         void switchRelativeTab(key === "pageup" ? -1 : 1);

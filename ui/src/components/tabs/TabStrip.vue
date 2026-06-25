@@ -36,8 +36,9 @@ const addButtonDropTarget = ref(false);
 const {menuPosition: contextMenuPosition, placeMenu: placeContextMenu} = useViewportMenuPosition({menuRef: contextMenuRef});
 let tabScrollResizeObserver: ResizeObserver | null = null;
 let tabOverflowFrame = 0;
+let tabOverflowRefreshTimer = 0;
 
-const tabIdealWidth = 168;
+const tabIdealWidth = 208;
 const tabMinWidth = 116;
 const tabGap = 8;
 const tabAddWidth = 36;
@@ -88,8 +89,10 @@ const updateTabOverflow = () => {
     return;
   }
   const maxScrollLeft = Math.max(0, scroll.scrollWidth - scroll.clientWidth);
-  canScrollStart.value = scroll.scrollLeft > 1;
-  canScrollEnd.value = maxScrollLeft > 1 && scroll.scrollLeft < maxScrollLeft - 1;
+  const idealListWidth = props.tabs.length * tabIdealWidth + Math.max(0, props.tabs.length - 1) * tabGap;
+  const canFitAtIdealWidth = idealListWidth <= scroll.clientWidth + 1;
+  canScrollStart.value = !canFitAtIdealWidth && scroll.scrollLeft > 1;
+  canScrollEnd.value = !canFitAtIdealWidth && maxScrollLeft > 1 && scroll.scrollLeft < maxScrollLeft - 1;
 }
 
 const scheduleTabOverflowUpdate = () => {
@@ -98,6 +101,15 @@ const scheduleTabOverflowUpdate = () => {
     tabOverflowFrame = 0;
     updateTabOverflow();
   });
+}
+
+const scheduleTabOverflowRefresh = () => {
+  scheduleTabOverflowUpdate();
+  if (tabOverflowRefreshTimer) window.clearTimeout(tabOverflowRefreshTimer);
+  tabOverflowRefreshTimer = window.setTimeout(() => {
+    tabOverflowRefreshTimer = 0;
+    scheduleTabOverflowUpdate();
+  }, 230);
 }
 
 const {
@@ -121,11 +133,12 @@ useOutsidePointerDown({
 
 watch(() => [props.activeTabId, props.tabs.length] as const, () => {
   void revealActiveTab();
+  scheduleTabOverflowRefresh();
 }, {immediate: true});
 
 watch(() => props.tabs.map(tab => `${tab.id}:${tab.title}`).join("|"), async () => {
   await nextTick();
-  scheduleTabOverflowUpdate();
+  scheduleTabOverflowRefresh();
 }, {flush: "post", immediate: true});
 
 watch(() => [props.contextMenu.visible, props.contextMenu.tabId, props.contextMenu.x, props.contextMenu.y] as const, ([visible]) => {
@@ -180,6 +193,7 @@ onBeforeUnmount(() => {
   document.removeEventListener("drop", clearEntryDropTarget, true);
   tabScrollResizeObserver?.disconnect();
   if (tabOverflowFrame) window.cancelAnimationFrame(tabOverflowFrame);
+  if (tabOverflowRefreshTimer) window.clearTimeout(tabOverflowRefreshTimer);
 });
 
 const emit = defineEmits<{
@@ -367,9 +381,10 @@ const handleAddDrop = (event: DragEvent) => {
                 dropAfter: dropTargetId === tab.id && dropPlacement === 'after',
                 entryDropTarget: entryDropTargetTabId === tab.id
               }"
-              :title="`${tab.path} · Ctrl+Tab 切换 · 中键关闭`"
+              :title="`${tab.path} · 中键关闭`"
               draggable="true"
               @click="emit('activate-tab', tab.id)"
+              @mousedown.middle.prevent.stop="emit('tab-aux-click', $event, tab.id)"
               @auxclick="emit('tab-aux-click', $event, tab.id)"
               @contextmenu="emit('tab-context-menu', $event, tab.id)"
               @keydown="handleTabKeyDown($event, tab)"
