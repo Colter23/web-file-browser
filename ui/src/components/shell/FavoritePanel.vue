@@ -35,6 +35,8 @@ const renameDraft = ref("");
 const renameEditRef = ref<HTMLElement | null>(null);
 const renameInputRef = ref<HTMLInputElement | null>(null);
 const removingFavoriteId = ref("");
+const removeConfirmRef = ref<HTMLElement | null>(null);
+const suppressedFavoriteActionsId = ref("");
 const draggingFavoriteId = ref("");
 const dropTargetId = ref("");
 const dropPlacement = ref<FavoriteDropPlacement | "">("");
@@ -78,6 +80,10 @@ const setRenameInputRef = (element: unknown) => {
   renameInputRef.value = element instanceof HTMLInputElement ? element : null;
 }
 
+const setRemoveConfirmRef = (element: unknown) => {
+  removeConfirmRef.value = element instanceof HTMLElement ? element : null;
+}
+
 const focusFavoriteButton = async (favoriteId: string) => {
   await nextTick();
   favoriteButtonRefs.get(favoriteId)?.focus({preventScroll: true});
@@ -94,6 +100,18 @@ const emitNotice = (message: string, kind: ShellNoticeKind = "info", title = "�
 
 const isRemoveConfirming = (favorite: FavoriteItem) => removingFavoriteId.value === favorite.id;
 
+const shouldShowFavoriteActions = (favorite: FavoriteItem) => {
+  return renamingFavoriteId.value !== favorite.id
+      && !isRemoveConfirming(favorite)
+      && suppressedFavoriteActionsId.value !== favorite.id;
+}
+
+const clearSuppressedFavoriteActions = (favoriteId?: string) => {
+  if (!favoriteId || suppressedFavoriteActionsId.value === favoriteId) {
+    suppressedFavoriteActionsId.value = "";
+  }
+}
+
 const clearRemoveConfirm = () => {
   removingFavoriteId.value = "";
 }
@@ -107,18 +125,15 @@ const setRemoveConfirmButtonRef = (favoriteId: string, element: unknown) => {
 }
 
 const startRemoveConfirm = async (favorite: FavoriteItem) => {
+  clearSuppressedFavoriteActions();
   clearRemoveConfirm();
   removingFavoriteId.value = favorite.id;
   await focusRemoveConfirmButton(favorite.id);
 }
 
-const cancelRemoveConfirm = async (favoriteId = removingFavoriteId.value) => {
-  if (!favoriteId) {
-    clearRemoveConfirm();
-    return;
-  }
+const cancelRemoveConfirm = (favoriteId = removingFavoriteId.value) => {
   clearRemoveConfirm();
-  await focusFavoriteButton(favoriteId);
+  suppressedFavoriteActionsId.value = favoriteId;
 }
 
 const confirmRemove = (favorite: FavoriteItem) => {
@@ -188,6 +203,12 @@ useOutsidePointerDown({
       cancelRename();
     }
   }
+});
+
+useOutsidePointerDown({
+  refs: [removeConfirmRef],
+  enabled: () => Boolean(removingFavoriteId.value),
+  onOutsidePointerDown: () => cancelRemoveConfirm()
 });
 
 const closeContextMenu = () => {
@@ -372,6 +393,7 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
             @dragstart="handleDragStart($event, favorite)"
             @dragover="handleDragOver($event, favorite)"
             @drop="handleDrop($event, favorite)"
+            @pointerleave="clearSuppressedFavoriteActions(favorite.id)"
             @contextmenu.prevent.stop="openContextMenu(favorite, $event)">
           <button
               v-if="renamingFavoriteId !== favorite.id"
@@ -407,7 +429,7 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
                 @keydown.esc.prevent.stop="cancelRename"
                 @blur="commitRename(favorite)">
           </div>
-          <span v-if="renamingFavoriteId !== favorite.id && !isRemoveConfirming(favorite)" class="favorite-actions">
+          <span v-if="shouldShowFavoriteActions(favorite)" class="favorite-actions">
             <button class="favorite-action" title="在新标签页中打开" @click.stop="handleOpenNewTab(favorite)">
               <icon icon="action.open-new-tab" />
             </button>
@@ -418,7 +440,7 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
               <icon icon="action.close" />
             </button>
           </span>
-          <span v-else-if="isRemoveConfirming(favorite)" class="favorite-remove-confirm" @keydown.esc.prevent.stop="cancelRemoveConfirm(favorite.id)">
+          <span v-else-if="isRemoveConfirming(favorite)" :ref="setRemoveConfirmRef" class="favorite-remove-confirm" @keydown.esc.prevent.stop="cancelRemoveConfirm(favorite.id)">
             <button
                 :ref="element => setRemoveConfirmButtonRef(favorite.id, element)"
                 class="favorite-action confirm"
