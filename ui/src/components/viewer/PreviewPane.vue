@@ -28,6 +28,7 @@ const emit = defineEmits<{
   (e: "download", entry: ExplorerEntry): void;
   (e: "open-image", entry: ExplorerEntry): void;
   (e: "open-video", entry: ExplorerEntry): void;
+  (e: "open-pdf", entry: ExplorerEntry): void;
   (e: "notice", payload: ShellNoticePayload): void;
 }>();
 
@@ -72,7 +73,7 @@ const downloadPreview = () => {
   <preview-image-view v-if="entry && previewKind === 'image'" :entry="entry" @open-image="emit('open-image', $event)" />
   <preview-text-view v-else-if="entry && previewKind === 'text'" :entry="entry" :reload-key="reloadKey" @notice="emit('notice', $event)" />
   <preview-video-view v-else-if="entry && previewKind === 'video'" :entry="entry" @open-video="emit('open-video', $event)" />
-  <preview-pdf-view v-else-if="entry && previewKind === 'pdf'" :entry="entry" :reload-key="reloadKey" />
+  <preview-pdf-view v-else-if="entry && previewKind === 'pdf'" :entry="entry" :reload-key="reloadKey" @open-pdf="emit('open-pdf', $event)" />
   <div v-else class="preview-body" :class="previewKind">
     <div v-if="!entry" class="preview-placeholder muted">
       <icon :icon="emptyIconName" size="3rem" />

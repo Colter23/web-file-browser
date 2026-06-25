@@ -13,10 +13,16 @@ type VideoViewerPayload = {
   entries: ExplorerEntry[];
 }
 
+type PdfViewerPayload = {
+  entry: ExplorerEntry;
+  entries: ExplorerEntry[];
+}
+
 type ExplorerPreviewOptions = {
   getSelectedEntry: () => ExplorerEntry | null;
   getImageEntries: () => ExplorerEntry[];
   getVideoEntries: () => ExplorerEntry[];
+  getPdfEntries: () => ExplorerEntry[];
   shouldPersistSelection: () => boolean;
   persistSelectedPaths: (paths: string[]) => void;
   showNotice: (message: string, kind?: ShellNoticeKind, title?: string, timeoutMs?: number) => void;
@@ -26,6 +32,7 @@ export const useExplorerPreview = ({
   getSelectedEntry,
   getImageEntries,
   getVideoEntries,
+  getPdfEntries,
   shouldPersistSelection,
   persistSelectedPaths,
   showNotice
@@ -40,6 +47,9 @@ export const useExplorerPreview = ({
   const videoViewerVisible = ref(false);
   const videoViewerEntry = ref<ExplorerEntry | null>(null);
   const videoViewerEntries = ref<ExplorerEntry[]>([]);
+  const pdfViewerVisible = ref(false);
+  const pdfViewerEntry = ref<ExplorerEntry | null>(null);
+  const pdfViewerEntries = ref<ExplorerEntry[]>([]);
   const currentSelection = ref<ExplorerEntry[]>([]);
   let previewUpdateToken = 0;
 
@@ -88,6 +98,12 @@ export const useExplorerPreview = ({
     videoViewerEntries.value = [];
   }
 
+  const resetPdfViewerState = () => {
+    pdfViewerVisible.value = false;
+    pdfViewerEntry.value = null;
+    pdfViewerEntries.value = [];
+  }
+
   const setPreviewEntry = async (entry: ExplorerEntry, force = false) => {
     if (!force && previewEntry.value?.path === entry.path && previewPanelVisible.value) return;
     const token = ++previewUpdateToken;
@@ -115,11 +131,20 @@ export const useExplorerPreview = ({
     if (nextPreviewEntry) void setPreviewEntry(nextPreviewEntry, true);
   }
 
+  const closePdfViewer = () => {
+    const nextPreviewEntry = previewPanelVisible.value && pdfViewerEntry.value?.path !== previewEntry.value?.path
+        ? pdfViewerEntry.value
+        : null;
+    resetPdfViewerState();
+    if (nextPreviewEntry) void setPreviewEntry(nextPreviewEntry, true);
+  }
+
   const closePreviewPanel = () => {
     previewPanelVisible.value = false;
     clearPreviewContent();
     closeImageViewer();
     closeVideoViewer();
+    closePdfViewer();
   }
 
   const setImageViewerEntry = (entry: ExplorerEntry) => {
@@ -130,9 +155,14 @@ export const useExplorerPreview = ({
     videoViewerEntry.value = entry;
   }
 
+  const setPdfViewerEntry = (entry: ExplorerEntry) => {
+    pdfViewerEntry.value = entry;
+  }
+
   const openImageViewer = async ({entry, entries}: ImageViewerPayload) => {
     if (!await fileStore.requestEditorLeave()) return;
     resetVideoViewerState();
+    resetPdfViewerState();
     fileStore.closeEditor();
     imageViewerEntries.value = entries.length ? entries : [entry];
     imageViewerVisible.value = true;
@@ -142,10 +172,21 @@ export const useExplorerPreview = ({
   const openVideoViewer = async ({entry, entries}: VideoViewerPayload) => {
     if (!await fileStore.requestEditorLeave()) return;
     resetImageViewerState();
+    resetPdfViewerState();
     fileStore.closeEditor();
     videoViewerEntries.value = entries.length ? entries : [entry];
     videoViewerVisible.value = true;
     setVideoViewerEntry(entry);
+  }
+
+  const openPdfViewer = async ({entry, entries}: PdfViewerPayload) => {
+    if (!await fileStore.requestEditorLeave()) return;
+    resetImageViewerState();
+    resetVideoViewerState();
+    fileStore.closeEditor();
+    pdfViewerEntries.value = entries.length ? entries : [entry];
+    pdfViewerVisible.value = true;
+    setPdfViewerEntry(entry);
   }
 
   const openPreviewImageViewer = async () => {
@@ -170,6 +211,18 @@ export const useExplorerPreview = ({
   const openPreviewEntryVideoViewer = async (entry: ExplorerEntry) => {
     previewEntry.value = entry;
     await openPreviewVideoViewer();
+  }
+
+  const openPreviewPdfViewer = async () => {
+    const entry = previewEntry.value;
+    if (!entry) return;
+    const entries = getPdfEntries();
+    await openPdfViewer({entry, entries: entries.some(item => item.path === entry.path) ? entries : [entry]});
+  }
+
+  const openPreviewEntryPdfViewer = async (entry: ExplorerEntry) => {
+    previewEntry.value = entry;
+    await openPreviewPdfViewer();
   }
 
   const previewSelected = async (entry = getSelectedEntry()) => {
@@ -214,6 +267,9 @@ export const useExplorerPreview = ({
     videoViewerVisible,
     videoViewerEntry,
     videoViewerEntries,
+    pdfViewerVisible,
+    pdfViewerEntry,
+    pdfViewerEntries,
     currentSelection,
     selectedList,
     selectedCount,
@@ -226,15 +282,20 @@ export const useExplorerPreview = ({
     resetPreviewContext,
     resetImageViewer: resetImageViewerState,
     resetVideoViewer: resetVideoViewerState,
+    resetPdfViewer: resetPdfViewerState,
     closePreviewPanel,
     closeImageViewer,
     closeVideoViewer,
+    closePdfViewer,
     setImageViewerEntry,
     setVideoViewerEntry,
+    setPdfViewerEntry,
     openImageViewer,
     openVideoViewer,
+    openPdfViewer,
     openPreviewEntryImageViewer,
     openPreviewEntryVideoViewer,
+    openPreviewEntryPdfViewer,
     previewSelected,
     previewSelectedQuietly,
     showEmptyPreviewPane,

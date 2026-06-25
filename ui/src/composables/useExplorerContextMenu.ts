@@ -15,6 +15,11 @@ type VideoViewerPayload = {
   entries: ExplorerEntry[];
 }
 
+type PdfViewerPayload = {
+  entry: ExplorerEntry;
+  entries: ExplorerEntry[];
+}
+
 type CopyPathPayload = {
   paths: string[];
 }
@@ -22,6 +27,7 @@ type CopyPathPayload = {
 type ExplorerContextMenuOptions = {
   imageEntries: ComputedRef<ExplorerEntry[]>;
   videoEntries: ComputedRef<ExplorerEntry[]>;
+  pdfEntries: ComputedRef<ExplorerEntry[]>;
   selectedPaths: Ref<string[]>;
   selectedEntries: ComputedRef<ExplorerEntry[]>;
   favoritePaths: ComputedRef<string[]>;
@@ -38,6 +44,7 @@ type ExplorerContextMenuOptions = {
   editEntry: (entry: ExplorerEntry) => MaybePromise;
   isImageFile: (entry: ExplorerEntry | null | undefined) => boolean;
   isVideoFile: (entry: ExplorerEntry | null | undefined) => boolean;
+  isPdfFile: (entry: ExplorerEntry | null | undefined) => boolean;
   canEditEntry: (entry: ExplorerEntry | null) => boolean;
   canExtract: (entry: ExplorerEntry | null | undefined) => boolean;
   startRename: (entry: ExplorerEntry | null) => void;
@@ -47,6 +54,7 @@ type ExplorerContextMenuOptions = {
   previewEntry: (entry: ExplorerEntry) => void;
   openImageViewer: (payload: ImageViewerPayload) => void;
   openVideoViewer: (payload: VideoViewerPayload) => void;
+  openPdfViewer: (payload: PdfViewerPayload) => void;
   downloadEntry: (entry: ExplorerEntry) => void;
   copyPath: (payload: CopyPathPayload) => void;
   copyEntry: (entry: ExplorerEntry) => void;
@@ -65,6 +73,7 @@ type ExplorerContextMenuOptions = {
 export const useExplorerContextMenu = ({
   imageEntries,
   videoEntries,
+  pdfEntries,
   selectedPaths,
   selectedEntries,
   favoritePaths,
@@ -81,6 +90,7 @@ export const useExplorerContextMenu = ({
   editEntry,
   isImageFile,
   isVideoFile,
+  isPdfFile,
   canEditEntry,
   canExtract,
   startRename,
@@ -90,6 +100,7 @@ export const useExplorerContextMenu = ({
   previewEntry,
   openImageViewer,
   openVideoViewer,
+  openPdfViewer,
   downloadEntry,
   copyPath,
   copyEntry,
@@ -189,6 +200,7 @@ export const useExplorerContextMenu = ({
   const primaryContextEntry = computed(() => contextEntry());
   const contextCanViewImage = computed(() => Boolean(primaryContextEntry.value && isImageFile(primaryContextEntry.value)));
   const contextCanViewVideo = computed(() => Boolean(primaryContextEntry.value && isVideoFile(primaryContextEntry.value)));
+  const contextCanViewPdf = computed(() => Boolean(primaryContextEntry.value && isPdfFile(primaryContextEntry.value)));
   const contextCanEdit = computed(() => canEditEntry(primaryContextEntry.value));
   const contextCanExtract = computed(() => canExtract(primaryContextEntry.value));
   const contextCanFavorite = computed(() => {
@@ -204,7 +216,7 @@ export const useExplorerContextMenu = ({
 
   const openEntryFromContext = async () => {
     const entry = primaryContextEntry.value;
-    await runAsyncEntryContextAction(openEntry, Boolean(entry && (entry.type === "folder" || !isImageFile(entry) && !isVideoFile(entry) && !canEditEntry(entry))));
+    await runAsyncEntryContextAction(openEntry, Boolean(entry && (entry.type === "folder" || !isImageFile(entry) && !isVideoFile(entry) && !isPdfFile(entry) && !canEditEntry(entry))));
   }
 
   const openContextEntryInNewTab = () => {
@@ -224,6 +236,12 @@ export const useExplorerContextMenu = ({
   const viewVideoContextEntry = () => {
     runEntryContextAction(entry => {
       if (isVideoFile(entry)) openVideoViewer({entry, entries: videoEntries.value});
+    });
+  }
+
+  const viewPdfContextEntry = () => {
+    runEntryContextAction(entry => {
+      if (isPdfFile(entry)) openPdfViewer({entry, entries: pdfEntries.value});
     });
   }
 
@@ -322,6 +340,7 @@ export const useExplorerContextMenu = ({
     primaryContextEntry,
     contextCanViewImage,
     contextCanViewVideo,
+    contextCanViewPdf,
     contextCanEdit,
     contextCanExtract,
     contextCanFavorite,
@@ -331,6 +350,7 @@ export const useExplorerContextMenu = ({
     previewContextEntry,
     viewImageContextEntry,
     viewVideoContextEntry,
+    viewPdfContextEntry,
     editContextEntry,
     downloadContextEntry,
     copyPathContextEntries,

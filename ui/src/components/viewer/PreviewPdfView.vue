@@ -10,16 +10,26 @@ const props = defineProps<{
   reloadKey: number;
 }>();
 
+const emit = defineEmits<{
+  (e: "open-pdf", entry: ExplorerEntry): void;
+}>();
+
 const previewUrl = computed(() => fileContentUrl(props.entry.path, {cacheKey: props.reloadKey}));
 
-const openPdfPreview = () => {
+const openPdfViewer = () => emit("open-pdf", props.entry);
+
+const openPdfInNewWindow = () => {
   window.open(previewUrl.value, "_blank", "noopener,noreferrer");
 }
 </script>
 
 <template>
   <preview-tool-row status="浏览器原生预览">
-    <button title="在新窗口打开 PDF" @click="openPdfPreview">
+    <button title="打开 PDF 查看" @click="openPdfViewer">
+      <icon icon="view.pdf" color="currentColor" />
+      <span>打开查看</span>
+    </button>
+    <button title="在新窗口打开 PDF" @click="openPdfInNewWindow">
       <icon icon="action.open-new-tab" color="currentColor" />
       <span>新窗口打开</span>
     </button>
@@ -29,7 +39,7 @@ const openPdfPreview = () => {
       <div class="preview-placeholder">
         <icon icon="file.pdf" size="3rem" />
         <span>当前浏览器无法内嵌预览 PDF</span>
-        <button @click="openPdfPreview">新窗口打开</button>
+        <button @click="openPdfInNewWindow">新窗口打开</button>
       </div>
     </object>
   </div>

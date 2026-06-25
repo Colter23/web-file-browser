@@ -1,7 +1,7 @@
 import type {ComputedRef} from "vue";
 import type {FileInfo} from "../class.ts";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
-import {entryFileInfo, isEditableEntry, isImageEntry, isVideoEntry} from "../utils/file-entry.ts";
+import {entryFileInfo, isEditableEntry, isImageEntry, isPdfEntry, isVideoEntry} from "../utils/file-entry.ts";
 
 type ImageViewerPayload = {
   entry: ExplorerEntry;
@@ -9,6 +9,11 @@ type ImageViewerPayload = {
 }
 
 type VideoViewerPayload = {
+  entry: ExplorerEntry;
+  entries: ExplorerEntry[];
+}
+
+type PdfViewerPayload = {
   entry: ExplorerEntry;
   entries: ExplorerEntry[];
 }
@@ -23,6 +28,7 @@ type ExplorerEntryActionOptions = {
   selectedEntries: ComputedRef<ExplorerEntry[]>;
   imageEntries: ComputedRef<ExplorerEntry[]>;
   videoEntries: ComputedRef<ExplorerEntry[]>;
+  pdfEntries: ComputedRef<ExplorerEntry[]>;
   isRenaming: (entry: ExplorerEntry) => boolean;
   requestEditorLeave: () => Promise<boolean>;
   openEditor: (file: FileInfo) => void;
@@ -30,6 +36,7 @@ type ExplorerEntryActionOptions = {
   previewEntry: (entry: ExplorerEntry) => void;
   openImageViewer: (payload: ImageViewerPayload) => void;
   openVideoViewer: (payload: VideoViewerPayload) => void;
+  openPdfViewer: (payload: PdfViewerPayload) => void;
   openNewTab: (entry: ExplorerEntry) => void;
   copyPath: (payload: CopyPathPayload) => void;
   closeContextMenu: () => void;
@@ -41,6 +48,7 @@ export const useExplorerEntryActions = ({
   selectedEntries,
   imageEntries,
   videoEntries,
+  pdfEntries,
   isRenaming,
   requestEditorLeave,
   openEditor,
@@ -48,6 +56,7 @@ export const useExplorerEntryActions = ({
   previewEntry,
   openImageViewer,
   openVideoViewer,
+  openPdfViewer,
   openNewTab,
   copyPath,
   closeContextMenu
@@ -75,6 +84,10 @@ export const useExplorerEntryActions = ({
     }
     if (isVideoEntry(entry)) {
       openVideoViewer({entry, entries: videoEntries.value});
+      return;
+    }
+    if (isPdfEntry(entry)) {
+      openPdfViewer({entry, entries: pdfEntries.value});
       return;
     }
     if (canEditEntry(entry)) {

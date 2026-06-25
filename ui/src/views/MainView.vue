@@ -28,6 +28,7 @@ import {
 import Explorer from "../components/explorer/Explorer.vue";
 import ImageViewer from "../components/viewer/ImageViewer.vue";
 import VideoViewer from "../components/viewer/VideoViewer.vue";
+import PdfViewer from "../components/viewer/PdfViewer.vue";
 import PreviewPane from "../components/viewer/PreviewPane.vue";
 import TaskPanel from "../components/tasks/TaskPanel.vue";
 import TrashPanel from "../components/trash/TrashPanel.vue";
@@ -87,6 +88,7 @@ type ExplorerExpose = {
   focus: () => void;
   getImageEntries: () => ExplorerEntry[];
   getVideoEntries: () => ExplorerEntry[];
+  getPdfEntries: () => ExplorerEntry[];
   getScrollTop: () => number;
   setScrollTop: (scrollTop: number) => Promise<void>;
 }
@@ -324,6 +326,9 @@ const {
   videoViewerVisible,
   videoViewerEntry,
   videoViewerEntries,
+  pdfViewerVisible,
+  pdfViewerEntry,
+  pdfViewerEntries,
   currentSelection,
   selectedCount,
   hasSelection,
@@ -335,14 +340,19 @@ const {
   closePreviewPanel,
   resetImageViewer,
   resetVideoViewer,
+  resetPdfViewer,
   closeImageViewer,
   closeVideoViewer,
+  closePdfViewer,
   setImageViewerEntry,
   setVideoViewerEntry,
+  setPdfViewerEntry,
   openImageViewer,
   openVideoViewer,
+  openPdfViewer,
   openPreviewEntryImageViewer,
   openPreviewEntryVideoViewer,
+  openPreviewEntryPdfViewer,
   previewSelected,
   previewSelectedQuietly,
   showEmptyPreviewPane,
@@ -351,6 +361,7 @@ const {
   getSelectedEntry: selectedEntry,
   getImageEntries: () => explorerRef.value?.getImageEntries() ?? [],
   getVideoEntries: () => explorerRef.value?.getVideoEntries() ?? [],
+  getPdfEntries: () => explorerRef.value?.getPdfEntries() ?? [],
   shouldPersistSelection,
   persistSelectedPaths,
   showNotice: showShellNotice
@@ -571,8 +582,10 @@ const shellActions = useMainViewShellActions({
   resetPreviewContext,
   resetImageViewer,
   resetVideoViewer,
+  resetPdfViewer,
   closeImageViewer,
   closeVideoViewer,
+  closePdfViewer,
   hideOperationPanel: () => operationPanel.value.visible = false,
   resetOperationPanel,
   resetDeleteConfirm,
@@ -633,6 +646,7 @@ const {
 } = useExplorerShortcuts({
   imageViewerVisible,
   videoViewerVisible,
+  pdfViewerVisible,
   previewPanelVisible,
   hasPreviewableSelection: () => singleSelection.value?.type === "file",
   focusSearchInput,
@@ -747,7 +761,8 @@ const {
   closePropertiesPanelAndFocus,
   closePreviewAndFocus,
   closeImageViewerAndFocus,
-  closeVideoViewerAndFocus
+  closeVideoViewerAndFocus,
+  closePdfViewerAndFocus
 } = useMainViewPanelClosers({
   editorVisible: () => fileStore.showEditor,
   focusExplorer,
@@ -759,6 +774,7 @@ const {
   previewPanelVisible,
   imageViewerVisible,
   videoViewerVisible,
+  pdfViewerVisible,
   closeTaskPanel,
   closeTrashPanel,
   closeOperationPanel,
@@ -766,7 +782,8 @@ const {
   closePropertiesPanel,
   closePreview,
   closeImageViewer,
-  closeVideoViewer
+  closeVideoViewer,
+  closePdfViewer
 });
 
 const toggleTasksFromMenu = async () => {
@@ -978,7 +995,8 @@ const signOut = async () => {
                 @add-favorite="addExplorerEntryToFavorites"
                 @remove-favorite="path => removeFavorite(path)"
                 @open-image-viewer="openImageViewer"
-                @open-video-viewer="openVideoViewer">
+                @open-video-viewer="openVideoViewer"
+                @open-pdf-viewer="openPdfViewer">
             </explorer>
             <shell-notice
                 v-if="shellNotice.visible"
@@ -1079,6 +1097,7 @@ const signOut = async () => {
                 @download="downloadSelected"
                 @open-image="openPreviewEntryImageViewer"
                 @open-video="openPreviewEntryVideoViewer"
+                @open-pdf="openPreviewEntryPdfViewer"
                 @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)">
             </preview-pane>
           </aside>
@@ -1103,6 +1122,16 @@ const signOut = async () => {
             @download="downloadSelected"
             @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)">
         </video-viewer>
+
+        <pdf-viewer
+            :visible="pdfViewerVisible"
+            :entry="pdfViewerEntry"
+            :entries="pdfViewerEntries"
+            @close="closePdfViewerAndFocus"
+            @select="setPdfViewerEntry"
+            @download="downloadSelected"
+            @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)">
+        </pdf-viewer>
 
         <div v-show="fileStore.showEditor" class="editor-overlay-panel">
           <editor-panel></editor-panel>

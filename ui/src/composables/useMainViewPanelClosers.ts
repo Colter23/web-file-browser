@@ -13,6 +13,7 @@ type MainViewPanelClosersOptions = {
   previewPanelVisible: Ref<boolean>;
   imageViewerVisible: Ref<boolean>;
   videoViewerVisible: Ref<boolean>;
+  pdfViewerVisible: Ref<boolean>;
   closeTaskPanel: () => void;
   closeTrashPanel: () => void;
   closeOperationPanel: () => void;
@@ -21,6 +22,7 @@ type MainViewPanelClosersOptions = {
   closePreview: () => void;
   closeImageViewer: () => void;
   closeVideoViewer: () => void;
+  closePdfViewer: () => void;
 }
 
 export const useMainViewPanelClosers = ({
@@ -34,6 +36,7 @@ export const useMainViewPanelClosers = ({
   previewPanelVisible,
   imageViewerVisible,
   videoViewerVisible,
+  pdfViewerVisible,
   closeTaskPanel,
   closeTrashPanel,
   closeOperationPanel,
@@ -41,7 +44,8 @@ export const useMainViewPanelClosers = ({
   closePropertiesPanel,
   closePreview,
   closeImageViewer,
-  closeVideoViewer
+  closeVideoViewer,
+  closePdfViewer
 }: MainViewPanelClosersOptions) => {
   const {closeAndFocusExplorer} = usePanelFocusRestore({
     editorVisible,
@@ -56,6 +60,7 @@ export const useMainViewPanelClosers = ({
     closePropertiesPanelAndFocus: () => closeAndFocusExplorer(() => propertiesPanel.value.visible, closePropertiesPanel),
     closePreviewAndFocus: () => closeAndFocusExplorer(() => previewPanelVisible.value, closePreview),
     closeImageViewerAndFocus: () => closeAndFocusExplorer(() => imageViewerVisible.value, closeImageViewer),
-    closeVideoViewerAndFocus: () => closeAndFocusExplorer(() => videoViewerVisible.value, closeVideoViewer)
+    closeVideoViewerAndFocus: () => closeAndFocusExplorer(() => videoViewerVisible.value, closeVideoViewer),
+    closePdfViewerAndFocus: () => closeAndFocusExplorer(() => pdfViewerVisible.value, closePdfViewer)
   };
 }

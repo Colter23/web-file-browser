@@ -24,6 +24,7 @@ import {
   formatEntrySize as formatSize,
   isExtractableArchiveEntry as canExtract,
   isImageEntry as isImageFile,
+  isPdfEntry as isPdfFile,
   isVideoEntry as isVideoFile
 } from "../../utils/file-entry.ts";
 import DetailsHeader from "./DetailsHeader.vue";
@@ -60,6 +61,11 @@ type VideoViewerPayload = {
   entries: ExplorerEntry[];
 }
 
+type PdfViewerPayload = {
+  entry: ExplorerEntry;
+  entries: ExplorerEntry[];
+}
+
 type CopyPathPayload = {
   paths: string[];
 }
@@ -78,6 +84,7 @@ const emit = defineEmits<{
   (e: "preview", entry: ExplorerEntry): void;
   (e: "open-image-viewer", payload: ImageViewerPayload): void;
   (e: "open-video-viewer", payload: VideoViewerPayload): void;
+  (e: "open-pdf-viewer", payload: PdfViewerPayload): void;
   (e: "copy", entry: ExplorerEntry): void;
   (e: "cut", entry: ExplorerEntry): void;
   (e: "paste"): void;
@@ -236,6 +243,7 @@ watch(selectedEntries, selected => {
 const thumbnailActive = computed(() => fileStore.viewMode === "icons" || fileStore.viewMode === "tiles");
 const imageEntries = computed(() => entries.value.filter(isImageFile));
 const videoEntries = computed(() => entries.value.filter(isVideoFile));
+const pdfEntries = computed(() => entries.value.filter(isPdfFile));
 const {
   shouldLoad: shouldLoadThumbnail,
   thumbnailUrl,
@@ -333,6 +341,7 @@ const {
   selectedEntries,
   imageEntries,
   videoEntries,
+  pdfEntries,
   isRenaming,
   requestEditorLeave: () => fileStore.requestEditorLeave(),
   openEditor: file => fileStore.openEditor(file),
@@ -340,6 +349,7 @@ const {
   previewEntry: entry => emit("preview", entry),
   openImageViewer: payload => emit("open-image-viewer", payload),
   openVideoViewer: payload => emit("open-video-viewer", payload),
+  openPdfViewer: payload => emit("open-pdf-viewer", payload),
   openNewTab: entry => emit("open-new-tab", entry),
   copyPath: payload => emit("copy-path", payload),
   closeContextMenu
@@ -586,6 +596,7 @@ const {
   primaryContextEntry,
   contextCanViewImage,
   contextCanViewVideo,
+  contextCanViewPdf,
   contextCanEdit,
   contextCanExtract,
   contextCanFavorite,
@@ -595,6 +606,7 @@ const {
   previewContextEntry,
   viewImageContextEntry,
   viewVideoContextEntry,
+  viewPdfContextEntry,
   editContextEntry,
   downloadContextEntry,
   copyPathContextEntries,
@@ -616,6 +628,7 @@ const {
 } = useExplorerContextMenu({
   imageEntries,
   videoEntries,
+  pdfEntries,
   selectedPaths,
   selectedEntries,
   favoritePaths: computed(() => props.favoritePaths),
@@ -632,6 +645,7 @@ const {
   editEntry,
   isImageFile,
   isVideoFile,
+  isPdfFile,
   canEditEntry,
   canExtract,
   startRename,
@@ -641,6 +655,7 @@ const {
   previewEntry: entry => emit("preview", entry),
   openImageViewer: payload => emit("open-image-viewer", payload),
   openVideoViewer: payload => emit("open-video-viewer", payload),
+  openPdfViewer: payload => emit("open-pdf-viewer", payload),
   downloadEntry: entry => emit("download", entry),
   copyPath: payload => emit("copy-path", payload),
   copyEntry: entry => emit("copy", entry),
@@ -747,6 +762,7 @@ defineExpose({
   getSelectedEntries: () => selectedEntries.value,
   getImageEntries: () => imageEntries.value,
   getVideoEntries: () => videoEntries.value,
+  getPdfEntries: () => pdfEntries.value,
   startRename: () => startRename(firstSelectedEntry()),
   selectPath,
   selectPaths,
@@ -882,6 +898,7 @@ defineExpose({
         :selection-count="contextSelectionCount"
         :can-view-image="contextCanViewImage"
         :can-view-video="contextCanViewVideo"
+        :can-view-pdf="contextCanViewPdf"
         :can-edit="contextCanEdit"
         :can-extract="contextCanExtract"
         :can-favorite="contextCanFavorite"
@@ -892,6 +909,7 @@ defineExpose({
         @open-new-tab="openContextEntryInNewTab"
         @view-image="viewImageContextEntry"
         @view-video="viewVideoContextEntry"
+        @view-pdf="viewPdfContextEntry"
         @edit="editContextEntry"
         @preview="previewContextEntry"
         @cut="cutContextEntries"

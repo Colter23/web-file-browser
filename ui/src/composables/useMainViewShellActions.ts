@@ -16,6 +16,8 @@ type MainViewShellActionsOptions = {
   closeImageViewer: () => void;
   resetVideoViewer: () => void;
   closeVideoViewer: () => void;
+  resetPdfViewer: () => void;
+  closePdfViewer: () => void;
   hideOperationPanel: () => void;
   resetOperationPanel: () => void;
   resetDeleteConfirm: () => void;
@@ -39,6 +41,8 @@ export const useMainViewShellActions = ({
   closeImageViewer,
   resetVideoViewer,
   closeVideoViewer,
+  resetPdfViewer,
+  closePdfViewer,
   hideOperationPanel,
   resetOperationPanel,
   resetDeleteConfirm,
@@ -55,6 +59,7 @@ export const useMainViewShellActions = ({
     closeTrashPanel();
     resetImageViewer();
     resetVideoViewer();
+    resetPdfViewer();
   }
 
   const closeTransientPanels = () => {
@@ -66,6 +71,7 @@ export const useMainViewShellActions = ({
     closeTrashPanel();
     closeImageViewer();
     closeVideoViewer();
+    closePdfViewer();
   }
 
   const closeOperationShellPanels = () => {
@@ -86,6 +92,7 @@ export const useMainViewShellActions = ({
     closeTrashPanel();
     resetImageViewer();
     resetVideoViewer();
+    resetPdfViewer();
   }
 
   const refreshCurrent = async (keepSelection = false) => {
