@@ -6,7 +6,6 @@ const props = withDefaults(defineProps<{
   color?: string;
   size?: string | "large" | "small" | "normal";
 }>(), {
-  color: "currentColor",
   size: "normal"
 });
 </script>

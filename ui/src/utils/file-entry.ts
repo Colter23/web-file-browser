@@ -16,6 +16,7 @@ export type FileEntryLike = {
 export type EntryPreviewKind = "image" | "text" | "audio" | "video" | "unknown";
 
 export type FileEntryIconKind =
+  | "home"
   | "folder"
   | "folder-open"
   | "image"

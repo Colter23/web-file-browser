@@ -4,6 +4,7 @@ import type {FavoriteItem} from "../../class.ts";
 import {readBooleanStorage, writeBooleanStorage} from "../../utils/safe-storage.ts";
 import {normalizePathText} from "../../utils/file-path.ts";
 import Icon from "../Icon.vue";
+import FileTypeIcon from "../FileTypeIcon.vue";
 import type {ShellNoticeKind} from "./types.ts";
 import FavoriteContextMenu from "./FavoriteContextMenu.vue";
 
@@ -296,7 +297,8 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
               @auxclick.middle.prevent="handleOpenNewTab(favorite)"
               @keydown="handleFavoriteKeyDown($event, favorite)">
             <span class="favorite-icon" aria-hidden="true">
-              <icon :icon="favorite.missing ? 'action.warning' : 'file.folder'" />
+              <icon v-if="favorite.missing" icon="action.warning" />
+              <file-type-icon v-else kind="folder" />
             </span>
             <span class="favorite-copy">
               <span class="favorite-name">{{ favorite.name }}</span>
@@ -305,7 +307,8 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
           </button>
           <div v-else class="favorite-edit">
             <span class="favorite-icon" aria-hidden="true">
-              <icon :icon="favorite.missing ? 'action.warning' : 'file.folder'" />
+              <icon v-if="favorite.missing" icon="action.warning" />
+              <file-type-icon v-else kind="folder" />
             </span>
             <input
                 ref="renameInputRef"

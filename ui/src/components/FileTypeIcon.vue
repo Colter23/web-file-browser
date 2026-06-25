@@ -39,6 +39,10 @@ const paletteClass = computed(() => `palette-${appearanceStore.fileIconPalette}`
   --file-icon-color: #d49220;
 }
 
+.kind-home {
+  --file-icon-color: var(--app-accent, #2563eb);
+}
+
 .kind-image {
   --file-icon-color: #0f9f8e;
 }
@@ -85,10 +89,5 @@ const paletteClass = computed(() => `palette-${appearanceStore.fileIconPalette}`
 
 .palette-accent {
   --file-icon-color: var(--app-accent, #2563eb);
-}
-
-.palette-accent.kind-folder,
-.palette-accent.kind-folder-open {
-  --file-icon-color: #d49220;
 }
 </style>

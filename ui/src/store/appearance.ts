@@ -17,8 +17,8 @@ export const iconStyleOptions: {value: AppIconStyle; label: string}[] = [
 ];
 
 export const fileIconPaletteOptions: {value: FileIconPalette; label: string}[] = [
-  {value: "category", label: "分类色"},
-  {value: "accent", label: "主题色"}
+  {value: "category", label: "按类型着色"},
+  {value: "accent", label: "跟随主题色"}
 ];
 
 export const accentColorOptions: {value: AppAccentColor; label: string; color: string; contrast: string; soft: string; border: string}[] = [

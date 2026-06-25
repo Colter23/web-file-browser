@@ -37,7 +37,6 @@ const loading = computed(() => props.loadingPaths.has(normalizedPath.value));
 const dropTarget = computed(() => Boolean(props.dropTargetPath) && normalizedPath.value === normalizePathText(props.dropTargetPath));
 const favorite = computed(() => props.favoritePaths.some(path => normalizePathText(path) === normalizedPath.value));
 const hasChildren = computed(() => Boolean(props.data.children?.length));
-const nodeIcon = computed(() => normalizedPath.value === "/" ? "file.home" : "file.folder");
 const nodeStyle = computed(() => ({"--tree-depth": props.deep}));
 
 const handleRowClick = (event: MouseEvent) => {
@@ -87,7 +86,7 @@ const handleToggle = (event: MouseEvent) => {
         <icon v-else icon="action.down" size="0.72rem" />
       </button>
       <span class="node-icon" aria-hidden="true">
-        <icon v-if="normalizedPath === '/'" :icon="nodeIcon" size="1.05rem" />
+        <file-type-icon v-if="normalizedPath === '/'" kind="home" size="1.05rem" />
         <file-type-icon v-else kind="folder" :open="expanded" size="1.05rem" />
       </span>
       <span class="node-name">{{ data.name }}</span>
