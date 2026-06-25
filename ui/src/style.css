@@ -97,3 +97,50 @@ body {
   background: var(--app-bg);
   color: var(--app-text);
 }
+
+@keyframes app-icon-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.icon-motion-spin {
+  transition: transform 0.22s ease;
+}
+
+button:hover:not(:disabled) .icon-motion-spin,
+button:focus-visible:not(:disabled) .icon-motion-spin {
+  transform: rotate(92deg);
+}
+
+button:active:not(:disabled) .icon-motion-spin {
+  transform: rotate(180deg) scale(0.94);
+  transition-duration: 0.08s;
+}
+
+.icon-motion-spin.is-spinning {
+  animation: app-icon-spin 0.82s linear infinite;
+}
+
+.icon-motion-caret {
+  transition: transform 0.18s ease;
+}
+
+.icon-motion-caret.is-open {
+  transform: rotate(180deg);
+}
+
+.icon-motion-caret.is-collapsed {
+  transform: rotate(-90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon-motion-spin,
+  .icon-motion-caret {
+    transition: none;
+  }
+
+  .icon-motion-spin.is-spinning {
+    animation: none;
+  }
+}

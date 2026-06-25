@@ -150,7 +150,7 @@ defineExpose({
       </div>
       <div class="task-panel-actions">
         <button class="task-icon-button" :disabled="loading" title="刷新任务" @click="emit('refresh')">
-          <icon icon="action.refresh" size="normal" />
+          <icon class="icon-motion-spin" :class="{'is-spinning': loading}" icon="action.refresh" size="normal" />
         </button>
         <button
             class="task-icon-button"

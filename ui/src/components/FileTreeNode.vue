@@ -82,8 +82,8 @@ const handleToggle = (event: MouseEvent) => {
           title="展开或折叠"
           @pointerdown.prevent
           @click.stop="handleToggle">
-        <icon v-if="loading" icon="action.refresh" size="0.8rem" />
-        <icon v-else icon="action.down" size="0.72rem" />
+        <icon v-if="loading" class="icon-motion-spin is-spinning" icon="action.refresh" size="0.8rem" />
+        <icon v-else class="icon-motion-caret" icon="action.down" size="0.72rem" />
       </button>
       <span class="node-icon" aria-hidden="true">
         <file-type-icon v-if="normalizedPath === '/'" kind="home" size="1.05rem" />

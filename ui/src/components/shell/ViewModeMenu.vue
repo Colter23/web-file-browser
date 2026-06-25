@@ -179,7 +179,7 @@ onBeforeUnmount(() => {
         @keydown="handleButtonKeyDown">
       <icon :icon="icon" />
       <span>{{ label }}</span>
-      <icon icon="action.down" class="view-caret" />
+      <icon icon="action.down" class="view-caret icon-motion-caret" :class="{'is-open': open}" />
     </button>
     <div v-if="open" ref="viewMenuPanelRef" class="view-menu-panel" role="menu" aria-label="查看模式" @keydown="handleMenuKeyDown">
       <button

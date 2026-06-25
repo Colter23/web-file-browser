@@ -132,7 +132,7 @@ onBeforeUnmount(() => {
         @keydown="handleButtonKeyDown">
       <icon icon="view.details" />
       <span>{{ activeSortLabel }} {{ activeOrderLabel }}</span>
-      <icon icon="action.down" class="sort-caret" />
+      <icon icon="action.down" class="sort-caret icon-motion-caret" :class="{'is-open': open}" />
     </button>
     <div v-if="open" ref="sortMenuPanelRef" class="sort-menu-panel" role="menu" aria-label="排序方式" @keydown="handleMenuKeyDown">
       <p class="menu-group-title">排序方式</p>

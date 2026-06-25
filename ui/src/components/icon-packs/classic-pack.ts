@@ -27,6 +27,7 @@ const classicSymbolIcons: Record<string, string> = {
   "action.recent": "icon-refresh",
   "action.clean": "icon-delete",
   "action.settings": "icon-setting",
+  "action.main-menu": "icon-listview",
   "action.more": "icon-unfold",
   "action.logout": "icon-user-fill",
   "action.search": "icon-fenxiang",

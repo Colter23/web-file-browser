@@ -154,7 +154,7 @@ defineExpose({
       <icon icon="action.up" size="large" />
     </button>
     <button class="nav-button" title="刷新 (F5 / Ctrl+R)" @click="emit('refresh')">
-      <icon icon="action.refresh" size="large" />
+      <icon class="icon-motion-spin" icon="action.refresh" size="large" />
     </button>
     <button class="nav-button" title="最近文件" @click="emit('show-recent')">
       <icon icon="action.recent" size="large" />
@@ -189,7 +189,7 @@ defineExpose({
             @keydown="handleSearchOptionsButtonKeyDown">
           <icon :icon="activeSearchType.icon" />
           <span>{{ activeSearchType.label }}</span>
-          <icon class="search-options-caret" icon="action.down" />
+          <icon class="search-options-caret icon-motion-caret" :class="{'is-open': searchOptionsMenuOpen}" icon="action.down" />
         </button>
         <div
             v-if="searchOptionsMenuOpen"

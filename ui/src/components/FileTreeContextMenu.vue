@@ -81,11 +81,11 @@ watch(() => [props.x, props.y, props.node.path] as const, () => {
       </button>
       <div class="context-separator"></div>
       <button class="context-row" :disabled="loading" @click="emit('refresh')">
-        <span class="context-row-icon"><icon icon="action.refresh" /></span>
+        <span class="context-row-icon"><icon class="icon-motion-spin" icon="action.refresh" /></span>
         <span class="context-row-label">刷新</span>
       </button>
       <button class="context-row" :disabled="!canToggle" @click="emit('toggle')">
-        <span class="context-row-icon"><icon :icon="expanded ? 'action.up' : 'action.down'" /></span>
+        <span class="context-row-icon"><icon icon="action.down" class="icon-motion-caret" :class="{'is-open': expanded}" /></span>
         <span class="context-row-label">{{ toggleText }}</span>
       </button>
       <button v-if="favorite" class="context-row" :disabled="node.path === '/'" @click="emit('remove-favorite')">

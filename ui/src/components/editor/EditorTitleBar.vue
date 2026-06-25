@@ -62,7 +62,7 @@ const emitMenuToggle = (menu: EditorMenuName, event: MouseEvent, align: EditorMe
         <icon icon="action.settings" />
       </button>
       <button class="icon-button" :disabled="loading" title="重新载入" @click.stop="emit('reload')">
-        <icon icon="action.refresh" />
+        <icon class="icon-motion-spin" :class="{'is-spinning': loading}" icon="action.refresh" />
       </button>
       <button class="save-button" :disabled="!canSave" title="保存 (Ctrl+S)" @click.stop="emit('save')">
         <icon icon="action.save" :color="canSave ? 'var(--app-accent-contrast)' : 'var(--app-text-disabled)'" />

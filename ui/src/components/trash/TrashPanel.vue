@@ -175,7 +175,7 @@ defineExpose({
       </div>
       <div class="trash-actions">
         <button class="trash-icon-button" :disabled="loading" title="刷新回收站" @click="emit('refresh')">
-          <icon icon="action.refresh" />
+          <icon class="icon-motion-spin" :class="{'is-spinning': loading}" icon="action.refresh" />
         </button>
         <button class="trash-icon-button" title="关闭回收站" @click="emit('close')">
           <icon icon="action.close" />

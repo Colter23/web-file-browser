@@ -38,6 +38,7 @@ const activeIconStyleLabel = computed(() => {
   return iconStyleOptions.find(option => option.value === appearanceStore.iconStyle)?.label ?? "线性";
 });
 const menuTitle = computed(() => `更多选项：${activeColorModeLabel.value}，${activeIconStyleLabel.value}`);
+const menuButtonLabel = computed(() => open.value ? "关闭主菜单" : menuTitle.value);
 
 const close = () => {
   open.value = false;
@@ -130,12 +131,16 @@ onBeforeUnmount(() => {
         ref="menuButtonRef"
         class="more-button"
         :class="{active: open || taskActive}"
-        :title="menuTitle"
+        :title="menuButtonLabel"
+        :aria-label="menuButtonLabel"
         aria-haspopup="menu"
         :aria-expanded="open"
         @click="toggle"
         @keydown="handleButtonKeyDown">
-      <icon icon="action.more" size="large" />
+      <span class="menu-icon-stack" :class="{open}">
+        <icon class="menu-icon menu-icon-menu" icon="action.main-menu" size="large" />
+        <icon class="menu-icon menu-icon-close" icon="action.close" size="large" />
+      </span>
     </button>
 
     <div v-if="open" ref="menuPanelRef" class="more-menu-panel" role="menu" aria-label="更多选项" @keydown="handleMenuKeyDown">
@@ -248,6 +253,7 @@ onBeforeUnmount(() => {
   border-color: color-mix(in srgb, var(--app-border) 45%, transparent);
   background: var(--app-control);
   color: var(--app-text-muted);
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .more-button:hover {
@@ -265,6 +271,35 @@ onBeforeUnmount(() => {
   @apply outline-none;
   border-color: var(--app-accent, #2563eb);
   box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
+.menu-icon-stack {
+  @apply relative grid h-6 w-6 place-items-center;
+}
+
+.menu-icon {
+  @apply col-start-1 row-start-1;
+  transition: opacity 0.16s ease, transform 0.18s ease;
+}
+
+.menu-icon-menu {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+.menu-icon-close {
+  opacity: 0;
+  transform: rotate(-45deg) scale(0.72);
+}
+
+.menu-icon-stack.open .menu-icon-menu {
+  opacity: 0;
+  transform: rotate(45deg) scale(0.72);
+}
+
+.menu-icon-stack.open .menu-icon-close {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
 }
 
 .more-menu-panel {

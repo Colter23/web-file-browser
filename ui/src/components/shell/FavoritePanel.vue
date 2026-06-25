@@ -258,12 +258,12 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
           :aria-expanded="!collapsed"
           :title="collapsed ? '展开收藏夹' : '折叠收藏夹'"
           @click="toggleCollapsed">
-        <icon :icon="collapsed ? 'action.next' : 'action.down'" class="favorite-caret" />
+        <icon icon="action.down" class="favorite-caret icon-motion-caret" :class="{'is-collapsed': collapsed}" />
         <icon icon="action.favorite" />
         <span>收藏夹</span>
       </button>
       <button class="favorite-refresh" :disabled="loading" title="刷新收藏夹" @click="emit('refresh')">
-        <icon icon="action.refresh" />
+        <icon class="icon-motion-spin" :class="{'is-spinning': loading}" icon="action.refresh" />
       </button>
     </div>
 

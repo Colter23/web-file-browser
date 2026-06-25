@@ -82,7 +82,7 @@ watch(() => [props.x, props.y, props.favorite.id] as const, () => {
         <span class="context-row-label">重命名收藏项</span>
       </button>
       <button role="menuitem" class="context-row" :disabled="loading" @click="emit('refresh')">
-        <span class="context-row-icon"><icon icon="action.refresh" /></span>
+        <span class="context-row-icon"><icon class="icon-motion-spin" icon="action.refresh" /></span>
         <span class="context-row-label">检查收藏夹</span>
       </button>
       <button role="menuitem" class="context-row" @click="emit('copy-path')">
