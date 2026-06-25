@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed, ref} from "vue";
+import {useDraggablePanel} from "../../composables/useDraggablePanel.ts";
 import Icon from "../Icon.vue";
 
 type OperationPanelShellTag = "form" | "section";
@@ -27,8 +28,14 @@ const emit = defineEmits<{
 }>();
 
 const shellRef = ref<HTMLElement | null>(null);
+const {
+  dragging,
+  panelStyle,
+  resetPosition,
+  startDrag
+} = useDraggablePanel({panelRef: shellRef});
 
-const shellClass = computed(() => ["operation-shell", `width-${props.width}`]);
+const shellClass = computed(() => ["operation-shell", `width-${props.width}`, {"is-dragging": dragging.value}]);
 const iconClass = computed(() => ["operation-shell-icon", props.variant]);
 
 defineExpose({
@@ -41,10 +48,11 @@ defineExpose({
       :is="as"
       ref="shellRef"
       :class="shellClass"
+      :style="panelStyle"
       :tabindex="tabindex"
       @submit.prevent="emit('submit')"
       @keydown.esc.prevent.stop="emit('close')">
-    <div class="operation-shell-header">
+    <div class="operation-shell-header" title="拖动移动面板" @pointerdown="startDrag" @dblclick="resetPosition">
       <div :class="iconClass">
         <icon :icon="icon" />
       </div>
@@ -67,28 +75,33 @@ defineExpose({
 @reference "tailwindcss";
 
 .operation-shell {
-  @apply absolute left-1/2 top-6 z-30 flex -translate-x-1/2 flex-col gap-3 rounded-lg border p-4 text-sm shadow-2xl outline-none;
+  @apply fixed left-1/2 top-1/2 z-50 flex -translate-x-1/2 -translate-y-1/2 flex-col gap-3 overflow-hidden rounded-lg border p-4 text-sm shadow-2xl outline-none;
+  max-height: calc(100vh - 2rem);
   border-color: var(--app-border-soft);
   background: var(--app-panel-solid);
   color: var(--app-text-muted);
   box-shadow: var(--app-menu-shadow);
 }
 
+.operation-shell.is-dragging {
+  @apply select-none;
+}
+
 .operation-shell.width-operation {
-  @apply w-[min(28rem,calc(100%-2rem))];
+  width: min(28rem, calc(100vw - 2rem));
 }
 
 .operation-shell.width-delete {
-  @apply w-[min(30rem,calc(100%-2rem))];
+  width: min(30rem, calc(100vw - 2rem));
   border-color: var(--app-danger-border);
 }
 
 .operation-shell.width-properties {
-  @apply w-[min(32rem,calc(100%-2rem))];
+  width: min(32rem, calc(100vw - 2rem));
 }
 
 .operation-shell-header {
-  @apply flex items-start gap-3;
+  @apply flex cursor-move select-none items-start gap-3;
 }
 
 .operation-shell-icon {
@@ -125,7 +138,7 @@ defineExpose({
 }
 
 .operation-shell-close {
-  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-md;
+  @apply flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md;
   color: var(--app-text-subtle);
 }
 

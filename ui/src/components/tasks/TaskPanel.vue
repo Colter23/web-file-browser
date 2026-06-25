@@ -2,6 +2,7 @@
 import {computed, nextTick, ref, watch} from "vue";
 import type {TaskKind, TaskState, TaskStatus} from "../../class.ts";
 import type {TaskCancelConfirmState} from "../../composables/useTaskPanel.ts";
+import {useDraggablePanel} from "../../composables/useDraggablePanel.ts";
 import Icon from "../Icon.vue";
 
 const props = defineProps<{
@@ -23,7 +24,14 @@ const emit = defineEmits<{
   (e: "confirm-cancel"): void;
 }>();
 
+const panelRef = ref<HTMLElement | null>(null);
 const cancelConfirmRef = ref<HTMLElement | null>(null);
+const {
+  dragging,
+  panelStyle,
+  resetPosition,
+  startDrag
+} = useDraggablePanel({panelRef});
 
 const taskKindText = (kind: TaskKind) => ({
   copy: "复制",
@@ -120,11 +128,15 @@ watch(() => props.cancelConfirm.visible, async visible => {
   await nextTick();
   cancelConfirmRef.value?.focus();
 });
+
+defineExpose({
+  focus: () => panelRef.value?.focus({preventScroll: true})
+});
 </script>
 
 <template>
-  <section class="task-panel" aria-label="后台任务">
-    <div class="task-panel-header">
+  <section ref="panelRef" class="task-panel" :class="{'is-dragging': dragging}" :style="panelStyle" aria-label="后台任务" tabindex="-1">
+    <div class="task-panel-header" title="拖动移动任务面板" @pointerdown="startDrag" @dblclick="resetPosition">
       <div class="min-w-0">
         <p class="task-panel-title">后台任务 · {{ taskSummaryText }}</p>
         <p class="task-panel-message">{{ message || taskRefreshText }}</p>
@@ -209,15 +221,24 @@ watch(() => props.cancelConfirm.visible, async visible => {
 @reference "tailwindcss";
 
 .task-panel {
-  @apply absolute right-3 top-3 z-20 flex w-[min(38rem,calc(100%-1.5rem))] flex-col gap-2 overflow-hidden rounded-lg border px-3 py-2 shadow-2xl backdrop-blur;
-  max-height: min(32rem, calc(100% - 1.5rem));
+  @apply fixed left-1/2 top-1/2 z-40 flex -translate-x-1/2 -translate-y-1/2 flex-col gap-2 overflow-hidden rounded-lg border px-3 py-2 shadow-2xl outline-none backdrop-blur;
+  width: min(38rem, calc(100vw - 1.5rem));
+  max-height: min(32rem, calc(100vh - 1.5rem));
   border-color: var(--app-border-soft);
   background: color-mix(in srgb, var(--app-panel-solid) 96%, transparent);
   box-shadow: var(--app-menu-shadow);
 }
 
+.task-panel.is-dragging {
+  @apply select-none;
+}
+
+.task-panel:focus-visible {
+  box-shadow: var(--app-menu-shadow), 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
 .task-panel-header {
-  @apply flex items-center justify-between gap-3;
+  @apply flex cursor-move select-none items-center justify-between gap-3;
 }
 
 .task-panel-title {
@@ -258,7 +279,7 @@ watch(() => props.cancelConfirm.visible, async visible => {
 }
 
 .task-icon-button {
-  @apply inline-flex h-8 w-8 items-center justify-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-50;
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);
   color: var(--app-text-muted);

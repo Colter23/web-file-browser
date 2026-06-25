@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed, nextTick, ref, watch} from "vue";
 import type {TrashRecord} from "../../class.ts";
+import {useDraggablePanel} from "../../composables/useDraggablePanel.ts";
 import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
 import {parentPath} from "../../utils/file-path.ts";
 import FileTypeIcon from "../FileTypeIcon.vue";
@@ -38,6 +39,12 @@ const emit = defineEmits<{
 }>();
 
 const panelRef = ref<HTMLElement | null>(null);
+const {
+  dragging,
+  panelStyle,
+  resetPosition,
+  startDrag
+} = useDraggablePanel({panelRef});
 
 const selectedIdSet = computed(() => new Set(props.selectedIds));
 const selectedCount = computed(() => props.selectedIds.length);
@@ -151,11 +158,13 @@ defineExpose({
   <section
       ref="panelRef"
       class="trash-panel"
+      :class="{'is-dragging': dragging}"
+      :style="panelStyle"
       aria-label="回收站"
       tabindex="-1"
       @keydown="handleKeydown"
       @keydown.esc.prevent.stop="emit('close')">
-    <div class="trash-panel-header">
+    <div class="trash-panel-header" title="拖动移动回收站面板" @pointerdown="startDrag" @dblclick="resetPosition">
       <div class="trash-title">
         <span class="trash-icon"><icon icon="action.trash" /></span>
         <div>
@@ -241,11 +250,16 @@ defineExpose({
 @reference "tailwindcss";
 
 .trash-panel {
-  @apply absolute right-3 top-3 z-20 flex w-[min(56rem,calc(100%-1.5rem))] flex-col gap-3 overflow-hidden rounded-lg border p-3 shadow-2xl outline-none backdrop-blur;
-  max-height: min(36rem, calc(100% - 1.5rem));
+  @apply fixed left-1/2 top-1/2 z-40 flex -translate-x-1/2 -translate-y-1/2 flex-col gap-3 overflow-hidden rounded-lg border p-3 shadow-2xl outline-none backdrop-blur;
+  width: min(56rem, calc(100vw - 1.5rem));
+  max-height: min(36rem, calc(100vh - 1.5rem));
   border-color: var(--app-border-soft);
   background: color-mix(in srgb, var(--app-panel-solid) 96%, transparent);
   box-shadow: var(--app-menu-shadow);
+}
+
+.trash-panel.is-dragging {
+  @apply select-none;
 }
 
 .trash-panel:focus-visible {
@@ -255,6 +269,10 @@ defineExpose({
 .trash-panel-header,
 .trash-toolbar {
   @apply flex flex-wrap items-center justify-between gap-2;
+}
+
+.trash-panel-header {
+  @apply cursor-move select-none;
 }
 
 .trash-title {
@@ -282,7 +300,7 @@ defineExpose({
 }
 
 .trash-icon-button {
-  @apply inline-flex h-8 w-8 items-center justify-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-50;
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);
   color: var(--app-text-muted);
