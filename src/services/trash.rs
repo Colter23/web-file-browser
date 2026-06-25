@@ -2,7 +2,10 @@ use std::{
     collections::HashSet,
     fs,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration as StdDuration, Instant},
 };
 
@@ -80,8 +83,8 @@ pub struct TrashService {
     root: Arc<PathBuf>,
     index_file: Arc<PathBuf>,
     records: Arc<RwLock<Vec<TrashRecord>>>,
-    retention_days: Option<u64>,
-    max_bytes: Option<u64>,
+    retention_days: Arc<AtomicU64>,
+    max_bytes: Arc<AtomicU64>,
     last_retention_check: Arc<RwLock<Option<Instant>>>,
     retention_cleanup_lock: Arc<Mutex<()>>,
 }
@@ -105,11 +108,18 @@ impl TrashService {
             root: Arc::new(root),
             index_file: Arc::new(index_file),
             records: Arc::new(RwLock::new(records)),
-            retention_days,
-            max_bytes,
+            retention_days: Arc::new(AtomicU64::new(option_to_atomic(retention_days))),
+            max_bytes: Arc::new(AtomicU64::new(option_to_atomic(max_bytes))),
             last_retention_check: Arc::new(RwLock::new(None)),
             retention_cleanup_lock: Arc::new(Mutex::new(())),
         })
+    }
+
+    pub fn update_policy(&self, retention_days: Option<u64>, max_bytes: Option<u64>) {
+        self.retention_days
+            .store(option_to_atomic(retention_days), Ordering::Relaxed);
+        self.max_bytes
+            .store(option_to_atomic(max_bytes), Ordering::Relaxed);
     }
 
     pub async fn cleanup_retention_if_due(&self) -> Result<usize, AppError> {
@@ -343,7 +353,8 @@ impl TrashService {
     async fn apply_retention(&self) -> Result<usize, AppError> {
         let mut records = self.records.read().await.clone();
         records.sort_by(|left, right| left.deleted_at.cmp(&right.deleted_at));
-        let purge_ids = select_retention_purge_ids(&records, self.retention_days, self.max_bytes)?;
+        let purge_ids =
+            select_retention_purge_ids(&records, self.retention_days(), self.max_bytes())?;
 
         self.purge_records(&purge_ids).await
     }
@@ -386,7 +397,15 @@ impl TrashService {
     }
 
     fn has_retention_policy(&self) -> bool {
-        self.retention_days.is_some() || self.max_bytes.is_some()
+        self.retention_days().is_some() || self.max_bytes().is_some()
+    }
+
+    fn retention_days(&self) -> Option<u64> {
+        atomic_to_option(self.retention_days.load(Ordering::Relaxed))
+    }
+
+    fn max_bytes(&self) -> Option<u64> {
+        atomic_to_option(self.max_bytes.load(Ordering::Relaxed))
     }
 
     async fn retention_check_is_recent(&self) -> bool {
@@ -539,6 +558,14 @@ fn select_retention_purge_ids(
     }
 
     Ok(purge_ids)
+}
+
+fn option_to_atomic(value: Option<u64>) -> u64 {
+    value.map(|value| value.saturating_add(1)).unwrap_or(0)
+}
+
+fn atomic_to_option(value: u64) -> Option<u64> {
+    value.checked_sub(1)
 }
 
 fn dir_size(path: &Path) -> Result<u64, std::io::Error> {

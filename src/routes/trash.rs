@@ -110,9 +110,10 @@ async fn restore_trash(
     Path(id): Path<String>,
     Query(query): Query<TrashWriteQuery>,
 ) -> Result<Json<TrashRestoreResult>, AppError> {
+    let runtime = state.settings.runtime().await;
     let policy = query
         .parse_conflict_policy()?
-        .unwrap_or(state.runtime_settings.conflict_policy);
+        .unwrap_or(runtime.conflict_policy);
     let snapshot = state.mapping_store.snapshot().await;
     let restored = state.trash.restore(snapshot.clone(), id, policy).await?;
     index_upsert_ignore(&state, snapshot, &restored.restored_virtual_path).await;
@@ -133,9 +134,8 @@ async fn restore_trash_batch(
     Json(request): Json<TrashBatchRequest>,
 ) -> Result<Json<TrashBatchRestoreResponse>, AppError> {
     let ids = validate_batch_ids(request.ids)?;
-    let policy = request
-        .conflict_policy
-        .unwrap_or(state.runtime_settings.conflict_policy);
+    let runtime = state.settings.runtime().await;
+    let policy = request.conflict_policy.unwrap_or(runtime.conflict_policy);
     let snapshot = state.mapping_store.snapshot().await;
     let outcome = state
         .trash

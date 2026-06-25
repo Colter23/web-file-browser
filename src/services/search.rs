@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     thread,
     time::Duration,
@@ -27,7 +27,7 @@ use crate::{
 
 #[derive(Clone)]
 pub struct SearchService {
-    enabled: bool,
+    enabled: Arc<AtomicBool>,
     entries: Arc<RwLock<Vec<IndexedEntry>>>,
     status: Arc<RwLock<IndexStatus>>,
     rebuild_token: Arc<AtomicU64>,
@@ -79,7 +79,7 @@ impl IndexedEntry {
 impl SearchService {
     pub fn new(enabled: bool) -> Self {
         Self {
-            enabled,
+            enabled: Arc::new(AtomicBool::new(enabled)),
             entries: Arc::new(RwLock::new(Vec::new())),
             status: Arc::new(RwLock::new(IndexStatus {
                 enabled,
@@ -93,12 +93,32 @@ impl SearchService {
         }
     }
 
+    pub async fn set_enabled(&self, enabled: bool) {
+        let old_enabled = self.enabled.swap(enabled, Ordering::SeqCst);
+        let mut status = self.status.write().await;
+        status.enabled = enabled;
+        if enabled {
+            if !old_enabled && status.state == "disabled" {
+                status.state = "idle".to_string();
+                status.last_error = None;
+            }
+            return;
+        }
+
+        self.rebuild_token.fetch_add(1, Ordering::SeqCst);
+        self.entries.write().await.clear();
+        status.state = "disabled".to_string();
+        status.indexed_entries = 0;
+        status.last_finished_at = Some(now_epoch_string());
+        status.last_error = None;
+    }
+
     pub async fn rebuild(
         &self,
         snapshot: Arc<MappingSnapshot>,
         scan_delay_ms: u64,
     ) -> Result<(), AppError> {
-        if !self.enabled {
+        if !self.is_enabled() {
             return Err(AppError::bad_request("搜索索引未启用"));
         }
         let token = {
@@ -148,7 +168,7 @@ impl SearchService {
     }
 
     pub async fn cancel_rebuild(&self) -> Result<(), AppError> {
-        if !self.enabled {
+        if !self.is_enabled() {
             return Err(AppError::bad_request("搜索索引未启用"));
         }
         let is_scanning = self.status.read().await.state == "scanning";
@@ -230,7 +250,7 @@ impl SearchService {
         snapshot: Arc<MappingSnapshot>,
         virtual_path: String,
     ) -> Result<(), AppError> {
-        if !self.enabled {
+        if !self.is_enabled() {
             return Ok(());
         }
         let item = tokio::task::spawn_blocking(move || {
@@ -239,6 +259,9 @@ impl SearchService {
         })
         .await??;
 
+        if !self.is_enabled() {
+            return Ok(());
+        }
         let indexed_entries = {
             let mut entries = self.entries.write().await;
             remove_path_prefix(&mut entries, &item.path);
@@ -250,10 +273,13 @@ impl SearchService {
     }
 
     pub async fn remove_virtual_path(&self, virtual_path: &str) -> Result<(), AppError> {
-        if !self.enabled {
+        if !self.is_enabled() {
             return Ok(());
         }
         let virtual_path = normalize_virtual_path(virtual_path)?;
+        if !self.is_enabled() {
+            return Ok(());
+        }
         let indexed_entries = {
             let mut entries = self.entries.write().await;
             remove_path_prefix(&mut entries, &virtual_path);
@@ -264,11 +290,14 @@ impl SearchService {
     }
 
     pub async fn move_virtual_path(&self, old_path: &str, new_path: &str) -> Result<(), AppError> {
-        if !self.enabled {
+        if !self.is_enabled() {
             return Ok(());
         }
         let old_path = normalize_virtual_path(old_path)?;
         let new_path = normalize_virtual_path(new_path)?;
+        if !self.is_enabled() {
+            return Ok(());
+        }
         let old_prefix = child_prefix(&old_path);
         let mut entries = self.entries.write().await;
         for item in entries.iter_mut() {
@@ -286,10 +315,13 @@ impl SearchService {
     }
 
     pub async fn remove_mount(&self, mount_path: &str) -> Result<(), AppError> {
-        if !self.enabled {
+        if !self.is_enabled() {
             return Ok(());
         }
         let mount_path = normalize_virtual_path(mount_path)?;
+        if !self.is_enabled() {
+            return Ok(());
+        }
         let indexed_entries = {
             let mut entries = self.entries.write().await;
             entries.retain(|item| item.result.mount_path != mount_path);
@@ -303,7 +335,14 @@ impl SearchService {
         self.status.read().await.clone()
     }
 
+    fn is_enabled(&self) -> bool {
+        self.enabled.load(Ordering::SeqCst)
+    }
+
     async fn refresh_indexed_entries(&self, indexed_entries: usize) {
+        if !self.is_enabled() {
+            return;
+        }
         let mut status = self.status.write().await;
         status.indexed_entries = indexed_entries;
     }

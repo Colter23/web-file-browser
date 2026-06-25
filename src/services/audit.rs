@@ -1,7 +1,10 @@
 use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, AtomicUsize, Ordering},
+    },
 };
 
 use serde::Serialize;
@@ -18,8 +21,8 @@ use crate::error::AppError;
 pub struct AuditService {
     file_path: Arc<PathBuf>,
     state: Arc<Mutex<AuditState>>,
-    max_bytes: Option<u64>,
-    retention_files: usize,
+    max_bytes: Arc<AtomicU64>,
+    retention_files: Arc<AtomicUsize>,
 }
 
 #[derive(Debug)]
@@ -54,9 +57,16 @@ impl AuditService {
         Ok(Self {
             file_path: Arc::new(file_path),
             state: Arc::new(Mutex::new(AuditState { current_bytes })),
-            max_bytes,
-            retention_files,
+            max_bytes: Arc::new(AtomicU64::new(option_to_atomic(max_bytes))),
+            retention_files: Arc::new(AtomicUsize::new(retention_files)),
         })
+    }
+
+    pub fn update_policy(&self, max_bytes: Option<u64>, retention_files: usize) {
+        self.max_bytes
+            .store(option_to_atomic(max_bytes), Ordering::Relaxed);
+        self.retention_files
+            .store(retention_files, Ordering::Relaxed);
     }
 
     pub async fn record(
@@ -91,7 +101,7 @@ impl AuditService {
     }
 
     pub async fn cleanup_rotated(&self) -> Result<usize, AppError> {
-        cleanup_rotated_audit_files(&self.file_path, self.retention_files).await
+        cleanup_rotated_audit_files(&self.file_path, self.retention_files()).await
     }
 
     async fn rotate_if_needed(
@@ -99,7 +109,7 @@ impl AuditService {
         state: &mut AuditState,
         incoming_bytes: u64,
     ) -> Result<(), AppError> {
-        let Some(max_bytes) = self.max_bytes else {
+        let Some(max_bytes) = self.max_bytes() else {
             return Ok(());
         };
         if state.current_bytes == 0
@@ -113,7 +123,7 @@ impl AuditService {
             Ok(()) => {
                 state.current_bytes = 0;
                 if let Err(error) =
-                    cleanup_rotated_audit_files(&self.file_path, self.retention_files).await
+                    cleanup_rotated_audit_files(&self.file_path, self.retention_files()).await
                 {
                     tracing::warn!("清理旧审计日志失败: {error}");
                 }
@@ -125,6 +135,14 @@ impl AuditService {
             }
             Err(error) => Err(error.into()),
         }
+    }
+
+    fn max_bytes(&self) -> Option<u64> {
+        atomic_to_option(self.max_bytes.load(Ordering::Relaxed))
+    }
+
+    fn retention_files(&self) -> usize {
+        self.retention_files.load(Ordering::Relaxed)
     }
 }
 
@@ -186,6 +204,14 @@ fn rotated_audit_path(file_path: &Path) -> Result<PathBuf, AppError> {
     Ok(parent
         .map(|path| path.join(&rotated_name))
         .unwrap_or_else(|| PathBuf::from(rotated_name)))
+}
+
+fn option_to_atomic(value: Option<u64>) -> u64 {
+    value.unwrap_or(0)
+}
+
+fn atomic_to_option(value: u64) -> Option<u64> {
+    if value == 0 { None } else { Some(value) }
 }
 
 fn rotated_audit_timestamp(file_path: &Path, candidate: &str) -> Result<Option<i128>, AppError> {

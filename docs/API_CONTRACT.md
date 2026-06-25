@@ -715,7 +715,75 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
 
 ### `GET /api/settings`
 
-返回运行配置快照，字段来自 `RuntimeSettings`。前端设置页可用于展示当前限制，不建议把这些字段当作可写配置。
+返回设置快照。`runtime` 是可在线编辑并热生效的运行配置；`startup` 是启动期只读配置，修改后需要重启。`envLocked` 中的字段由环境变量控制，不能通过设置接口覆盖。
+
+```json
+{
+  "runtime": {
+    "maxEditBytes": 2097152,
+    "editableExtensions": [],
+    "editableMimeTypes": [],
+    "maxUploadBytes": null,
+    "maxDirPageSize": 2000,
+    "maxDirConcurrency": 4,
+    "maxTransferConcurrency": 8,
+    "maxIpConcurrency": 16,
+    "maxTaskConcurrency": 2,
+    "taskHistoryLimit": 200,
+    "taskSpeedLimitBytesPerSec": null,
+    "maxExtractBytes": null,
+    "maxExtractFiles": null,
+    "maxExtractDepth": 64,
+    "indexEnabled": false,
+    "indexScanDelayMs": 2,
+    "auditMaxBytes": 10485760,
+    "auditRetentionFiles": 8,
+    "trashRetentionDays": null,
+    "trashMaxBytes": null,
+    "conflictPolicy": "autoRename"
+  },
+  "startup": {
+    "bindAddress": "0.0.0.0",
+    "port": 8080,
+    "mappingFile": "data/mappings.json",
+    "configFile": "data/config.json",
+    "authFile": "data/auth.json",
+    "favoritesFile": "data/favorites.json",
+    "trashDir": "data/trash",
+    "staticDir": "ui/dist",
+    "corsAllowedOrigins": [],
+    "trustProxyHeaders": false,
+    "auditFile": "data/audit.jsonl",
+    "indexRebuildOnStartup": false
+  },
+  "authConfigured": true,
+  "envLocked": [],
+  "restartRequiredFields": [
+    "startup.bindAddress",
+    "startup.port"
+  ]
+}
+```
+
+### `PATCH /api/settings`
+
+在线修改运行配置，成功后写入 `data/config.json` 并更新内存快照。只接受 `runtime` 字段；提交 `startup` 会返回 `400`。如果字段出现在 `envLocked` 中，返回 `409`。
+
+```json
+{
+  "runtime": {
+    "maxUploadBytes": 104857600,
+    "maxDirPageSize": 1000,
+    "conflictPolicy": "reject"
+  }
+}
+```
+
+返回值与 `GET /api/settings` 相同。新的配置只保证对后续请求和后续任务生效；已开始的上传、下载、后台任务继续使用开始时的配置。
+
+### `POST /api/settings/reload`
+
+手动从 `config.json` 重新加载可热生效运行配置，并应用环境变量覆盖。不监听文件变化，不在请求热路径读取配置文件。
 
 ### `GET /api/health`
 

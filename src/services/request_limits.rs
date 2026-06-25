@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock as StdRwLock},
+};
 
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 
@@ -6,6 +9,10 @@ use crate::{error::AppError, models::RequestLimitMetrics};
 
 #[derive(Clone)]
 pub struct RequestLimits {
+    inner: Arc<StdRwLock<Arc<RequestLimitState>>>,
+}
+
+struct RequestLimitState {
     dir_scan: Arc<Semaphore>,
     transfer: Arc<Semaphore>,
     dir_scan_limit: usize,
@@ -16,6 +23,49 @@ pub struct RequestLimits {
 
 impl RequestLimits {
     pub fn new(dir_scan: usize, transfer: usize, per_ip_limit: usize) -> Self {
+        Self {
+            inner: Arc::new(StdRwLock::new(Arc::new(RequestLimitState::new(
+                dir_scan,
+                transfer,
+                per_ip_limit,
+            )))),
+        }
+    }
+
+    pub fn update(&self, dir_scan: usize, transfer: usize, per_ip_limit: usize) {
+        let mut inner = self
+            .inner
+            .write()
+            .unwrap_or_else(|error| error.into_inner());
+        *inner = Arc::new(RequestLimitState::new(dir_scan, transfer, per_ip_limit));
+    }
+
+    pub fn acquire_dir_scan(&self) -> Result<OwnedSemaphorePermit, AppError> {
+        self.current().acquire_dir_scan()
+    }
+
+    pub fn acquire_transfer(&self) -> Result<OwnedSemaphorePermit, AppError> {
+        self.current().acquire_transfer()
+    }
+
+    pub async fn acquire_ip(&self, ip: String) -> Result<OwnedSemaphorePermit, AppError> {
+        self.current().acquire_ip(ip).await
+    }
+
+    pub async fn metrics(&self) -> RequestLimitMetrics {
+        self.current().metrics().await
+    }
+
+    fn current(&self) -> Arc<RequestLimitState> {
+        self.inner
+            .read()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone()
+    }
+}
+
+impl RequestLimitState {
+    fn new(dir_scan: usize, transfer: usize, per_ip_limit: usize) -> Self {
         let dir_scan_limit = dir_scan.max(1);
         let transfer_limit = transfer.max(1);
         let per_ip_limit = per_ip_limit.max(1);
@@ -29,21 +79,21 @@ impl RequestLimits {
         }
     }
 
-    pub fn acquire_dir_scan(&self) -> Result<OwnedSemaphorePermit, AppError> {
+    fn acquire_dir_scan(&self) -> Result<OwnedSemaphorePermit, AppError> {
         self.dir_scan
             .clone()
             .try_acquire_owned()
             .map_err(|_| AppError::too_many_requests("目录扫描并发过高，请稍后重试"))
     }
 
-    pub fn acquire_transfer(&self) -> Result<OwnedSemaphorePermit, AppError> {
+    fn acquire_transfer(&self) -> Result<OwnedSemaphorePermit, AppError> {
         self.transfer
             .clone()
             .try_acquire_owned()
             .map_err(|_| AppError::too_many_requests("文件传输并发过高，请稍后重试"))
     }
 
-    pub async fn acquire_ip(&self, ip: String) -> Result<OwnedSemaphorePermit, AppError> {
+    async fn acquire_ip(&self, ip: String) -> Result<OwnedSemaphorePermit, AppError> {
         let mut per_ip = self.per_ip.lock().await;
         prune_idle_ip_entries(&mut per_ip, self.per_ip_limit);
         let semaphore = per_ip
@@ -55,7 +105,7 @@ impl RequestLimits {
             .map_err(|_| AppError::too_many_requests("当前 IP 并发请求过高，请稍后重试"))
     }
 
-    pub async fn metrics(&self) -> RequestLimitMetrics {
+    async fn metrics(&self) -> RequestLimitMetrics {
         let mut per_ip = self.per_ip.lock().await;
         prune_idle_ip_entries(&mut per_ip, self.per_ip_limit);
         let active_ip_requests = per_ip

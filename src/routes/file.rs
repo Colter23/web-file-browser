@@ -238,7 +238,8 @@ async fn respond_metadata(
     headers: HeaderMap,
 ) -> Result<Response, AppError> {
     let snapshot = state.mapping_store.snapshot().await;
-    let options = query.into_options(state.runtime_settings.max_dir_page_size)?;
+    let runtime = state.settings.runtime().await;
+    let options = query.into_options(runtime.max_dir_page_size)?;
     if should_precheck_basic_not_modified(&headers, options)
         && let Some(modified) =
             path_resolver::basic_metadata_modified(snapshot.clone(), path.clone()).await?
@@ -448,7 +449,7 @@ async fn create_entry_at_path(
     request: CreateEntryRequest,
 ) -> Result<(StatusCode, Json<FileOperationResponse>), AppError> {
     let snapshot = state.mapping_store.snapshot().await;
-    let policy = write_policy(&state, &query, request.conflict_policy)?;
+    let policy = write_policy(&state, &query, request.conflict_policy).await?;
     let response = file_ops::create_entry(snapshot.clone(), path, request, policy).await?;
     index_upsert_ignore(&state, snapshot, &response.path).await;
     audit_ignore(&state, "create", Some(&response.path), None).await;
@@ -479,7 +480,7 @@ async fn move_entry_at_path(
     request: MoveEntryRequest,
 ) -> Result<Json<FileOperationResponse>, AppError> {
     let snapshot = state.mapping_store.snapshot().await;
-    let policy = write_policy(&state, &query, request.conflict_policy)?;
+    let policy = write_policy(&state, &query, request.conflict_policy).await?;
     let response = file_ops::move_entry(snapshot.clone(), path.clone(), request, policy).await?;
     index_move_ignore(&state, &path, &response.path).await;
     index_upsert_ignore(&state, snapshot, &response.path).await;
@@ -580,9 +581,10 @@ async fn stream_content_at_path(
     let permit = state.limits.acquire_transfer()?;
     let snapshot = state.mapping_store.snapshot().await;
     let resolved = path_resolver::resolve_existing(snapshot, path).await?;
+    let runtime = state.settings.runtime().await;
     let edit_policy = query
         .requires_edit_policy()?
-        .then(|| edit_policy_from_state(&state));
+        .then(|| edit_policy_from_runtime(&runtime));
     transfer::stream_existing_file(
         resolved,
         headers,
@@ -619,13 +621,14 @@ async fn save_content_at_path(
 ) -> Result<(HeaderMap, Json<FileOperationResponse>), AppError> {
     let _permit = state.limits.acquire_transfer()?;
     let snapshot = state.mapping_store.snapshot().await;
+    let runtime = state.settings.runtime().await;
     let response = transfer::save_content(
         snapshot.clone(),
         path,
         headers,
         body,
-        state.runtime_settings.max_upload_bytes,
-        &edit_policy_from_state(&state),
+        runtime.max_upload_bytes,
+        &edit_policy_from_runtime(&runtime),
     )
     .await?;
     index_upsert_ignore(&state, snapshot, &response.1.0.path).await;
@@ -700,12 +703,13 @@ async fn upload_file_at_path(
 ) -> Result<(StatusCode, Json<UploadResponse>), AppError> {
     let _permit = state.limits.acquire_transfer()?;
     let snapshot = state.mapping_store.snapshot().await;
-    let policy = write_policy(&state, &query, None)?;
+    let runtime = state.settings.runtime().await;
+    let policy = write_policy_from_runtime(&runtime, &query, None)?;
     let response = transfer::upload_multipart(
         snapshot.clone(),
         path,
         multipart,
-        state.runtime_settings.max_upload_bytes,
+        runtime.max_upload_bytes,
         policy,
     )
     .await?;
@@ -745,22 +749,31 @@ async fn audit_ignore(state: &AppState, action: &str, path: Option<&str>, detail
     }
 }
 
-fn write_policy(
+async fn write_policy(
     state: &AppState,
+    query: &WriteQuery,
+    request_policy: Option<ConflictPolicy>,
+) -> Result<ConflictPolicy, AppError> {
+    let runtime = state.settings.runtime().await;
+    write_policy_from_runtime(&runtime, query, request_policy)
+}
+
+fn write_policy_from_runtime(
+    runtime: &crate::models::RuntimeSettings,
     query: &WriteQuery,
     request_policy: Option<ConflictPolicy>,
 ) -> Result<ConflictPolicy, AppError> {
     Ok(query
         .parse_conflict_policy()?
         .or(request_policy)
-        .unwrap_or(state.runtime_settings.conflict_policy))
+        .unwrap_or(runtime.conflict_policy))
 }
 
-fn edit_policy_from_state(state: &AppState) -> transfer::EditablePolicy {
+fn edit_policy_from_runtime(runtime: &crate::models::RuntimeSettings) -> transfer::EditablePolicy {
     transfer::EditablePolicy {
-        max_bytes: state.runtime_settings.max_edit_bytes,
-        extensions: state.runtime_settings.editable_extensions.clone(),
-        mime_types: state.runtime_settings.editable_mime_types.clone(),
+        max_bytes: runtime.max_edit_bytes,
+        extensions: runtime.editable_extensions.clone(),
+        mime_types: runtime.editable_mime_types.clone(),
     }
 }
 

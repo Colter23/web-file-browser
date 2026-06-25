@@ -6,7 +6,7 @@ use axum::{
     },
     routing::get,
 };
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 use tower_http::{
     cors::{AllowHeaders, AllowOrigin, CorsLayer},
     services::{ServeDir, ServeFile},
@@ -20,7 +20,7 @@ use crate::{
     services::{
         audit::AuditService, auth::AuthService, auth_store::AuthStore, favorites::FavoriteService,
         mapping_store::MappingStore, request_limits::RequestLimits, search::SearchService,
-        tasks::TaskService, trash::TrashService,
+        settings::SettingsService, tasks::TaskService, trash::TrashService,
     },
 };
 
@@ -35,7 +35,7 @@ pub struct AppState {
     pub limits: RequestLimits,
     pub tasks: TaskService,
     pub search: SearchService,
-    pub runtime_settings: RuntimeSettings,
+    pub settings: SettingsService,
 }
 
 pub async fn build(config: AppConfig) -> Result<Router, AppError> {
@@ -65,42 +65,7 @@ pub async fn build(config: AppConfig) -> Result<Router, AppError> {
         config.task_history_limit,
     );
     let search = SearchService::new(config.index_enabled);
-    let runtime_settings = RuntimeSettings {
-        bind_address: config.bind_address.clone(),
-        port: config.port,
-        mapping_file: path_to_string(&config.mapping_file),
-        config_file: path_to_string(&config.config_file),
-        auth_file: path_to_string(&config.auth_file),
-        favorites_file: path_to_string(&config.favorites_file),
-        trash_dir: path_to_string(&config.trash_dir),
-        static_dir: path_to_string(&config.static_dir),
-        cors_allowed_origins: config.cors_allowed_origins.clone(),
-        trust_proxy_headers: config.trust_proxy_headers,
-        max_edit_bytes: config.max_edit_bytes,
-        editable_extensions: config.editable_extensions.clone(),
-        editable_mime_types: config.editable_mime_types.clone(),
-        max_upload_bytes: config.max_upload_bytes,
-        max_dir_page_size: config.max_dir_page_size,
-        max_dir_concurrency: config.max_dir_concurrency,
-        max_transfer_concurrency: config.max_transfer_concurrency,
-        max_ip_concurrency: config.max_ip_concurrency,
-        max_task_concurrency: config.max_task_concurrency,
-        task_history_limit: config.task_history_limit,
-        task_speed_limit_bytes_per_sec: config.task_speed_limit_bytes_per_sec,
-        max_extract_bytes: config.max_extract_bytes,
-        max_extract_files: config.max_extract_files,
-        max_extract_depth: config.max_extract_depth,
-        index_enabled: config.index_enabled,
-        index_rebuild_on_startup: config.index_rebuild_on_startup,
-        index_scan_delay_ms: config.index_scan_delay_ms,
-        audit_file: path_to_string(&config.audit_file),
-        audit_max_bytes: config.audit_max_bytes,
-        audit_retention_files: config.audit_retention_files,
-        trash_retention_days: config.trash_retention_days,
-        trash_max_bytes: config.trash_max_bytes,
-        conflict_policy: config.conflict_policy,
-        auth_configured: auth_store.has_admin_password().await,
-    };
+    let settings = SettingsService::new(&config);
 
     let state = Arc::new(AppState {
         mapping_store,
@@ -112,7 +77,7 @@ pub async fn build(config: AppConfig) -> Result<Router, AppError> {
         limits,
         tasks,
         search,
-        runtime_settings,
+        settings,
     });
 
     if config.index_enabled && config.index_rebuild_on_startup {
@@ -141,8 +106,24 @@ pub async fn build(config: AppConfig) -> Result<Router, AppError> {
         .with_state(state))
 }
 
-fn path_to_string(path: &Path) -> String {
-    path.to_string_lossy().to_string()
+impl AppState {
+    pub async fn apply_runtime_settings(&self, settings: &RuntimeSettings) {
+        self.limits.update(
+            settings.max_dir_concurrency,
+            settings.max_transfer_concurrency,
+            settings.max_ip_concurrency,
+        );
+        self.tasks.update(
+            settings.max_task_concurrency,
+            settings.task_speed_limit_bytes_per_sec,
+            settings.task_history_limit,
+        );
+        self.search.set_enabled(settings.index_enabled).await;
+        self.trash
+            .update_policy(settings.trash_retention_days, settings.trash_max_bytes);
+        self.audit
+            .update_policy(settings.audit_max_bytes, settings.audit_retention_files);
+    }
 }
 
 fn build_cors_layer(allowed_origins: &[String]) -> Result<CorsLayer, AppError> {

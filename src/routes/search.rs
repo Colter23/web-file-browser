@@ -42,7 +42,8 @@ async fn search(
     State(state): State<Arc<AppState>>,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<SearchResponse>, AppError> {
-    let limit = bounded_limit(query.limit, state.runtime_settings.max_dir_page_size)?;
+    let runtime = state.settings.runtime().await;
+    let limit = bounded_limit(query.limit, runtime.max_dir_page_size)?;
     Ok(Json(
         state
             .search
@@ -61,15 +62,14 @@ async fn recent(
     State(state): State<Arc<AppState>>,
     Query(query): Query<RecentQuery>,
 ) -> Result<Json<Vec<SearchResult>>, AppError> {
-    let limit = bounded_limit(
-        query.limit.or(Some(50)),
-        state.runtime_settings.max_dir_page_size,
-    )?;
+    let runtime = state.settings.runtime().await;
+    let limit = bounded_limit(query.limit.or(Some(50)), runtime.max_dir_page_size)?;
     Ok(Json(state.search.recent(limit).await))
 }
 
 async fn rebuild_index(State(state): State<Arc<AppState>>) -> Result<StatusCode, AppError> {
-    if !state.runtime_settings.index_enabled {
+    let runtime = state.settings.runtime().await;
+    if !runtime.index_enabled {
         return Err(AppError::bad_request("搜索索引未启用"));
     }
     if state.search.status().await.state == "scanning" {
@@ -77,7 +77,7 @@ async fn rebuild_index(State(state): State<Arc<AppState>>) -> Result<StatusCode,
     }
     let snapshot = state.mapping_store.snapshot().await;
     let search = state.search.clone();
-    let scan_delay_ms = state.runtime_settings.index_scan_delay_ms;
+    let scan_delay_ms = runtime.index_scan_delay_ms;
     tokio::spawn(async move {
         if let Err(error) = search.rebuild(snapshot, scan_delay_ms).await {
             tracing::warn!("搜索索引重建失败: {error}");

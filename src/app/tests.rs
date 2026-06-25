@@ -7,5 +7,6 @@ mod file;
 mod mapping;
 mod ops;
 mod search;
+mod settings;
 mod tasks;
 mod trash;

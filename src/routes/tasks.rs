@@ -95,9 +95,8 @@ async fn create_copy_task(
         .create(TaskKind::Copy, request.sources.len(), 0)
         .await?;
     let id = task.id.clone();
-    let policy = request
-        .conflict_policy
-        .unwrap_or(state.runtime_settings.conflict_policy);
+    let runtime = state.settings.runtime().await;
+    let policy = request.conflict_policy.unwrap_or(runtime.conflict_policy);
     spawn_copy_task(state, id.clone(), request.sources, target_path, policy);
     Ok(Json(TaskResponse { id }))
 }
@@ -120,9 +119,8 @@ async fn create_move_task(
         .create(TaskKind::Move, request.sources.len(), 0)
         .await?;
     let id = task.id.clone();
-    let policy = request
-        .conflict_policy
-        .unwrap_or(state.runtime_settings.conflict_policy);
+    let runtime = state.settings.runtime().await;
+    let policy = request.conflict_policy.unwrap_or(runtime.conflict_policy);
     spawn_move_task(state, id.clone(), request.sources, target_path, policy);
     Ok(Json(TaskResponse { id }))
 }
@@ -159,9 +157,8 @@ async fn create_archive_task(
         .create(TaskKind::Archive, request.sources.len(), 0)
         .await?;
     let id = task.id.clone();
-    let policy = request
-        .conflict_policy
-        .unwrap_or(state.runtime_settings.conflict_policy);
+    let runtime = state.settings.runtime().await;
+    let policy = request.conflict_policy.unwrap_or(runtime.conflict_policy);
     spawn_archive_task(state, id.clone(), request, policy);
     Ok(Json(TaskResponse { id }))
 }
@@ -175,9 +172,8 @@ async fn create_extract_task(
     ensure_optional_child_name("解压任务 folderName", request.folder_name.as_deref())?;
     let task = state.tasks.create(TaskKind::Extract, 1, 0).await?;
     let id = task.id.clone();
-    let policy = request
-        .conflict_policy
-        .unwrap_or(state.runtime_settings.conflict_policy);
+    let runtime = state.settings.runtime().await;
+    let policy = request.conflict_policy.unwrap_or(runtime.conflict_policy);
     spawn_extract_task(state, id.clone(), request, policy);
     Ok(Json(TaskResponse { id }))
 }
@@ -532,10 +528,11 @@ async fn extract_task(
     let temp_path = temp_sibling_path(&target.path, "extract");
     let target_path = target.path.clone();
     let source_path = source.real_path.clone();
+    let runtime = state.settings.runtime().await;
     let limits = ExtractLimits {
-        max_bytes: state.runtime_settings.max_extract_bytes,
-        max_files: state.runtime_settings.max_extract_files,
-        max_depth: state.runtime_settings.max_extract_depth,
+        max_bytes: runtime.max_extract_bytes,
+        max_files: runtime.max_extract_files,
+        max_depth: runtime.max_extract_depth,
     };
     let tasks = state.tasks.clone();
     let speed_limit = state.tasks.speed_limit_bytes_per_sec();

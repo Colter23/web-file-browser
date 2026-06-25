@@ -10,6 +10,7 @@ pub mod path_resolver;
 pub mod request_limits;
 pub mod reserved;
 pub mod search;
+pub mod settings;
 pub mod task_io;
 pub mod tasks;
 pub mod transfer;

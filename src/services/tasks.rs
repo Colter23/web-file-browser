@@ -1,4 +1,10 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc, RwLock as StdRwLock,
+        atomic::{AtomicU64, AtomicUsize, Ordering},
+    },
+};
 
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::sync::{OwnedSemaphorePermit, RwLock, Semaphore};
@@ -12,9 +18,13 @@ use crate::{
 #[derive(Clone)]
 pub struct TaskService {
     tasks: Arc<RwLock<HashMap<String, TaskStatus>>>,
+    runtime: Arc<StdRwLock<Arc<TaskRuntime>>>,
+    speed_limit_bytes_per_sec: Arc<AtomicU64>,
+    history_limit: Arc<AtomicUsize>,
+}
+
+struct TaskRuntime {
     run_slots: Arc<Semaphore>,
-    speed_limit_bytes_per_sec: Option<u64>,
-    history_limit: usize,
 }
 
 impl TaskService {
@@ -25,14 +35,36 @@ impl TaskService {
     ) -> Self {
         Self {
             tasks: Arc::new(RwLock::new(HashMap::new())),
-            run_slots: Arc::new(Semaphore::new(max_concurrency.max(1))),
-            speed_limit_bytes_per_sec,
-            history_limit: history_limit.max(1),
+            runtime: Arc::new(StdRwLock::new(Arc::new(TaskRuntime::new(max_concurrency)))),
+            speed_limit_bytes_per_sec: Arc::new(AtomicU64::new(option_to_atomic(
+                speed_limit_bytes_per_sec,
+            ))),
+            history_limit: Arc::new(AtomicUsize::new(history_limit.max(1))),
         }
     }
 
+    pub fn update(
+        &self,
+        max_concurrency: usize,
+        speed_limit_bytes_per_sec: Option<u64>,
+        history_limit: usize,
+    ) {
+        let mut runtime = self
+            .runtime
+            .write()
+            .unwrap_or_else(|error| error.into_inner());
+        *runtime = Arc::new(TaskRuntime::new(max_concurrency));
+        self.speed_limit_bytes_per_sec.store(
+            option_to_atomic(speed_limit_bytes_per_sec),
+            Ordering::Relaxed,
+        );
+        self.history_limit
+            .store(history_limit.max(1), Ordering::Relaxed);
+    }
+
     pub async fn acquire_run_permit(&self) -> Result<OwnedSemaphorePermit, AppError> {
-        self.run_slots
+        self.runtime()
+            .run_slots
             .clone()
             .acquire_owned()
             .await
@@ -40,7 +72,7 @@ impl TaskService {
     }
 
     pub fn speed_limit_bytes_per_sec(&self) -> Option<u64> {
-        self.speed_limit_bytes_per_sec
+        atomic_to_option(self.speed_limit_bytes_per_sec.load(Ordering::Relaxed))
     }
 
     pub async fn create(
@@ -106,7 +138,7 @@ impl TaskService {
         task.finished_at = Some(now_string()?);
         task.current_path = None;
         let status = task.clone();
-        prune_history(&mut tasks, self.history_limit);
+        prune_history(&mut tasks, self.history_limit());
         Ok(status)
     }
 
@@ -194,7 +226,7 @@ impl TaskService {
             task.finished_at = Some(now_string()?);
             task.current_path = None;
         }
-        prune_history(&mut tasks, self.history_limit);
+        prune_history(&mut tasks, self.history_limit());
         Ok(())
     }
 
@@ -226,6 +258,25 @@ impl TaskService {
         let before = tasks.len();
         tasks.retain(|_, task| !is_finished(task));
         before.saturating_sub(tasks.len())
+    }
+
+    fn runtime(&self) -> Arc<TaskRuntime> {
+        self.runtime
+            .read()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone()
+    }
+
+    fn history_limit(&self) -> usize {
+        self.history_limit.load(Ordering::Relaxed).max(1)
+    }
+}
+
+impl TaskRuntime {
+    fn new(max_concurrency: usize) -> Self {
+        Self {
+            run_slots: Arc::new(Semaphore::new(max_concurrency.max(1))),
+        }
     }
 }
 
@@ -284,6 +335,14 @@ fn now_string() -> Result<String, AppError> {
     OffsetDateTime::now_utc()
         .format(&Rfc3339)
         .map_err(|error| AppError::internal(format!("生成任务时间失败: {error}")))
+}
+
+fn option_to_atomic(value: Option<u64>) -> u64 {
+    value.unwrap_or(0)
+}
+
+fn atomic_to_option(value: u64) -> Option<u64> {
+    if value == 0 { None } else { Some(value) }
 }
 
 impl Default for TaskService {

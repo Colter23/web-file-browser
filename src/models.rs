@@ -204,16 +204,6 @@ pub struct SessionResponse {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeSettings {
-    pub bind_address: String,
-    pub port: u16,
-    pub mapping_file: String,
-    pub config_file: String,
-    pub auth_file: String,
-    pub favorites_file: String,
-    pub trash_dir: String,
-    pub static_dir: String,
-    pub cors_allowed_origins: Vec<String>,
-    pub trust_proxy_headers: bool,
     pub max_edit_bytes: u64,
     pub editable_extensions: Vec<String>,
     pub editable_mime_types: Vec<String>,
@@ -229,15 +219,95 @@ pub struct RuntimeSettings {
     pub max_extract_files: Option<usize>,
     pub max_extract_depth: usize,
     pub index_enabled: bool,
-    pub index_rebuild_on_startup: bool,
     pub index_scan_delay_ms: u64,
-    pub audit_file: String,
     pub audit_max_bytes: Option<u64>,
     pub audit_retention_files: usize,
     pub trash_retention_days: Option<u64>,
     pub trash_max_bytes: Option<u64>,
     pub conflict_policy: ConflictPolicy,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupSettings {
+    pub bind_address: String,
+    pub port: u16,
+    pub mapping_file: String,
+    pub config_file: String,
+    pub auth_file: String,
+    pub favorites_file: String,
+    pub trash_dir: String,
+    pub static_dir: String,
+    pub cors_allowed_origins: Vec<String>,
+    pub trust_proxy_headers: bool,
+    pub audit_file: String,
+    pub index_rebuild_on_startup: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsResponse {
+    pub runtime: RuntimeSettings,
+    pub startup: StartupSettings,
     pub auth_configured: bool,
+    pub env_locked: Vec<String>,
+    pub restart_required_fields: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateSettingsRequest {
+    #[serde(default)]
+    pub runtime: Option<RuntimeSettingsPatch>,
+    #[serde(default)]
+    pub startup: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeSettingsPatch {
+    #[serde(default)]
+    pub max_edit_bytes: Option<u64>,
+    #[serde(default)]
+    pub editable_extensions: Option<Vec<String>>,
+    #[serde(default)]
+    pub editable_mime_types: Option<Vec<String>>,
+    #[serde(default)]
+    pub max_upload_bytes: Option<Option<u64>>,
+    #[serde(default)]
+    pub max_dir_page_size: Option<usize>,
+    #[serde(default)]
+    pub max_dir_concurrency: Option<usize>,
+    #[serde(default)]
+    pub max_transfer_concurrency: Option<usize>,
+    #[serde(default)]
+    pub max_ip_concurrency: Option<usize>,
+    #[serde(default)]
+    pub max_task_concurrency: Option<usize>,
+    #[serde(default)]
+    pub task_history_limit: Option<usize>,
+    #[serde(default)]
+    pub task_speed_limit_bytes_per_sec: Option<Option<u64>>,
+    #[serde(default)]
+    pub max_extract_bytes: Option<Option<u64>>,
+    #[serde(default)]
+    pub max_extract_files: Option<Option<usize>>,
+    #[serde(default)]
+    pub max_extract_depth: Option<usize>,
+    #[serde(default)]
+    pub index_enabled: Option<bool>,
+    #[serde(default)]
+    pub index_scan_delay_ms: Option<u64>,
+    #[serde(default)]
+    pub audit_max_bytes: Option<Option<u64>>,
+    #[serde(default)]
+    pub audit_retention_files: Option<usize>,
+    #[serde(default)]
+    pub trash_retention_days: Option<Option<u64>>,
+    #[serde(default)]
+    pub trash_max_bytes: Option<Option<u64>>,
+    #[serde(default)]
+    pub conflict_policy: Option<ConflictPolicy>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

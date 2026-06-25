@@ -1,8 +1,15 @@
-use std::{env, fs, net::SocketAddr, path::PathBuf};
+use std::{
+    env, fs,
+    net::SocketAddr,
+    path::{Path, PathBuf},
+};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use crate::{error::AppError, models::ConflictPolicy};
+use crate::{
+    error::AppError,
+    models::{ConflictPolicy, RuntimeSettings, StartupSettings},
+};
 
 const DEFAULT_BIND_ADDRESS: &str = "0.0.0.0";
 const DEFAULT_PORT: u16 = 8080;
@@ -69,6 +76,10 @@ pub struct AppConfig {
 impl AppConfig {
     pub fn load() -> Result<Self, AppError> {
         let config_file = env_config_file();
+        Self::load_from_file(config_file)
+    }
+
+    pub(crate) fn load_from_file(config_file: PathBuf) -> Result<Self, AppError> {
         let file_config = RuntimeConfigFile::read(&config_file)?;
         let mut config = Self::defaults(config_file);
         config.apply_file(file_config);
@@ -78,6 +89,49 @@ impl AppConfig {
 
     pub fn socket_addr(&self) -> Result<SocketAddr, std::net::AddrParseError> {
         format!("{}:{}", self.bind_address, self.port).parse()
+    }
+
+    pub(crate) fn runtime_settings(&self) -> RuntimeSettings {
+        RuntimeSettings {
+            max_edit_bytes: self.max_edit_bytes,
+            editable_extensions: self.editable_extensions.clone(),
+            editable_mime_types: self.editable_mime_types.clone(),
+            max_upload_bytes: self.max_upload_bytes,
+            max_dir_page_size: self.max_dir_page_size,
+            max_dir_concurrency: self.max_dir_concurrency,
+            max_transfer_concurrency: self.max_transfer_concurrency,
+            max_ip_concurrency: self.max_ip_concurrency,
+            max_task_concurrency: self.max_task_concurrency,
+            task_history_limit: self.task_history_limit,
+            task_speed_limit_bytes_per_sec: self.task_speed_limit_bytes_per_sec,
+            max_extract_bytes: self.max_extract_bytes,
+            max_extract_files: self.max_extract_files,
+            max_extract_depth: self.max_extract_depth,
+            index_enabled: self.index_enabled,
+            index_scan_delay_ms: self.index_scan_delay_ms,
+            audit_max_bytes: self.audit_max_bytes,
+            audit_retention_files: self.audit_retention_files,
+            trash_retention_days: self.trash_retention_days,
+            trash_max_bytes: self.trash_max_bytes,
+            conflict_policy: self.conflict_policy,
+        }
+    }
+
+    pub(crate) fn startup_settings(&self) -> StartupSettings {
+        StartupSettings {
+            bind_address: self.bind_address.clone(),
+            port: self.port,
+            mapping_file: path_to_string(&self.mapping_file),
+            config_file: path_to_string(&self.config_file),
+            auth_file: path_to_string(&self.auth_file),
+            favorites_file: path_to_string(&self.favorites_file),
+            trash_dir: path_to_string(&self.trash_dir),
+            static_dir: path_to_string(&self.static_dir),
+            cors_allowed_origins: self.cors_allowed_origins.clone(),
+            trust_proxy_headers: self.trust_proxy_headers,
+            audit_file: path_to_string(&self.audit_file),
+            index_rebuild_on_startup: self.index_rebuild_on_startup,
+        }
     }
 
     fn defaults(config_file: PathBuf) -> Self {
@@ -297,33 +351,47 @@ impl AppConfig {
     }
 }
 
-#[derive(Debug, Default, Deserialize)]
+fn path_to_string(path: &Path) -> String {
+    path.to_string_lossy().to_string()
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct RuntimeConfigFile {
+pub(crate) struct RuntimeConfigFile {
     #[serde(default)]
-    server: Option<ServerConfigFile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) server: Option<ServerConfigFile>,
     #[serde(default)]
-    storage: Option<StorageConfigFile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) storage: Option<StorageConfigFile>,
     #[serde(default)]
-    limits: Option<LimitsConfigFile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) limits: Option<LimitsConfigFile>,
     #[serde(default)]
-    editor: Option<EditorConfigFile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) editor: Option<EditorConfigFile>,
     #[serde(default)]
-    tasks: Option<TaskConfigFile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) tasks: Option<TaskConfigFile>,
     #[serde(default)]
-    archive: Option<ArchiveConfigFile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) archive: Option<ArchiveConfigFile>,
     #[serde(default)]
-    index: Option<IndexConfigFile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) index: Option<IndexConfigFile>,
     #[serde(default)]
-    trash: Option<TrashConfigFile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) trash: Option<TrashConfigFile>,
     #[serde(default)]
-    audit: Option<AuditConfigFile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) audit: Option<AuditConfigFile>,
     #[serde(default)]
-    conflict_policy: Option<ConflictPolicy>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) conflict_policy: Option<ConflictPolicy>,
 }
 
 impl RuntimeConfigFile {
-    fn read(path: &PathBuf) -> Result<Self, AppError> {
+    pub(crate) fn read(path: &PathBuf) -> Result<Self, AppError> {
         let text = match fs::read_to_string(path) {
             Ok(text) if text.trim().is_empty() => return Ok(Self::default()),
             Ok(text) => text,
@@ -342,111 +410,142 @@ impl RuntimeConfigFile {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ServerConfigFile {
+pub(crate) struct ServerConfigFile {
     #[serde(default, alias = "bindAddress")]
-    bind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) bind: Option<String>,
     #[serde(default)]
-    port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) port: Option<u16>,
     #[serde(default)]
-    static_dir: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) static_dir: Option<PathBuf>,
     #[serde(default)]
-    cors_allowed_origins: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) cors_allowed_origins: Option<Vec<String>>,
     #[serde(default)]
-    trust_proxy_headers: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) trust_proxy_headers: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct StorageConfigFile {
+pub(crate) struct StorageConfigFile {
     #[serde(default)]
-    mapping_file: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) mapping_file: Option<PathBuf>,
     #[serde(default)]
-    auth_file: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) auth_file: Option<PathBuf>,
     #[serde(default)]
-    favorites_file: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) favorites_file: Option<PathBuf>,
     #[serde(default)]
-    trash_dir: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) trash_dir: Option<PathBuf>,
     #[serde(default)]
-    audit_file: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) audit_file: Option<PathBuf>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct LimitsConfigFile {
+pub(crate) struct LimitsConfigFile {
     #[serde(default)]
-    max_upload_bytes: Option<Option<u64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_upload_bytes: Option<Option<u64>>,
     #[serde(default)]
-    max_dir_page_size: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_dir_page_size: Option<usize>,
     #[serde(default)]
-    max_dir_concurrency: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_dir_concurrency: Option<usize>,
     #[serde(default)]
-    max_transfer_concurrency: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_transfer_concurrency: Option<usize>,
     #[serde(default)]
-    max_ip_concurrency: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_ip_concurrency: Option<usize>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct EditorConfigFile {
+pub(crate) struct EditorConfigFile {
     #[serde(default)]
-    max_edit_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_edit_bytes: Option<u64>,
     #[serde(default)]
-    editable_extensions: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) editable_extensions: Option<Vec<String>>,
     #[serde(default)]
-    editable_mime_types: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) editable_mime_types: Option<Vec<String>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct TaskConfigFile {
+pub(crate) struct TaskConfigFile {
     #[serde(default)]
-    max_concurrency: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_concurrency: Option<usize>,
     #[serde(default)]
-    history_limit: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) history_limit: Option<usize>,
     #[serde(default)]
-    speed_limit_bytes_per_sec: Option<Option<u64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) speed_limit_bytes_per_sec: Option<Option<u64>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ArchiveConfigFile {
+pub(crate) struct ArchiveConfigFile {
     #[serde(default)]
-    max_extract_bytes: Option<Option<u64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_extract_bytes: Option<Option<u64>>,
     #[serde(default)]
-    max_extract_files: Option<Option<usize>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_extract_files: Option<Option<usize>>,
     #[serde(default)]
-    max_extract_depth: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_extract_depth: Option<usize>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct IndexConfigFile {
+pub(crate) struct IndexConfigFile {
     #[serde(default)]
-    enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) enabled: Option<bool>,
     #[serde(default)]
-    rebuild_on_startup: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) rebuild_on_startup: Option<bool>,
     #[serde(default)]
-    scan_delay_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) scan_delay_ms: Option<u64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct TrashConfigFile {
+pub(crate) struct TrashConfigFile {
     #[serde(default)]
-    retention_days: Option<Option<u64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) retention_days: Option<Option<u64>>,
     #[serde(default)]
-    max_bytes: Option<Option<u64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_bytes: Option<Option<u64>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct AuditConfigFile {
+pub(crate) struct AuditConfigFile {
     #[serde(default)]
-    max_bytes: Option<Option<u64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_bytes: Option<Option<u64>>,
     #[serde(default)]
-    retention_files: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) retention_files: Option<usize>,
 }
 
 fn env_config_file() -> PathBuf {
@@ -598,7 +697,7 @@ fn normalize_extension_list(value: &str) -> Vec<String> {
     normalize_extension_values(split_env_list(value))
 }
 
-fn normalize_extension_values(values: Vec<String>) -> Vec<String> {
+pub(crate) fn normalize_extension_values(values: Vec<String>) -> Vec<String> {
     values
         .into_iter()
         .map(|value| value.trim_start_matches('.').trim().to_ascii_lowercase())
@@ -610,7 +709,7 @@ fn normalize_mime_list(value: &str) -> Vec<String> {
     normalize_mime_values(split_env_list(value))
 }
 
-fn normalize_mime_values(values: Vec<String>) -> Vec<String> {
+pub(crate) fn normalize_mime_values(values: Vec<String>) -> Vec<String> {
     values
         .into_iter()
         .map(|value| value.to_ascii_lowercase())

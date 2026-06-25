@@ -68,7 +68,7 @@ pub async fn limit_ip(
     request: Request,
     next: Next,
 ) -> Result<Response, AppError> {
-    let ip = request_ip(&request, state.runtime_settings.trust_proxy_headers);
+    let ip = request_ip(&request, state.settings.startup().trust_proxy_headers);
     let _permit = state.limits.acquire_ip(ip).await?;
     Ok(next.run(request).await)
 }
