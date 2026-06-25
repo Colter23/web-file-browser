@@ -73,20 +73,23 @@ const estimateRenameWidth = (text: string) => {
   return Math.max(2.5, Math.min(96, units + 1.25));
 }
 
-const estimateRenameRows = (text: string, maxLineUnits: number) => {
+const estimateRenameRows = (text: string, maxLineUnits: number, maxRows = 32) => {
   const units = estimateTextUnits(text);
   const safeLineUnits = Math.max(maxLineUnits - 0.5, 1);
-  return Math.max(1, Math.min(6, Math.ceil(units / safeLineUnits)));
+  return Math.max(1, Math.min(maxRows, Math.ceil(units / safeLineUnits)));
 }
 
 const estimateFloatingRename = (text: string, mode: ExplorerViewMode, iconSize: ExplorerIconSize) => {
   const units = estimateTextUnits(text);
   const maxWidth = mode === "tiles"
       ? iconSize === "large" ? 22 : 20
-      : iconSize === "large" ? 18 : iconSize === "small" ? 12 : 14;
-  const minWidth = mode === "tiles" ? 10 : 8;
+      : iconSize === "large" ? 24 : iconSize === "small" ? 16 : 20;
+  const lineWidth = mode === "tiles"
+      ? maxWidth - 1
+      : iconSize === "large" ? 14 : iconSize === "small" ? 7 : 9;
+  const minWidth = mode === "tiles" ? 12 : 9;
   const width = Math.min(Math.max(units + 1.5, minWidth), maxWidth);
-  const rows = estimateRenameRows(text, width);
+  const rows = estimateRenameRows(text, Math.min(width, lineWidth), mode === "tiles" ? 20 : 32);
   return {width, rows};
 }
 
@@ -130,6 +133,19 @@ const renameTextareaRows = computed(() => {
   const text = props.renameDraft || props.entry.name;
   return estimateFloatingRename(text, props.viewMode, props.iconSize).rows;
 });
+
+const visualIconSize = computed(() => {
+  if (props.viewMode === "details" || props.viewMode === "list") return "1.15rem";
+  if (props.viewMode === "tiles") return "2rem";
+  if (props.entry.type === "folder") {
+    if (props.iconSize === "large") return "5rem";
+    if (props.iconSize === "small") return "2.65rem";
+    return "3.55rem";
+  }
+  if (props.iconSize === "large") return "4.25rem";
+  if (props.iconSize === "small") return "2.25rem";
+  return "3rem";
+});
 </script>
 
 <template>
@@ -163,7 +179,7 @@ const renameTextareaRows = computed(() => {
             loading="lazy"
             decoding="async"
             @error="emit('thumbnail-error')">
-        <file-type-icon v-else :kind="iconKind" />
+        <file-type-icon v-else :kind="iconKind" :size="visualIconSize" />
       </div>
       <div class="entry-main">
         <textarea
@@ -174,6 +190,7 @@ const renameTextareaRows = computed(() => {
             :style="renameControlStyle"
             :disabled="renameSubmitting"
             :rows="renameTextareaRows"
+            wrap="soft"
             spellcheck="false"
             @input="updateRenameDraft"
             @click.stop
@@ -182,8 +199,14 @@ const renameTextareaRows = computed(() => {
             @keydown.enter.prevent="emit('commit-rename')"
             @keydown.esc.prevent.stop="emit('cancel-rename')"
             @blur="emit('commit-rename')"></textarea>
+        <span
+            v-if="renaming && (viewMode === 'icons' || viewMode === 'tiles')"
+            class="entry-name entry-rename-placeholder"
+            aria-hidden="true">
+          {{ renameDraft || entry.name }}
+        </span>
         <input
-            v-else-if="renaming"
+            v-if="renaming && viewMode !== 'icons' && viewMode !== 'tiles'"
             :ref="element => emit('rename-input-ref', element)"
             :value="renameDraft"
             class="entry-rename-input"
@@ -198,7 +221,7 @@ const renameTextareaRows = computed(() => {
             @keydown.enter.prevent="emit('commit-rename')"
             @keydown.esc.prevent.stop="emit('cancel-rename')"
             @blur="emit('commit-rename')">
-        <span v-else class="entry-name" @click.stop="emit('name-click', $event)">
+        <span v-if="!renaming" class="entry-name" @click.stop="emit('name-click', $event)">
           <span
               v-for="(segment, index) in highlightedNameSegments"
               :key="`${index}-${segment.text}`"
@@ -292,7 +315,7 @@ const renameTextareaRows = computed(() => {
 }
 
 .entry-item.view-icons .entry-name-cell {
-  @apply flex-col justify-start gap-2 text-center;
+  @apply w-full flex-col justify-start gap-2 text-center;
 }
 
 .entry-item.view-tiles .entry-name-cell {
@@ -345,7 +368,7 @@ const renameTextareaRows = computed(() => {
 }
 
 .entry-main {
-  @apply flex min-w-0 flex-1 items-center gap-2;
+  @apply relative flex min-w-0 flex-1 items-center gap-2;
 }
 
 .entry-item.view-icons .entry-main {
@@ -420,21 +443,21 @@ const renameTextareaRows = computed(() => {
 
 .entry-item.view-icons .entry-rename-input {
   left: 50%;
-  bottom: 0.35rem;
+  top: 0;
   transform: translateX(-50%);
   text-align: center;
-  width: min(var(--rename-input-width, 12ch), calc(100% - 1rem));
-  min-width: 8ch;
-  max-width: calc(100% - 1rem);
+  width: min(var(--rename-input-width, 20ch), calc(100% + 1rem));
+  min-width: 9ch;
+  max-width: calc(100% + 1rem);
 }
 
 .entry-item.view-tiles .entry-rename-input {
-  left: calc(3.5rem + 0.75rem);
-  bottom: 0.35rem;
+  left: 0;
+  top: 0;
   text-align: left;
-  width: min(var(--rename-input-width, 16ch), calc(100% - 4.25rem));
-  min-width: 10ch;
-  max-width: calc(100% - 4.25rem);
+  width: min(var(--rename-input-width, 16ch), 100%);
+  min-width: 12ch;
+  max-width: 100%;
 }
 
 .entry-item.view-icons .entry-rename-input,
@@ -443,29 +466,25 @@ const renameTextareaRows = computed(() => {
 }
 
 .entry-item.view-icons .entry-rename-input {
-  padding-inline: 0.75rem;
-  padding-block: 0.4rem;
+  padding-inline: 0.35rem;
+  padding-block: 0.3rem;
 }
 
 .entry-item.view-tiles .entry-rename-input {
-  padding-inline: 0.75rem;
-  padding-block: 0.4rem;
+  padding-inline: 0.45rem;
+  padding-block: 0.3rem;
 }
 
 .entry-rename-textarea {
   scrollbar-width: thin;
 }
 
-@supports (field-sizing: content) {
-  .entry-item.view-icons .entry-rename-input,
-  .entry-item.view-tiles .entry-rename-input {
-    width: auto;
-    field-sizing: content;
-  }
-}
-
 .entry-item.view-icons .entry-name {
   @apply line-clamp-2 whitespace-normal break-all leading-tight;
+}
+
+.entry-rename-placeholder {
+  @apply pointer-events-none opacity-0;
 }
 
 .entry-item.view-icons[data-renaming="true"] .entry-meta,
