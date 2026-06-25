@@ -8,9 +8,15 @@ type ImageViewerPayload = {
   entries: ExplorerEntry[];
 }
 
+type VideoViewerPayload = {
+  entry: ExplorerEntry;
+  entries: ExplorerEntry[];
+}
+
 type ExplorerPreviewOptions = {
   getSelectedEntry: () => ExplorerEntry | null;
   getImageEntries: () => ExplorerEntry[];
+  getVideoEntries: () => ExplorerEntry[];
   shouldPersistSelection: () => boolean;
   persistSelectedPaths: (paths: string[]) => void;
   showNotice: (message: string, kind?: ShellNoticeKind, title?: string, timeoutMs?: number) => void;
@@ -19,6 +25,7 @@ type ExplorerPreviewOptions = {
 export const useExplorerPreview = ({
   getSelectedEntry,
   getImageEntries,
+  getVideoEntries,
   shouldPersistSelection,
   persistSelectedPaths,
   showNotice
@@ -30,6 +37,9 @@ export const useExplorerPreview = ({
   const imageViewerVisible = ref(false);
   const imageViewerEntry = ref<ExplorerEntry | null>(null);
   const imageViewerEntries = ref<ExplorerEntry[]>([]);
+  const videoViewerVisible = ref(false);
+  const videoViewerEntry = ref<ExplorerEntry | null>(null);
+  const videoViewerEntries = ref<ExplorerEntry[]>([]);
   const currentSelection = ref<ExplorerEntry[]>([]);
   let previewUpdateToken = 0;
 
@@ -72,6 +82,12 @@ export const useExplorerPreview = ({
     imageViewerEntries.value = [];
   }
 
+  const resetVideoViewerState = () => {
+    videoViewerVisible.value = false;
+    videoViewerEntry.value = null;
+    videoViewerEntries.value = [];
+  }
+
   const setPreviewEntry = async (entry: ExplorerEntry, force = false) => {
     if (!force && previewEntry.value?.path === entry.path && previewPanelVisible.value) return;
     const token = ++previewUpdateToken;
@@ -91,22 +107,45 @@ export const useExplorerPreview = ({
     if (nextPreviewEntry) void setPreviewEntry(nextPreviewEntry, true);
   }
 
+  const closeVideoViewer = () => {
+    const nextPreviewEntry = previewPanelVisible.value && videoViewerEntry.value?.path !== previewEntry.value?.path
+        ? videoViewerEntry.value
+        : null;
+    resetVideoViewerState();
+    if (nextPreviewEntry) void setPreviewEntry(nextPreviewEntry, true);
+  }
+
   const closePreviewPanel = () => {
     previewPanelVisible.value = false;
     clearPreviewContent();
     closeImageViewer();
+    closeVideoViewer();
   }
 
   const setImageViewerEntry = (entry: ExplorerEntry) => {
     imageViewerEntry.value = entry;
   }
 
+  const setVideoViewerEntry = (entry: ExplorerEntry) => {
+    videoViewerEntry.value = entry;
+  }
+
   const openImageViewer = async ({entry, entries}: ImageViewerPayload) => {
     if (!await fileStore.requestEditorLeave()) return;
+    resetVideoViewerState();
     fileStore.closeEditor();
     imageViewerEntries.value = entries.length ? entries : [entry];
     imageViewerVisible.value = true;
     setImageViewerEntry(entry);
+  }
+
+  const openVideoViewer = async ({entry, entries}: VideoViewerPayload) => {
+    if (!await fileStore.requestEditorLeave()) return;
+    resetImageViewerState();
+    fileStore.closeEditor();
+    videoViewerEntries.value = entries.length ? entries : [entry];
+    videoViewerVisible.value = true;
+    setVideoViewerEntry(entry);
   }
 
   const openPreviewImageViewer = async () => {
@@ -119,6 +158,18 @@ export const useExplorerPreview = ({
   const openPreviewEntryImageViewer = async (entry: ExplorerEntry) => {
     previewEntry.value = entry;
     await openPreviewImageViewer();
+  }
+
+  const openPreviewVideoViewer = async () => {
+    const entry = previewEntry.value;
+    if (!entry) return;
+    const entries = getVideoEntries();
+    await openVideoViewer({entry, entries: entries.some(item => item.path === entry.path) ? entries : [entry]});
+  }
+
+  const openPreviewEntryVideoViewer = async (entry: ExplorerEntry) => {
+    previewEntry.value = entry;
+    await openPreviewVideoViewer();
   }
 
   const previewSelected = async (entry = getSelectedEntry()) => {
@@ -160,6 +211,9 @@ export const useExplorerPreview = ({
     imageViewerVisible,
     imageViewerEntry,
     imageViewerEntries,
+    videoViewerVisible,
+    videoViewerEntry,
+    videoViewerEntries,
     currentSelection,
     selectedList,
     selectedCount,
@@ -171,11 +225,16 @@ export const useExplorerPreview = ({
     clearPreviewContent,
     resetPreviewContext,
     resetImageViewer: resetImageViewerState,
+    resetVideoViewer: resetVideoViewerState,
     closePreviewPanel,
     closeImageViewer,
+    closeVideoViewer,
     setImageViewerEntry,
+    setVideoViewerEntry,
     openImageViewer,
+    openVideoViewer,
     openPreviewEntryImageViewer,
+    openPreviewEntryVideoViewer,
     previewSelected,
     previewSelectedQuietly,
     showEmptyPreviewPane,

@@ -27,6 +27,7 @@ import {
 } from "../network/api";
 import Explorer from "../components/explorer/Explorer.vue";
 import ImageViewer from "../components/viewer/ImageViewer.vue";
+import VideoViewer from "../components/viewer/VideoViewer.vue";
 import PreviewPane from "../components/viewer/PreviewPane.vue";
 import TaskPanel from "../components/tasks/TaskPanel.vue";
 import TrashPanel from "../components/trash/TrashPanel.vue";
@@ -85,6 +86,7 @@ type ExplorerExpose = {
   isResultActive: () => boolean;
   focus: () => void;
   getImageEntries: () => ExplorerEntry[];
+  getVideoEntries: () => ExplorerEntry[];
   getScrollTop: () => number;
   setScrollTop: (scrollTop: number) => Promise<void>;
 }
@@ -319,6 +321,9 @@ const {
   imageViewerVisible,
   imageViewerEntry,
   imageViewerEntries,
+  videoViewerVisible,
+  videoViewerEntry,
+  videoViewerEntries,
   currentSelection,
   selectedCount,
   hasSelection,
@@ -329,10 +334,15 @@ const {
   resetPreviewContext,
   closePreviewPanel,
   resetImageViewer,
+  resetVideoViewer,
   closeImageViewer,
+  closeVideoViewer,
   setImageViewerEntry,
+  setVideoViewerEntry,
   openImageViewer,
+  openVideoViewer,
   openPreviewEntryImageViewer,
+  openPreviewEntryVideoViewer,
   previewSelected,
   previewSelectedQuietly,
   showEmptyPreviewPane,
@@ -340,6 +350,7 @@ const {
 } = useExplorerPreview({
   getSelectedEntry: selectedEntry,
   getImageEntries: () => explorerRef.value?.getImageEntries() ?? [],
+  getVideoEntries: () => explorerRef.value?.getVideoEntries() ?? [],
   shouldPersistSelection,
   persistSelectedPaths,
   showNotice: showShellNotice
@@ -559,7 +570,9 @@ const shellActions = useMainViewShellActions({
   closePreviewPanel,
   resetPreviewContext,
   resetImageViewer,
+  resetVideoViewer,
   closeImageViewer,
+  closeVideoViewer,
   hideOperationPanel: () => operationPanel.value.visible = false,
   resetOperationPanel,
   resetDeleteConfirm,
@@ -619,6 +632,7 @@ const {
   handleWindowKeyDown
 } = useExplorerShortcuts({
   imageViewerVisible,
+  videoViewerVisible,
   previewPanelVisible,
   hasPreviewableSelection: () => singleSelection.value?.type === "file",
   focusSearchInput,
@@ -732,7 +746,8 @@ const {
   closeDeleteConfirmAndFocus,
   closePropertiesPanelAndFocus,
   closePreviewAndFocus,
-  closeImageViewerAndFocus
+  closeImageViewerAndFocus,
+  closeVideoViewerAndFocus
 } = useMainViewPanelClosers({
   editorVisible: () => fileStore.showEditor,
   focusExplorer,
@@ -743,13 +758,15 @@ const {
   propertiesPanel,
   previewPanelVisible,
   imageViewerVisible,
+  videoViewerVisible,
   closeTaskPanel,
   closeTrashPanel,
   closeOperationPanel,
   closeDeleteConfirm,
   closePropertiesPanel,
   closePreview,
-  closeImageViewer
+  closeImageViewer,
+  closeVideoViewer
 });
 
 const toggleTasksFromMenu = async () => {
@@ -960,7 +977,8 @@ const signOut = async () => {
                 @open-new-tab="openEntryInNewTab"
                 @add-favorite="addExplorerEntryToFavorites"
                 @remove-favorite="path => removeFavorite(path)"
-                @open-image-viewer="openImageViewer">
+                @open-image-viewer="openImageViewer"
+                @open-video-viewer="openVideoViewer">
             </explorer>
             <shell-notice
                 v-if="shellNotice.visible"
@@ -1060,6 +1078,7 @@ const signOut = async () => {
                 @edit="editPreviewEntry"
                 @download="downloadSelected"
                 @open-image="openPreviewEntryImageViewer"
+                @open-video="openPreviewEntryVideoViewer"
                 @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)">
             </preview-pane>
           </aside>
@@ -1074,6 +1093,16 @@ const signOut = async () => {
             @download="downloadSelected"
             @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)">
         </image-viewer>
+
+        <video-viewer
+            :visible="videoViewerVisible"
+            :entry="videoViewerEntry"
+            :entries="videoViewerEntries"
+            @close="closeVideoViewerAndFocus"
+            @select="setVideoViewerEntry"
+            @download="downloadSelected"
+            @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)">
+        </video-viewer>
 
         <div v-show="fileStore.showEditor" class="editor-overlay-panel">
           <editor-panel></editor-panel>

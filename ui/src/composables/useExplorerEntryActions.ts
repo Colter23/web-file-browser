@@ -1,9 +1,14 @@
 import type {ComputedRef} from "vue";
 import type {FileInfo} from "../class.ts";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
-import {entryFileInfo, isEditableEntry, isImageEntry} from "../utils/file-entry.ts";
+import {entryFileInfo, isEditableEntry, isImageEntry, isVideoEntry} from "../utils/file-entry.ts";
 
 type ImageViewerPayload = {
+  entry: ExplorerEntry;
+  entries: ExplorerEntry[];
+}
+
+type VideoViewerPayload = {
   entry: ExplorerEntry;
   entries: ExplorerEntry[];
 }
@@ -17,12 +22,14 @@ type ExplorerEntryActionOptions = {
   editableExtensions: () => readonly string[];
   selectedEntries: ComputedRef<ExplorerEntry[]>;
   imageEntries: ComputedRef<ExplorerEntry[]>;
+  videoEntries: ComputedRef<ExplorerEntry[]>;
   isRenaming: (entry: ExplorerEntry) => boolean;
   requestEditorLeave: () => Promise<boolean>;
   openEditor: (file: FileInfo) => void;
   loadFolder: (path: string) => Promise<unknown>;
   previewEntry: (entry: ExplorerEntry) => void;
   openImageViewer: (payload: ImageViewerPayload) => void;
+  openVideoViewer: (payload: VideoViewerPayload) => void;
   openNewTab: (entry: ExplorerEntry) => void;
   copyPath: (payload: CopyPathPayload) => void;
   closeContextMenu: () => void;
@@ -33,12 +40,14 @@ export const useExplorerEntryActions = ({
   editableExtensions,
   selectedEntries,
   imageEntries,
+  videoEntries,
   isRenaming,
   requestEditorLeave,
   openEditor,
   loadFolder,
   previewEntry,
   openImageViewer,
+  openVideoViewer,
   openNewTab,
   copyPath,
   closeContextMenu
@@ -62,6 +71,10 @@ export const useExplorerEntryActions = ({
     }
     if (isImageEntry(entry)) {
       openImageViewer({entry, entries: imageEntries.value});
+      return;
+    }
+    if (isVideoEntry(entry)) {
+      openVideoViewer({entry, entries: videoEntries.value});
       return;
     }
     if (canEditEntry(entry)) {

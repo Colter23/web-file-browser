@@ -9,6 +9,7 @@ import PreviewHeader from "./PreviewHeader.vue";
 import PreviewImageView from "./PreviewImageView.vue";
 import PreviewMetaList from "./PreviewMetaList.vue";
 import PreviewTextView from "./PreviewTextView.vue";
+import PreviewVideoView from "./PreviewVideoView.vue";
 import type {PreviewKind} from "./types.ts";
 
 const props = defineProps<{
@@ -25,6 +26,7 @@ const emit = defineEmits<{
   (e: "edit", entry: ExplorerEntry): void;
   (e: "download", entry: ExplorerEntry): void;
   (e: "open-image", entry: ExplorerEntry): void;
+  (e: "open-video", entry: ExplorerEntry): void;
   (e: "notice", payload: ShellNoticePayload): void;
 }>();
 
@@ -68,6 +70,7 @@ const downloadPreview = () => {
   <preview-meta-list v-if="entry" :items="previewMeta" />
   <preview-image-view v-if="entry && previewKind === 'image'" :entry="entry" @open-image="emit('open-image', $event)" />
   <preview-text-view v-else-if="entry && previewKind === 'text'" :entry="entry" :reload-key="reloadKey" @notice="emit('notice', $event)" />
+  <preview-video-view v-else-if="entry && previewKind === 'video'" :entry="entry" @open-video="emit('open-video', $event)" />
   <div v-else class="preview-body" :class="previewKind">
     <div v-if="!entry" class="preview-placeholder muted">
       <icon :icon="emptyIconName" size="3rem" />
@@ -75,7 +78,6 @@ const downloadPreview = () => {
       <small v-if="emptySubtitleText">{{ emptySubtitleText }}</small>
     </div>
     <audio v-else-if="entry && previewKind === 'audio'" :src="downloadUrl(entry.path)" controls></audio>
-    <video v-else-if="entry && previewKind === 'video'" :src="downloadUrl(entry.path)" controls></video>
     <div v-else class="preview-placeholder">
       <icon icon="file.file" size="3rem" />
       <span>暂不支持预览此类型</span>

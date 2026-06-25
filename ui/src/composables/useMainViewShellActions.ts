@@ -14,6 +14,8 @@ type MainViewShellActionsOptions = {
   resetPreviewContext: () => void;
   resetImageViewer: () => void;
   closeImageViewer: () => void;
+  resetVideoViewer: () => void;
+  closeVideoViewer: () => void;
   hideOperationPanel: () => void;
   resetOperationPanel: () => void;
   resetDeleteConfirm: () => void;
@@ -35,6 +37,8 @@ export const useMainViewShellActions = ({
   resetPreviewContext,
   resetImageViewer,
   closeImageViewer,
+  resetVideoViewer,
+  closeVideoViewer,
   hideOperationPanel,
   resetOperationPanel,
   resetDeleteConfirm,
@@ -50,6 +54,7 @@ export const useMainViewShellActions = ({
     resetTaskCancelConfirm();
     closeTrashPanel();
     resetImageViewer();
+    resetVideoViewer();
   }
 
   const closeTransientPanels = () => {
@@ -60,6 +65,7 @@ export const useMainViewShellActions = ({
     resetTaskCancelConfirm();
     closeTrashPanel();
     closeImageViewer();
+    closeVideoViewer();
   }
 
   const closeOperationShellPanels = () => {
@@ -79,6 +85,7 @@ export const useMainViewShellActions = ({
     resetTaskCancelConfirm();
     closeTrashPanel();
     resetImageViewer();
+    resetVideoViewer();
   }
 
   const refreshCurrent = async (keepSelection = false) => {

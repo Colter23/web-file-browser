@@ -23,7 +23,8 @@ import {
   formatEntryDate as formatDate,
   formatEntrySize as formatSize,
   isExtractableArchiveEntry as canExtract,
-  isImageEntry as isImageFile
+  isImageEntry as isImageFile,
+  isVideoEntry as isVideoFile
 } from "../../utils/file-entry.ts";
 import DetailsHeader from "./DetailsHeader.vue";
 import ExplorerContextMenu from "./ExplorerContextMenu.vue";
@@ -54,6 +55,11 @@ type ImageViewerPayload = {
   entries: ExplorerEntry[];
 }
 
+type VideoViewerPayload = {
+  entry: ExplorerEntry;
+  entries: ExplorerEntry[];
+}
+
 type CopyPathPayload = {
   paths: string[];
 }
@@ -71,6 +77,7 @@ const emit = defineEmits<{
   (e: "properties", entries: ExplorerEntry[]): void;
   (e: "preview", entry: ExplorerEntry): void;
   (e: "open-image-viewer", payload: ImageViewerPayload): void;
+  (e: "open-video-viewer", payload: VideoViewerPayload): void;
   (e: "copy", entry: ExplorerEntry): void;
   (e: "cut", entry: ExplorerEntry): void;
   (e: "paste"): void;
@@ -228,6 +235,7 @@ watch(selectedEntries, selected => {
 
 const thumbnailActive = computed(() => fileStore.viewMode === "icons" || fileStore.viewMode === "tiles");
 const imageEntries = computed(() => entries.value.filter(isImageFile));
+const videoEntries = computed(() => entries.value.filter(isVideoFile));
 const {
   shouldLoad: shouldLoadThumbnail,
   thumbnailUrl,
@@ -324,12 +332,14 @@ const {
   editableExtensions: () => fileStore.extensions,
   selectedEntries,
   imageEntries,
+  videoEntries,
   isRenaming,
   requestEditorLeave: () => fileStore.requestEditorLeave(),
   openEditor: file => fileStore.openEditor(file),
   loadFolder: path => loadFolder(path),
   previewEntry: entry => emit("preview", entry),
   openImageViewer: payload => emit("open-image-viewer", payload),
+  openVideoViewer: payload => emit("open-video-viewer", payload),
   openNewTab: entry => emit("open-new-tab", entry),
   copyPath: payload => emit("copy-path", payload),
   closeContextMenu
@@ -575,6 +585,7 @@ const {
   contextSelectionCount,
   primaryContextEntry,
   contextCanViewImage,
+  contextCanViewVideo,
   contextCanEdit,
   contextCanExtract,
   contextCanFavorite,
@@ -583,6 +594,7 @@ const {
   openContextEntryInNewTab,
   previewContextEntry,
   viewImageContextEntry,
+  viewVideoContextEntry,
   editContextEntry,
   downloadContextEntry,
   copyPathContextEntries,
@@ -603,6 +615,7 @@ const {
   removeContextFavorite
 } = useExplorerContextMenu({
   imageEntries,
+  videoEntries,
   selectedPaths,
   selectedEntries,
   favoritePaths: computed(() => props.favoritePaths),
@@ -618,6 +631,7 @@ const {
   openNewTab: openEntryInNewTab,
   editEntry,
   isImageFile,
+  isVideoFile,
   canEditEntry,
   canExtract,
   startRename,
@@ -626,6 +640,7 @@ const {
   invertCurrentSelection,
   previewEntry: entry => emit("preview", entry),
   openImageViewer: payload => emit("open-image-viewer", payload),
+  openVideoViewer: payload => emit("open-video-viewer", payload),
   downloadEntry: entry => emit("download", entry),
   copyPath: payload => emit("copy-path", payload),
   copyEntry: entry => emit("copy", entry),
@@ -731,6 +746,7 @@ defineExpose({
   getSelectedEntry: primarySelected,
   getSelectedEntries: () => selectedEntries.value,
   getImageEntries: () => imageEntries.value,
+  getVideoEntries: () => videoEntries.value,
   startRename: () => startRename(firstSelectedEntry()),
   selectPath,
   selectPaths,
@@ -865,6 +881,7 @@ defineExpose({
         :primary-entry="primaryContextEntry"
         :selection-count="contextSelectionCount"
         :can-view-image="contextCanViewImage"
+        :can-view-video="contextCanViewVideo"
         :can-edit="contextCanEdit"
         :can-extract="contextCanExtract"
         :can-favorite="contextCanFavorite"
@@ -874,6 +891,7 @@ defineExpose({
         @open="openEntryFromContext"
         @open-new-tab="openContextEntryInNewTab"
         @view-image="viewImageContextEntry"
+        @view-video="viewVideoContextEntry"
         @edit="editContextEntry"
         @preview="previewContextEntry"
         @cut="cutContextEntries"

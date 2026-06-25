@@ -57,6 +57,7 @@ const classicSymbolIcons: Record<string, string> = {
   "view.preview-pane": "icon-view-list",
   "view.preview-pane-close": "icon-view-list",
   "view.image": "icon-file-image-fill",
+  "view.video": "icon-file-fill",
 
   "file.home": "icon-home-fill",
   "file.folder": "icon-folder-fill",

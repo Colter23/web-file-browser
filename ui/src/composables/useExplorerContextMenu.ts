@@ -10,12 +10,18 @@ type ImageViewerPayload = {
   entries: ExplorerEntry[];
 }
 
+type VideoViewerPayload = {
+  entry: ExplorerEntry;
+  entries: ExplorerEntry[];
+}
+
 type CopyPathPayload = {
   paths: string[];
 }
 
 type ExplorerContextMenuOptions = {
   imageEntries: ComputedRef<ExplorerEntry[]>;
+  videoEntries: ComputedRef<ExplorerEntry[]>;
   selectedPaths: Ref<string[]>;
   selectedEntries: ComputedRef<ExplorerEntry[]>;
   favoritePaths: ComputedRef<string[]>;
@@ -31,6 +37,7 @@ type ExplorerContextMenuOptions = {
   openNewTab: (entry: ExplorerEntry) => void;
   editEntry: (entry: ExplorerEntry) => MaybePromise;
   isImageFile: (entry: ExplorerEntry | null | undefined) => boolean;
+  isVideoFile: (entry: ExplorerEntry | null | undefined) => boolean;
   canEditEntry: (entry: ExplorerEntry | null) => boolean;
   canExtract: (entry: ExplorerEntry | null | undefined) => boolean;
   startRename: (entry: ExplorerEntry | null) => void;
@@ -39,6 +46,7 @@ type ExplorerContextMenuOptions = {
   invertCurrentSelection: () => void;
   previewEntry: (entry: ExplorerEntry) => void;
   openImageViewer: (payload: ImageViewerPayload) => void;
+  openVideoViewer: (payload: VideoViewerPayload) => void;
   downloadEntry: (entry: ExplorerEntry) => void;
   copyPath: (payload: CopyPathPayload) => void;
   copyEntry: (entry: ExplorerEntry) => void;
@@ -56,6 +64,7 @@ type ExplorerContextMenuOptions = {
 
 export const useExplorerContextMenu = ({
   imageEntries,
+  videoEntries,
   selectedPaths,
   selectedEntries,
   favoritePaths,
@@ -71,6 +80,7 @@ export const useExplorerContextMenu = ({
   openNewTab,
   editEntry,
   isImageFile,
+  isVideoFile,
   canEditEntry,
   canExtract,
   startRename,
@@ -79,6 +89,7 @@ export const useExplorerContextMenu = ({
   invertCurrentSelection,
   previewEntry,
   openImageViewer,
+  openVideoViewer,
   downloadEntry,
   copyPath,
   copyEntry,
@@ -177,6 +188,7 @@ export const useExplorerContextMenu = ({
   const contextSelectionCount = computed(() => contextEntries.value.length);
   const primaryContextEntry = computed(() => contextEntry());
   const contextCanViewImage = computed(() => Boolean(primaryContextEntry.value && isImageFile(primaryContextEntry.value)));
+  const contextCanViewVideo = computed(() => Boolean(primaryContextEntry.value && isVideoFile(primaryContextEntry.value)));
   const contextCanEdit = computed(() => canEditEntry(primaryContextEntry.value));
   const contextCanExtract = computed(() => canExtract(primaryContextEntry.value));
   const contextCanFavorite = computed(() => {
@@ -192,7 +204,7 @@ export const useExplorerContextMenu = ({
 
   const openEntryFromContext = async () => {
     const entry = primaryContextEntry.value;
-    await runAsyncEntryContextAction(openEntry, Boolean(entry && (entry.type === "folder" || !isImageFile(entry) && !canEditEntry(entry))));
+    await runAsyncEntryContextAction(openEntry, Boolean(entry && (entry.type === "folder" || !isImageFile(entry) && !isVideoFile(entry) && !canEditEntry(entry))));
   }
 
   const openContextEntryInNewTab = () => {
@@ -206,6 +218,12 @@ export const useExplorerContextMenu = ({
   const viewImageContextEntry = () => {
     runEntryContextAction(entry => {
       if (isImageFile(entry)) openImageViewer({entry, entries: imageEntries.value});
+    });
+  }
+
+  const viewVideoContextEntry = () => {
+    runEntryContextAction(entry => {
+      if (isVideoFile(entry)) openVideoViewer({entry, entries: videoEntries.value});
     });
   }
 
@@ -303,6 +321,7 @@ export const useExplorerContextMenu = ({
     contextSelectionCount,
     primaryContextEntry,
     contextCanViewImage,
+    contextCanViewVideo,
     contextCanEdit,
     contextCanExtract,
     contextCanFavorite,
@@ -311,6 +330,7 @@ export const useExplorerContextMenu = ({
     openContextEntryInNewTab,
     previewContextEntry,
     viewImageContextEntry,
+    viewVideoContextEntry,
     editContextEntry,
     downloadContextEntry,
     copyPathContextEntries,

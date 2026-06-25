@@ -139,6 +139,7 @@ const lucideIcons: Record<string, Component> = {
   "view.preview-pane": PanelRight,
   "view.preview-pane-close": PanelRightClose,
   "view.image": Image,
+  "view.video": Video,
 
   "file.home": House,
   "file.folder": Folder,

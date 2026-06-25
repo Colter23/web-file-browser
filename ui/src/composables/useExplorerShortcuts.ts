@@ -5,6 +5,7 @@ type MaybePromise<T = unknown> = T | Promise<T>;
 
 type ExplorerShortcutsOptions = {
   imageViewerVisible: Ref<boolean>;
+  videoViewerVisible: Ref<boolean>;
   previewPanelVisible: Ref<boolean>;
   hasPreviewableSelection: () => boolean;
   focusSearchInput: () => void;
@@ -72,6 +73,7 @@ const isExplorerShortcutTarget = (target: EventTarget | null) => {
 
 export const useExplorerShortcuts = ({
   imageViewerVisible,
+  videoViewerVisible,
   previewPanelVisible,
   hasPreviewableSelection,
   focusSearchInput,
@@ -155,7 +157,7 @@ export const useExplorerShortcuts = ({
   }
 
   const handleWindowKeyDown = (event: KeyboardEvent) => {
-    if (imageViewerVisible.value) return;
+    if (imageViewerVisible.value || videoViewerVisible.value) return;
     if (event.defaultPrevented) return;
     const key = event.key.toLowerCase();
     const commandKey = event.ctrlKey || event.metaKey;
