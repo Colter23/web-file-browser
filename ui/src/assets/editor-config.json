@@ -139,16 +139,22 @@
       "extensions": ["pgsql"]
     },
     {
-      "name": "PHP",
-      "key": "php",
-      "icon": "php",
-      "extensions": ["php", "inc", "phtml", "shtml", "php3", "php4", "php5", "phps", "phpt", "aw", "ctp", "module"]
-    },
-    {
       "name": "Powershell",
       "key": "powershell",
       "icon": "powershell",
       "extensions": ["ps1"]
+    },
+    {
+      "name": "Shell Script",
+      "key": "shell",
+      "icon": "shell",
+      "extensions": ["sh", "bash", "zsh", "fish", "ksh"]
+    },
+    {
+      "name": "Batch Script",
+      "key": "batch",
+      "icon": "batch",
+      "extensions": ["bat", "cmd"]
     },
     {
       "name": "Properties",
@@ -233,27 +239,64 @@
     ],
     "light": [
       {
-        "name": "浅色",
+        "name": "清透浅色",
         "key": "light",
         "icon": "appearance.light"
       },
       {
-        "name": "柔和浅色",
-        "key": "soft_light",
+        "name": "纸张浅色",
+        "key": "paper_light",
+        "icon": "appearance.light"
+      },
+      {
+        "name": "雾蓝浅色",
+        "key": "mist_light",
         "icon": "appearance.light"
       }
     ],
     "dark": [
       {
-        "name": "深色",
+        "name": "标准深色",
         "key": "dark",
         "icon": "appearance.dark"
       },
       {
-        "name": "柔和深色",
-        "key": "soft_dark",
+        "name": "午夜深色",
+        "key": "midnight_dark",
+        "icon": "appearance.dark"
+      },
+      {
+        "name": "石墨深色",
+        "key": "graphite_dark",
         "icon": "appearance.dark"
       }
     ]
-  }
+  },
+  "highlight": [
+    {
+      "name": "经典",
+      "key": "default",
+      "icon": "action.appearance"
+    },
+    {
+      "name": "锐彩",
+      "key": "vivid",
+      "icon": "action.appearance"
+    },
+    {
+      "name": "宝石",
+      "key": "muted",
+      "icon": "action.appearance"
+    },
+    {
+      "name": "霓虹",
+      "key": "cool",
+      "icon": "action.appearance"
+    },
+    {
+      "name": "花火",
+      "key": "warm",
+      "icon": "action.appearance"
+    }
+  ]
 }

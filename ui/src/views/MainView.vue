@@ -15,6 +15,7 @@ import {
   getFolderData,
   getMappingRoot,
   getMappings,
+  getSettings,
   listFavorites,
   listTasks,
   listTrashRecords,
@@ -684,10 +685,19 @@ const {
   navigateUp
 });
 
+const loadEditableExtensions = async () => {
+  try {
+    const settings = await getSettings();
+    fileStore.setExtensions(settings.runtime.editableExtensions);
+  } catch (error) {
+    console.warn("同步可编辑扩展名失败", error);
+  }
+}
+
 useMainViewLifecycle({
   initialize: async () => {
     fileStore.ensureActiveTab();
-    await Promise.all([loadRoot(), loadFavorites()]);
+    await Promise.all([loadEditableExtensions(), loadRoot(), loadFavorites()]);
     await syncActiveTabContext();
   },
   stopScrollPersistence,

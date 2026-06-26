@@ -21,6 +21,7 @@ const activeMenu = ref<EditorMenuName>("");
 const menuAnchor = ref<EditorMenuAnchor | null>(null);
 const {
   currentTheme,
+  currentHighlight,
   fontSize,
   tabSize,
   wrap
@@ -117,6 +118,7 @@ const {
   filePathText,
   selectedModeName,
   selectedThemeName,
+  selectedHighlightName,
   fileSizeText,
   wrapText,
   cursorStatusText,
@@ -130,8 +132,10 @@ const {
   fileInfo,
   currentMode,
   currentTheme,
+  currentHighlight,
   modes: editorConfig.mode,
   themes: editorConfig.theme,
+  highlights: editorConfig.highlight,
   wrap,
   cursorStatus,
   saveConflict,
@@ -157,6 +161,12 @@ const changeMode = (mode: string) => {
 
 const changeTheme = (theme: string) => {
   currentTheme.value = theme;
+  closeMenus();
+  nextTick(() => editorRef.value?.focus?.());
+}
+
+const changeHighlight = (highlight: string) => {
+  currentHighlight.value = highlight;
   closeMenus();
   nextTick(() => editorRef.value?.focus?.());
 }
@@ -249,6 +259,7 @@ onBeforeUnmount(() => {
         :dirty="isChange"
         :selected-mode-name="selectedModeName"
         :selected-theme-name="selectedThemeName"
+        :selected-highlight-name="selectedHighlightName"
         :loading="loading"
         :saving="saving"
         :can-save="canSave"
@@ -265,10 +276,13 @@ onBeforeUnmount(() => {
         :anchor="menuAnchor"
         :modes="editorConfig.mode"
         :themes="editorConfig.theme"
+        :highlights="editorConfig.highlight"
         :current-mode="currentMode"
         :current-theme="currentTheme"
+        :current-highlight="currentHighlight"
         @change-mode="changeMode"
-        @change-theme="changeTheme" />
+        @change-theme="changeTheme"
+        @change-highlight="changeHighlight" />
 
     <main class="editor-main">
       <editor-search-bar
@@ -308,6 +322,7 @@ onBeforeUnmount(() => {
             ref="editorRef"
             :mode="currentMode"
             :theme="currentTheme"
+            :highlight="currentHighlight"
             :content="content"
             :font-size="fontSize"
             :wrap="wrap"

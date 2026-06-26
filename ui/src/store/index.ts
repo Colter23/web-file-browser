@@ -110,6 +110,12 @@ export const useFileStore = defineStore('file', {
             this.editorDirty = dirty;
         },
 
+        setExtensions(extensions: string[]) {
+            this.extensions = extensions
+                .map(extension => extension.trim().replace(/^\./, "").toLowerCase())
+                .filter(Boolean);
+        },
+
         requestEditorLeave() {
             if (!this.showEditor || !this.editorDirty) return Promise.resolve(true);
             pendingEditorLeaveResolver?.(false);

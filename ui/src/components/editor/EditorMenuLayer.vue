@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import {computed} from "vue";
 import Icon from "../Icon.vue";
-import type {EditorMenuAnchor, EditorMenuName, EditorModeOption, EditorThemeGroups} from "./types.ts";
+import type {EditorHighlightOption, EditorMenuAnchor, EditorMenuName, EditorModeOption, EditorThemeGroups} from "./types.ts";
 
 const props = defineProps<{
   activeMenu: EditorMenuName;
   anchor: EditorMenuAnchor | null;
   modes: EditorModeOption[];
   themes: EditorThemeGroups;
+  highlights: EditorHighlightOption[];
   currentMode: string;
   currentTheme: string;
+  currentHighlight: string;
   fontSize: number;
   tabSize: number;
   wrap: boolean;
@@ -18,6 +20,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "change-mode", mode: string): void;
   (e: "change-theme", theme: string): void;
+  (e: "change-highlight", highlight: string): void;
   (e: "update:fontSize", value: number): void;
   (e: "update:tabSize", value: number): void;
   (e: "update:wrap", value: boolean): void;
@@ -87,6 +90,17 @@ const menuLayerStyle = computed(() => {
       </template>
     </div>
 
+    <div v-if="activeMenu === 'highlight'" class="editor-menu highlight-menu">
+      <button
+          v-for="highlight in highlights"
+          :key="highlight.key"
+          :class="{active: currentHighlight === highlight.key}"
+          @click="emit('change-highlight', highlight.key)">
+        <icon :icon="highlight.icon ?? 'file.code'" />
+        <span>{{ highlight.name }}</span>
+      </button>
+    </div>
+
     <div v-if="activeMenu === 'settings'" class="editor-menu settings-menu">
       <label>
         <span>字号</span>
@@ -124,6 +138,10 @@ const menuLayerStyle = computed(() => {
 }
 
 .theme-menu {
+  @apply w-56;
+}
+
+.highlight-menu {
   @apply w-56;
 }
 

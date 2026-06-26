@@ -1,15 +1,17 @@
 import {computed} from "vue";
 import type {Ref} from "vue";
 import type {FileInfo} from "../class.ts";
-import type {EditorCursorStatus, EditorModeOption, EditorThemeGroups, PendingEditorAction} from "../components/editor/types.ts";
+import type {EditorCursorStatus, EditorHighlightOption, EditorModeOption, EditorThemeGroups, PendingEditorAction} from "../components/editor/types.ts";
 import {formatEntrySize} from "../utils/file-entry.ts";
 
 type EditorStatusTextOptions = {
   fileInfo: Ref<FileInfo | null>;
   currentMode: Ref<string>;
   currentTheme: Ref<string>;
+  currentHighlight: Ref<string>;
   modes: readonly EditorModeOption[];
   themes: EditorThemeGroups;
+  highlights: readonly EditorHighlightOption[];
   wrap: Ref<boolean>;
   cursorStatus: Ref<EditorCursorStatus>;
   saveConflict: Ref<boolean>;
@@ -22,8 +24,10 @@ export const useEditorStatusText = ({
   fileInfo,
   currentMode,
   currentTheme,
+  currentHighlight,
   modes,
   themes,
+  highlights,
   wrap,
   cursorStatus,
   saveConflict,
@@ -39,6 +43,10 @@ export const useEditorStatusText = ({
   const selectedThemeName = computed(() => {
     const allThemes = Object.values(themes).flat();
     return allThemes.find(theme => theme.key === currentTheme.value)?.name ?? currentTheme.value;
+  });
+
+  const selectedHighlightName = computed(() => {
+    return highlights.find(highlight => highlight.key === currentHighlight.value)?.name ?? currentHighlight.value;
   });
 
   const wrapText = computed(() => wrap.value ? "自动换行" : "不换行");
@@ -83,6 +91,7 @@ export const useEditorStatusText = ({
     filePathText,
     selectedModeName,
     selectedThemeName,
+    selectedHighlightName,
     fileSizeText,
     wrapText,
     cursorStatusText,

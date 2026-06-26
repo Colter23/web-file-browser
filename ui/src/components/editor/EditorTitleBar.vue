@@ -9,6 +9,7 @@ defineProps<{
   dirty: boolean;
   selectedModeName: string;
   selectedThemeName: string;
+  selectedHighlightName: string;
   loading: boolean;
   saving: boolean;
   canSave: boolean;
@@ -55,8 +56,12 @@ const emitMenuToggle = (menu: EditorMenuName, event: MouseEvent, align: EditorMe
         <span>语言：{{ selectedModeName }}</span>
       </button>
       <button class="menu-button" :class="{active: activeMenu === 'theme'}" data-editor-menu-button @click.stop="emitMenuToggle('theme', $event, 'start')">
-        <icon icon="action.settings" />
+        <icon icon="action.appearance" />
         <span>主题：{{ selectedThemeName }}</span>
+      </button>
+      <button class="menu-button" :class="{active: activeMenu === 'highlight'}" data-editor-menu-button @click.stop="emitMenuToggle('highlight', $event, 'start')">
+        <icon icon="file.code" />
+        <span>高亮：{{ selectedHighlightName }}</span>
       </button>
       <button class="icon-button" :class="{active: activeMenu === 'settings'}" data-editor-menu-button title="编辑设置" @click.stop="emitMenuToggle('settings', $event)">
         <icon icon="action.settings" />

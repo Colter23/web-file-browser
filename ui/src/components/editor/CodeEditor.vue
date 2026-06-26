@@ -15,6 +15,7 @@ import {useAppearanceStore} from "../../store/appearance.ts";
 interface CodeEditorProps {
   mode: string;
   theme: string;
+  highlight: string;
   content: string;
   fontSize?: number;
   wrap?: boolean;
@@ -30,6 +31,7 @@ type SearchMatch = {
 const props = withDefaults(defineProps<CodeEditorProps>(), {
   mode: "text",
   theme: "app",
+  highlight: "default",
   content: "",
   fontSize: 16,
   wrap: true,
@@ -116,7 +118,7 @@ const createExtensions = (languageExtension: Extension): Extension[] => [
   customKeymap(),
   EditorView.updateListener.of(handleEditorUpdate),
   languageCompartment.of(languageExtension),
-  themeCompartment.of(createCodeMirrorTheme(props.theme, appearanceStore.resolvedColorMode)),
+  themeCompartment.of(createCodeMirrorTheme(props.theme, appearanceStore.resolvedColorMode, props.highlight)),
   wrapCompartment.of(wrapExtension(props.wrap)),
   tabCompartment.of(tabExtensions(props.tabSize)),
   readOnlyCompartment.of(readOnlyExtensions(props.readOnly)),
@@ -284,8 +286,8 @@ const handleEditorUpdate = (update: ViewUpdate) => {
   }
 }
 
-watch(() => [props.theme, appearanceStore.resolvedColorMode] as const, ([theme, appColorMode]) => {
-  view?.dispatch({effects: themeCompartment.reconfigure(createCodeMirrorTheme(theme, appColorMode))});
+watch(() => [props.theme, appearanceStore.resolvedColorMode, props.highlight] as const, ([theme, appColorMode, highlight]) => {
+  view?.dispatch({effects: themeCompartment.reconfigure(createCodeMirrorTheme(theme, appColorMode, highlight))});
 });
 
 watch(() => props.mode, async mode => {

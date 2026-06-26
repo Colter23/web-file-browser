@@ -7,7 +7,7 @@ export type EditorCursorStatus = {
   selectedCharacters: number;
 }
 
-export type EditorMenuName = "language" | "theme" | "settings" | "";
+export type EditorMenuName = "language" | "theme" | "highlight" | "settings" | "";
 
 export type EditorMenuAnchor = {
   left: number;
@@ -37,6 +37,12 @@ export type EditorThemeGroups = {
   automatic: EditorThemeOption[];
   light: EditorThemeOption[];
   dark: EditorThemeOption[];
+}
+
+export type EditorHighlightOption = {
+  name: string;
+  key: string;
+  icon?: string;
 }
 
 export type EditorSearchOptions = {

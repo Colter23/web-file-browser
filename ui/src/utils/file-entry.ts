@@ -1,4 +1,5 @@
 import type {ArchiveFormat, FileInfo} from "../class.ts";
+import editorConfig from "../assets/editor-config.json";
 import {parentPath} from "./file-path.ts";
 
 export type FileEntryKind = "folder" | "file";
@@ -53,8 +54,13 @@ export type FileEntryMetaOptions = {
   modifiedLabel?: string;
 }
 
+type EditorModeConfig = {
+  extensions?: string[];
+}
+
 export const imageFileExtensions = ["apng", "avif", "bmp", "gif", "ico", "jpeg", "jpg", "png", "svg", "webp"];
 export const textLikeFileExtensions = ["txt", "log", "md", "json", "yaml", "yml", "toml", "xml", "csv"];
+export const scriptFileExtensions = ["bat", "cmd", "sh", "bash", "zsh", "fish", "ksh", "ps1"];
 export const audioFileExtensions = ["mp3", "wav", "ogg", "flac", "m4a", "aac"];
 export const videoFileExtensions = ["mp4", "webm", "mov", "mkv", "avi"];
 export const pdfFileExtensions = ["pdf"];
@@ -71,9 +77,12 @@ export const fontFileExtensions = ["eot", "otf", "ttf", "woff", "woff2"];
 export const packageFileExtensions = ["apk", "deb", "dmg", "jar", "rpm"];
 
 const normalizedExtensionSet = (extensions: readonly string[]) => new Set(extensions.map(extension => extension.toLowerCase()));
+const editorModeFileExtensions = (editorConfig.mode as EditorModeConfig[])
+    .flatMap(mode => mode.extensions ?? []);
 
 const imageExtensionSet = normalizedExtensionSet(imageFileExtensions);
 const textLikeExtensionSet = normalizedExtensionSet(textLikeFileExtensions);
+const scriptExtensionSet = normalizedExtensionSet(scriptFileExtensions);
 const audioExtensionSet = normalizedExtensionSet(audioFileExtensions);
 const videoExtensionSet = normalizedExtensionSet(videoFileExtensions);
 const pdfExtensionSet = normalizedExtensionSet(pdfFileExtensions);
@@ -88,8 +97,33 @@ const shortcutExtensionSet = normalizedExtensionSet(shortcutFileExtensions);
 const databaseExtensionSet = normalizedExtensionSet(databaseFileExtensions);
 const fontExtensionSet = normalizedExtensionSet(fontFileExtensions);
 const packageExtensionSet = normalizedExtensionSet(packageFileExtensions);
+const defaultEditableExtensionSet = normalizedExtensionSet([
+  ...editorModeFileExtensions,
+  ...textLikeFileExtensions,
+  ...scriptFileExtensions,
+  ...codeFileExtensions,
+  ...configFileExtensions
+]);
+const knownNonTextExtensionSet = normalizedExtensionSet([
+  ...imageFileExtensions,
+  ...audioFileExtensions,
+  ...videoFileExtensions,
+  ...pdfFileExtensions,
+  ...archiveFileExtensions,
+  ...spreadsheetFileExtensions,
+  ...documentFileExtensions,
+  ...presentationFileExtensions,
+  ...shortcutFileExtensions,
+  ...databaseFileExtensions,
+  ...fontFileExtensions,
+  ...packageFileExtensions,
+  ...executableFileExtensions.filter(extension => !scriptExtensionSet.has(extension))
+]);
 
 const hasExtension = (extensions: readonly string[], extension: string) => extensions.some(item => item.toLowerCase() === extension);
+const isDefaultEditableExtension = (extension: string) => {
+  return defaultEditableExtensionSet.has(extension) || !knownNonTextExtensionSet.has(extension);
+}
 
 const extensionFromName = (name?: string) => {
   if (!name || name.startsWith(".") && !name.slice(1).includes(".")) return "";
@@ -107,7 +141,10 @@ export const isImageEntry = (entry: FileEntryLike | null | undefined) => {
 export const isTextLikeEntry = (entry: FileEntryLike | null | undefined, editableExtensions: readonly string[] = []) => {
   if (!entry || entry.type !== "file") return false;
   const extension = normalizeEntryExtension(entry);
-  return textLikeExtensionSet.has(extension) || hasExtension(editableExtensions, extension);
+  if (textLikeExtensionSet.has(extension) || scriptExtensionSet.has(extension)) return true;
+  return editableExtensions.length
+      ? hasExtension(editableExtensions, extension)
+      : isDefaultEditableExtension(extension);
 }
 
 export const isAudioEntry = (entry: FileEntryLike | null | undefined) => {
@@ -146,7 +183,10 @@ export const entryPreviewTypeText = (kind: EntryPreviewKind) => ({
 
 export const isEditableEntry = (entry: FileEntryLike | null | undefined, editableExtensions: readonly string[]) => {
   if (!entry || entry.type !== "file") return false;
-  return hasExtension(editableExtensions, normalizeEntryExtension(entry));
+  const extension = normalizeEntryExtension(entry);
+  return editableExtensions.length
+      ? hasExtension(editableExtensions, extension)
+      : isDefaultEditableExtension(extension);
 }
 
 export const entryFileInfo = (entry: FileEntryLike): FileInfo => entry.file ?? {
@@ -192,6 +232,7 @@ export const fileEntryIconKind = (entry: FileEntryLike, editableExtensions: read
   if (presentationExtensionSet.has(extension)) return "presentation";
   if (documentExtensionSet.has(extension)) return "document";
   if (shortcutExtensionSet.has(extension)) return "shortcut";
+  if (scriptExtensionSet.has(extension)) return "code";
   if (executableExtensionSet.has(extension)) return "executable";
   if (databaseExtensionSet.has(extension)) return "database";
   if (fontExtensionSet.has(extension)) return "font";
