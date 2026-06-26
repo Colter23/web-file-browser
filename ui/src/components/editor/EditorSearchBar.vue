@@ -11,6 +11,7 @@ defineProps<{
   caseSensitive: boolean;
   wholeWord: boolean;
   regex: boolean;
+  readOnly: boolean;
   canFind: boolean;
   canReplace: boolean;
   setSearchInputRef: EditorInputRefSetter;
@@ -71,7 +72,7 @@ const updateReplaceText = (event: Event) => {
       <button title="下一个 (Enter)" :disabled="!canFind" @click="emit('search', false)">
         <icon icon="action.down" />
       </button>
-      <button v-if="!replaceVisible" title="显示替换 (Ctrl+H)" @click="emit('show-replace')">
+      <button v-if="!replaceVisible && !readOnly" title="显示替换 (Ctrl+H)" @click="emit('show-replace')">
         <icon icon="action.rename" />
       </button>
       <button v-if="replaceVisible" class="text-tool" title="替换当前" :disabled="!canReplace" @click="emit('replace-current')">替换</button>
@@ -90,13 +91,13 @@ const updateReplaceText = (event: Event) => {
 @reference "tailwindcss";
 
 .search-bar {
-  @apply relative z-20 flex shrink-0 items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-xs shadow-sm;
+  @apply relative z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-xs shadow-sm;
   border-color: var(--app-border-soft);
   background: var(--app-panel-solid);
 }
 
 .search-fields {
-  @apply flex min-w-0 grow items-center gap-2;
+  @apply flex min-w-64 grow items-center gap-2;
 }
 
 .search-input {
@@ -120,7 +121,7 @@ const updateReplaceText = (event: Event) => {
 }
 
 .search-actions {
-  @apply flex shrink-0 items-center gap-1;
+  @apply flex min-w-0 shrink-0 items-center gap-1;
   color: var(--app-text-muted);
 }
 
@@ -150,7 +151,17 @@ const updateReplaceText = (event: Event) => {
 }
 
 .search-status {
-  @apply max-w-28 truncate px-1;
+  @apply max-w-32 truncate px-1;
   color: var(--app-warning-text);
+}
+
+@media (max-width: 760px) {
+  .search-fields {
+    @apply min-w-full;
+  }
+
+  .search-actions {
+    @apply w-full justify-end;
+  }
 }
 </style>

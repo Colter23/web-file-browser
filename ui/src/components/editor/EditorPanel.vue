@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, nextTick, onBeforeUnmount, onMounted, ref} from "vue";
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import CodeEditor from "./CodeEditor.vue";
 import editorConfig from "../../assets/editor-config.json";
 import {useFileStore} from "../../store";
@@ -24,9 +24,11 @@ const {
   currentHighlight,
   fontSize,
   tabSize,
-  wrap
+  wrap,
+  defaultEditMode
 } = useEditorPreferences();
 
+const editMode = ref(defaultEditMode.value);
 let resetSearchStateHandler = () => {};
 const resetSearchStateProxy = () => resetSearchStateHandler();
 const focusEditor = () => editorRef.value?.focus?.();
@@ -62,6 +64,7 @@ const {
   focusEditor
 });
 
+const editorLocked = computed(() => editorReadOnly.value || !editMode.value);
 const themeClass = computed(() => `editor-theme-${currentTheme.value.replace(/_/g, "-")}`);
 
 const closeMenus = () => {
@@ -106,7 +109,7 @@ const {
 } = useEditorSearch({
   editorRef,
   cursorStatus,
-  editorReadOnly,
+  editorReadOnly: editorLocked,
   isEditorActive: () => fileStore.showEditor,
   closeMenus
 });
@@ -171,7 +174,17 @@ const changeHighlight = (highlight: string) => {
   nextTick(() => editorRef.value?.focus?.());
 }
 
+const clampFontSize = (value: number) => {
+  if (!Number.isFinite(value)) return 16;
+  return Math.min(28, Math.max(12, Math.round(value)));
+}
+
+const adjustFontSize = (step: number) => {
+  fontSize.value = clampFontSize(fontSize.value + step);
+}
+
 const showReplace = () => {
+  if (editorLocked.value) return;
   replaceVisible.value = true;
   focusReplaceInput();
 }
@@ -184,6 +197,11 @@ const clearGotoStatus = () => {
   gotoStatus.value = "";
 }
 
+const openReplacePanel = async () => {
+  if (editorLocked.value) return;
+  await openReplace();
+}
+
 const handleKeyDown = (event: KeyboardEvent) => {
   if (!fileStore.showEditor) return;
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
@@ -193,7 +211,7 @@ const handleKeyDown = (event: KeyboardEvent) => {
   }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "h") {
     event.preventDefault();
-    void openReplace();
+    void openReplacePanel();
     return;
   }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "g") {
@@ -235,6 +253,11 @@ const handleGlobalPointerDown = (event: PointerEvent) => {
   closeMenus();
 }
 
+watch(() => [fileStore.showEditor, fileStore.currentFile?.path] as const, ([visible, path]) => {
+  if (!visible || !path) return;
+  editMode.value = defaultEditMode.value;
+}, {immediate: true});
+
 onMounted(() => {
   window.addEventListener("keydown", handleKeyDown);
   window.addEventListener("pointerdown", handleGlobalPointerDown, true);
@@ -260,6 +283,7 @@ onBeforeUnmount(() => {
         :selected-mode-name="selectedModeName"
         :selected-theme-name="selectedThemeName"
         :selected-highlight-name="selectedHighlightName"
+        v-model:edit-mode="editMode"
         :loading="loading"
         :saving="saving"
         :can-save="canSave"
@@ -272,6 +296,7 @@ onBeforeUnmount(() => {
         v-model:font-size="fontSize"
         v-model:tab-size="tabSize"
         v-model:wrap="wrap"
+        v-model:default-edit-mode="defaultEditMode"
         :active-menu="activeMenu"
         :anchor="menuAnchor"
         :modes="editorConfig.mode"
@@ -294,6 +319,7 @@ onBeforeUnmount(() => {
           :case-sensitive="searchCaseSensitive"
           :whole-word="searchWholeWord"
           :regex="searchRegex"
+          :read-only="editorLocked"
           :can-find="canFind"
           :can-replace="canReplace"
           :set-search-input-ref="setSearchInputRef"
@@ -327,12 +353,13 @@ onBeforeUnmount(() => {
             :font-size="fontSize"
             :wrap="wrap"
             :tab-size="tabSize"
-            :read-only="editorReadOnly"
+            :read-only="editorLocked"
             @change="onContentChange"
             @cursor-change="onCursorChange"
+            @zoom-font="adjustFontSize"
             @find="openSearch(false)"
             @goto-line="openGotoLine"
-            @replace="openReplace"
+            @replace="openReplacePanel"
             @save="save">
         </code-editor>
       </div>

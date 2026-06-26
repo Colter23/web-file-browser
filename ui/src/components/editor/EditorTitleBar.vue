@@ -10,6 +10,7 @@ defineProps<{
   selectedModeName: string;
   selectedThemeName: string;
   selectedHighlightName: string;
+  editMode: boolean;
   loading: boolean;
   saving: boolean;
   canSave: boolean;
@@ -17,6 +18,7 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: "toggle-menu", menu: EditorMenuName, anchor: EditorMenuAnchor): void;
+  (e: "update:editMode", value: boolean): void;
   (e: "reload"): void;
   (e: "save"): void;
   (e: "close"): void;
@@ -38,8 +40,8 @@ const emitMenuToggle = (menu: EditorMenuName, event: MouseEvent, align: EditorMe
 <template>
   <header class="editor-titlebar">
     <div class="editor-file-head">
-      <div class="file-mark">
-        <icon icon="action.edit" color="var(--app-accent-contrast)" />
+      <div class="file-mark" :class="{editing: editMode}">
+        <icon :icon="editMode ? 'action.edit' : 'action.preview'" color="currentColor" />
       </div>
       <div class="file-title-block">
         <div class="file-title-line">
@@ -51,31 +53,59 @@ const emitMenuToggle = (menu: EditorMenuName, event: MouseEvent, align: EditorMe
     </div>
 
     <div class="editor-actions">
-      <button class="menu-button" :class="{active: activeMenu === 'language'}" data-editor-menu-button @click.stop="emitMenuToggle('language', $event, 'start')">
-        <icon icon="file.text" />
-        <span>语言：{{ selectedModeName }}</span>
-      </button>
-      <button class="menu-button" :class="{active: activeMenu === 'theme'}" data-editor-menu-button @click.stop="emitMenuToggle('theme', $event, 'start')">
-        <icon icon="action.appearance" />
-        <span>主题：{{ selectedThemeName }}</span>
-      </button>
-      <button class="menu-button" :class="{active: activeMenu === 'highlight'}" data-editor-menu-button @click.stop="emitMenuToggle('highlight', $event, 'start')">
-        <icon icon="file.code" />
-        <span>高亮：{{ selectedHighlightName }}</span>
-      </button>
-      <button class="icon-button" :class="{active: activeMenu === 'settings'}" data-editor-menu-button title="编辑设置" @click.stop="emitMenuToggle('settings', $event)">
-        <icon icon="action.settings" />
-      </button>
-      <button class="icon-button" :disabled="loading" title="重新载入" @click.stop="emit('reload')">
-        <icon class="icon-motion-spin" :class="{'is-spinning': loading}" icon="action.refresh" />
-      </button>
-      <button class="save-button" :disabled="!canSave" title="保存 (Ctrl+S)" @click.stop="emit('save')">
-        <icon icon="action.save" :color="canSave ? 'var(--app-accent-contrast)' : 'var(--app-text-disabled)'" />
-        <span>{{ saving ? "保存中" : "保存" }}</span>
-      </button>
-      <button class="icon-button close-button" title="关闭 (Esc)" @click.stop="emit('close')">
-        <icon icon="action.close" />
-      </button>
+      <div class="action-cluster mode-cluster">
+        <div class="edit-mode-control" role="group" aria-label="编辑器模式">
+          <button
+              type="button"
+              :class="{active: !editMode}"
+              :disabled="loading || saving"
+              title="查看模式"
+              @click.stop="emit('update:editMode', false)">
+            <icon icon="action.preview" />
+            <span>查看</span>
+          </button>
+          <button
+              type="button"
+              :class="{active: editMode}"
+              :disabled="loading || saving"
+              title="编辑模式"
+              @click.stop="emit('update:editMode', true)">
+            <icon icon="action.edit" />
+            <span>编辑</span>
+          </button>
+        </div>
+      </div>
+      <span class="toolbar-separator" aria-hidden="true"></span>
+      <div class="action-cluster menu-cluster">
+        <button class="menu-button" :class="{active: activeMenu === 'language'}" data-editor-menu-button @click.stop="emitMenuToggle('language', $event, 'start')">
+          <icon icon="file.text" />
+          <span>语言：{{ selectedModeName }}</span>
+        </button>
+        <button class="menu-button" :class="{active: activeMenu === 'theme'}" data-editor-menu-button @click.stop="emitMenuToggle('theme', $event, 'start')">
+          <icon icon="action.appearance" />
+          <span>主题：{{ selectedThemeName }}</span>
+        </button>
+        <button class="menu-button" :class="{active: activeMenu === 'highlight'}" data-editor-menu-button @click.stop="emitMenuToggle('highlight', $event, 'start')">
+          <icon icon="file.code" />
+          <span>高亮：{{ selectedHighlightName }}</span>
+        </button>
+      </div>
+      <span class="toolbar-separator" aria-hidden="true"></span>
+      <div class="action-cluster command-cluster">
+        <button class="icon-button" :class="{active: activeMenu === 'settings'}" data-editor-menu-button title="编辑设置" @click.stop="emitMenuToggle('settings', $event)">
+          <icon icon="action.settings" />
+        </button>
+        <button class="icon-button" :disabled="loading" title="重新载入" @click.stop="emit('reload')">
+          <icon class="icon-motion-spin" :class="{'is-spinning': loading}" icon="action.refresh" />
+        </button>
+        <button class="save-button" :disabled="!canSave" title="保存 (Ctrl+S)" @click.stop="emit('save')">
+          <icon icon="action.save" :color="canSave ? 'var(--app-accent-contrast)' : 'var(--app-text-disabled)'" />
+          <span>{{ saving ? "保存中" : "保存" }}</span>
+        </button>
+        <button class="icon-button close-button" title="关闭 (Esc)" @click.stop="emit('close')">
+          <icon icon="action.close" />
+        </button>
+      </div>
     </div>
   </header>
 </template>
@@ -90,16 +120,24 @@ const emitMenuToggle = (menu: EditorMenuName, event: MouseEvent, align: EditorMe
 }
 
 .editor-file-head {
-  @apply flex min-w-0 items-center gap-3;
+  @apply flex min-w-0 flex-1 items-center gap-3;
 }
 
 .file-mark {
-  @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md shadow-sm;
+  @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border shadow-sm;
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
+}
+
+.file-mark.editing {
+  border-color: var(--app-accent, #2563eb);
   background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast);
 }
 
 .file-title-block {
-  @apply flex min-w-0 flex-col;
+  @apply flex min-w-0 flex-1 flex-col;
 }
 
 .file-title-line {
@@ -117,12 +155,29 @@ const emitMenuToggle = (menu: EditorMenuName, event: MouseEvent, align: EditorMe
 }
 
 .file-path {
-  @apply max-w-[42rem] truncate text-xs;
+  @apply truncate text-xs;
   color: var(--app-text-subtle);
 }
 
 .editor-actions {
+  @apply flex min-w-0 items-center gap-2;
+}
+
+.action-cluster {
   @apply flex shrink-0 items-center gap-1;
+}
+
+.menu-cluster {
+  @apply min-w-0 shrink;
+}
+
+.command-cluster {
+  @apply shrink-0;
+}
+
+.toolbar-separator {
+  @apply mx-1 h-4 w-px shrink-0 rounded-full;
+  background: color-mix(in srgb, var(--app-border) 86%, transparent);
 }
 
 .menu-button,
@@ -147,7 +202,7 @@ const emitMenuToggle = (menu: EditorMenuName, event: MouseEvent, align: EditorMe
 }
 
 .menu-button {
-  @apply max-w-40 gap-1.5 px-2;
+  @apply min-w-0 max-w-36 gap-1.5 px-2;
 }
 
 .menu-button span {
@@ -156,6 +211,33 @@ const emitMenuToggle = (menu: EditorMenuName, event: MouseEvent, align: EditorMe
 
 .icon-button {
   @apply w-8;
+}
+
+.edit-mode-control {
+  @apply flex h-8 items-center gap-0.5 overflow-hidden rounded-md border p-0.5 shadow-sm;
+  border-color: var(--app-border-soft);
+  background: var(--app-control);
+}
+
+.edit-mode-control button {
+  @apply inline-flex h-7 min-w-14 items-center justify-center gap-1.5 rounded border-0 px-2 text-xs font-medium shadow-none transition-colors disabled:cursor-not-allowed disabled:opacity-45;
+  background: transparent;
+  color: var(--app-text-muted);
+}
+
+.edit-mode-control button:hover:not(:disabled) {
+  background: var(--app-control-hover);
+  color: var(--app-text);
+}
+
+.edit-mode-control button.active {
+  background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast);
+}
+
+.edit-mode-control button.active:hover:not(:disabled) {
+  background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast);
 }
 
 .menu-button.active,
@@ -174,12 +256,44 @@ const emitMenuToggle = (menu: EditorMenuName, event: MouseEvent, align: EditorMe
 
 .save-button:disabled {
   border-color: var(--app-border-soft);
-  background: var(--app-control);
+  background: var(--app-control-solid);
   color: var(--app-text-disabled);
 }
 
 .save-button:hover:not(:disabled) {
   background: var(--app-accent-strong);
+}
+
+@media (max-width: 980px) {
+  .menu-button {
+    @apply max-w-28;
+  }
+}
+
+@media (max-width: 820px) {
+  .file-path {
+    @apply hidden;
+  }
+
+  .menu-button {
+    @apply max-w-24;
+  }
+
+  .edit-mode-control button {
+    @apply min-w-10;
+  }
+
+  .edit-mode-control button span {
+    @apply hidden;
+  }
+
+  .save-button span {
+    @apply hidden;
+  }
+
+  .save-button {
+    @apply w-8 px-0;
+  }
 }
 
 .close-button {

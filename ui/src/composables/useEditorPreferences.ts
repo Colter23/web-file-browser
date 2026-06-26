@@ -8,7 +8,8 @@ const storageKeys = {
   highlight: "editor.highlight",
   fontSize: "editor.fontSize",
   tabSize: "editor.tabSize",
-  wrap: "editor.wrap"
+  wrap: "editor.wrap",
+  defaultEditMode: "editor.defaultEditMode"
 };
 
 const allThemes = Object.values(editorConfig.theme).flat() as EditorThemeOption[];
@@ -49,8 +50,9 @@ export const useEditorPreferences = () => {
   const currentTheme = ref(readThemePreference());
   const currentHighlight = ref(readHighlightPreference());
   const fontSize = ref(readNumberPreference(storageKeys.fontSize, 16, 12, 28));
-  const tabSize = ref(readNumberPreference(storageKeys.tabSize, 2, 2, 8));
+  const tabSize = ref(readNumberPreference(storageKeys.tabSize, 4, 2, 8));
   const wrap = ref(readBooleanPreference(storageKeys.wrap, true));
+  const defaultEditMode = ref(readBooleanPreference(storageKeys.defaultEditMode, false));
 
   watch(currentTheme, theme => {
     if (allThemeKeys.includes(theme)) writeStorageItem(storageKeys.theme, theme);
@@ -70,7 +72,7 @@ export const useEditorPreferences = () => {
   });
 
   watch(tabSize, value => {
-    const normalized = normalizeNumberPreference(value, 2, 2, 8);
+    const normalized = normalizeNumberPreference(value, 4, 2, 8);
     if (value !== normalized) {
       tabSize.value = normalized;
       return;
@@ -82,11 +84,16 @@ export const useEditorPreferences = () => {
     writeBooleanStorage(storageKeys.wrap, Boolean(value));
   });
 
+  watch(defaultEditMode, value => {
+    writeBooleanStorage(storageKeys.defaultEditMode, Boolean(value));
+  });
+
   return {
     currentTheme,
     currentHighlight,
     fontSize,
     tabSize,
-    wrap
+    wrap,
+    defaultEditMode
   };
 }

@@ -35,7 +35,7 @@ const props = withDefaults(defineProps<CodeEditorProps>(), {
   content: "",
   fontSize: 16,
   wrap: true,
-  tabSize: 2,
+  tabSize: 4,
   readOnly: false
 })
 
@@ -46,6 +46,7 @@ const emit = defineEmits<{
   (e: "replace"): void;
   (e: "goto-line"): void;
   (e: "cursor-change", status: EditorCursorStatus): void;
+  (e: "zoom-font", step: number): void;
 }>()
 
 const appearanceStore = useAppearanceStore();
@@ -286,6 +287,13 @@ const handleEditorUpdate = (update: ViewUpdate) => {
   }
 }
 
+const handleWheel = (event: WheelEvent) => {
+  if (!event.ctrlKey || event.deltaY === 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  emit("zoom-font", event.deltaY < 0 ? 1 : -1);
+}
+
 watch(() => [props.theme, appearanceStore.resolvedColorMode, props.highlight] as const, ([theme, appColorMode, highlight]) => {
   view?.dispatch({effects: themeCompartment.reconfigure(createCodeMirrorTheme(theme, appColorMode, highlight))});
 });
@@ -363,7 +371,7 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="editorRef" class="code-editor"></div>
+  <div ref="editorRef" class="code-editor" @wheel.capture="handleWheel"></div>
 </template>
 
 <style scoped lang="postcss">
