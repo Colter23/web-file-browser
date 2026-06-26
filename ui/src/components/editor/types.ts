@@ -25,6 +25,9 @@ export type EditorSearchOptionName = "case" | "word" | "regex";
 export type EditorModeOption = {
   name: string;
   key: string;
+  icon?: string;
+  extensions?: string[];
+  regular?: string;
 }
 
 export type EditorThemeOption = {

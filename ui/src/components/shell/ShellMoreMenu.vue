@@ -322,11 +322,11 @@ onBeforeUnmount(() => {
             </div>
           </section>
 
-          <section class="preference-section" aria-label="图标着色">
+          <section class="preference-section" aria-label="文件图标着色">
             <div class="preference-heading">
-              <span>图标着色</span>
+              <span>文件图标着色</span>
             </div>
-            <div class="segmented-group" role="radiogroup" aria-label="图标着色">
+            <div class="segmented-group" role="radiogroup" aria-label="文件图标着色">
               <button
                   v-for="option in fileIconPaletteOptions"
                   :key="option.value"

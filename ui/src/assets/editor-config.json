@@ -3,229 +3,229 @@
     {
       "name": "Apache Conf",
       "key": "apache_conf",
-      "icon": "apache",
+      "icon": "file.config",
       "extensions": ["htaccess", "htgroups", "htpasswd"]
     },
     {
       "name": "AsciiDoc",
       "key": "asciidoc",
-      "icon": "asciidoc",
+      "icon": "file.markup",
       "extensions": ["asciidoc", "adoc"]
     },
     {
       "name": "C/C++",
       "key": "c_cpp",
-      "icon": "c_cpp",
+      "icon": "file.code",
       "extensions": ["c", "cc", "cpp", "cxx", "h", "hh", "ino"]
     },
     {
       "name": "C#",
       "key": "csharp",
-      "icon": "csharp",
+      "icon": "file.code",
       "extensions": ["cs"]
     },
     {
       "name": "CSS",
       "key": "css",
-      "icon": "css",
+      "icon": "file.markup",
       "extensions": ["css"]
     },
     {
       "name": "Dart",
       "key": "dart",
-      "icon": "dart",
+      "icon": "file.code",
       "extensions": ["dart"]
     },
     {
       "name": "Dockerfile",
       "key": "dockerfile",
-      "icon": "dockerfile",
+      "icon": "file.config",
       "regular": "^Dockerfile$"
     },
     {
       "name": "Go",
       "key": "golang",
-      "icon": "golang",
+      "icon": "file.code",
       "extensions": ["go"]
     },
     {
       "name": "Groovy",
       "key": "groovy",
-      "icon": "groovy",
+      "icon": "file.code",
       "extensions": ["groovy"]
     },
     {
       "name": "HTML",
       "key": "html",
-      "icon": "html",
+      "icon": "file.markup",
       "extensions": ["html", "htm", "xhtml", "vue", "we", "wpy", "svg"]
     },
     {
       "name": "INI",
       "key": "ini",
-      "icon": "ini",
+      "icon": "file.config",
       "extensions": ["ini", "cfg", "prefs"]
     },
     {
       "name": "Java",
       "key": "java",
-      "icon": "java",
+      "icon": "file.code",
       "extensions": ["java"]
     },
     {
       "name": "JavaScript",
       "key": "javascript",
-      "icon": "javascript",
+      "icon": "file.code",
       "extensions": ["js", "jsm", "jsx", "cjs", "mjs"]
     },
     {
       "name": "JSON",
       "key": "json",
-      "icon": "json",
+      "icon": "file.markup",
       "extensions": ["json"]
     },
     {
       "name": "JSP",
       "key": "jsp",
-      "icon": "jsp",
+      "icon": "file.markup",
       "extensions": ["jsp"]
     },
     {
       "name": "Kotlin",
       "key": "kotlin",
-      "icon": "kotlin",
+      "icon": "file.code",
       "extensions": ["kt", "kts"]
     },
     {
       "name": "Log",
       "key": "log",
-      "icon": "log",
+      "icon": "file.text",
       "extensions": ["log"]
     },
     {
       "name": "Lua",
       "key": "lua",
-      "icon": "lua",
+      "icon": "file.code",
       "extensions": ["lua"]
     },
     {
       "name": "Markdown",
       "key": "markdown",
-      "icon": "markdown",
+      "icon": "file.markup",
       "extensions": ["md", "markdown"]
     },
     {
       "name": "MATLAB",
       "key": "matlab",
-      "icon": "matlab",
+      "icon": "file.code",
       "extensions": ["matlab"]
     },
     {
       "name": "MySQL",
       "key": "mysql",
-      "icon": "mysql",
+      "icon": "file.database",
       "extensions": ["mysql"]
     },
     {
       "name": "Nginx",
       "key": "nginx",
-      "icon": "nginx",
+      "icon": "file.config",
       "extensions": ["nginx", "conf"]
     },
     {
       "name": "pgSQL",
       "key": "pgsql",
-      "icon": "pgsql",
+      "icon": "file.database",
       "extensions": ["pgsql"]
     },
     {
       "name": "Powershell",
       "key": "powershell",
-      "icon": "powershell",
+      "icon": "file.code",
       "extensions": ["ps1"]
     },
     {
       "name": "Shell Script",
       "key": "shell",
-      "icon": "shell",
+      "icon": "file.code",
       "extensions": ["sh", "bash", "zsh", "fish", "ksh"]
     },
     {
       "name": "Batch Script",
       "key": "batch",
-      "icon": "batch",
+      "icon": "file.code",
       "extensions": ["bat", "cmd"]
     },
     {
       "name": "Properties",
       "key": "properties",
-      "icon": "properties",
+      "icon": "file.config",
       "extensions": ["properties"]
     },
     {
       "name": "Protobuf",
       "key": "protobuf",
-      "icon": "protobuf",
+      "icon": "file.code",
       "extensions": ["proto"]
     },
     {
       "name": "Python",
       "key": "python",
-      "icon": "python",
+      "icon": "file.code",
       "extensions": ["py"]
     },
     {
       "name": "Ruby",
       "key": "ruby",
-      "icon": "ruby",
+      "icon": "file.code",
       "extensions": ["ru", "gemspec", "rake"]
     },
     {
       "name": "Rust",
       "key": "rust",
-      "icon": "rust",
+      "icon": "file.code",
       "extensions": ["rs"]
     },
     {
       "name": "SQL",
       "key": "sql",
-      "icon": "sql",
+      "icon": "file.database",
       "extensions": ["sql"]
     },
     {
       "name": "Swift",
       "key": "swift",
-      "icon": "swift",
+      "icon": "file.code",
       "extensions": ["swift"]
     },
     {
       "name": "Text",
       "key": "text",
-      "icon": "text",
+      "icon": "file.text",
       "extensions": ["txt", "ass"]
     },
     {
       "name": "Toml",
       "key": "toml",
-      "icon": "toml",
+      "icon": "file.config",
       "extensions": ["toml"]
     },
     {
       "name": "Typescript",
       "key": "typescript",
-      "icon": "typescript",
+      "icon": "file.code",
       "extensions": ["ts", "mts", "cts", "typescript", "str"]
     },
     {
       "name": "XML",
       "key": "xml",
-      "icon": "xml",
+      "icon": "file.markup",
       "extensions": ["xml", "rdf", "rss", "wsdl", "xslt", "atom", "mathml", "mml", "xul", "xbl", "xaml"]
     },
     {
       "name": "YAML",
       "key": "yaml",
-      "icon": "yaml",
+      "icon": "file.config",
       "extensions": ["yaml", "yml"]
     }
   ],

@@ -15,8 +15,7 @@ export type ResolvedColorMode = "light" | "dark";
 export const iconStyleOptions: {value: AppIconStyle; label: string}[] = [
   {value: "lucide", label: "线性"},
   {value: "fluent", label: "填充"},
-  {value: "solar", label: "双色"},
-  {value: "fluent-color", label: "彩色"}
+  {value: "solar", label: "双色"}
 ];
 
 export const fileIconStyleOptions: {value: FileIconStyle; label: string}[] = [

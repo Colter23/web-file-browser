@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import {computed} from "vue";
+import type {FileEntryIconKind} from "../../utils/file-entry.ts";
+import FileTypeIcon from "../FileTypeIcon.vue";
 import Icon from "../Icon.vue";
 import type {EditorHighlightOption, EditorMenuAnchor, EditorMenuName, EditorModeOption, EditorThemeGroups} from "./types.ts";
 
@@ -56,6 +58,44 @@ const themeGroups = computed(() => [
   {title: "深色", items: props.themes.dark}
 ].filter(group => group.items.length));
 
+const fileIconKinds = new Set<FileEntryIconKind>([
+  "home",
+  "folder",
+  "folder-open",
+  "image",
+  "text",
+  "code",
+  "config",
+  "archive",
+  "audio",
+  "video",
+  "pdf",
+  "spreadsheet",
+  "document",
+  "presentation",
+  "executable",
+  "shortcut",
+  "database",
+  "font",
+  "package",
+  "markup",
+  "unknown",
+  "file"
+]);
+
+const modeIconKind = (mode: EditorModeOption): FileEntryIconKind => {
+  const iconKind = mode.icon?.startsWith("file.") ? mode.icon.slice("file.".length) : "";
+  return fileIconKinds.has(iconKind as FileEntryIconKind) ? iconKind as FileEntryIconKind : "code";
+}
+
+const modeIconExtension = (mode: EditorModeOption) => mode.extensions?.[0] ?? "";
+
+const modeIconName = (mode: EditorModeOption) => {
+  if (mode.regular === "^Dockerfile$") return "Dockerfile";
+  const extension = modeIconExtension(mode);
+  return extension ? `example.${extension}` : mode.name;
+}
+
 const menuLayerStyle = computed(() => {
   const anchor = props.anchor;
   if (!anchor || !props.activeMenu) return {};
@@ -81,7 +121,10 @@ const menuLayerStyle = computed(() => {
           :key="mode.key"
           :class="{active: currentMode === mode.key}"
           @click="emit('change-mode', mode.key)">
-        <icon icon="file.code" />
+        <file-type-icon
+            :kind="modeIconKind(mode)"
+            :name="modeIconName(mode)"
+            :extension="modeIconExtension(mode)" />
         <span>{{ mode.name }}</span>
       </button>
     </div>
