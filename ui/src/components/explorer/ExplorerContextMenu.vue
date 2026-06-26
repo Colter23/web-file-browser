@@ -59,6 +59,12 @@ const menuRef = ref<HTMLElement | null>(null);
 const {menuPosition, placeMenu} = useViewportMenuPosition({menuRef});
 
 const isMultiSelect = computed(() => props.selectionCount > 1);
+const canOpenNewTab = computed(() => Boolean(props.primaryEntry?.type === "folder"));
+const canPreviewEntry = computed(() => Boolean(props.primaryEntry?.type === "file"));
+const canDownloadEntry = computed(() => Boolean(props.primaryEntry?.type === "file"));
+const hasFavoriteAction = computed(() => props.canFavorite);
+const hasViewerAction = computed(() => props.canViewImage || props.canPlayAudio || props.canViewVideo || props.canViewPdf || props.canEdit || canPreviewEntry.value);
+const hasTransferAction = computed(() => props.canPaste || props.selectionCount > 0 || props.canExtract || canDownloadEntry.value);
 
 const contextLabel = (single: string, multiple: string) => {
   return isMultiSelect.value ? `${multiple}（${props.selectionCount} 项）` : single;
@@ -181,68 +187,72 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
           <span class="context-row-label">打开</span>
           <span class="context-row-shortcut">Enter</span>
         </button>
-        <button class="context-row" :disabled="!primaryEntry || primaryEntry.type !== 'folder'" @click="emit('open-new-tab')">
+        <button v-if="canOpenNewTab" class="context-row" @click="emit('open-new-tab')">
           <span class="context-row-icon"><icon icon="action.open-new-tab" /></span>
           <span class="context-row-label">在新标签页中打开</span>
         </button>
-        <button v-if="favorite" class="context-row" :disabled="!canFavorite" @click="emit('remove-favorite')">
+        <button v-if="favorite && canFavorite" class="context-row" @click="emit('remove-favorite')">
           <span class="context-row-icon favorite"><icon icon="action.favorite-filled" /></span>
           <span class="context-row-label">从收藏夹移除</span>
         </button>
-        <button v-else class="context-row" :disabled="!canFavorite" @click="emit('add-favorite')">
+        <button v-else-if="hasFavoriteAction" class="context-row" @click="emit('add-favorite')">
           <span class="context-row-icon favorite"><icon icon="action.favorite" /></span>
           <span class="context-row-label">添加到收藏夹</span>
         </button>
-        <button class="context-row" :disabled="!canViewImage" @click="emit('view-image')">
-          <span class="context-row-icon"><icon icon="view.image" /></span>
-          <span class="context-row-label">查看图片</span>
-        </button>
-        <button class="context-row" :disabled="!canPlayAudio" @click="emit('play-audio')">
-          <span class="context-row-icon"><icon icon="view.audio" /></span>
-          <span class="context-row-label">播放音乐</span>
-        </button>
-        <button class="context-row" :disabled="!canViewVideo" @click="emit('view-video')">
-          <span class="context-row-icon"><icon icon="view.video" /></span>
-          <span class="context-row-label">播放视频</span>
-        </button>
-        <button class="context-row" :disabled="!canViewPdf" @click="emit('view-pdf')">
-          <span class="context-row-icon"><icon icon="view.pdf" /></span>
-          <span class="context-row-label">查看 PDF</span>
-        </button>
-        <button class="context-row" :disabled="!canEdit" @click="emit('edit')">
-          <span class="context-row-icon"><icon icon="action.edit" /></span>
-          <span class="context-row-label">编辑</span>
-        </button>
-        <button class="context-row" :disabled="!primaryEntry || primaryEntry.type !== 'file'" @click="emit('preview')">
-          <span class="context-row-icon"><icon icon="action.preview" /></span>
-          <span class="context-row-label">预览</span>
-          <span class="context-row-shortcut">Space</span>
-        </button>
-        <div class="context-separator"></div>
-        <button class="context-row" :disabled="!canPaste" @click="emit('paste')">
-          <span class="context-row-icon"><icon icon="action.paste" /></span>
-          <span class="context-row-label">粘贴</span>
-          <span class="context-row-shortcut">Ctrl+V</span>
-        </button>
-        <button class="context-row" :disabled="!selectionCount" @click="emit('copy-path')">
-          <span class="context-row-icon"><icon icon="action.copy-path" /></span>
-          <span class="context-row-label">{{ contextLabel("复制路径", "复制选中项路径") }}</span>
-        </button>
-        <div class="context-separator"></div>
-        <button class="context-row" :disabled="!primaryEntry || primaryEntry.type !== 'file'" @click="emit('download')">
-          <span class="context-row-icon"><icon icon="action.download" /></span>
-          <span class="context-row-label">下载</span>
-        </button>
-        <button class="context-row" :disabled="!selectionCount" @click="emit('archive')">
-          <span class="context-row-icon"><icon icon="action.archive" /></span>
-          <span class="context-row-label">{{ contextLabel("压缩", "压缩选中项") }}</span>
-        </button>
-        <button class="context-row" :disabled="!canExtract" @click="emit('extract')">
-          <span class="context-row-icon"><icon icon="action.extract" /></span>
-          <span class="context-row-label">解压</span>
-        </button>
-        <div class="context-separator"></div>
-        <button class="context-row" :disabled="!selectionCount" @click="emit('properties')">
+        <template v-if="hasViewerAction">
+          <div class="context-separator"></div>
+          <button v-if="canViewImage" class="context-row" @click="emit('view-image')">
+            <span class="context-row-icon"><icon icon="view.image" /></span>
+            <span class="context-row-label">查看图片</span>
+          </button>
+          <button v-if="canPlayAudio" class="context-row" @click="emit('play-audio')">
+            <span class="context-row-icon"><icon icon="view.audio" /></span>
+            <span class="context-row-label">播放音乐</span>
+          </button>
+          <button v-if="canViewVideo" class="context-row" @click="emit('view-video')">
+            <span class="context-row-icon"><icon icon="view.video" /></span>
+            <span class="context-row-label">播放视频</span>
+          </button>
+          <button v-if="canViewPdf" class="context-row" @click="emit('view-pdf')">
+            <span class="context-row-icon"><icon icon="view.pdf" /></span>
+            <span class="context-row-label">查看 PDF</span>
+          </button>
+          <button v-if="canEdit" class="context-row" @click="emit('edit')">
+            <span class="context-row-icon"><icon icon="action.edit" /></span>
+            <span class="context-row-label">编辑</span>
+          </button>
+          <button v-if="canPreviewEntry" class="context-row" @click="emit('preview')">
+            <span class="context-row-icon"><icon icon="action.preview" /></span>
+            <span class="context-row-label">预览</span>
+            <span class="context-row-shortcut">Space</span>
+          </button>
+        </template>
+        <template v-if="hasTransferAction">
+          <div class="context-separator"></div>
+          <button v-if="canPaste" class="context-row" @click="emit('paste')">
+            <span class="context-row-icon"><icon icon="action.paste" /></span>
+            <span class="context-row-label">粘贴</span>
+            <span class="context-row-shortcut">Ctrl+V</span>
+          </button>
+          <button v-if="selectionCount" class="context-row" @click="emit('copy-path')">
+            <span class="context-row-icon"><icon icon="action.copy-path" /></span>
+            <span class="context-row-label">{{ contextLabel("复制路径", "复制选中项路径") }}</span>
+          </button>
+          <button v-if="canDownloadEntry" class="context-row" @click="emit('download')">
+            <span class="context-row-icon"><icon icon="action.download" /></span>
+            <span class="context-row-label">下载</span>
+          </button>
+          <button v-if="selectionCount" class="context-row" @click="emit('archive')">
+            <span class="context-row-icon"><icon icon="action.archive" /></span>
+            <span class="context-row-label">{{ contextLabel("压缩", "压缩选中项") }}</span>
+          </button>
+          <button v-if="canExtract" class="context-row" @click="emit('extract')">
+            <span class="context-row-icon"><icon icon="action.extract" /></span>
+            <span class="context-row-label">解压</span>
+          </button>
+        </template>
+        <div v-if="selectionCount" class="context-separator"></div>
+        <button v-if="selectionCount" class="context-row" @click="emit('properties')">
           <span class="context-row-icon"><icon icon="action.properties" /></span>
           <span class="context-row-label">属性</span>
           <span class="context-row-shortcut">Alt+Enter</span>
