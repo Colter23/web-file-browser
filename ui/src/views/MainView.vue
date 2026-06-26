@@ -27,6 +27,7 @@ import {
 } from "../network/api";
 import Explorer from "../components/explorer/Explorer.vue";
 import ImageViewer from "../components/viewer/ImageViewer.vue";
+import AudioPlayer from "../components/viewer/AudioPlayer.vue";
 import VideoViewer from "../components/viewer/VideoViewer.vue";
 import PdfViewer from "../components/viewer/PdfViewer.vue";
 import PreviewPane from "../components/viewer/PreviewPane.vue";
@@ -87,6 +88,7 @@ type ExplorerExpose = {
   isResultActive: () => boolean;
   focus: () => void;
   getImageEntries: () => ExplorerEntry[];
+  getAudioEntries: () => ExplorerEntry[];
   getVideoEntries: () => ExplorerEntry[];
   getPdfEntries: () => ExplorerEntry[];
   getScrollTop: () => number;
@@ -323,6 +325,10 @@ const {
   imageViewerVisible,
   imageViewerEntry,
   imageViewerEntries,
+  audioPlayerVisible,
+  audioPlayerEntry,
+  audioPlayerEntries,
+  audioPlayerReloadKey,
   videoViewerVisible,
   videoViewerEntry,
   videoViewerEntries,
@@ -342,15 +348,19 @@ const {
   resetVideoViewer,
   resetPdfViewer,
   closeImageViewer,
+  closeAudioPlayer,
   closeVideoViewer,
   closePdfViewer,
   setImageViewerEntry,
+  setAudioPlayerEntry,
   setVideoViewerEntry,
   setPdfViewerEntry,
   openImageViewer,
+  openAudioPlayer,
   openVideoViewer,
   openPdfViewer,
   openPreviewEntryImageViewer,
+  openPreviewEntryAudioPlayer,
   openPreviewEntryVideoViewer,
   openPreviewEntryPdfViewer,
   previewSelected,
@@ -360,6 +370,7 @@ const {
 } = useExplorerPreview({
   getSelectedEntry: selectedEntry,
   getImageEntries: () => explorerRef.value?.getImageEntries() ?? [],
+  getAudioEntries: () => explorerRef.value?.getAudioEntries() ?? [],
   getVideoEntries: () => explorerRef.value?.getVideoEntries() ?? [],
   getPdfEntries: () => explorerRef.value?.getPdfEntries() ?? [],
   shouldPersistSelection,
@@ -995,6 +1006,7 @@ const signOut = async () => {
                 @add-favorite="addExplorerEntryToFavorites"
                 @remove-favorite="path => removeFavorite(path)"
                 @open-image-viewer="openImageViewer"
+                @open-audio-player="openAudioPlayer"
                 @open-video-viewer="openVideoViewer"
                 @open-pdf-viewer="openPdfViewer">
             </explorer>
@@ -1096,6 +1108,7 @@ const signOut = async () => {
                 @edit="editPreviewEntry"
                 @download="downloadSelected"
                 @open-image="openPreviewEntryImageViewer"
+                @open-audio="openPreviewEntryAudioPlayer"
                 @open-video="openPreviewEntryVideoViewer"
                 @open-pdf="openPreviewEntryPdfViewer"
                 @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)">
@@ -1112,6 +1125,17 @@ const signOut = async () => {
             @download="downloadSelected"
             @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)">
         </image-viewer>
+
+        <audio-player
+            :visible="audioPlayerVisible"
+            :entry="audioPlayerEntry"
+            :entries="audioPlayerEntries"
+            :reload-key="audioPlayerReloadKey"
+            @close="closeAudioPlayer"
+            @select="setAudioPlayerEntry"
+            @download="downloadSelected"
+            @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)">
+        </audio-player>
 
         <video-viewer
             :visible="videoViewerVisible"

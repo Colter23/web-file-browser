@@ -16,6 +16,7 @@ const props = defineProps<{
   primaryEntry: ExplorerEntry | null;
   selectionCount: number;
   canViewImage: boolean;
+  canPlayAudio: boolean;
   canViewVideo: boolean;
   canViewPdf: boolean;
   canEdit: boolean;
@@ -30,6 +31,7 @@ const emit = defineEmits<{
   (e: "open"): void;
   (e: "open-new-tab"): void;
   (e: "view-image"): void;
+  (e: "play-audio"): void;
   (e: "view-video"): void;
   (e: "view-pdf"): void;
   (e: "edit"): void;
@@ -194,6 +196,10 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
         <button class="context-row" :disabled="!canViewImage" @click="emit('view-image')">
           <span class="context-row-icon"><icon icon="view.image" /></span>
           <span class="context-row-label">查看图片</span>
+        </button>
+        <button class="context-row" :disabled="!canPlayAudio" @click="emit('play-audio')">
+          <span class="context-row-icon"><icon icon="view.audio" /></span>
+          <span class="context-row-label">播放音乐</span>
         </button>
         <button class="context-row" :disabled="!canViewVideo" @click="emit('view-video')">
           <span class="context-row-icon"><icon icon="view.video" /></span>

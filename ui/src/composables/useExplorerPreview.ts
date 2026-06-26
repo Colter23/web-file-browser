@@ -13,6 +13,11 @@ type VideoViewerPayload = {
   entries: ExplorerEntry[];
 }
 
+type AudioPlayerPayload = {
+  entry: ExplorerEntry;
+  entries: ExplorerEntry[];
+}
+
 type PdfViewerPayload = {
   entry: ExplorerEntry;
   entries: ExplorerEntry[];
@@ -21,6 +26,7 @@ type PdfViewerPayload = {
 type ExplorerPreviewOptions = {
   getSelectedEntry: () => ExplorerEntry | null;
   getImageEntries: () => ExplorerEntry[];
+  getAudioEntries: () => ExplorerEntry[];
   getVideoEntries: () => ExplorerEntry[];
   getPdfEntries: () => ExplorerEntry[];
   shouldPersistSelection: () => boolean;
@@ -31,6 +37,7 @@ type ExplorerPreviewOptions = {
 export const useExplorerPreview = ({
   getSelectedEntry,
   getImageEntries,
+  getAudioEntries,
   getVideoEntries,
   getPdfEntries,
   shouldPersistSelection,
@@ -44,6 +51,10 @@ export const useExplorerPreview = ({
   const imageViewerVisible = ref(false);
   const imageViewerEntry = ref<ExplorerEntry | null>(null);
   const imageViewerEntries = ref<ExplorerEntry[]>([]);
+  const audioPlayerVisible = ref(false);
+  const audioPlayerEntry = ref<ExplorerEntry | null>(null);
+  const audioPlayerEntries = ref<ExplorerEntry[]>([]);
+  const audioPlayerReloadKey = ref(0);
   const videoViewerVisible = ref(false);
   const videoViewerEntry = ref<ExplorerEntry | null>(null);
   const videoViewerEntries = ref<ExplorerEntry[]>([]);
@@ -92,6 +103,12 @@ export const useExplorerPreview = ({
     imageViewerEntries.value = [];
   }
 
+  const resetAudioPlayerState = () => {
+    audioPlayerVisible.value = false;
+    audioPlayerEntry.value = null;
+    audioPlayerEntries.value = [];
+  }
+
   const resetVideoViewerState = () => {
     videoViewerVisible.value = false;
     videoViewerEntry.value = null;
@@ -123,6 +140,10 @@ export const useExplorerPreview = ({
     if (nextPreviewEntry) void setPreviewEntry(nextPreviewEntry, true);
   }
 
+  const closeAudioPlayer = () => {
+    resetAudioPlayerState();
+  }
+
   const closeVideoViewer = () => {
     const nextPreviewEntry = previewPanelVisible.value && videoViewerEntry.value?.path !== previewEntry.value?.path
         ? videoViewerEntry.value
@@ -151,6 +172,10 @@ export const useExplorerPreview = ({
     imageViewerEntry.value = entry;
   }
 
+  const setAudioPlayerEntry = (entry: ExplorerEntry) => {
+    audioPlayerEntry.value = entry;
+  }
+
   const setVideoViewerEntry = (entry: ExplorerEntry) => {
     videoViewerEntry.value = entry;
   }
@@ -167,6 +192,13 @@ export const useExplorerPreview = ({
     imageViewerEntries.value = entries.length ? entries : [entry];
     imageViewerVisible.value = true;
     setImageViewerEntry(entry);
+  }
+
+  const openAudioPlayer = ({entry, entries}: AudioPlayerPayload) => {
+    audioPlayerEntries.value = entries.length ? entries : [entry];
+    audioPlayerVisible.value = true;
+    audioPlayerReloadKey.value += 1;
+    setAudioPlayerEntry(entry);
   }
 
   const openVideoViewer = async ({entry, entries}: VideoViewerPayload) => {
@@ -194,6 +226,18 @@ export const useExplorerPreview = ({
     if (!entry) return;
     const entries = getImageEntries();
     await openImageViewer({entry, entries: entries.some(item => item.path === entry.path) ? entries : [entry]});
+  }
+
+  const openPreviewAudioPlayer = () => {
+    const entry = previewEntry.value;
+    if (!entry) return;
+    const entries = getAudioEntries();
+    openAudioPlayer({entry, entries: entries.some(item => item.path === entry.path) ? entries : [entry]});
+  }
+
+  const openPreviewEntryAudioPlayer = (entry: ExplorerEntry) => {
+    previewEntry.value = entry;
+    openPreviewAudioPlayer();
   }
 
   const openPreviewEntryImageViewer = async (entry: ExplorerEntry) => {
@@ -264,6 +308,10 @@ export const useExplorerPreview = ({
     imageViewerVisible,
     imageViewerEntry,
     imageViewerEntries,
+    audioPlayerVisible,
+    audioPlayerEntry,
+    audioPlayerEntries,
+    audioPlayerReloadKey,
     videoViewerVisible,
     videoViewerEntry,
     videoViewerEntries,
@@ -281,19 +329,24 @@ export const useExplorerPreview = ({
     clearPreviewContent,
     resetPreviewContext,
     resetImageViewer: resetImageViewerState,
+    resetAudioPlayer: resetAudioPlayerState,
     resetVideoViewer: resetVideoViewerState,
     resetPdfViewer: resetPdfViewerState,
     closePreviewPanel,
     closeImageViewer,
+    closeAudioPlayer,
     closeVideoViewer,
     closePdfViewer,
     setImageViewerEntry,
+    setAudioPlayerEntry,
     setVideoViewerEntry,
     setPdfViewerEntry,
     openImageViewer,
+    openAudioPlayer,
     openVideoViewer,
     openPdfViewer,
     openPreviewEntryImageViewer,
+    openPreviewEntryAudioPlayer,
     openPreviewEntryVideoViewer,
     openPreviewEntryPdfViewer,
     previewSelected,

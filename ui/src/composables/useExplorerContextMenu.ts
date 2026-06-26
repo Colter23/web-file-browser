@@ -15,6 +15,11 @@ type VideoViewerPayload = {
   entries: ExplorerEntry[];
 }
 
+type AudioPlayerPayload = {
+  entry: ExplorerEntry;
+  entries: ExplorerEntry[];
+}
+
 type PdfViewerPayload = {
   entry: ExplorerEntry;
   entries: ExplorerEntry[];
@@ -26,6 +31,7 @@ type CopyPathPayload = {
 
 type ExplorerContextMenuOptions = {
   imageEntries: ComputedRef<ExplorerEntry[]>;
+  audioEntries: ComputedRef<ExplorerEntry[]>;
   videoEntries: ComputedRef<ExplorerEntry[]>;
   pdfEntries: ComputedRef<ExplorerEntry[]>;
   selectedPaths: Ref<string[]>;
@@ -43,6 +49,7 @@ type ExplorerContextMenuOptions = {
   openNewTab: (entry: ExplorerEntry) => void;
   editEntry: (entry: ExplorerEntry) => MaybePromise;
   isImageFile: (entry: ExplorerEntry | null | undefined) => boolean;
+  isAudioFile: (entry: ExplorerEntry | null | undefined) => boolean;
   isVideoFile: (entry: ExplorerEntry | null | undefined) => boolean;
   isPdfFile: (entry: ExplorerEntry | null | undefined) => boolean;
   canEditEntry: (entry: ExplorerEntry | null) => boolean;
@@ -53,6 +60,7 @@ type ExplorerContextMenuOptions = {
   invertCurrentSelection: () => void;
   previewEntry: (entry: ExplorerEntry) => void;
   openImageViewer: (payload: ImageViewerPayload) => void;
+  openAudioPlayer: (payload: AudioPlayerPayload) => void;
   openVideoViewer: (payload: VideoViewerPayload) => void;
   openPdfViewer: (payload: PdfViewerPayload) => void;
   downloadEntry: (entry: ExplorerEntry) => void;
@@ -72,6 +80,7 @@ type ExplorerContextMenuOptions = {
 
 export const useExplorerContextMenu = ({
   imageEntries,
+  audioEntries,
   videoEntries,
   pdfEntries,
   selectedPaths,
@@ -89,6 +98,7 @@ export const useExplorerContextMenu = ({
   openNewTab,
   editEntry,
   isImageFile,
+  isAudioFile,
   isVideoFile,
   isPdfFile,
   canEditEntry,
@@ -99,6 +109,7 @@ export const useExplorerContextMenu = ({
   invertCurrentSelection,
   previewEntry,
   openImageViewer,
+  openAudioPlayer,
   openVideoViewer,
   openPdfViewer,
   downloadEntry,
@@ -199,6 +210,7 @@ export const useExplorerContextMenu = ({
   const contextSelectionCount = computed(() => contextEntries.value.length);
   const primaryContextEntry = computed(() => contextEntry());
   const contextCanViewImage = computed(() => Boolean(primaryContextEntry.value && isImageFile(primaryContextEntry.value)));
+  const contextCanPlayAudio = computed(() => Boolean(primaryContextEntry.value && isAudioFile(primaryContextEntry.value)));
   const contextCanViewVideo = computed(() => Boolean(primaryContextEntry.value && isVideoFile(primaryContextEntry.value)));
   const contextCanViewPdf = computed(() => Boolean(primaryContextEntry.value && isPdfFile(primaryContextEntry.value)));
   const contextCanEdit = computed(() => canEditEntry(primaryContextEntry.value));
@@ -216,7 +228,7 @@ export const useExplorerContextMenu = ({
 
   const openEntryFromContext = async () => {
     const entry = primaryContextEntry.value;
-    await runAsyncEntryContextAction(openEntry, Boolean(entry && (entry.type === "folder" || !isImageFile(entry) && !isVideoFile(entry) && !isPdfFile(entry) && !canEditEntry(entry))));
+    await runAsyncEntryContextAction(openEntry, Boolean(entry && (entry.type === "folder" || !isImageFile(entry) && !isAudioFile(entry) && !isVideoFile(entry) && !isPdfFile(entry) && !canEditEntry(entry))));
   }
 
   const openContextEntryInNewTab = () => {
@@ -230,6 +242,12 @@ export const useExplorerContextMenu = ({
   const viewImageContextEntry = () => {
     runEntryContextAction(entry => {
       if (isImageFile(entry)) openImageViewer({entry, entries: imageEntries.value});
+    });
+  }
+
+  const playAudioContextEntry = () => {
+    runEntryContextAction(entry => {
+      if (isAudioFile(entry)) openAudioPlayer({entry, entries: audioEntries.value});
     });
   }
 
@@ -339,6 +357,7 @@ export const useExplorerContextMenu = ({
     contextSelectionCount,
     primaryContextEntry,
     contextCanViewImage,
+    contextCanPlayAudio,
     contextCanViewVideo,
     contextCanViewPdf,
     contextCanEdit,
@@ -349,6 +368,7 @@ export const useExplorerContextMenu = ({
     openContextEntryInNewTab,
     previewContextEntry,
     viewImageContextEntry,
+    playAudioContextEntry,
     viewVideoContextEntry,
     viewPdfContextEntry,
     editContextEntry,

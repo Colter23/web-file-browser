@@ -1,7 +1,7 @@
 import type {ComputedRef} from "vue";
 import type {FileInfo} from "../class.ts";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
-import {entryFileInfo, isEditableEntry, isImageEntry, isPdfEntry, isVideoEntry} from "../utils/file-entry.ts";
+import {entryFileInfo, isAudioEntry, isEditableEntry, isImageEntry, isPdfEntry, isVideoEntry} from "../utils/file-entry.ts";
 
 type ImageViewerPayload = {
   entry: ExplorerEntry;
@@ -9,6 +9,11 @@ type ImageViewerPayload = {
 }
 
 type VideoViewerPayload = {
+  entry: ExplorerEntry;
+  entries: ExplorerEntry[];
+}
+
+type AudioPlayerPayload = {
   entry: ExplorerEntry;
   entries: ExplorerEntry[];
 }
@@ -27,6 +32,7 @@ type ExplorerEntryActionOptions = {
   editableExtensions: () => readonly string[];
   selectedEntries: ComputedRef<ExplorerEntry[]>;
   imageEntries: ComputedRef<ExplorerEntry[]>;
+  audioEntries: ComputedRef<ExplorerEntry[]>;
   videoEntries: ComputedRef<ExplorerEntry[]>;
   pdfEntries: ComputedRef<ExplorerEntry[]>;
   isRenaming: (entry: ExplorerEntry) => boolean;
@@ -35,6 +41,7 @@ type ExplorerEntryActionOptions = {
   loadFolder: (path: string) => Promise<unknown>;
   previewEntry: (entry: ExplorerEntry) => void;
   openImageViewer: (payload: ImageViewerPayload) => void;
+  openAudioPlayer: (payload: AudioPlayerPayload) => void;
   openVideoViewer: (payload: VideoViewerPayload) => void;
   openPdfViewer: (payload: PdfViewerPayload) => void;
   openNewTab: (entry: ExplorerEntry) => void;
@@ -47,6 +54,7 @@ export const useExplorerEntryActions = ({
   editableExtensions,
   selectedEntries,
   imageEntries,
+  audioEntries,
   videoEntries,
   pdfEntries,
   isRenaming,
@@ -55,6 +63,7 @@ export const useExplorerEntryActions = ({
   loadFolder,
   previewEntry,
   openImageViewer,
+  openAudioPlayer,
   openVideoViewer,
   openPdfViewer,
   openNewTab,
@@ -80,6 +89,10 @@ export const useExplorerEntryActions = ({
     }
     if (isImageEntry(entry)) {
       openImageViewer({entry, entries: imageEntries.value});
+      return;
+    }
+    if (isAudioEntry(entry)) {
+      openAudioPlayer({entry, entries: audioEntries.value});
       return;
     }
     if (isVideoEntry(entry)) {

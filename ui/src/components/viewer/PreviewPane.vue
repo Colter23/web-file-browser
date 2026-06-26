@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import {computed} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
-import {downloadUrl} from "../../network/api.ts";
 import Icon from "../Icon.vue";
 import type {ShellNoticePayload} from "../shell/types.ts";
 import {entryMetaRows, entryPreviewKind, entryPreviewTypeText, isEditableEntry} from "../../utils/file-entry.ts";
 import PreviewHeader from "./PreviewHeader.vue";
+import PreviewAudioView from "./PreviewAudioView.vue";
 import PreviewImageView from "./PreviewImageView.vue";
 import PreviewMetaList from "./PreviewMetaList.vue";
 import PreviewPdfView from "./PreviewPdfView.vue";
@@ -27,6 +27,7 @@ const emit = defineEmits<{
   (e: "edit", entry: ExplorerEntry): void;
   (e: "download", entry: ExplorerEntry): void;
   (e: "open-image", entry: ExplorerEntry): void;
+  (e: "open-audio", entry: ExplorerEntry): void;
   (e: "open-video", entry: ExplorerEntry): void;
   (e: "open-pdf", entry: ExplorerEntry): void;
   (e: "notice", payload: ShellNoticePayload): void;
@@ -72,6 +73,7 @@ const downloadPreview = () => {
   <preview-meta-list v-if="entry" :items="previewMeta" />
   <preview-image-view v-if="entry && previewKind === 'image'" :entry="entry" @open-image="emit('open-image', $event)" />
   <preview-text-view v-else-if="entry && previewKind === 'text'" :entry="entry" :reload-key="reloadKey" @notice="emit('notice', $event)" />
+  <preview-audio-view v-else-if="entry && previewKind === 'audio'" :entry="entry" @open-audio="emit('open-audio', $event)" />
   <preview-video-view v-else-if="entry && previewKind === 'video'" :entry="entry" @open-video="emit('open-video', $event)" />
   <preview-pdf-view v-else-if="entry && previewKind === 'pdf'" :entry="entry" :reload-key="reloadKey" @open-pdf="emit('open-pdf', $event)" />
   <div v-else class="preview-body" :class="previewKind">
@@ -80,7 +82,6 @@ const downloadPreview = () => {
       <span>{{ emptyTitleText }}</span>
       <small v-if="emptySubtitleText">{{ emptySubtitleText }}</small>
     </div>
-    <audio v-else-if="entry && previewKind === 'audio'" :src="downloadUrl(entry.path)" controls></audio>
     <div v-else class="preview-placeholder">
       <icon icon="file.file" size="3rem" />
       <span>暂不支持预览此类型</span>
@@ -97,12 +98,10 @@ const downloadPreview = () => {
   color: var(--app-text-muted);
 }
 
-.preview-body.audio,
 .preview-body.video {
   background: var(--app-panel-muted);
 }
 
-.preview-body audio,
 .preview-body video {
   @apply m-auto max-h-full max-w-full;
 }

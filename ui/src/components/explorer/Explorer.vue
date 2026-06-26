@@ -23,6 +23,7 @@ import {
   formatEntryDate as formatDate,
   formatEntrySize as formatSize,
   isExtractableArchiveEntry as canExtract,
+  isAudioEntry as isAudioFile,
   isImageEntry as isImageFile,
   isPdfEntry as isPdfFile,
   isVideoEntry as isVideoFile
@@ -61,6 +62,11 @@ type VideoViewerPayload = {
   entries: ExplorerEntry[];
 }
 
+type AudioPlayerPayload = {
+  entry: ExplorerEntry;
+  entries: ExplorerEntry[];
+}
+
 type PdfViewerPayload = {
   entry: ExplorerEntry;
   entries: ExplorerEntry[];
@@ -83,6 +89,7 @@ const emit = defineEmits<{
   (e: "properties", entries: ExplorerEntry[]): void;
   (e: "preview", entry: ExplorerEntry): void;
   (e: "open-image-viewer", payload: ImageViewerPayload): void;
+  (e: "open-audio-player", payload: AudioPlayerPayload): void;
   (e: "open-video-viewer", payload: VideoViewerPayload): void;
   (e: "open-pdf-viewer", payload: PdfViewerPayload): void;
   (e: "copy", entry: ExplorerEntry): void;
@@ -242,6 +249,7 @@ watch(selectedEntries, selected => {
 
 const thumbnailActive = computed(() => fileStore.viewMode === "icons" || fileStore.viewMode === "tiles");
 const imageEntries = computed(() => entries.value.filter(isImageFile));
+const audioEntries = computed(() => entries.value.filter(isAudioFile));
 const videoEntries = computed(() => entries.value.filter(isVideoFile));
 const pdfEntries = computed(() => entries.value.filter(isPdfFile));
 const {
@@ -340,6 +348,7 @@ const {
   editableExtensions: () => fileStore.extensions,
   selectedEntries,
   imageEntries,
+  audioEntries,
   videoEntries,
   pdfEntries,
   isRenaming,
@@ -348,6 +357,7 @@ const {
   loadFolder: path => loadFolder(path),
   previewEntry: entry => emit("preview", entry),
   openImageViewer: payload => emit("open-image-viewer", payload),
+  openAudioPlayer: payload => emit("open-audio-player", payload),
   openVideoViewer: payload => emit("open-video-viewer", payload),
   openPdfViewer: payload => emit("open-pdf-viewer", payload),
   openNewTab: entry => emit("open-new-tab", entry),
@@ -595,6 +605,7 @@ const {
   contextSelectionCount,
   primaryContextEntry,
   contextCanViewImage,
+  contextCanPlayAudio,
   contextCanViewVideo,
   contextCanViewPdf,
   contextCanEdit,
@@ -605,6 +616,7 @@ const {
   openContextEntryInNewTab,
   previewContextEntry,
   viewImageContextEntry,
+  playAudioContextEntry,
   viewVideoContextEntry,
   viewPdfContextEntry,
   editContextEntry,
@@ -627,6 +639,7 @@ const {
   removeContextFavorite
 } = useExplorerContextMenu({
   imageEntries,
+  audioEntries,
   videoEntries,
   pdfEntries,
   selectedPaths,
@@ -644,6 +657,7 @@ const {
   openNewTab: openEntryInNewTab,
   editEntry,
   isImageFile,
+  isAudioFile,
   isVideoFile,
   isPdfFile,
   canEditEntry,
@@ -654,6 +668,7 @@ const {
   invertCurrentSelection,
   previewEntry: entry => emit("preview", entry),
   openImageViewer: payload => emit("open-image-viewer", payload),
+  openAudioPlayer: payload => emit("open-audio-player", payload),
   openVideoViewer: payload => emit("open-video-viewer", payload),
   openPdfViewer: payload => emit("open-pdf-viewer", payload),
   downloadEntry: entry => emit("download", entry),
@@ -761,6 +776,7 @@ defineExpose({
   getSelectedEntry: primarySelected,
   getSelectedEntries: () => selectedEntries.value,
   getImageEntries: () => imageEntries.value,
+  getAudioEntries: () => audioEntries.value,
   getVideoEntries: () => videoEntries.value,
   getPdfEntries: () => pdfEntries.value,
   startRename: () => startRename(firstSelectedEntry()),
@@ -897,6 +913,7 @@ defineExpose({
         :primary-entry="primaryContextEntry"
         :selection-count="contextSelectionCount"
         :can-view-image="contextCanViewImage"
+        :can-play-audio="contextCanPlayAudio"
         :can-view-video="contextCanViewVideo"
         :can-view-pdf="contextCanViewPdf"
         :can-edit="contextCanEdit"
@@ -908,6 +925,7 @@ defineExpose({
         @open="openEntryFromContext"
         @open-new-tab="openContextEntryInNewTab"
         @view-image="viewImageContextEntry"
+        @play-audio="playAudioContextEntry"
         @view-video="viewVideoContextEntry"
         @view-pdf="viewPdfContextEntry"
         @edit="editContextEntry"
