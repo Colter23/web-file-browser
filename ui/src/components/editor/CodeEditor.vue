@@ -1,27 +1,15 @@
 <script setup lang="ts">
-import ace from "ace-builds";
+import {Compartment, EditorSelection, EditorState, Prec} from "@codemirror/state";
+import type {Extension} from "@codemirror/state";
+import {EditorView, keymap} from "@codemirror/view";
+import type {ViewUpdate} from "@codemirror/view";
+import {basicSetup} from "codemirror";
+import {SearchQuery, highlightSelectionMatches, search, setSearchQuery} from "@codemirror/search";
+import {indentUnit} from "@codemirror/language";
 import {onBeforeUnmount, onMounted, ref, watch} from "vue";
-import {aceModePath, aceThemePath, loadAceMode, loadAceTheme, registerAceResources} from "./ace-resources.ts";
+import {loadCodeMirrorLanguage} from "./codemirror-languages.ts";
+import {createCodeMirrorTheme} from "./codemirror-theme.ts";
 import type {EditorCursorStatus, EditorSearchOptions} from "./types.ts";
-
-let aceReady: Promise<void> | null = null;
-
-const exposeAceGlobal = () => {
-  (globalThis as typeof globalThis & {ace?: typeof ace}).ace = ace;
-}
-
-const ensureAceReady = async () => {
-  if (!aceReady) {
-    exposeAceGlobal();
-    aceReady = Promise.all([
-      import("ace-builds/src-noconflict/ext-language_tools")
-    ]).then(() => {
-      exposeAceGlobal();
-      registerAceResources();
-    });
-  }
-  await aceReady;
-}
 
 interface CodeEditorProps {
   mode: string;
@@ -31,6 +19,11 @@ interface CodeEditorProps {
   wrap?: boolean;
   tabSize?: number;
   readOnly?: boolean;
+}
+
+type SearchMatch = {
+  from: number;
+  to: number;
 }
 
 const props = withDefaults(defineProps<CodeEditorProps>(), {
@@ -53,197 +46,310 @@ const emit = defineEmits<{
 }>()
 
 const editorRef = ref<HTMLElement | null>(null);
-let editor: ReturnType<typeof ace.edit> | null = null;
+const languageCompartment = new Compartment();
+const themeCompartment = new Compartment();
+const wrapCompartment = new Compartment();
+const tabCompartment = new Compartment();
+const readOnlyCompartment = new Compartment();
+const fontSizeCompartment = new Compartment();
+let view: EditorView | null = null;
 let syncing = false;
 let disposed = false;
-const editorVerticalInset = 12;
-const editorScrollMargin = 8;
-let themeLoadToken = 0;
-let modeLoadToken = 0;
+let languageLoadToken = 0;
+let lastSearchOptions: EditorSearchOptions | null = null;
+
+const tabExtensions = (tabSize: number) => [
+  EditorState.tabSize.of(tabSize),
+  indentUnit.of(" ".repeat(tabSize))
+];
+
+const readOnlyExtensions = (readOnly: boolean) => [
+  EditorState.readOnly.of(readOnly),
+  EditorView.editable.of(!readOnly)
+];
+
+const fontSizeExtension = (fontSize: number) => EditorView.theme({
+  "&": {
+    fontSize: `${fontSize}px`
+  }
+});
+
+const wrapExtension = (wrap: boolean) => wrap ? EditorView.lineWrapping : [];
+
+const customKeymap = () => Prec.highest(keymap.of([
+  {
+    key: "Mod-s",
+    run: () => {
+      emit("save");
+      return true;
+    }
+  },
+  {
+    key: "Mod-f",
+    run: () => {
+      emit("find");
+      return true;
+    }
+  },
+  {
+    key: "Mod-h",
+    run: () => {
+      emit("replace");
+      return true;
+    }
+  },
+  {
+    key: "Mod-g",
+    run: () => {
+      emit("goto-line");
+      return true;
+    }
+  }
+]));
+
+const createExtensions = (languageExtension: Extension): Extension[] => [
+  basicSetup,
+  search({top: true}),
+  highlightSelectionMatches(),
+  customKeymap(),
+  EditorView.updateListener.of(handleEditorUpdate),
+  languageCompartment.of(languageExtension),
+  themeCompartment.of(createCodeMirrorTheme(props.theme)),
+  wrapCompartment.of(wrapExtension(props.wrap)),
+  tabCompartment.of(tabExtensions(props.tabSize)),
+  readOnlyCompartment.of(readOnlyExtensions(props.readOnly)),
+  fontSizeCompartment.of(fontSizeExtension(props.fontSize))
+];
+
+const createSearchQuery = (options: EditorSearchOptions, replacement = "") => new SearchQuery({
+  search: options.needle,
+  caseSensitive: Boolean(options.caseSensitive),
+  literal: !options.regex,
+  regexp: Boolean(options.regex),
+  replace: replacement,
+  wholeWord: Boolean(options.wholeWord)
+});
+
+const collectMatches = (query: SearchQuery, from = 0, to = view?.state.doc.length ?? 0) => {
+  if (!view || !query.valid) return [];
+  const matches: SearchMatch[] = [];
+  const cursor = query.getCursor(view.state, from, to);
+  for (let next = cursor.next(); !next.done; next = cursor.next()) {
+    const match = next.value;
+    if (match.to < match.from) continue;
+    matches.push({from: match.from, to: match.to});
+  }
+  return matches;
+}
+
+const findMatch = (options: EditorSearchOptions) => {
+  if (!view || !options.needle) return null;
+  const query = createSearchQuery(options);
+  if (!query.valid) return null;
+  const selection = view.state.selection.main;
+  const docLength = view.state.doc.length;
+
+  if (options.backwards) {
+    const before = collectMatches(query, 0, selection.from);
+    if (before.length) return before[before.length - 1];
+    const wrapped = collectMatches(query, selection.to, docLength);
+    return wrapped.length ? wrapped[wrapped.length - 1] : null;
+  }
+
+  const start = selection.empty ? selection.from : selection.to;
+  const after = collectMatches(query, start, docLength);
+  if (after.length) return after[0];
+  const wrapped = collectMatches(query, 0, start);
+  return wrapped.length ? wrapped[0] : null;
+}
+
+const selectRange = (from: number, to: number, query?: SearchQuery) => {
+  if (!view) return;
+  view.dispatch({
+    selection: EditorSelection.range(from, to),
+    effects: [
+      EditorView.scrollIntoView(from, {y: "center"}),
+      ...(query ? [setSearchQuery.of(query)] : [])
+    ]
+  });
+  view.focus();
+  emitCursorStatus();
+}
 
 const findNeedle = (options: EditorSearchOptions) => {
-  if (!editor || !options.needle) return false;
+  if (!view || !options.needle) return false;
+  lastSearchOptions = options;
+  const match = findMatch(options);
+  if (!match) return false;
+  selectRange(match.from, match.to, createSearchQuery(options));
+  return true;
+}
+
+const isCurrentSelectionMatch = (query: SearchQuery) => {
+  if (!view || !query.valid) return false;
+  const selection = view.state.selection.main;
+  if (selection.empty) return false;
+  const match = collectMatches(query, selection.from, selection.to)[0];
+  return Boolean(match && match.from === selection.from && match.to === selection.to);
+}
+
+const replacementFor = (text: string, options: EditorSearchOptions, replacement: string) => {
+  if (!options.regex) return replacement;
   try {
-    const range = editor.find(options.needle, {
-      backwards: Boolean(options.backwards),
-      wrap: true,
-      caseSensitive: Boolean(options.caseSensitive),
-      wholeWord: Boolean(options.wholeWord),
-      regExp: Boolean(options.regex),
-      preventScroll: false
-    });
-    editor.focus();
-    return Boolean(range);
+    const flags = options.caseSensitive ? "" : "i";
+    return text.replace(new RegExp(options.needle, flags), replacement);
   } catch {
-    return false;
+    return replacement;
   }
 }
 
 const replaceCurrent = (replacement: string) => {
-  if (!editor) return false;
-  try {
-    const before = editor.getValue();
-    editor.replace(replacement);
-    const changed = editor.getValue() !== before;
-    if (changed) emitCursorStatus();
-    editor.focus();
-    return changed;
-  } catch {
-    return false;
-  }
-}
-
-const replaceEverywhere = (replacement: string) => {
-  if (!editor) return false;
-  try {
-    const before = editor.getValue();
-    editor.replaceAll(replacement);
-    const changed = editor.getValue() !== before;
-    if (changed) emitCursorStatus();
-    editor.focus();
-    return changed;
-  } catch {
-    return false;
-  }
-}
-
-const gotoLine = (line: number, column = 0) => {
-  if (!editor || !Number.isFinite(line)) return false;
-  const targetLine = Math.max(1, Math.min(Math.round(line), editor.session.getLength()));
-  const targetColumn = Math.max(0, Math.round(column));
-  editor.gotoLine(targetLine, targetColumn, true);
-  editor.focus();
+  if (!view || props.readOnly || !lastSearchOptions) return false;
+  const query = createSearchQuery(lastSearchOptions, replacement);
+  if (!isCurrentSelectionMatch(query)) return false;
+  const selection = view.state.selection.main;
+  const selectedText = view.state.sliceDoc(selection.from, selection.to);
+  const nextText = replacementFor(selectedText, lastSearchOptions, replacement);
+  view.dispatch({
+    changes: {from: selection.from, to: selection.to, insert: nextText},
+    selection: EditorSelection.range(selection.from, selection.from + nextText.length),
+    effects: EditorView.scrollIntoView(selection.from, {y: "center"})
+  });
+  view.focus();
   emitCursorStatus();
   return true;
 }
 
-const lineCount = () => editor?.session.getLength() ?? 0;
+const replaceEverywhere = (replacement: string) => {
+  if (!view || props.readOnly || !lastSearchOptions) return false;
+  const query = createSearchQuery(lastSearchOptions, replacement);
+  const matches = collectMatches(query);
+  if (!matches.length) return false;
+  const changes = matches.map(match => ({
+    from: match.from,
+    to: match.to,
+    insert: replacementFor(view!.state.sliceDoc(match.from, match.to), lastSearchOptions!, replacement)
+  }));
+  view.dispatch({changes});
+  view.focus();
+  emitCursorStatus();
+  return true;
+}
+
+const gotoLine = (line: number, column = 0) => {
+  if (!view || !Number.isFinite(line)) return false;
+  const targetLine = Math.max(1, Math.min(Math.round(line), view.state.doc.lines));
+  const lineInfo = view.state.doc.line(targetLine);
+  const targetColumn = Math.max(0, Math.round(column));
+  const position = Math.min(lineInfo.from + targetColumn, lineInfo.to);
+  view.dispatch({
+    selection: EditorSelection.cursor(position),
+    effects: EditorView.scrollIntoView(position, {y: "center"})
+  });
+  view.focus();
+  emitCursorStatus();
+  return true;
+}
+
+const lineCount = () => view?.state.doc.lines ?? 0;
+
+const selectedRange = () => view?.state.selection.main;
 
 const emitCursorStatus = () => {
-  if (!editor) return;
-  const cursor = editor.getCursorPosition();
-  const range = editor.getSelectionRange();
-  const selectedCharacters = editor.getSelectedText().length;
-  const selectedRows = selectedCharacters > 0 ? Math.abs(range.end.row - range.start.row) + 1 : 0;
+  if (!view) return;
+  const selection = view.state.selection.main;
+  const cursor = view.state.doc.lineAt(selection.head);
+  const from = Math.min(selection.from, selection.to);
+  const to = Math.max(selection.from, selection.to);
+  const selectedCharacters = to - from;
+  const selectedRows = selectedCharacters > 0
+      ? view.state.doc.lineAt(to).number - view.state.doc.lineAt(from).number + 1
+      : 0;
   emit("cursor-change", {
-    line: cursor.row + 1,
-    column: cursor.column + 1,
+    line: cursor.number,
+    column: selection.head - cursor.from + 1,
     selectedRows,
     selectedCharacters
   });
 }
 
-const applyEditorSpacing = () => {
-  if (!editor) return;
-  editor.renderer.setMargin(editorVerticalInset, editorVerticalInset, 0, 0);
-  editor.renderer.setScrollMargin(editorScrollMargin, editorScrollMargin);
+const handleEditorUpdate = (update: ViewUpdate) => {
+  if (update.docChanged && !syncing) {
+    emit("change", update.state.doc.toString());
+  }
+  if (update.docChanged || update.selectionSet) {
+    emitCursorStatus();
+  }
 }
 
-watch(() => props.theme, async (theme: string) => {
-  const token = ++themeLoadToken;
-  await loadAceTheme(theme);
-  if (!editor || disposed || token !== themeLoadToken) return;
-  editor.setTheme(aceThemePath(theme));
-  requestAnimationFrame(applyEditorSpacing);
+watch(() => props.theme, theme => {
+  view?.dispatch({effects: themeCompartment.reconfigure(createCodeMirrorTheme(theme))});
 });
 
-watch(() => props.mode, async (mode: string) => {
-  const token = ++modeLoadToken;
-  await loadAceMode(mode);
-  if (!editor || disposed || token !== modeLoadToken) return;
-  editor.session.setMode(aceModePath(mode));
+watch(() => props.mode, async mode => {
+  const token = ++languageLoadToken;
+  const languageExtension = await loadCodeMirrorLanguage(mode);
+  if (!view || disposed || token !== languageLoadToken) return;
+  view.dispatch({effects: languageCompartment.reconfigure(languageExtension)});
 });
 
-watch(() => props.content, (content: string) => {
-  if (!editor || editor.getValue() === content) return;
+watch(() => props.content, content => {
+  if (!view || view.state.doc.toString() === content) return;
   syncing = true;
-  editor.session.setValue(content);
+  view.dispatch({
+    changes: {from: 0, to: view.state.doc.length, insert: content}
+  });
   syncing = false;
   emitCursorStatus();
 });
 
-watch(() => props.fontSize, (fontSize: number) => {
-  editor?.setOption("fontSize", fontSize);
+watch(() => props.fontSize, fontSize => {
+  view?.dispatch({effects: fontSizeCompartment.reconfigure(fontSizeExtension(fontSize))});
 });
 
-watch(() => props.wrap, (wrap: boolean) => {
-  editor?.session.setUseWrapMode(wrap);
+watch(() => props.wrap, wrap => {
+  view?.dispatch({effects: wrapCompartment.reconfigure(wrapExtension(wrap))});
 });
 
-watch(() => props.tabSize, (tabSize: number) => {
-  editor?.session.setTabSize(tabSize);
+watch(() => props.tabSize, tabSize => {
+  view?.dispatch({effects: tabCompartment.reconfigure(tabExtensions(tabSize))});
 });
 
-watch(() => props.readOnly, (readOnly: boolean) => {
-  editor?.setReadOnly(readOnly);
+watch(() => props.readOnly, readOnly => {
+  view?.dispatch({effects: readOnlyCompartment.reconfigure(readOnlyExtensions(readOnly))});
 });
-
-onMounted(() => {
-  if (!editorRef.value) return;
-  void initializeEditor();
-})
 
 const initializeEditor = async () => {
-  await ensureAceReady();
-  await Promise.all([loadAceTheme(props.theme), loadAceMode(props.mode)]);
-  if (disposed || !editorRef.value || editor) return;
-  editor = ace.edit(editorRef.value);
-
-  editor.setOptions({
-    theme: aceThemePath(props.theme),
-    fontSize: props.fontSize,
-    mode: aceModePath(props.mode),
-    value: props.content,
-    readOnly: props.readOnly,
-
-    enableBasicAutocompletion: true,
-    enableSnippets: true,
-    enableLiveAutocompletion: true
+  const token = ++languageLoadToken;
+  const languageExtension = await loadCodeMirrorLanguage(props.mode);
+  if (disposed || token !== languageLoadToken || !editorRef.value || view) return;
+  view = new EditorView({
+    state: EditorState.create({
+      doc: props.content,
+      extensions: createExtensions(languageExtension)
+    }),
+    parent: editorRef.value
   });
-  applyEditorSpacing();
-  editor.session.setUseWrapMode(props.wrap);
-  editor.session.setTabSize(props.tabSize);
-  editor.commands.addCommand({
-    name: "saveFile",
-    bindKey: {win: "Ctrl-S", mac: "Command-S"},
-    exec: () => emit("save")
-  });
-  editor.commands.addCommand({
-    name: "openFindBar",
-    bindKey: {win: "Ctrl-F", mac: "Command-F"},
-    exec: () => emit("find")
-  });
-  editor.commands.addCommand({
-    name: "openReplaceBar",
-    bindKey: {win: "Ctrl-H", mac: "Command-Option-F"},
-    exec: () => emit("replace")
-  });
-  editor.commands.addCommand({
-    name: "openGotoLineBar",
-    bindKey: {win: "Ctrl-G", mac: "Command-L"},
-    exec: () => emit("goto-line")
-  });
-  editor.selection.on("changeCursor", emitCursorStatus);
-  editor.selection.on("changeSelection", emitCursorStatus);
   emitCursorStatus();
-
-  editor.session.on("change", () => {
-    if (editor && !syncing) {
-      emit("change", editor.getValue());
-      emitCursorStatus();
-    }
-  });
 }
+
+onMounted(() => {
+  void initializeEditor();
+});
 
 onBeforeUnmount(() => {
   disposed = true;
-  editor?.destroy();
-  editor = null;
+  view?.destroy();
+  view = null;
 });
 
 defineExpose({
-  focus: () => editor?.focus(),
-  getSelectedText: () => editor?.getSelectedText() ?? "",
+  focus: () => view?.focus(),
+  getSelectedText: () => {
+    if (!view) return "";
+    const range = selectedRange();
+    return range ? view.state.sliceDoc(range.from, range.to) : "";
+  },
   getLineCount: lineCount,
   gotoLine,
   find: findNeedle,
@@ -258,7 +364,12 @@ defineExpose({
 
 <style scoped lang="postcss">
 @reference "tailwindcss";
+
 .code-editor {
-  @apply w-full h-full
+  @apply h-full w-full;
+}
+
+.code-editor :deep(.cm-editor) {
+  @apply h-full;
 }
 </style>

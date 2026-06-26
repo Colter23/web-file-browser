@@ -35,7 +35,8 @@ type ExplorerShortcutsOptions = {
 
 const formControlSelector = "input, textarea, select, [contenteditable='true']";
 const operationOverlaySelector = ".operation-shell, .operation-panel, .delete-confirm-panel, .properties-panel";
-const shellOverlaySelector = `.ace_editor, ${operationOverlaySelector}, .context-menu, .tab-context-menu, .view-menu-panel, .task-panel, .trash-panel`;
+const editorSurfaceSelector = ".cm-editor, .ace_editor";
+const shellOverlaySelector = `${editorSurfaceSelector}, ${operationOverlaySelector}, .context-menu, .tab-context-menu, .view-menu-panel, .task-panel, .trash-panel`;
 
 export const shouldIgnoreNavigationShortcut = (target: EventTarget | null) => {
   if (!(target instanceof HTMLElement)) return false;
@@ -52,7 +53,7 @@ const shouldIgnoreActionShortcut = (target: EventTarget | null) => {
 const shouldKeepEditorFindShortcut = (showEditor: boolean, target: EventTarget | null) => {
   if (showEditor) return true;
   if (!(target instanceof HTMLElement)) return false;
-  return Boolean(target.closest(`.ace_editor, ${operationOverlaySelector}`));
+  return Boolean(target.closest(`${editorSurfaceSelector}, ${operationOverlaySelector}`));
 }
 
 const shouldIgnoreAddressShortcut = (showEditor: boolean, target: EventTarget | null) => {

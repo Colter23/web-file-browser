@@ -61,7 +61,7 @@ const {
   focusEditor
 });
 
-const themeClass = computed(() => `ace-${currentTheme.value.replace(/_/g, "-")}`);
+const themeClass = computed(() => `editor-theme-${currentTheme.value.replace(/_/g, "-")}`);
 
 const closeMenus = () => {
   activeMenu.value = "";
