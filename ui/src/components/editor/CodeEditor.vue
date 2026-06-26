@@ -10,6 +10,7 @@ import {onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {loadCodeMirrorLanguage} from "./codemirror-languages.ts";
 import {createCodeMirrorTheme} from "./codemirror-theme.ts";
 import type {EditorCursorStatus, EditorSearchOptions} from "./types.ts";
+import {useAppearanceStore} from "../../store/appearance.ts";
 
 interface CodeEditorProps {
   mode: string;
@@ -28,7 +29,7 @@ type SearchMatch = {
 
 const props = withDefaults(defineProps<CodeEditorProps>(), {
   mode: "text",
-  theme: "dracula",
+  theme: "app",
   content: "",
   fontSize: 16,
   wrap: true,
@@ -45,6 +46,7 @@ const emit = defineEmits<{
   (e: "cursor-change", status: EditorCursorStatus): void;
 }>()
 
+const appearanceStore = useAppearanceStore();
 const editorRef = ref<HTMLElement | null>(null);
 const languageCompartment = new Compartment();
 const themeCompartment = new Compartment();
@@ -114,7 +116,7 @@ const createExtensions = (languageExtension: Extension): Extension[] => [
   customKeymap(),
   EditorView.updateListener.of(handleEditorUpdate),
   languageCompartment.of(languageExtension),
-  themeCompartment.of(createCodeMirrorTheme(props.theme)),
+  themeCompartment.of(createCodeMirrorTheme(props.theme, appearanceStore.resolvedColorMode)),
   wrapCompartment.of(wrapExtension(props.wrap)),
   tabCompartment.of(tabExtensions(props.tabSize)),
   readOnlyCompartment.of(readOnlyExtensions(props.readOnly)),
@@ -282,8 +284,8 @@ const handleEditorUpdate = (update: ViewUpdate) => {
   }
 }
 
-watch(() => props.theme, theme => {
-  view?.dispatch({effects: themeCompartment.reconfigure(createCodeMirrorTheme(theme))});
+watch(() => [props.theme, appearanceStore.resolvedColorMode] as const, ([theme, appColorMode]) => {
+  view?.dispatch({effects: themeCompartment.reconfigure(createCodeMirrorTheme(theme, appColorMode))});
 });
 
 watch(() => props.mode, async mode => {

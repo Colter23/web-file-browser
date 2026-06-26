@@ -37,7 +37,7 @@ export const useEditorStatusText = ({
   const selectedModeName = computed(() => modes.find(mode => mode.key === currentMode.value)?.name ?? currentMode.value);
 
   const selectedThemeName = computed(() => {
-    const allThemes = [...themes.light, ...themes.dark];
+    const allThemes = Object.values(themes).flat();
     return allThemes.find(theme => theme.key === currentTheme.value)?.name ?? currentTheme.value;
   });
 

@@ -1,6 +1,7 @@
 import {ref, watch} from "vue";
 import editorConfig from "../assets/editor-config.json";
 import {readBooleanStorage, readStorageItem, writeBooleanStorage, writeStorageItem} from "../utils/safe-storage.ts";
+import type {EditorThemeOption} from "../components/editor/types.ts";
 
 const storageKeys = {
   theme: "editor.theme",
@@ -9,7 +10,8 @@ const storageKeys = {
   wrap: "editor.wrap"
 };
 
-const allThemeKeys = [...editorConfig.theme.light, ...editorConfig.theme.dark].map(theme => theme.key);
+const allThemes = Object.values(editorConfig.theme).flat() as EditorThemeOption[];
+const allThemeKeys = allThemes.map(theme => theme.key);
 
 const normalizeNumberPreference = (value: unknown, fallback: number, min: number, max: number) => {
   const numeric = typeof value === "number" ? value : Number(value);
@@ -19,7 +21,7 @@ const normalizeNumberPreference = (value: unknown, fallback: number, min: number
 
 const readThemePreference = () => {
   const theme = readStorageItem(storageKeys.theme);
-  return theme && allThemeKeys.includes(theme) ? theme : "github";
+  return theme && allThemeKeys.includes(theme) ? theme : "app";
 }
 
 const readNumberPreference = (key: string, fallback: number, min: number, max: number) => {

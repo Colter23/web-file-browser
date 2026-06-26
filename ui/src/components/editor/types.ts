@@ -30,9 +30,11 @@ export type EditorModeOption = {
 export type EditorThemeOption = {
   name: string;
   key: string;
+  icon?: string;
 }
 
 export type EditorThemeGroups = {
+  automatic: EditorThemeOption[];
   light: EditorThemeOption[];
   dark: EditorThemeOption[];
 }

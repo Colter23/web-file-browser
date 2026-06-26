@@ -37,6 +37,12 @@ const updateWrap = (event: Event) => {
   emit("update:wrap", Boolean(input?.checked));
 }
 
+const themeGroups = computed(() => [
+  {title: "跟随", items: props.themes.automatic},
+  {title: "浅色", items: props.themes.light},
+  {title: "深色", items: props.themes.dark}
+].filter(group => group.items.length));
+
 const menuLayerStyle = computed(() => {
   const anchor = props.anchor;
   if (!anchor || !props.activeMenu) return {};
@@ -68,22 +74,17 @@ const menuLayerStyle = computed(() => {
     </div>
 
     <div v-if="activeMenu === 'theme'" class="editor-menu theme-menu">
-      <p>浅色主题</p>
-      <button
-          v-for="theme in themes.light"
-          :key="theme.key"
-          :class="{active: currentTheme === theme.key}"
-          @click="emit('change-theme', theme.key)">
-        <span>{{ theme.name }}</span>
-      </button>
-      <p>深色主题</p>
-      <button
-          v-for="theme in themes.dark"
-          :key="theme.key"
-          :class="{active: currentTheme === theme.key}"
-          @click="emit('change-theme', theme.key)">
-        <span>{{ theme.name }}</span>
-      </button>
+      <template v-for="group in themeGroups" :key="group.title">
+        <p>{{ group.title }}</p>
+        <button
+            v-for="theme in group.items"
+            :key="theme.key"
+            :class="{active: currentTheme === theme.key}"
+            @click="emit('change-theme', theme.key)">
+          <icon :icon="theme.icon ?? 'action.appearance'" />
+          <span>{{ theme.name }}</span>
+        </button>
+      </template>
     </div>
 
     <div v-if="activeMenu === 'settings'" class="editor-menu settings-menu">
