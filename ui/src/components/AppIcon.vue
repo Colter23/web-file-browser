@@ -38,12 +38,18 @@ watch(
 );
 
 const iconComponent = computed(() => resolvedIcon.value?.kind === "component" ? resolvedIcon.value.component : undefined);
+const componentProps = computed(() => resolvedIcon.value?.kind === "component" ? resolvedIcon.value.props : undefined);
 const symbolHref = computed(() => resolvedIcon.value?.kind === "symbol" ? `#${resolvedIcon.value.symbol}` : "");
 const iconClass = computed(() => resolvedIcon.value?.className);
 const passthroughAttrs = computed(() => {
   const {class: _class, style: _style, ...rest} = attrs;
   return rest;
 });
+const componentAttrs = computed(() => ({
+  strokeWidth: props.strokeWidth,
+  ...(componentProps.value ?? {}),
+  ...passthroughAttrs.value
+}));
 
 const normalizedSize = computed(() => {
   if (props.size === "large") return "1.5rem";
@@ -68,11 +74,10 @@ const rootStyle = computed(() => [attrs.style, iconStyle.value]);
   <component
       :is="iconComponent"
       v-if="iconComponent"
-      v-bind="passthroughAttrs"
+      v-bind="componentAttrs"
       :class="rootClass"
       aria-hidden="true"
-      :style="rootStyle"
-      :stroke-width="strokeWidth" />
+      :style="rootStyle" />
   <svg v-else-if="symbolHref" v-bind="passthroughAttrs" :class="rootClass" aria-hidden="true" :style="rootStyle">
     <use :href="symbolHref" :xlink:href="symbolHref" />
   </svg>
@@ -95,5 +100,36 @@ const rootStyle = computed(() => [attrs.style, iconStyle.value]);
 
 .app-icon-symbol {
   fill: currentColor;
+}
+
+.app-icon-fluent {
+  display: inline-grid;
+  place-items: center;
+}
+
+.app-icon-fluent :deep(.app-icon-fluent-content),
+.app-icon-fluent-color :deep(.app-icon-fluent-content) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  line-height: 0;
+}
+
+.app-icon-fluent :deep(svg),
+.app-icon-fluent-color :deep(svg) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+.app-icon-fluent-color {
+  display: inline-grid;
+  place-items: center;
+}
+
+.app-icon-solar {
+  fill: currentColor;
+  color: currentColor;
 }
 </style>

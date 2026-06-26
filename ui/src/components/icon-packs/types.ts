@@ -3,6 +3,7 @@ import type {Component} from "vue";
 export interface AppIconComponentDefinition {
   kind: "component";
   component: Component;
+  props?: Record<string, unknown>;
   className?: string;
   transform?: string;
 }

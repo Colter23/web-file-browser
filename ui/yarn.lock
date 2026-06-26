@@ -378,6 +378,29 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@fluentui/svg-icons@npm:^1.1.330":
+  version: 1.1.330
+  resolution: "@fluentui/svg-icons@npm:1.1.330"
+  checksum: 10c0/6672793aa91d90cb59e1d68cbd065a49bb2d2c448c30f1d625217fef6206efc59e84a34a104807c0510a4c3f7dc0b690c42db4bd82331c645de6e841171a63fc
+  languageName: node
+  linkType: hard
+
+"@iconify-icons/solar@npm:^1.2.3":
+  version: 1.2.3
+  resolution: "@iconify-icons/solar@npm:1.2.3"
+  dependencies:
+    "@iconify/types": "npm:*"
+  checksum: 10c0/07633f091d7b0135117f9c3ac944c8645095b3f54d4ac305f24089390e14b800f12e5f08ac5f491aff7b3c600d4a9e25c9681eb5070c59abe9855c748d1834a7
+  languageName: node
+  linkType: hard
+
+"@iconify/types@npm:*":
+  version: 2.0.0
+  resolution: "@iconify/types@npm:2.0.0"
+  checksum: 10c0/65a3be43500c7ccacf360e136d00e1717f050b7b91da644e94370256ac66f582d59212bdb30d00788aab4fc078262e91c95b805d1808d654b72f6d2072a7e4b2
+  languageName: node
+  linkType: hard
+
 "@isaacs/cliui@npm:^8.0.2":
   version: 8.0.2
   resolution: "@isaacs/cliui@npm:8.0.2"
@@ -3082,6 +3105,8 @@ __metadata:
     "@codemirror/search": "npm:^6.7.1"
     "@codemirror/state": "npm:^6.7.0"
     "@codemirror/view": "npm:^6.43.3"
+    "@fluentui/svg-icons": "npm:^1.1.330"
+    "@iconify-icons/solar": "npm:^1.2.3"
     "@lezer/highlight": "npm:^1.2.3"
     "@tailwindcss/postcss": "npm:^4.3.0"
     "@vitejs/plugin-vue": "npm:^6.0.7"

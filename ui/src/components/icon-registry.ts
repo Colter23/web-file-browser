@@ -5,14 +5,22 @@ const fallbackIconStyle: AppIconStyle = "lucide";
 
 const iconPackLoaders: Record<AppIconStyle, () => Promise<AppIconPack>> = {
   lucide: async () => (await import("./icon-packs/lucide-pack.ts")).lucideIconPack,
-  classic: async () => (await import("./icon-packs/classic-pack.ts")).classicIconPack
+  fluent: async () => (await import("./icon-packs/fluent-pack.ts")).fluentIconPack,
+  solar: async () => (await import("./icon-packs/solar-pack.ts")).solarIconPack,
+  "fluent-color": async () => (await import("./icon-packs/fluent-color-pack.ts")).fluentColorIconPack
 };
 
 const iconPackPromises: Partial<Record<AppIconStyle, Promise<AppIconPack>>> = {};
+let classicPackPromise: Promise<AppIconPack> | undefined;
 
 const loadIconPack = (style: AppIconStyle) => {
   iconPackPromises[style] ??= iconPackLoaders[style]();
   return iconPackPromises[style];
+};
+
+const loadClassicCompatibilityPack = () => {
+  classicPackPromise ??= import("./icon-packs/classic-pack.ts").then(module => module.classicIconPack);
+  return classicPackPromise;
 };
 
 export const resolveAppIcon = async (style: AppIconStyle, icon: string): Promise<AppIconDefinition | undefined> => {
@@ -26,10 +34,6 @@ export const resolveAppIcon = async (style: AppIconStyle, icon: string): Promise
     if (fallbackIcon) return fallbackIcon;
   }
 
-  if (style !== "classic") {
-    const classicPack = await loadIconPack("classic");
-    return classicPack.resolve(icon);
-  }
-
-  return undefined;
+  const classicPack = await loadClassicCompatibilityPack();
+  return classicPack.resolve(icon);
 };

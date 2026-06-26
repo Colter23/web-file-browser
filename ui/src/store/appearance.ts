@@ -13,7 +13,9 @@ export type ResolvedColorMode = "light" | "dark";
 
 export const iconStyleOptions: {value: AppIconStyle; label: string}[] = [
   {value: "lucide", label: "线性"},
-  {value: "classic", label: "填充"}
+  {value: "fluent", label: "填充"},
+  {value: "solar", label: "双色"},
+  {value: "fluent-color", label: "彩色"}
 ];
 
 export const fileIconPaletteOptions: {value: FileIconPalette; label: string}[] = [
@@ -42,6 +44,8 @@ const colorModes = colorModeOptions.map(option => option.value);
 
 const readIconStyle = (): AppIconStyle => {
   const value = readStorageItem(storageKeys.iconStyle);
+  if (value === "classic" || value === "material") return "fluent";
+  if (value === "phosphor") return "solar";
   return iconStyles.includes(value as AppIconStyle) ? value as AppIconStyle : "lucide";
 }
 
