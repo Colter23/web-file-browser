@@ -31,10 +31,15 @@ export const fileIconPaletteOptions: {value: FileIconPalette; label: string}[] =
 
 export const accentColorOptions: {value: AppAccentColor; label: string; color: string; contrast: string; soft: string; border: string}[] = [
   {value: "blue", label: "蓝色", color: "#2563eb", contrast: "#ffffff", soft: "#eff6ff", border: "#bfdbfe"},
+  {value: "sky", label: "湖蓝", color: "#0369a1", contrast: "#ffffff", soft: "#f0f9ff", border: "#bae6fd"},
   {value: "teal", label: "青绿", color: "#0f766e", contrast: "#ffffff", soft: "#f0fdfa", border: "#99f6e4"},
+  {value: "emerald", label: "森绿", color: "#15803d", contrast: "#ffffff", soft: "#f0fdf4", border: "#bbf7d0"},
+  {value: "slate", label: "灰蓝", color: "#475569", contrast: "#ffffff", soft: "#f8fafc", border: "#cbd5e1"},
   {value: "violet", label: "紫色", color: "#7c3aed", contrast: "#ffffff", soft: "#f5f3ff", border: "#ddd6fe"},
-  {value: "rose", label: "玫红", color: "#e11d48", contrast: "#ffffff", soft: "#fff1f2", border: "#fecdd3"},
-  {value: "slate", label: "灰蓝", color: "#475569", contrast: "#ffffff", soft: "#f8fafc", border: "#cbd5e1"}
+  {value: "pink", label: "粉色", color: "#db2777", contrast: "#ffffff", soft: "#fdf2f8", border: "#fbcfe8"},
+  {value: "rose", label: "胭红", color: "#be123c", contrast: "#ffffff", soft: "#fff1f2", border: "#fecdd3"},
+  {value: "orange", label: "赤橙", color: "#c2410c", contrast: "#ffffff", soft: "#fff7ed", border: "#fed7aa"},
+  {value: "amber", label: "琥珀", color: "#a16207", contrast: "#ffffff", soft: "#fffbeb", border: "#fde68a"}
 ];
 
 export const colorModeOptions: {value: AppColorMode; label: string}[] = [
