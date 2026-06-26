@@ -406,7 +406,7 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
               @keydown="handleFavoriteKeyDown($event, favorite)">
             <span class="favorite-icon" aria-hidden="true">
               <icon v-if="favorite.missing" icon="action.warning" />
-              <file-type-icon v-else kind="folder" />
+              <file-type-icon v-else kind="folder" :name="favorite.name" />
             </span>
             <span class="favorite-copy">
               <span class="favorite-name">{{ favorite.name }}</span>
@@ -416,7 +416,7 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
           <div v-else :ref="setRenameEditRef" class="favorite-edit">
             <span class="favorite-icon" aria-hidden="true">
               <icon v-if="favorite.missing" icon="action.warning" />
-              <file-type-icon v-else kind="folder" />
+              <file-type-icon v-else kind="folder" :name="favorite.name" />
             </span>
             <input
                 :ref="setRenameInputRef"

@@ -59,7 +59,7 @@ defineExpose({
       @close="emit('close')">
     <div class="delete-confirm-list">
       <div v-for="item in visibleItems" :key="item.path" :title="item.path">
-        <file-type-icon :kind="item.type === 'folder' ? 'folder' : 'file'" />
+        <file-type-icon :kind="item.type === 'folder' ? 'folder' : 'file'" :name="item.name" :extension="item.extension" />
         <span>{{ item.name }}</span>
       </div>
       <div v-if="extraCount" class="delete-confirm-more">

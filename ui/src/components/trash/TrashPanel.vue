@@ -222,7 +222,7 @@ defineExpose({
           <span class="trash-row-check" aria-hidden="true">
             <icon v-if="selectedIdSet.has(record.id)" icon="action.check" />
           </span>
-          <file-type-icon :kind="recordKind(record)" />
+          <file-type-icon :kind="recordKind(record)" :name="recordName(record)" />
           <span class="trash-row-main">
             <strong>{{ recordName(record) }}</strong>
             <small>{{ recordLocation(record) }}</small>

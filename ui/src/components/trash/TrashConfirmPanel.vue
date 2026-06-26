@@ -77,7 +77,7 @@ defineExpose({
     </div>
     <div v-else class="trash-confirm-list">
       <div v-for="record in visibleRecords" :key="record.id" :title="record.originalVirtualPath">
-        <file-type-icon :kind="recordKind(record)" />
+        <file-type-icon :kind="recordKind(record)" :name="recordName(record)" />
         <span class="trash-confirm-name">{{ recordName(record) }}</span>
         <small>{{ recordLocation(record) }}</small>
         <small>{{ recordSize(record) }}</small>

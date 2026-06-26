@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import {computed} from "vue";
+import type {AppIconStyle} from "../class.ts";
 import {useAppearanceStore} from "../store/appearance.ts";
 import type {FileEntryIconKind} from "../utils/file-entry.ts";
 import AppIcon from "./AppIcon.vue";
 
 const props = withDefaults(defineProps<{
   kind: FileEntryIconKind;
+  name?: string;
+  extension?: string;
   open?: boolean;
   size?: string | "large" | "small" | "normal";
 }>(), {
@@ -15,7 +18,38 @@ const props = withDefaults(defineProps<{
 
 const appearanceStore = useAppearanceStore();
 const normalizedKind = computed<FileEntryIconKind>(() => props.open && props.kind === "folder" ? "folder-open" : props.kind);
-const iconName = computed(() => `file.${normalizedKind.value}`);
+const fileIconStyle = computed<AppIconStyle | undefined>(() => {
+  return appearanceStore.fileIconStyle === "inherit" ? undefined : appearanceStore.fileIconStyle;
+});
+const normalizedFolderKey = computed(() => {
+  const name = props.name?.trim().toLowerCase() ?? "";
+  return name
+      .replace(/^\.+/, "")
+      .replace(/[.\s_]+/g, "-");
+});
+const normalizedExtension = computed(() => {
+  const extension = props.extension?.trim().replace(/^\./, "").toLowerCase();
+  if (extension) return extension;
+  const name = props.name?.trim().toLowerCase() ?? "";
+  const index = name.lastIndexOf(".");
+  return index > 0 && index < name.length - 1 ? name.slice(index + 1) : "";
+});
+const normalizedNameKey = computed(() => {
+  const name = props.name?.trim().toLowerCase() ?? "";
+  if (!name) return "";
+  if (name === "dockerfile") return "dockerfile";
+  if (name === "nginx.conf") return "nginx";
+  if (name.startsWith(".env")) return "env";
+  return "";
+});
+const iconName = computed(() => {
+  const baseName = `file.${normalizedKind.value}`;
+  if (!fileIconStyle.value) return baseName;
+  const specificKey = normalizedKind.value === "folder" || normalizedKind.value === "folder-open"
+      ? normalizedFolderKey.value
+      : normalizedNameKey.value || normalizedExtension.value;
+  return specificKey ? `${baseName}.${specificKey}` : baseName;
+});
 const paletteClass = computed(() => `palette-${appearanceStore.fileIconPalette}`);
 </script>
 
@@ -24,7 +58,8 @@ const paletteClass = computed(() => `palette-${appearanceStore.fileIconPalette}`
       class="file-type-icon"
       :class="[`kind-${normalizedKind}`, paletteClass]"
       :icon="iconName"
-      :size="size" />
+      :size="size"
+      :icon-style="fileIconStyle" />
 </template>
 
 <style scoped lang="postcss">

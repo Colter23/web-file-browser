@@ -109,7 +109,7 @@ const handleDragStart = (event: DragEvent) => {
       </button>
       <span class="node-icon" aria-hidden="true">
         <file-type-icon v-if="normalizedPath === '/'" kind="home" size="1.05rem" />
-        <file-type-icon v-else kind="folder" :open="expanded" size="1.05rem" />
+        <file-type-icon v-else kind="folder" :name="data.name" :open="expanded" size="1.05rem" />
       </span>
       <span class="node-name">{{ data.name }}</span>
       <span v-if="favorite && normalizedPath !== '/'" class="node-favorite" aria-label="已收藏" title="已收藏">

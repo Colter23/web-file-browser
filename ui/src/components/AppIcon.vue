@@ -132,4 +132,12 @@ const rootStyle = computed(() => [attrs.style, iconStyle.value]);
   fill: currentColor;
   color: currentColor;
 }
+
+.app-icon-vscode-icons {
+  display: inline-block;
+}
+
+.app-icon-catppuccin {
+  display: inline-block;
+}
 </style>

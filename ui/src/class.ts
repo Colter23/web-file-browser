@@ -32,7 +32,8 @@ export interface FolderQueryParams {
 
 export type ExplorerViewMode = "details" | "list" | "icons" | "tiles";
 export type ExplorerIconSize = "small" | "medium" | "large";
-export type AppIconStyle = "lucide" | "fluent" | "solar" | "fluent-color";
+export type AppIconStyle = "lucide" | "fluent" | "solar" | "fluent-color" | "vscode-icons" | "catppuccin";
+export type FileIconStyle = "inherit" | "vscode-icons" | "catppuccin";
 export type FileIconPalette = "category" | "accent";
 export type AppAccentColor = "blue" | "teal" | "violet" | "rose" | "slate";
 export type AppColorMode = "system" | "light" | "dark";

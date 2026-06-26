@@ -7,7 +7,9 @@ const iconPackLoaders: Record<AppIconStyle, () => Promise<AppIconPack>> = {
   lucide: async () => (await import("./icon-packs/lucide-pack.ts")).lucideIconPack,
   fluent: async () => (await import("./icon-packs/fluent-pack.ts")).fluentIconPack,
   solar: async () => (await import("./icon-packs/solar-pack.ts")).solarIconPack,
-  "fluent-color": async () => (await import("./icon-packs/fluent-color-pack.ts")).fluentColorIconPack
+  "fluent-color": async () => (await import("./icon-packs/fluent-color-pack.ts")).fluentColorIconPack,
+  "vscode-icons": async () => (await import("./icon-packs/vscode-icons-pack.ts")).vscodeIconsPack,
+  catppuccin: async () => (await import("./icon-packs/catppuccin-icons-pack.ts")).catppuccinIconsPack
 };
 
 const iconPackPromises: Partial<Record<AppIconStyle, Promise<AppIconPack>>> = {};

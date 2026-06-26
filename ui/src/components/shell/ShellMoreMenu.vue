@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref} from "vue";
-import type {AppAccentColor, AppColorMode, AppIconStyle, FileIconPalette} from "../../class.ts";
+import type {AppAccentColor, AppColorMode, AppIconStyle, FileIconPalette, FileIconStyle} from "../../class.ts";
 import {
   accentColorOptions,
   colorModeOptions,
+  fileIconStyleOptions,
   fileIconPaletteOptions,
   iconStyleOptions,
   useAppearanceStore
@@ -48,13 +49,16 @@ const activeColorModeLabel = computed(() => {
 const activeIconStyleLabel = computed(() => {
   return iconStyleOptions.find(option => option.value === appearanceStore.iconStyle)?.label ?? "线性";
 });
+const activeFileIconStyleLabel = computed(() => {
+  return fileIconStyleOptions.find(option => option.value === appearanceStore.fileIconStyle)?.label ?? "跟随样式";
+});
 const activeAccentColorLabel = computed(() => {
   return accentColorOptions.find(option => option.value === appearanceStore.accentColor)?.label ?? "蓝色";
 });
 const menuTitle = computed(() => `更多选项：${activeColorModeLabel.value}，${activeIconStyleLabel.value}`);
 const menuButtonLabel = computed(() => open.value ? "关闭主菜单" : menuTitle.value);
 const appearanceSummary = computed(() => {
-  return `${activeColorModeLabel.value} · ${activeAccentColorLabel.value} · ${activeIconStyleLabel.value}`;
+  return `${activeColorModeLabel.value} · ${activeAccentColorLabel.value} · ${activeIconStyleLabel.value} · ${activeFileIconStyleLabel.value}`;
 });
 
 const close = () => {
@@ -125,6 +129,10 @@ const selectIconStyle = (style: AppIconStyle) => {
   appearanceStore.setIconStyle(style);
 }
 
+const selectFileIconStyle = (style: FileIconStyle) => {
+  appearanceStore.setFileIconStyle(style);
+}
+
 const selectFileIconPalette = (palette: FileIconPalette) => {
   appearanceStore.setFileIconPalette(palette);
 }
@@ -138,6 +146,10 @@ const handleButtonKeyDown = (event: KeyboardEvent) => {
   event.preventDefault();
   if (!open.value) openMenu();
   else void focusFirstItem();
+}
+
+const fileIconPreviewStyle = (style: FileIconStyle): AppIconStyle => {
+  return style === "inherit" ? appearanceStore.iconStyle : style;
 }
 
 useOutsidePointerDown({
@@ -281,6 +293,29 @@ onBeforeUnmount(() => {
                   @click="selectIconStyle(option.value)">
                 <span class="style-preview-frame">
                   <icon class="style-preview-icon" icon="file.folder" size="1.15rem" :icon-style="option.value" />
+                </span>
+                <span>{{ option.label }}</span>
+              </button>
+            </div>
+          </section>
+
+          <section class="preference-section" aria-label="文件图标">
+            <div class="preference-heading">
+              <span>文件图标</span>
+            </div>
+            <div class="segmented-group" role="radiogroup" aria-label="文件图标">
+              <button
+                  v-for="option in fileIconStyleOptions"
+                  :key="option.value"
+                  class="segmented-option file-icon-style-option"
+                  :class="{active: appearanceStore.fileIconStyle === option.value}"
+                  role="radio"
+                  type="button"
+                  tabindex="-1"
+                  :aria-checked="appearanceStore.fileIconStyle === option.value"
+                  @click="selectFileIconStyle(option.value)">
+                <span class="style-preview-frame">
+                  <icon class="style-preview-icon" icon="file.folder" size="1.15rem" :icon-style="fileIconPreviewStyle(option.value)" />
                 </span>
                 <span>{{ option.label }}</span>
               </button>

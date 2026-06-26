@@ -1,9 +1,10 @@
 import {defineStore} from "pinia";
-import type {AppAccentColor, AppColorMode, AppIconStyle, FileIconPalette} from "../class.ts";
+import type {AppAccentColor, AppColorMode, AppIconStyle, FileIconPalette, FileIconStyle} from "../class.ts";
 import {readStorageItem, writeStorageItem} from "../utils/safe-storage.ts";
 
 const storageKeys = {
   iconStyle: "appearance.iconStyle",
+  fileIconStyle: "appearance.fileIconStyle",
   fileIconPalette: "appearance.fileIconPalette",
   accentColor: "appearance.accentColor",
   colorMode: "appearance.colorMode"
@@ -16,6 +17,12 @@ export const iconStyleOptions: {value: AppIconStyle; label: string}[] = [
   {value: "fluent", label: "填充"},
   {value: "solar", label: "双色"},
   {value: "fluent-color", label: "彩色"}
+];
+
+export const fileIconStyleOptions: {value: FileIconStyle; label: string}[] = [
+  {value: "inherit", label: "跟随样式"},
+  {value: "vscode-icons", label: "VSCode"},
+  {value: "catppuccin", label: "Catppuccin"}
 ];
 
 export const fileIconPaletteOptions: {value: FileIconPalette; label: string}[] = [
@@ -38,6 +45,7 @@ export const colorModeOptions: {value: AppColorMode; label: string}[] = [
 ];
 
 const iconStyles = iconStyleOptions.map(option => option.value);
+const fileIconStyles = fileIconStyleOptions.map(option => option.value);
 const fileIconPalettes = fileIconPaletteOptions.map(option => option.value);
 const accentColors = accentColorOptions.map(option => option.value);
 const colorModes = colorModeOptions.map(option => option.value);
@@ -46,7 +54,15 @@ const readIconStyle = (): AppIconStyle => {
   const value = readStorageItem(storageKeys.iconStyle);
   if (value === "classic" || value === "material") return "fluent";
   if (value === "phosphor") return "solar";
+  if (value === "vscode-icons" || value === "catppuccin") return "lucide";
   return iconStyles.includes(value as AppIconStyle) ? value as AppIconStyle : "lucide";
+}
+
+const readFileIconStyle = (): FileIconStyle => {
+  const value = readStorageItem(storageKeys.fileIconStyle);
+  if (fileIconStyles.includes(value as FileIconStyle)) return value as FileIconStyle;
+  const legacyValue = readStorageItem(storageKeys.iconStyle);
+  return legacyValue === "vscode-icons" || legacyValue === "catppuccin" ? legacyValue : "inherit";
 }
 
 const readFileIconPalette = (): FileIconPalette => {
@@ -72,6 +88,7 @@ export const resolveSystemColorMode = (): ResolvedColorMode => {
 export const useAppearanceStore = defineStore("appearance", {
   state: () => ({
     iconStyle: readIconStyle(),
+    fileIconStyle: readFileIconStyle(),
     fileIconPalette: readFileIconPalette(),
     accentColor: readAccentColor(),
     colorMode: readColorMode(),
@@ -101,6 +118,12 @@ export const useAppearanceStore = defineStore("appearance", {
       if (!iconStyles.includes(style)) return;
       this.iconStyle = style;
       writeStorageItem(storageKeys.iconStyle, style);
+    },
+
+    setFileIconStyle(style: FileIconStyle) {
+      if (!fileIconStyles.includes(style)) return;
+      this.fileIconStyle = style;
+      writeStorageItem(storageKeys.fileIconStyle, style);
     },
 
     setFileIconPalette(palette: FileIconPalette) {

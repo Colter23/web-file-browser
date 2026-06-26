@@ -179,7 +179,7 @@ const visualIconSize = computed(() => {
             loading="lazy"
             decoding="async"
             @error="emit('thumbnail-error')">
-        <file-type-icon v-else :kind="iconKind" :size="visualIconSize" />
+        <file-type-icon v-else :kind="iconKind" :name="entry.name" :extension="entry.extension" :size="visualIconSize" />
       </div>
       <div class="entry-main">
         <textarea

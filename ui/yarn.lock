@@ -394,6 +394,24 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@iconify-icons/vscode-icons@npm:^1.2.29":
+  version: 1.2.29
+  resolution: "@iconify-icons/vscode-icons@npm:1.2.29"
+  dependencies:
+    "@iconify/types": "npm:*"
+  checksum: 10c0/a0b531705d461da0e20c00b070ee7c56c18ad07a55c50d3e0b4c3e56617b32c2b2f9cad3fd6958f5b44d31028cfca660d5d32aeb504a2ae49b8f4d51e64a9c77
+  languageName: node
+  linkType: hard
+
+"@iconify-json/catppuccin@npm:^1.2.17":
+  version: 1.2.17
+  resolution: "@iconify-json/catppuccin@npm:1.2.17"
+  dependencies:
+    "@iconify/types": "npm:*"
+  checksum: 10c0/58ed599421f16ea646dda8e2be2e93bfc8e764a22649a94a97b671f898da376c703369cfee41df94fc06adaf6ccc79ee714fcf2e31b031499e7bf3d99f29dc7b
+  languageName: node
+  linkType: hard
+
 "@iconify/types@npm:*":
   version: 2.0.0
   resolution: "@iconify/types@npm:2.0.0"
@@ -3107,6 +3125,8 @@ __metadata:
     "@codemirror/view": "npm:^6.43.3"
     "@fluentui/svg-icons": "npm:^1.1.330"
     "@iconify-icons/solar": "npm:^1.2.3"
+    "@iconify-icons/vscode-icons": "npm:^1.2.29"
+    "@iconify-json/catppuccin": "npm:^1.2.17"
     "@lezer/highlight": "npm:^1.2.3"
     "@tailwindcss/postcss": "npm:^4.3.0"
     "@vitejs/plugin-vue": "npm:^6.0.7"
