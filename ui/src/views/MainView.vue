@@ -137,7 +137,8 @@ const {
   show: showShellNotice,
   showError: showErrorNotice,
   close: closeShellNotice,
-  stopTimer: stopShellNoticeTimer
+  stopTimer: stopShellNoticeTimer,
+  resumeTimer: resumeShellNoticeTimer
 } = useShellNotice();
 let refreshCurrentHandler = async (_keepSelection = false) => {};
 const refreshCurrent = (keepSelection = false) => refreshCurrentHandler(keepSelection);
@@ -1018,12 +1019,6 @@ const signOut = async () => {
                 @open-video-viewer="openVideoViewer"
                 @open-pdf-viewer="openPdfViewer">
             </explorer>
-            <shell-notice
-                v-if="shellNotice.visible"
-                :kind="shellNotice.kind"
-                :title="shellNotice.title"
-                :message="shellNotice.message"
-                @close="closeShellNotice" />
             <upload-drop-overlay
                 v-if="uploadDropActive || uploadDropUploading"
                 :title="uploadDropTitle"
@@ -1123,6 +1118,21 @@ const signOut = async () => {
             </preview-pane>
           </aside>
         </div>
+
+        <Transition name="shell-notice-pop" mode="out-in">
+          <div
+              v-if="shellNotice.visible"
+              :key="shellNotice.id"
+              class="shell-notice-layer">
+            <shell-notice
+                :kind="shellNotice.kind"
+                :title="shellNotice.title"
+                :message="shellNotice.message"
+                @close="closeShellNotice"
+                @pause="stopShellNoticeTimer"
+                @resume="resumeShellNoticeTimer" />
+          </div>
+        </Transition>
 
         <image-viewer
             :visible="imageViewerVisible"
@@ -1277,6 +1287,34 @@ const signOut = async () => {
 
 .preview-resizer:focus-visible {
   @apply outline-none;
+}
+
+.shell-notice-layer {
+  @apply pointer-events-none absolute inset-x-0 bottom-12 z-[70] flex justify-center px-4;
+}
+
+.shell-notice-layer :deep(.shell-notice) {
+  @apply pointer-events-auto;
+}
+
+.shell-notice-pop-enter-active,
+.shell-notice-pop-leave-active {
+  transition:
+      opacity 0.14s ease,
+      transform 0.16s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.shell-notice-pop-enter-from,
+.shell-notice-pop-leave-to {
+  opacity: 0;
+  transform: translateY(0.5rem) scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-notice-pop-enter-active,
+  .shell-notice-pop-leave-active {
+    transition: none;
+  }
 }
 
 </style>
