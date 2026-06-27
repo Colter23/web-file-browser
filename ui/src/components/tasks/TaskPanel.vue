@@ -1,8 +1,20 @@
 <script setup lang="ts">
 import {computed, nextTick, ref, watch} from "vue";
-import type {TaskKind, TaskState, TaskStatus} from "../../class.ts";
+import type {TaskStatus} from "../../class.ts";
 import type {TaskCancelConfirmState} from "../../composables/useTaskPanel.ts";
 import {useDraggablePanel} from "../../composables/useDraggablePanel.ts";
+import {
+  canCancelTask,
+  formatTaskBytes,
+  shortTaskId,
+  taskBytesText,
+  taskCurrentPath,
+  taskItemsText,
+  taskKindText,
+  taskProgress,
+  taskStateClass,
+  taskStateText
+} from "../../utils/task-status.ts";
 import Icon from "../Icon.vue";
 
 const props = defineProps<{
@@ -32,58 +44,6 @@ const {
   resetPosition,
   startDrag
 } = useDraggablePanel({panelRef});
-
-const taskKindText = (kind: TaskKind) => ({
-  copy: "复制",
-  move: "移动",
-  delete: "删除",
-  archive: "压缩",
-  extract: "解压"
-}[kind] ?? kind);
-
-const taskStateText = (state: TaskState) => ({
-  queued: "排队中",
-  running: "运行中",
-  completed: "已完成",
-  failed: "失败",
-  cancelled: "已取消"
-}[state] ?? state);
-
-const taskStateClass = (state: TaskState) => ({
-  queued: "queued",
-  running: "running",
-  completed: "completed",
-  failed: "failed",
-  cancelled: "cancelled"
-}[state] ?? "queued");
-
-const canCancelTask = (task: TaskStatus) => task.state === "queued" || task.state === "running";
-const shortTaskId = (id: string) => id.slice(0, 8);
-const taskProgress = (task: TaskStatus) => `${Math.round((task.progress || 0) * 100)}%`;
-const taskCurrentPath = (task: TaskStatus) => task.currentPath?.trim();
-
-const formatBytes = (bytes?: number) => {
-  if (!bytes) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = bytes;
-  let index = 0;
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024;
-    index += 1;
-  }
-  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
-}
-
-const taskBytesText = (task: TaskStatus) => {
-  const processed = formatBytes(task.processedBytes);
-  const total = task.totalBytes > 0 ? formatBytes(task.totalBytes) : "未知总量";
-  return `${processed} / ${total}`;
-}
-
-const taskItemsText = (task: TaskStatus) => {
-  const total = task.totalItems > 0 ? task.totalItems : "?";
-  return `${task.processedItems} / ${total} 项`;
-}
 
 const taskStats = computed(() => {
   const stats = {
@@ -185,7 +145,7 @@ defineExpose({
         </div>
         <div class="task-meta">
           <span>{{ taskBytesText(task) }}</span>
-          <span>{{ formatBytes(task.speedBytesPerSec) }}/s</span>
+          <span>{{ formatTaskBytes(task.speedBytesPerSec) }}/s</span>
           <span>{{ taskItemsText(task) }}</span>
           <span v-if="task.errors.length" class="task-errors">错误 {{ task.errors.length }}</span>
         </div>

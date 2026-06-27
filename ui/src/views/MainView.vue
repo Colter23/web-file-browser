@@ -33,6 +33,7 @@ import VideoViewer from "../components/viewer/VideoViewer.vue";
 import PdfViewer from "../components/viewer/PdfViewer.vue";
 import PreviewPane from "../components/viewer/PreviewPane.vue";
 import TaskPanel from "../components/tasks/TaskPanel.vue";
+import TaskStatusPill from "../components/tasks/TaskStatusPill.vue";
 import TrashPanel from "../components/trash/TrashPanel.vue";
 import TrashConfirmPanel from "../components/trash/TrashConfirmPanel.vue";
 import TabStrip from "../components/tabs/TabStrip.vue";
@@ -146,6 +147,7 @@ let refreshFolderInExplorerAndTree = async (_path: string) => {};
 
 const {
   visible: taskPanelVisible,
+  summaryVisible: taskSummaryVisible,
   loading: tasksLoading,
   cleanupLoading: tasksCleanupLoading,
   tasks,
@@ -154,9 +156,14 @@ const {
   cancelConfirm: taskCancelConfirm,
   buttonText: taskButtonText,
   cleanupTaskCount,
+  activeTaskCount,
+  summaryTask,
+  summaryFailed,
   load: loadTasks,
   toggle: toggleTaskPanel,
+  open: openTaskPanel,
   close: closeTaskPanel,
+  dismissSummary: dismissTaskSummary,
   stopPolling: stopTaskPolling,
   resetCancelConfirm: resetTaskCancelConfirm,
   requestCancel: cancelTaskById,
@@ -168,6 +175,7 @@ const {
   listTasks,
   cancelTask,
   cleanupTasks,
+  showNotice: showShellNotice,
   showError: showErrorNotice,
   onTaskSettled: async () => {
     await refreshCurrent(true);
@@ -811,6 +819,11 @@ const toggleTasksFromMenu = async () => {
   await toggleTaskPanel();
 }
 
+const openTasksFromSummary = async () => {
+  if (trashPanelVisible.value) closeTrashPanel();
+  await openTaskPanel();
+}
+
 const toggleTrashFromMenu = async () => {
   if (taskPanelVisible.value) closeTaskPanel();
   await toggleTrashPanelBase();
@@ -1039,6 +1052,16 @@ const signOut = async () => {
                 @close-cancel="closeTaskCancelConfirm"
                 @confirm-cancel="submitTaskCancelConfirm">
             </task-panel>
+            <div class="task-status-layer">
+              <task-status-pill
+                  :visible="taskSummaryVisible"
+                  :task="summaryTask"
+                  :active-count="activeTaskCount"
+                  :failed="summaryFailed"
+                  :panel-open="taskPanelVisible"
+                  @open="openTasksFromSummary"
+                  @dismiss="dismissTaskSummary" />
+            </div>
             <trash-panel
                 v-if="trashPanelVisible"
                 ref="trashPanelRef"
@@ -1295,6 +1318,10 @@ const signOut = async () => {
 
 .shell-notice-layer :deep(.shell-notice) {
   @apply pointer-events-auto;
+}
+
+.task-status-layer {
+  @apply pointer-events-none absolute inset-x-0 bottom-3 z-[58] flex justify-center px-4;
 }
 
 .shell-notice-pop-enter-active,

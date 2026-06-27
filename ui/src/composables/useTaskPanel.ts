@@ -1,5 +1,6 @@
 import {computed, ref} from "vue";
 import type {TaskStatus} from "../class.ts";
+import {canCancelTask, canCleanupTask, shortTaskId} from "../utils/task-status.ts";
 
 export type TaskCancelConfirmState = {
   visible: boolean;
@@ -12,6 +13,7 @@ type TaskPanelOptions = {
   listTasks: () => Promise<TaskStatus[]>;
   cancelTask: (id: string) => Promise<unknown>;
   cleanupTasks: () => Promise<{removed: number}>;
+  showNotice: (message: string, kind?: "info" | "success" | "warning" | "error", title?: string, timeoutMs?: number) => void;
   showError: (error: unknown, fallback: string, title?: string) => void;
   onTaskSettled?: (tasks: TaskStatus[]) => void | Promise<void>;
 }
@@ -23,26 +25,36 @@ const emptyCancelConfirm = (): TaskCancelConfirmState => ({
   error: ""
 });
 
-const canCancelTask = (task: TaskStatus) => task.state === "queued" || task.state === "running";
-const canCleanupTask = (task: TaskStatus) => !canCancelTask(task);
-
-const shortTaskId = (id: string) => id.slice(0, 8);
-
-export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showError, onTaskSettled}: TaskPanelOptions) => {
+export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showNotice, showError, onTaskSettled}: TaskPanelOptions) => {
   const visible = ref(false);
+  const summaryVisible = ref(false);
   const loading = ref(false);
   const cleanupLoading = ref(false);
   const tasks = ref<TaskStatus[]>([]);
   const message = ref("");
   const lastUpdatedAt = ref("");
   const cancelConfirm = ref<TaskCancelConfirmState>(emptyCancelConfirm());
+  const summaryDismissed = ref(false);
+  const recentSummaryTaskId = ref("");
   const trackedActiveTaskIds = new Set<string>();
   const pendingTaskIds = new Set<string>();
   let pollTimer: number | undefined;
+  let summaryHideTimer: number | undefined;
 
   const activeTaskCount = computed(() => tasks.value.filter(task => task.state === "running" || task.state === "queued").length);
   const cleanupTaskCount = computed(() => tasks.value.filter(canCleanupTask).length);
   const hasActiveTasks = computed(() => activeTaskCount.value > 0);
+  const summaryTask = computed(() => {
+    const activeRecentTask = recentSummaryTaskId.value
+        ? tasks.value.find(task => task.id === recentSummaryTaskId.value && canCancelTask(task))
+        : null;
+    return activeRecentTask
+        ?? tasks.value.find(task => task.state === "running")
+        ?? tasks.value.find(task => task.state === "queued")
+        ?? (recentSummaryTaskId.value ? tasks.value.find(task => task.id === recentSummaryTaskId.value) : null)
+        ?? null;
+  });
+  const summaryFailed = computed(() => summaryTask.value?.state === "failed" || Boolean(summaryTask.value?.errors.length));
   const buttonText = computed(() => hasActiveTasks.value ? `任务 ${activeTaskCount.value}` : "任务");
 
   const updateRefreshTime = () => {
@@ -57,6 +69,28 @@ export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showError, on
     if (!pollTimer) return;
     window.clearTimeout(pollTimer);
     pollTimer = undefined;
+    stopSummaryHideTimer();
+  }
+
+  const stopSummaryHideTimer = () => {
+    if (!summaryHideTimer) return;
+    window.clearTimeout(summaryHideTimer);
+    summaryHideTimer = undefined;
+  }
+
+  const scheduleSummaryHide = () => {
+    stopSummaryHideTimer();
+    if (hasActiveTasks.value || pendingTaskIds.size) {
+      summaryVisible.value = !summaryDismissed.value;
+      return;
+    }
+    summaryDismissed.value = false;
+    if (!summaryVisible.value) return;
+    summaryHideTimer = window.setTimeout(() => {
+      summaryVisible.value = false;
+      recentSummaryTaskId.value = "";
+      summaryHideTimer = undefined;
+    }, 3600);
   }
 
   const syncTaskTransitions = (nextTasks: TaskStatus[]) => {
@@ -69,6 +103,12 @@ export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showError, on
     const removedActiveTaskSettled = Array.from(trackedActiveTaskIds).some(id => !pendingTaskIds.has(id) && !nextTaskIds.has(id));
     trackedActiveTaskIds.clear();
     nextTasks.filter(canCancelTask).forEach(task => trackedActiveTaskIds.add(task.id));
+    if (settledTasks.length) {
+      const failedCount = settledTasks.filter(task => task.state === "failed").length;
+      const summarySettledTask = settledTasks.find(task => task.state === "failed") ?? settledTasks[0];
+      if (summarySettledTask) recentSummaryTaskId.value = summarySettledTask.id;
+      if (failedCount) showNotice(`${failedCount} 个后台任务失败，请打开任务查看详情`, "error", "任务失败", 5000);
+    }
     if (settledTasks.length || removedActiveTaskSettled) void onTaskSettled?.(settledTasks);
   }
 
@@ -80,6 +120,7 @@ export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showError, on
       tasks.value = nextTasks;
       updateRefreshTime();
       schedulePolling();
+      scheduleSummaryHide();
     } catch (error) {
       stopPolling();
       showError(error, "加载任务失败", "任务加载失败");
@@ -98,6 +139,7 @@ export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showError, on
 
   const toggle = async () => {
     visible.value = !visible.value;
+    if (visible.value) summaryVisible.value = false;
     if (visible.value) {
       await load();
     } else {
@@ -109,6 +151,21 @@ export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showError, on
     visible.value = false;
     if (hasActiveTasks.value || pendingTaskIds.size) schedulePolling();
     else stopPolling();
+    scheduleSummaryHide();
+  }
+
+  const open = async () => {
+    visible.value = true;
+    summaryVisible.value = false;
+    stopSummaryHideTimer();
+    await load();
+  }
+
+  const dismissSummary = () => {
+    summaryDismissed.value = true;
+    summaryVisible.value = false;
+    recentSummaryTaskId.value = "";
+    stopSummaryHideTimer();
   }
 
   const resetCancelConfirm = () => {
@@ -165,12 +222,15 @@ export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showError, on
   const markStarted = async (id: string, label = "后台任务") => {
     message.value = `${label}已创建：${shortTaskId(id)}`;
     pendingTaskIds.add(id);
-    visible.value = true;
+    recentSummaryTaskId.value = id;
+    summaryDismissed.value = false;
+    summaryVisible.value = true;
     await load();
   }
 
   return {
     visible,
+    summaryVisible,
     loading,
     cleanupLoading,
     tasks,
@@ -180,7 +240,9 @@ export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showError, on
     buttonText,
     load,
     toggle,
+    open,
     close,
+    dismissSummary,
     stopPolling,
     resetCancelConfirm,
     requestCancel,
@@ -188,6 +250,10 @@ export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showError, on
     submitCancelConfirm,
     cleanupFinishedTasks,
     cleanupTaskCount,
+    activeTaskCount,
+    hasActiveTasks,
+    summaryTask,
+    summaryFailed,
     markStarted
   };
 }
