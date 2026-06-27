@@ -372,89 +372,93 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
       </button>
     </div>
 
-    <template v-if="!collapsed">
-      <div v-if="loading && !favorites.length" class="favorite-empty">正在加载...</div>
-      <div v-else-if="!favorites.length" class="favorite-empty">暂无收藏</div>
-      <div v-else class="favorite-list" role="list" @dragend="clearDropState">
-        <div
-            v-for="favorite in favorites"
-            :key="favorite.id"
-            class="favorite-row"
-            :class="{
-              active: isActive(favorite),
-              missing: favorite.missing,
-              confirmingRemove: isRemoveConfirming(favorite),
-              dragging: draggingFavoriteId === favorite.id,
-              dropBefore: dropTargetId === favorite.id && dropPlacement === 'before',
-              dropAfter: dropTargetId === favorite.id && dropPlacement === 'after'
-            }"
-            role="listitem"
-            :draggable="renamingFavoriteId !== favorite.id && !isRemoveConfirming(favorite)"
-            @dragstart="handleDragStart($event, favorite)"
-            @dragover="handleDragOver($event, favorite)"
-            @drop="handleDrop($event, favorite)"
-            @pointerleave="clearSuppressedFavoriteActions(favorite.id)"
-            @contextmenu.prevent.stop="openContextMenu(favorite, $event)">
-          <button
-              v-if="renamingFavoriteId !== favorite.id"
-              :ref="element => setFavoriteButtonRef(favorite.id, element)"
-              class="favorite-open"
-              :disabled="isRemoveConfirming(favorite)"
-              :title="favorite.path"
-              @click="handleOpen(favorite)"
-              @auxclick.middle.prevent="handleOpenNewTab(favorite)"
-              @keydown="handleFavoriteKeyDown($event, favorite)">
-            <span class="favorite-icon" aria-hidden="true">
-              <icon v-if="favorite.missing" icon="action.warning" />
-              <file-type-icon v-else kind="folder" :name="favorite.name" />
-            </span>
-            <span class="favorite-copy">
-              <span class="favorite-name">{{ favorite.name }}</span>
-              <small>{{ favorite.missing ? "目录缺失" : favorite.path }}</small>
-            </span>
-          </button>
-          <div v-else :ref="setRenameEditRef" class="favorite-edit">
-            <span class="favorite-icon" aria-hidden="true">
-              <icon v-if="favorite.missing" icon="action.warning" />
-              <file-type-icon v-else kind="folder" :name="favorite.name" />
-            </span>
-            <input
-                :ref="setRenameInputRef"
-                v-model="renameDraft"
-                class="favorite-rename-input"
-                type="text"
-                spellcheck="false"
-                @click.stop
-                @keydown.enter.prevent="commitRename(favorite)"
-                @keydown.esc.prevent.stop="cancelRename"
-                @blur="commitRename(favorite)">
+    <Transition name="sidebar-section">
+      <div v-if="!collapsed" class="favorite-body-shell">
+        <div class="favorite-body">
+          <div v-if="loading && !favorites.length" class="favorite-empty">正在加载...</div>
+          <div v-else-if="!favorites.length" class="favorite-empty">暂无收藏</div>
+          <div v-else class="favorite-list" role="list" @dragend="clearDropState">
+            <div
+                v-for="favorite in favorites"
+                :key="favorite.id"
+                class="favorite-row"
+                :class="{
+                  active: isActive(favorite),
+                  missing: favorite.missing,
+                  confirmingRemove: isRemoveConfirming(favorite),
+                  dragging: draggingFavoriteId === favorite.id,
+                  dropBefore: dropTargetId === favorite.id && dropPlacement === 'before',
+                  dropAfter: dropTargetId === favorite.id && dropPlacement === 'after'
+                }"
+                role="listitem"
+                :draggable="renamingFavoriteId !== favorite.id && !isRemoveConfirming(favorite)"
+                @dragstart="handleDragStart($event, favorite)"
+                @dragover="handleDragOver($event, favorite)"
+                @drop="handleDrop($event, favorite)"
+                @pointerleave="clearSuppressedFavoriteActions(favorite.id)"
+                @contextmenu.prevent.stop="openContextMenu(favorite, $event)">
+              <button
+                  v-if="renamingFavoriteId !== favorite.id"
+                  :ref="element => setFavoriteButtonRef(favorite.id, element)"
+                  class="favorite-open"
+                  :disabled="isRemoveConfirming(favorite)"
+                  :title="favorite.path"
+                  @click="handleOpen(favorite)"
+                  @auxclick.middle.prevent="handleOpenNewTab(favorite)"
+                  @keydown="handleFavoriteKeyDown($event, favorite)">
+                <span class="favorite-icon" aria-hidden="true">
+                  <icon v-if="favorite.missing" icon="action.warning" />
+                  <file-type-icon v-else kind="folder" :name="favorite.name" />
+                </span>
+                <span class="favorite-copy">
+                  <span class="favorite-name">{{ favorite.name }}</span>
+                  <small>{{ favorite.missing ? "目录缺失" : favorite.path }}</small>
+                </span>
+              </button>
+              <div v-else :ref="setRenameEditRef" class="favorite-edit">
+                <span class="favorite-icon" aria-hidden="true">
+                  <icon v-if="favorite.missing" icon="action.warning" />
+                  <file-type-icon v-else kind="folder" :name="favorite.name" />
+                </span>
+                <input
+                    :ref="setRenameInputRef"
+                    v-model="renameDraft"
+                    class="favorite-rename-input"
+                    type="text"
+                    spellcheck="false"
+                    @click.stop
+                    @keydown.enter.prevent="commitRename(favorite)"
+                    @keydown.esc.prevent.stop="cancelRename"
+                    @blur="commitRename(favorite)">
+              </div>
+              <span v-if="shouldShowFavoriteActions(favorite)" class="favorite-actions">
+                <button class="favorite-action" title="在新标签页中打开" @click.stop="handleOpenNewTab(favorite)">
+                  <icon icon="action.open-new-tab" />
+                </button>
+                <button class="favorite-action" title="重命名收藏项" @click.stop="startRename(favorite)">
+                  <icon icon="action.rename" />
+                </button>
+                <button class="favorite-action danger" title="从收藏夹移除" @click.stop="startRemoveConfirm(favorite)">
+                  <icon icon="action.close" />
+                </button>
+              </span>
+              <span v-else-if="isRemoveConfirming(favorite)" :ref="setRemoveConfirmRef" class="favorite-remove-confirm" @keydown.esc.prevent.stop="cancelRemoveConfirm(favorite.id)">
+                <button
+                    :ref="element => setRemoveConfirmButtonRef(favorite.id, element)"
+                    class="favorite-action confirm"
+                    title="确认移除收藏项"
+                    @click.stop="confirmRemove(favorite)">
+                  <icon icon="action.trash" />
+                </button>
+                <button class="favorite-action cancel" title="取消移除" @click.stop="cancelRemoveConfirm(favorite.id)">
+                  <icon icon="action.close" />
+                </button>
+              </span>
+            </div>
           </div>
-          <span v-if="shouldShowFavoriteActions(favorite)" class="favorite-actions">
-            <button class="favorite-action" title="在新标签页中打开" @click.stop="handleOpenNewTab(favorite)">
-              <icon icon="action.open-new-tab" />
-            </button>
-            <button class="favorite-action" title="重命名收藏项" @click.stop="startRename(favorite)">
-              <icon icon="action.rename" />
-            </button>
-            <button class="favorite-action danger" title="从收藏夹移除" @click.stop="startRemoveConfirm(favorite)">
-              <icon icon="action.close" />
-            </button>
-          </span>
-          <span v-else-if="isRemoveConfirming(favorite)" :ref="setRemoveConfirmRef" class="favorite-remove-confirm" @keydown.esc.prevent.stop="cancelRemoveConfirm(favorite.id)">
-            <button
-                :ref="element => setRemoveConfirmButtonRef(favorite.id, element)"
-                class="favorite-action confirm"
-                title="确认移除收藏项"
-                @click.stop="confirmRemove(favorite)">
-              <icon icon="action.trash" />
-            </button>
-            <button class="favorite-action cancel" title="取消移除" @click.stop="cancelRemoveConfirm(favorite.id)">
-              <icon icon="action.close" />
-            </button>
-          </span>
         </div>
       </div>
-    </template>
+    </Transition>
     <favorite-context-menu
         v-if="contextMenu.visible && contextFavorite"
         :x="contextMenu.x"
@@ -547,6 +551,16 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
 .favorite-refresh:disabled {
   @apply cursor-wait;
   color: var(--app-text-disabled);
+}
+
+.favorite-body-shell {
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+}
+
+.favorite-body {
+  min-height: 0;
 }
 
 .favorite-list {
@@ -692,5 +706,33 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
 .favorite-empty {
   @apply flex h-8 items-center px-2 text-xs;
   color: var(--app-text-disabled);
+}
+
+.sidebar-section-enter-active {
+  transition:
+      grid-template-rows 0.16s cubic-bezier(0.2, 0, 0, 1),
+      opacity 0.12s ease,
+      transform 0.16s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.sidebar-section-leave-active {
+  transition:
+      grid-template-rows 0.13s cubic-bezier(0.4, 0, 1, 1),
+      opacity 0.1s ease,
+      transform 0.13s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.sidebar-section-enter-from,
+.sidebar-section-leave-to {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-section-enter-active,
+  .sidebar-section-leave-active {
+    transition: none;
+  }
 }
 </style>

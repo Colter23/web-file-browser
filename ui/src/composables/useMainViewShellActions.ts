@@ -6,8 +6,8 @@ type MainViewShellActionsOptions = {
   currentSelection: Ref<ExplorerEntry[]>;
   editorVisible: () => boolean;
   currentFolder: () => string;
-  loadRoot: (options?: {forceRefresh?: boolean}) => Promise<unknown>;
   refreshExplorer: (path: string, options?: {forceRefresh?: boolean}) => Promise<unknown>;
+  refreshTreePath: (path: string) => Promise<unknown>;
   selectPaths: (paths: string[]) => Promise<boolean | undefined>;
   clearPersistedSelection: () => void;
   closePreviewPanel: () => void;
@@ -31,8 +31,8 @@ export const useMainViewShellActions = ({
   currentSelection,
   editorVisible,
   currentFolder,
-  loadRoot,
   refreshExplorer,
+  refreshTreePath,
   selectPaths,
   clearPersistedSelection,
   closePreviewPanel,
@@ -104,8 +104,10 @@ export const useMainViewShellActions = ({
       closePanels();
     }
     const path = currentFolder();
-    if (path === "/") await loadRoot({forceRefresh: true});
-    await refreshExplorer(path, {forceRefresh: true});
+    await Promise.all([
+      refreshExplorer(path, {forceRefresh: true}),
+      refreshTreePath(path)
+    ]);
     if (!selectedPaths.length) return;
     const restored = await selectPaths(selectedPaths);
     if (!restored) clearPersistedSelection();

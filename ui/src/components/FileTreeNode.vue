@@ -46,7 +46,8 @@ const dropAfter = computed(() => props.reorderPlacement === "after" && normalize
 const favorite = computed(() => props.favoritePaths.some(path => normalizePathText(path) === normalizedPath.value));
 const reorderable = computed(() => typeof props.data.mappingId === "number" && normalizedPath.value !== "/");
 const hasChildren = computed(() => Boolean(props.data.children?.length));
-const rootPlaceholder = computed(() => normalizedPath.value === "/" && props.data.children !== undefined && !hasChildren.value);
+const canToggle = computed(() => props.data.children === undefined || hasChildren.value);
+const foldPlaceholder = computed(() => !loading.value && !canToggle.value);
 const nodeStyle = computed(() => ({"--tree-depth": props.deep}));
 
 const handleRowClick = (event: MouseEvent) => {
@@ -83,7 +84,7 @@ const handleDragStart = (event: DragEvent) => {
         :draggable="reorderable"
         :data-tree-path="normalizedPath"
         :aria-selected="active"
-        :aria-expanded="expanded"
+        :aria-expanded="canToggle ? expanded : undefined"
         :title="data.path"
         @click="handleRowClick"
         @focus="emit('node-focus', data)"
@@ -97,8 +98,8 @@ const handleDragStart = (event: DragEvent) => {
       <button
           type="button"
           class="fold-button"
-          :class="{expanded, placeholder: rootPlaceholder}"
-          :disabled="loading || rootPlaceholder"
+          :class="{expanded, placeholder: foldPlaceholder}"
+          :disabled="loading || !canToggle"
           tabindex="-1"
           aria-hidden="true"
           title="展开或折叠"
@@ -109,40 +110,50 @@ const handleDragStart = (event: DragEvent) => {
       </button>
       <span class="node-icon" aria-hidden="true">
         <file-type-icon v-if="normalizedPath === '/'" kind="home" size="1.05rem" />
-        <file-type-icon v-else kind="folder" :name="data.name" :open="expanded" size="1.05rem" />
+        <file-type-icon v-else kind="folder" :name="data.name" :open="expanded && canToggle" size="1.05rem" />
       </span>
-      <span class="node-name">{{ data.name }}</span>
-      <span v-if="favorite && normalizedPath !== '/'" class="node-favorite" aria-label="已收藏" title="已收藏">
-        <icon icon="action.favorite-filled" size="0.72rem" />
+      <span class="node-label">
+        <span class="node-name">{{ data.name }}</span>
+        <span v-if="favorite && normalizedPath !== '/'" class="node-favorite" aria-label="已收藏" title="已收藏">
+          <icon icon="action.favorite-filled" size="0.72rem" />
+        </span>
       </span>
     </div>
 
-    <div v-if="expanded && hasChildren" class="tree-children" role="group">
-      <file-tree-node
-          v-for="file in data.children"
-          :key="file.path"
-          :deep="deep + 1"
-          :data="file"
-          :current-path="currentPath"
-          :focused-path="focusedPath"
-          :expanded-paths="expandedPaths"
-          :loading-paths="loadingPaths"
-          :drop-target-path="dropTargetPath"
-          :dragging-tree-path="draggingTreePath"
-          :reorder-target-path="reorderTargetPath"
-          :reorder-placement="reorderPlacement"
-          :favorite-paths="favoritePaths"
-          :load-data="loadData"
-          @toggle="node => emit('toggle', node)"
-          @navigate="node => emit('navigate', node)"
-          @node-focus="node => emit('node-focus', node)"
-          @node-context-menu="(node, event) => emit('node-context-menu', node, event)"
-          @node-drag-start="(node, event) => emit('node-drag-start', node, event)"
-          @node-drag-end="(node, event) => emit('node-drag-end', node, event)"
-          @node-drag-over="(node, event) => emit('node-drag-over', node, event)"
-          @node-drag-leave="(node, event) => emit('node-drag-leave', node, event)"
-          @node-drop="(node, event) => emit('node-drop', node, event)" />
-    </div>
+    <Transition name="tree-branch">
+      <div
+          v-if="expanded && hasChildren"
+          class="tree-children-shell"
+          :class="{'root-branch': normalizedPath === '/'}"
+          role="group">
+        <div class="tree-children">
+          <file-tree-node
+              v-for="file in data.children"
+              :key="file.path"
+              :deep="deep + 1"
+              :data="file"
+              :current-path="currentPath"
+              :focused-path="focusedPath"
+              :expanded-paths="expandedPaths"
+              :loading-paths="loadingPaths"
+              :drop-target-path="dropTargetPath"
+              :dragging-tree-path="draggingTreePath"
+              :reorder-target-path="reorderTargetPath"
+              :reorder-placement="reorderPlacement"
+              :favorite-paths="favoritePaths"
+              :load-data="loadData"
+              @toggle="node => emit('toggle', node)"
+              @navigate="node => emit('navigate', node)"
+              @node-focus="node => emit('node-focus', node)"
+              @node-context-menu="(node, event) => emit('node-context-menu', node, event)"
+              @node-drag-start="(node, event) => emit('node-drag-start', node, event)"
+              @node-drag-end="(node, event) => emit('node-drag-end', node, event)"
+              @node-drag-over="(node, event) => emit('node-drag-over', node, event)"
+              @node-drag-leave="(node, event) => emit('node-drag-leave', node, event)"
+              @node-drop="(node, event) => emit('node-drop', node, event)" />
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -155,7 +166,7 @@ const handleDragStart = (event: DragEvent) => {
 
 .tree-node {
   --tree-depth: 0;
-  @apply flex h-7 w-full min-w-max items-center rounded-sm border border-transparent pr-2 text-left outline-none;
+  @apply flex h-7 w-full min-w-0 items-center rounded-sm border border-transparent pr-2 text-left outline-none;
   padding-left: calc(var(--tree-depth) * 1rem + 0.125rem);
   color: var(--app-text-muted);
 }
@@ -244,8 +255,15 @@ const handleDragStart = (event: DragEvent) => {
   color: var(--app-accent, #2563eb);
 }
 
+.node-label {
+  @apply inline-flex min-w-0 max-w-full items-center;
+  flex: 0 1 auto;
+  width: fit-content;
+}
+
 .node-name {
-  @apply min-w-0 max-w-52 truncate text-[13px] leading-none;
+  @apply min-w-0 truncate text-[13px] leading-none;
+  flex: 0 1 auto;
 }
 
 .node-favorite {
@@ -253,7 +271,67 @@ const handleDragStart = (event: DragEvent) => {
   color: var(--app-accent, #2563eb);
 }
 
+.tree-children-shell {
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+}
+
 .tree-children {
   @apply flex flex-col;
+  min-height: 0;
+}
+
+.tree-children-shell.root-branch .tree-children {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.tree-branch-enter-active {
+  transition:
+      grid-template-rows 0.16s cubic-bezier(0.2, 0, 0, 1),
+      opacity 0.12s ease,
+      transform 0.16s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.tree-branch-leave-active {
+  transition:
+      grid-template-rows 0.13s cubic-bezier(0.4, 0, 1, 1),
+      opacity 0.1s ease,
+      transform 0.13s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.tree-branch-enter-from,
+.tree-branch-leave-to {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-2px);
+}
+
+.tree-branch-enter-active.root-branch .tree-children {
+  transition:
+      opacity 0.08s ease 0.055s,
+      transform 0.12s cubic-bezier(0.2, 0, 0, 1) 0.035s;
+}
+
+.tree-branch-leave-active.root-branch .tree-children {
+  transition:
+      opacity 0.08s ease,
+      transform 0.1s ease;
+}
+
+.tree-branch-enter-from.root-branch .tree-children,
+.tree-branch-leave-to.root-branch .tree-children {
+  opacity: 0;
+  transform: translateY(-3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-branch-enter-active,
+  .tree-branch-leave-active,
+  .tree-branch-enter-active.root-branch .tree-children,
+  .tree-branch-leave-active.root-branch .tree-children {
+    transition: none;
+  }
 }
 </style>

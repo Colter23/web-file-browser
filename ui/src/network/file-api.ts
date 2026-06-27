@@ -135,23 +135,29 @@ export const getFolderData = async (path: string = "", params: FolderQueryParams
     if (options.forceRefresh) clearFolderCache(path);
     const cacheKey = folderCacheKey(path, params);
     const cached = options.forceRefresh ? undefined : folderResponseCache.get(cacheKey);
+    const bypassBrowserCache = options.forceRefresh || !cached;
     const conditionalHeaders = cached
         ? {
             ...(cached.etag ? {"If-None-Match": cached.etag} : {}),
             ...(!cached.etag && cached.lastModified ? {"If-Modified-Since": cached.lastModified} : {})
         }
         : {};
-    const requestParams = options.forceRefresh
+    const requestParams = bypassBrowserCache
         ? {...params, _: `${Date.now()}-${Math.random().toString(16).slice(2)}`}
         : params;
     const response = await network.get(pathUrl("/api/file", path), {
         params: requestParams,
-        headers: options.forceRefresh
+        headers: bypassBrowserCache
             ? {
                 "Cache-Control": "no-cache, no-store, max-age=0",
-                "Pragma": "no-cache"
+                "Pragma": "no-cache",
+                "Expires": "0"
             }
-            : conditionalHeaders,
+            : {
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+                ...conditionalHeaders
+            },
         validateStatus: status => (status >= 200 && status < 300) || status === 304
     });
     if (response.status === 304) {

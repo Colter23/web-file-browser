@@ -141,7 +141,7 @@ const {
 } = useShellNotice();
 let refreshCurrentHandler = async (_keepSelection = false) => {};
 const refreshCurrent = (keepSelection = false) => refreshCurrentHandler(keepSelection);
-let refreshCurrentTreePath = async () => {};
+let refreshFolderInExplorerAndTree = async (_path: string) => {};
 
 const {
   visible: taskPanelVisible,
@@ -170,7 +170,6 @@ const {
   showError: showErrorNotice,
   onTaskSettled: async () => {
     await refreshCurrent(true);
-    await refreshCurrentTreePath();
   }
 });
 const {
@@ -206,10 +205,7 @@ const {
   cleanupTrash,
   showError: showErrorNotice,
   onRestored: async () => {
-    const path = currentFolder();
-    if (path === "/") await loadRoot({forceRefresh: true});
-    await explorerRef.value?.refresh(path, {forceRefresh: true});
-    await refreshCurrentTreePath();
+    await refreshFolderInExplorerAndTree(currentFolder());
   }
 });
 const explorerRef = ref<ExplorerExpose | null>(null);
@@ -490,6 +486,13 @@ const {treeData, loadRoot, handleLoad, reorderMount, refreshPath: refreshTreePat
   showError: showErrorNotice
 });
 
+refreshFolderInExplorerAndTree = async (path: string) => {
+  await Promise.all([
+    explorerRef.value?.refresh(path, {forceRefresh: true}) ?? Promise.resolve(false),
+    refreshTreePath(path)
+  ]);
+}
+
 const {
   favorites,
   favoritesLoading,
@@ -508,10 +511,6 @@ const {
   showNotice: showShellNotice,
   showError: showErrorNotice
 });
-
-refreshCurrentTreePath = async () => {
-  await refreshTreePath(currentFolder());
-}
 
 const {
   fileClipboardAction,
@@ -586,8 +585,8 @@ const shellActions = useMainViewShellActions({
   currentSelection,
   editorVisible: () => fileStore.showEditor,
   currentFolder,
-  loadRoot,
   refreshExplorer: (path, options) => explorerRef.value?.refresh(path, options) ?? Promise.resolve(false),
+  refreshTreePath,
   selectPaths: paths => explorerRef.value?.selectPaths(paths) ?? Promise.resolve(false),
   clearPersistedSelection: () => fileStore.setActiveTabSelectedPaths([]),
   closePreviewPanel,
