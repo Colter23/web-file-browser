@@ -63,6 +63,9 @@ const appearanceSummary = computed(() => {
 
 const close = () => {
   open.value = false;
+}
+
+const resetMenuView = () => {
   activeView.value = "main";
 }
 
@@ -189,184 +192,186 @@ onBeforeUnmount(() => {
       </span>
     </button>
 
-    <div
-        v-if="open"
-        ref="menuPanelRef"
-        class="more-menu-panel"
-        :class="{'appearance-view': activeView === 'appearance'}"
-        role="menu"
-        aria-label="更多选项"
-        @keydown="handleMenuKeyDown">
-      <Transition :name="activeView === 'appearance' ? 'menu-view-forward' : 'menu-view-back'" mode="out-in">
-        <div v-if="activeView === 'main'" key="main" class="menu-view">
-          <button class="command-item" role="menuitem" tabindex="-1" @click="closeAndEmit('open-settings')">
-            <icon icon="action.settings" />
-            <span class="item-copy">
-              <strong>设置</strong>
-              <small>系统、挂载与运行状态</small>
-            </span>
-          </button>
-
-          <button class="command-item submenu-launch" role="menuitem" tabindex="-1" @click="showAppearance">
-            <icon icon="action.appearance" />
-            <span class="item-copy">
-              <strong>外观和主题</strong>
-              <small>{{ appearanceSummary }}</small>
-            </span>
-            <icon class="submenu-caret" icon="action.next" />
-          </button>
-
-          <div class="menu-separator"></div>
-
-          <button class="command-item" :class="{active: taskActive}" role="menuitem" tabindex="-1" @click="closeAndEmit('toggle-tasks')">
-            <icon icon="view.details" />
-            <span class="item-copy">
-              <strong>{{ taskButtonText }}</strong>
-              <small>后台任务与传输进度</small>
-            </span>
-          </button>
-
-          <button class="command-item" :class="{active: trashActive}" role="menuitem" tabindex="-1" @click="closeAndEmit('toggle-trash')">
-            <icon icon="action.trash" />
-            <span class="item-copy">
-              <strong>回收站</strong>
-              <small>恢复或永久删除项目</small>
-            </span>
-          </button>
-
-          <div class="menu-separator"></div>
-
-          <button class="command-item danger" role="menuitem" tabindex="-1" @click="closeAndEmit('sign-out')">
-            <icon icon="action.logout" />
-            <span class="item-copy">
-              <strong>退出</strong>
-              <small>退出当前会话</small>
-            </span>
-          </button>
-        </div>
-
-        <div v-else key="appearance" class="menu-view appearance-menu-view">
-          <div class="submenu-header">
-            <button class="submenu-back" type="button" role="menuitem" tabindex="-1" aria-label="返回主菜单" @click="showMain">
-              <icon icon="action.previous" />
+    <Transition name="more-menu" @after-leave="resetMenuView">
+      <div
+          v-if="open"
+          ref="menuPanelRef"
+          class="more-menu-panel"
+          :class="{'appearance-view': activeView === 'appearance'}"
+          role="menu"
+          aria-label="更多选项"
+          @keydown="handleMenuKeyDown">
+        <Transition :name="activeView === 'appearance' ? 'menu-view-forward' : 'menu-view-back'" mode="out-in">
+          <div v-if="activeView === 'main'" key="main" class="menu-view">
+            <button class="command-item" role="menuitem" tabindex="-1" @click="closeAndEmit('open-settings')">
+              <icon icon="action.settings" />
+              <span class="item-copy">
+                <strong>设置</strong>
+                <small>系统、挂载与运行状态</small>
+              </span>
             </button>
-            <span class="item-copy">
-              <strong>外观和主题</strong>
-            </span>
+
+            <button class="command-item submenu-launch" role="menuitem" tabindex="-1" @click="showAppearance">
+              <icon icon="action.appearance" />
+              <span class="item-copy">
+                <strong>外观和主题</strong>
+                <small>{{ appearanceSummary }}</small>
+              </span>
+              <icon class="submenu-caret" icon="action.next" />
+            </button>
+
+            <div class="menu-separator"></div>
+
+            <button class="command-item" :class="{active: taskActive}" role="menuitem" tabindex="-1" @click="closeAndEmit('toggle-tasks')">
+              <icon icon="view.details" />
+              <span class="item-copy">
+                <strong>{{ taskButtonText }}</strong>
+                <small>后台任务与传输进度</small>
+              </span>
+            </button>
+
+            <button class="command-item" :class="{active: trashActive}" role="menuitem" tabindex="-1" @click="closeAndEmit('toggle-trash')">
+              <icon icon="action.trash" />
+              <span class="item-copy">
+                <strong>回收站</strong>
+                <small>恢复或永久删除项目</small>
+              </span>
+            </button>
+
+            <div class="menu-separator"></div>
+
+            <button class="command-item danger" role="menuitem" tabindex="-1" @click="closeAndEmit('sign-out')">
+              <icon icon="action.logout" />
+              <span class="item-copy">
+                <strong>退出</strong>
+                <small>退出当前会话</small>
+              </span>
+            </button>
           </div>
 
-          <section class="preference-section" aria-label="颜色模式">
-            <div class="preference-heading">
-              <span>颜色模式</span>
-            </div>
-            <div class="segmented-group" role="radiogroup" aria-label="颜色模式">
-              <button
-                  v-for="option in colorModeOptions"
-                  :key="option.value"
-                  class="segmented-option mode-option"
-                  :class="{active: appearanceStore.colorMode === option.value}"
-                  role="radio"
-                  type="button"
-                  tabindex="-1"
-                  :aria-checked="appearanceStore.colorMode === option.value"
-                  @click="selectColorMode(option.value)">
-                <icon class="option-icon" :icon="colorModeIcons[option.value]" />
-                <span>{{ option.label }}</span>
+          <div v-else key="appearance" class="menu-view appearance-menu-view">
+            <div class="submenu-header">
+              <button class="submenu-back" type="button" role="menuitem" tabindex="-1" aria-label="返回主菜单" @click="showMain">
+                <icon icon="action.previous" />
               </button>
+              <span class="item-copy">
+                <strong>外观和主题</strong>
+              </span>
             </div>
-          </section>
 
-          <section class="preference-section" aria-label="图标样式">
-            <div class="preference-heading">
-              <span>图标样式</span>
-            </div>
-            <div class="segmented-group" role="radiogroup" aria-label="图标样式">
-              <button
-                  v-for="option in iconStyleOptions"
-                  :key="option.value"
-                  class="segmented-option icon-style-option"
-                  :class="{active: appearanceStore.iconStyle === option.value}"
-                  role="radio"
-                  type="button"
-                  tabindex="-1"
-                  :aria-checked="appearanceStore.iconStyle === option.value"
-                  @click="selectIconStyle(option.value)">
-                <span class="style-preview-frame">
-                  <icon class="style-preview-icon" icon="file.folder" size="1.15rem" :icon-style="option.value" />
-                </span>
-                <span>{{ option.label }}</span>
-              </button>
-            </div>
-          </section>
+            <section class="preference-section" aria-label="颜色模式">
+              <div class="preference-heading">
+                <span>颜色模式</span>
+              </div>
+              <div class="segmented-group" role="radiogroup" aria-label="颜色模式">
+                <button
+                    v-for="option in colorModeOptions"
+                    :key="option.value"
+                    class="segmented-option mode-option"
+                    :class="{active: appearanceStore.colorMode === option.value}"
+                    role="radio"
+                    type="button"
+                    tabindex="-1"
+                    :aria-checked="appearanceStore.colorMode === option.value"
+                    @click="selectColorMode(option.value)">
+                  <icon class="option-icon" :icon="colorModeIcons[option.value]" />
+                  <span>{{ option.label }}</span>
+                </button>
+              </div>
+            </section>
 
-          <section class="preference-section" aria-label="文件图标">
-            <div class="preference-heading">
-              <span>文件图标</span>
-            </div>
-            <div class="segmented-group" role="radiogroup" aria-label="文件图标">
-              <button
-                  v-for="option in fileIconStyleOptions"
-                  :key="option.value"
-                  class="segmented-option file-icon-style-option"
-                  :class="{active: appearanceStore.fileIconStyle === option.value}"
-                  role="radio"
-                  type="button"
-                  tabindex="-1"
-                  :aria-checked="appearanceStore.fileIconStyle === option.value"
-                  @click="selectFileIconStyle(option.value)">
-                <span class="style-preview-frame">
-                  <icon class="style-preview-icon" icon="file.folder" size="1.15rem" :icon-style="fileIconPreviewStyle(option.value)" />
-                </span>
-                <span>{{ option.label }}</span>
-              </button>
-            </div>
-          </section>
+            <section class="preference-section" aria-label="图标样式">
+              <div class="preference-heading">
+                <span>图标样式</span>
+              </div>
+              <div class="segmented-group" role="radiogroup" aria-label="图标样式">
+                <button
+                    v-for="option in iconStyleOptions"
+                    :key="option.value"
+                    class="segmented-option icon-style-option"
+                    :class="{active: appearanceStore.iconStyle === option.value}"
+                    role="radio"
+                    type="button"
+                    tabindex="-1"
+                    :aria-checked="appearanceStore.iconStyle === option.value"
+                    @click="selectIconStyle(option.value)">
+                  <span class="style-preview-frame">
+                    <icon class="style-preview-icon" icon="file.folder" size="1.15rem" :icon-style="option.value" />
+                  </span>
+                  <span>{{ option.label }}</span>
+                </button>
+              </div>
+            </section>
 
-          <section class="preference-section" aria-label="文件图标着色">
-            <div class="preference-heading">
-              <span>文件图标着色</span>
-            </div>
-            <div class="segmented-group" role="radiogroup" aria-label="文件图标着色">
-              <button
-                  v-for="option in fileIconPaletteOptions"
-                  :key="option.value"
-                  class="segmented-option palette-option"
-                  :class="[`palette-${option.value}`, {active: appearanceStore.fileIconPalette === option.value}]"
-                  role="radio"
-                  type="button"
-                  tabindex="-1"
-                  :aria-checked="appearanceStore.fileIconPalette === option.value"
-                  @click="selectFileIconPalette(option.value)">
-                <icon class="option-icon" :icon="fileIconPaletteIcons[option.value]" />
-                <span>{{ option.label }}</span>
-              </button>
-            </div>
-          </section>
+            <section class="preference-section" aria-label="文件图标">
+              <div class="preference-heading">
+                <span>文件图标</span>
+              </div>
+              <div class="segmented-group" role="radiogroup" aria-label="文件图标">
+                <button
+                    v-for="option in fileIconStyleOptions"
+                    :key="option.value"
+                    class="segmented-option file-icon-style-option"
+                    :class="{active: appearanceStore.fileIconStyle === option.value}"
+                    role="radio"
+                    type="button"
+                    tabindex="-1"
+                    :aria-checked="appearanceStore.fileIconStyle === option.value"
+                    @click="selectFileIconStyle(option.value)">
+                  <span class="style-preview-frame">
+                    <icon class="style-preview-icon" icon="file.folder" size="1.15rem" :icon-style="fileIconPreviewStyle(option.value)" />
+                  </span>
+                  <span>{{ option.label }}</span>
+                </button>
+              </div>
+            </section>
 
-          <section class="preference-section" aria-label="主题色">
-            <div class="preference-heading">
-              <span>主题色</span>
-            </div>
-            <div class="accent-grid" role="radiogroup" aria-label="主题色">
-              <button
-                  v-for="option in accentColorOptions"
-                  :key="option.value"
-                  class="accent-button"
-                  :class="{active: appearanceStore.accentColor === option.value}"
-                  role="radio"
-                  :aria-checked="appearanceStore.accentColor === option.value"
-                  type="button"
-                  tabindex="-1"
-                  :title="option.label"
-                  @click="selectAccentColor(option.value)">
-                <span class="accent-swatch" :style="{backgroundColor: option.color}"></span>
-                <span>{{ option.label }}</span>
-              </button>
-            </div>
-          </section>
-        </div>
-      </Transition>
-    </div>
+            <section class="preference-section" aria-label="文件图标着色">
+              <div class="preference-heading">
+                <span>文件图标着色</span>
+              </div>
+              <div class="segmented-group" role="radiogroup" aria-label="文件图标着色">
+                <button
+                    v-for="option in fileIconPaletteOptions"
+                    :key="option.value"
+                    class="segmented-option palette-option"
+                    :class="[`palette-${option.value}`, {active: appearanceStore.fileIconPalette === option.value}]"
+                    role="radio"
+                    type="button"
+                    tabindex="-1"
+                    :aria-checked="appearanceStore.fileIconPalette === option.value"
+                    @click="selectFileIconPalette(option.value)">
+                  <icon class="option-icon" :icon="fileIconPaletteIcons[option.value]" />
+                  <span>{{ option.label }}</span>
+                </button>
+              </div>
+            </section>
+
+            <section class="preference-section" aria-label="主题色">
+              <div class="preference-heading">
+                <span>主题色</span>
+              </div>
+              <div class="accent-grid" role="radiogroup" aria-label="主题色">
+                <button
+                    v-for="option in accentColorOptions"
+                    :key="option.value"
+                    class="accent-button"
+                    :class="{active: appearanceStore.accentColor === option.value}"
+                    role="radio"
+                    :aria-checked="appearanceStore.accentColor === option.value"
+                    type="button"
+                    tabindex="-1"
+                    :title="option.label"
+                    @click="selectAccentColor(option.value)">
+                  <span class="accent-swatch" :style="{backgroundColor: option.color}"></span>
+                  <span>{{ option.label }}</span>
+                </button>
+              </div>
+            </section>
+          </div>
+        </Transition>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -436,10 +441,25 @@ onBeforeUnmount(() => {
   border-color: var(--app-border-soft);
   background: var(--app-panel-solid);
   box-shadow: var(--app-menu-shadow);
+  transform-origin: top right;
 }
 
 .menu-view {
   @apply flex flex-col gap-0.5;
+}
+
+.more-menu-enter-active {
+  transition: opacity 0.12s ease, transform 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.more-menu-leave-active {
+  transition: opacity 0.09s ease, transform 0.1s ease;
+}
+
+.more-menu-enter-from,
+.more-menu-leave-to {
+  opacity: 0;
+  transform: translateY(-0.25rem) scale(0.985);
 }
 
 .menu-view-forward-enter-active,
@@ -624,6 +644,8 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .more-menu-enter-active,
+  .more-menu-leave-active,
   .menu-view-forward-enter-active,
   .menu-view-forward-leave-active,
   .menu-view-back-enter-active,
