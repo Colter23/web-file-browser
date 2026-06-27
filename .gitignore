@@ -16,6 +16,8 @@
 /server.log
 /server.err
 /.smoke/
+/dist-win/
+/dist-win-*/
 
 # Frontend dependencies and build output
 /ui/node_modules/
