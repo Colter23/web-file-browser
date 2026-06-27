@@ -144,21 +144,29 @@ defineExpose({
 
 <template>
   <div class="path-row">
-    <button class="nav-button" :disabled="!canNavigateBack" :title="navigateBackTitle" @click="emit('navigate-back')">
-      <icon icon="action.previous" size="large" />
-    </button>
-    <button class="nav-button" :disabled="!canNavigateForward" :title="navigateForwardTitle" @click="emit('navigate-forward')">
-      <icon icon="action.next" size="large" />
-    </button>
-    <button class="nav-button" :disabled="!canNavigateUp" :title="navigateUpTitle" @click="emit('navigate-up')">
-      <icon icon="action.up" size="large" />
-    </button>
-    <button class="nav-button" title="刷新 (F5 / Ctrl+R)" @click="emit('refresh')">
-      <icon class="icon-motion-spin" icon="action.refresh" size="large" />
-    </button>
-    <button class="nav-button" title="最近文件" @click="emit('show-recent')">
-      <icon icon="action.recent" size="large" />
-    </button>
+    <div class="nav-cluster" role="group" aria-label="导航">
+      <button class="nav-button nav-button-arrow" :disabled="!canNavigateBack" :title="navigateBackTitle" @click="emit('navigate-back')">
+        <span class="nav-icon-motion nav-icon-motion-back">
+          <icon icon="nav.back" size="1.42rem" :stroke-width="2.15" />
+        </span>
+      </button>
+      <button class="nav-button nav-button-arrow" :disabled="!canNavigateForward" :title="navigateForwardTitle" @click="emit('navigate-forward')">
+        <span class="nav-icon-motion nav-icon-motion-forward">
+          <icon icon="nav.forward" size="1.42rem" :stroke-width="2.15" />
+        </span>
+      </button>
+      <button class="nav-button nav-button-arrow" :disabled="!canNavigateUp" :title="navigateUpTitle" @click="emit('navigate-up')">
+        <span class="nav-icon-motion nav-icon-motion-up">
+          <icon icon="nav.up" size="1.42rem" :stroke-width="2.15" />
+        </span>
+      </button>
+      <button class="nav-button nav-button-tool" title="刷新 (F5 / Ctrl+R)" @click="emit('refresh')">
+        <icon class="icon-motion-spin" icon="nav.refresh" size="1.32rem" />
+      </button>
+      <button class="nav-button nav-button-tool" title="最近文件" @click="emit('show-recent')">
+        <icon icon="nav.recent" size="1.32rem" />
+      </button>
+    </div>
     <breadcrumb
         ref="breadcrumbRef"
         @navigate="(path, complete) => emit('breadcrumb-navigate', path, complete)"
@@ -187,8 +195,7 @@ defineExpose({
             :aria-expanded="searchOptionsMenuOpen"
             @click.prevent="toggleSearchOptionsMenu"
             @keydown="handleSearchOptionsButtonKeyDown">
-          <icon :icon="activeSearchType.icon" />
-          <span>{{ activeSearchType.label }}</span>
+          <span class="search-options-trigger-label">{{ activeSearchType.label }}</span>
           <icon class="search-options-caret icon-motion-caret" :class="{'is-open': searchOptionsMenuOpen}" icon="action.down" />
         </button>
         <div
@@ -209,9 +216,9 @@ defineExpose({
               :aria-checked="searchType === option.type"
               tabindex="-1"
               @click.prevent="selectSearchType(option.type)">
-            <span class="search-options-check">{{ searchType === option.type ? "✓" : "" }}</span>
-            <icon :icon="option.icon" />
+            <span class="search-options-icon"><icon :icon="option.icon" /></span>
             <span>{{ option.label }}</span>
+            <span class="search-options-check"><icon v-if="searchType === option.type" icon="action.check" size="small" /></span>
           </button>
           <div class="search-options-separator"></div>
           <p class="search-options-title">范围</p>
@@ -226,9 +233,9 @@ defineExpose({
               tabindex="-1"
               :title="option.title"
               @click.prevent="selectSearchScope(option.scope)">
-            <span class="search-options-check">{{ searchScope === option.scope ? "✓" : "" }}</span>
-            <icon :icon="option.icon" />
+            <span class="search-options-icon"><icon :icon="option.icon" /></span>
             <span>{{ option.label }}</span>
+            <span class="search-options-check"><icon v-if="searchScope === option.scope" icon="action.check" size="small" /></span>
           </button>
         </div>
       </div>
@@ -246,6 +253,11 @@ defineExpose({
   @apply flex h-12 shrink-0 items-center gap-2 border-b px-3;
   border-color: var(--app-border);
   background: var(--app-panel-muted);
+}
+
+.nav-cluster {
+  @apply flex h-9 shrink-0 items-center gap-0.5 rounded-md px-0.5;
+  background: transparent;
 }
 
 .nav-button {
@@ -273,11 +285,45 @@ defineExpose({
   color: var(--app-text-disabled);
 }
 
+.nav-icon-motion {
+  @apply inline-flex items-center justify-center;
+  --nav-motion-x: 0px;
+  --nav-motion-y: 0px;
+  transition: transform 0.16s ease;
+}
+
+.nav-icon-motion-back {
+  --nav-motion-x: -1.8px;
+}
+
+.nav-icon-motion-forward {
+  --nav-motion-x: 1.8px;
+}
+
+.nav-icon-motion-up {
+  --nav-motion-y: -1.8px;
+}
+
+.nav-button:hover:not(:disabled) .nav-icon-motion,
+.nav-button:focus-visible:not(:disabled) .nav-icon-motion {
+  transform: translate3d(var(--nav-motion-x), var(--nav-motion-y), 0);
+}
+
+.nav-button:active:not(:disabled) .nav-icon-motion {
+  transform: translate3d(calc(var(--nav-motion-x) * 1.45), calc(var(--nav-motion-y) * 1.45), 0) scale(0.95);
+  transition-duration: 0.08s;
+}
+
 .search-box {
-  @apply relative flex h-9 min-w-64 w-[24rem] max-w-[34vw] shrink items-center gap-1.5 rounded-md border px-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)];
+  @apply relative flex h-9 min-w-56 w-[18.5rem] max-w-[26vw] shrink items-center gap-1.5 rounded-md border px-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] transition-[width,max-width,border-color,box-shadow,background-color] duration-150 ease-out;
   border-color: var(--app-border);
   background: var(--app-control-solid);
   color: var(--app-text-subtle);
+}
+
+.search-box.active,
+.search-box:focus-within {
+  @apply w-[25rem] max-w-[36vw];
 }
 
 .search-box.active {
@@ -315,38 +361,41 @@ defineExpose({
 }
 
 .search-options-trigger {
-  @apply mr-0 inline-flex h-6 w-auto max-w-20 items-center gap-1 rounded-md border border-transparent px-1.5 text-[0.68rem];
+  @apply mr-0 inline-flex h-7 w-auto max-w-20 items-center gap-1 rounded-md border px-2 text-xs font-medium leading-none transition-colors;
+  border-color: var(--app-border-soft);
+  background: color-mix(in srgb, var(--app-control-solid) 64%, transparent);
   color: var(--app-text-subtle);
 }
 
 .search-options-trigger:hover {
+  border-color: var(--app-border-soft);
   background: var(--app-control-hover);
   color: var(--app-text-muted);
 }
 
 .search-options-trigger.active {
   border-color: var(--app-accent-border, #bfdbfe);
-  background: var(--app-control-solid);
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 10%, var(--app-control-solid));
   color: var(--app-accent, #2563eb);
 }
 
-.search-options-trigger span {
+.search-options-trigger-label {
   @apply min-w-0 truncate;
 }
 
 .search-options-caret {
-  @apply shrink-0 text-[0.6rem];
+  @apply shrink-0 text-[0.6rem] leading-none;
 }
 
 .search-options-panel {
-  @apply absolute right-0 top-[calc(100%+0.45rem)] z-50 w-44 overflow-hidden rounded-md border py-1;
+  @apply absolute right-0 top-[calc(100%+0.45rem)] z-50 w-48 overflow-hidden rounded-md border p-1.5;
   border-color: var(--app-border-soft);
   background: var(--app-panel-solid);
   box-shadow: var(--app-menu-shadow);
 }
 
 .search-options-title {
-  @apply px-3 py-1 text-[0.68rem] font-medium;
+  @apply px-1.5 pb-1 pt-0.5 text-[0.68rem] font-medium;
   color: var(--app-text-subtle);
 }
 
@@ -356,21 +405,35 @@ defineExpose({
 }
 
 .search-options-item {
-  @apply mr-0 grid h-auto w-full grid-cols-[1rem_1rem_minmax(0,1fr)] items-center gap-2 rounded-none px-2.5 py-1.5 text-left text-sm;
+  @apply mr-0 grid h-auto w-full grid-cols-[1.75rem_minmax(0,1fr)_1.25rem] items-center gap-2 rounded-md border border-transparent px-1.5 py-1.5 text-left text-sm;
   color: var(--app-text-muted);
 }
 
 .search-options-item:hover {
-  background: var(--app-accent-hover, #eff6ff);
+  border-color: var(--app-border-soft);
+  background: var(--app-control-hover);
 }
 
 .search-options-item.active {
-  background: var(--app-accent-soft, #eff6ff);
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 12%, var(--app-panel-solid));
+  color: var(--app-accent, #2563eb);
+}
+
+.search-options-icon {
+  @apply grid size-7 place-items-center rounded;
+  background: var(--app-control);
+  color: var(--app-text-muted);
+}
+
+.search-options-item.active .search-options-icon {
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 14%, transparent);
   color: var(--app-accent, #2563eb);
 }
 
 .search-options-check {
-  @apply text-center text-xs font-semibold;
+  @apply grid size-5 place-items-center rounded-full text-xs font-semibold;
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 12%, transparent);
   color: var(--app-accent, #2563eb);
 }
 
@@ -383,12 +446,35 @@ defineExpose({
 .search-options-trigger:focus-visible,
 .search-options-item:focus-visible {
   @apply outline-none;
-  background: var(--app-control-hover);
   box-shadow: inset 0 0 0 1px var(--app-accent, #2563eb);
 }
 
 .search-options-item:focus-visible {
   background: var(--app-accent-soft, #eff6ff);
   color: var(--app-accent, #2563eb);
+}
+
+@media (max-width: 1180px) {
+  .search-box,
+  .search-box.active,
+  .search-box:focus-within {
+    @apply min-w-48 w-[16rem] max-w-[24vw];
+  }
+
+  .search-options-trigger-label {
+    @apply sr-only;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-icon-motion {
+    transition: none;
+  }
+
+  .nav-button:hover:not(:disabled) .nav-icon-motion,
+  .nav-button:focus-visible:not(:disabled) .nav-icon-motion,
+  .nav-button:active:not(:disabled) .nav-icon-motion {
+    transform: none;
+  }
 }
 </style>

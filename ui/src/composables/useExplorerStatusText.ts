@@ -15,6 +15,20 @@ type ExplorerStatusTextOptions = {
   resultTotal: Ref<number | null>;
 }
 
+export type ExplorerFolderStatus = {
+  sourceText: string;
+  countText: string;
+  moreText: string;
+  title: string;
+}
+
+export type ExplorerSelectionStatus = {
+  active: boolean;
+  countText: string;
+  detailText: string;
+  title: string;
+}
+
 const hasLoadedFileSize = (entry: ExplorerEntry): entry is ExplorerEntry & {type: "file"; size: number} => {
   return entry.type === "file" && Number.isFinite(entry.size);
 }
@@ -55,34 +69,27 @@ export const useExplorerStatusText = ({
 
   const selectedMissingSizeCount = computed(() => selectedFileEntries.value.filter(entry => !hasLoadedFileSize(entry)).length);
 
-  const selectedCountText = computed(() => {
-    const count = selectedEntries.value.length;
-    if (!count) return "未选择项目";
-    return `已选择 ${count} 项`;
-  });
-
-  const totalCountText = computed(() => {
-    const loadedCount = allEntries.value.length;
-    const hasMoreText = hasMore.value ? "，还有更多" : "";
-    if (sourceMode.value === "search") {
-      const total = resultTotal.value;
-      return total !== null ? `搜索结果 ${loadedCount} / ${total} 项` : `搜索结果 ${loadedCount} 项`;
-    }
-    if (sourceMode.value === "recent") return `最近文件 ${loadedCount} 项`;
-    return filterActive.value ? `已加载 ${loadedCount} 项，筛选 ${entries.value.length} 项${hasMoreText}` : `已加载 ${loadedCount} 项${hasMoreText}`;
-  });
-
-  const folderStatusText = computed(() => {
+  const folderStatus = computed<ExplorerFolderStatus>(() => {
     const source = filterActive.value ? entries.value : allEntries.value;
     const folderCount = source.filter(entry => entry.type === "folder").length;
     const fileCount = source.length - folderCount;
-    const prefix = sourceMode.value === "search"
+    const sourceText = sourceMode.value === "search"
         ? "搜索结果"
         : sourceMode.value === "recent"
           ? "最近文件"
-          : filterActive.value ? "筛选结果" : "当前已加载";
-    const suffix = hasMore.value && !filterActive.value ? "，还有更多" : "";
-    return `${prefix}：${folderCount} 个文件夹，${fileCount} 个文件${suffix}`;
+          : filterActive.value ? "筛选结果" : "当前目录";
+    const totalText = sourceMode.value === "search" && resultTotal.value !== null
+        ? `${source.length} / ${resultTotal.value} 项`
+        : `${source.length} 项`;
+    const countParts = [];
+    if (folderCount) countParts.push(`${folderCount} 个文件夹`);
+    if (fileCount) countParts.push(`${fileCount} 个文件`);
+    const countText = countParts.length ? `${totalText} · ${countParts.join("，")}` : totalText;
+    const moreText = hasMore.value
+        ? filterActive.value ? "仅筛选已加载" : "还有更多"
+        : "";
+    const title = `${sourceText}：${countText}${moreText ? `，${moreText}` : ""}`;
+    return {sourceText, countText, moreText, title};
   });
 
   const selectedSizeText = computed(() => {
@@ -94,22 +101,39 @@ export const useExplorerStatusText = ({
     return formatEntrySize(selectedKnownSize.value);
   });
 
-  const selectedStatusText = computed(() => {
+  const selectedStatus = computed<ExplorerSelectionStatus>(() => {
     const selectedCount = selectedEntries.value.length;
-    if (!selectedCount) return "未选择项目";
+    if (!selectedCount) {
+      return {
+        active: false,
+        countText: "未选择项目",
+        detailText: "",
+        title: "未选择项目"
+      };
+    }
     const detail = [];
     if (selectedFileEntries.value.length) detail.push(`${selectedFileEntries.value.length} 个文件`);
     if (selectedFolderCount.value) detail.push(`${selectedFolderCount.value} 个文件夹`);
     if (selectedSizeText.value) detail.push(selectedSizeText.value);
-    return `已选择 ${selectedCount} 项${detail.length ? ` · ${detail.join("，")}` : ""}`;
+    const countText = `已选择 ${selectedCount} 项`;
+    const detailText = detail.join("，");
+    return {
+      active: true,
+      countText,
+      detailText,
+      title: `${countText}${detailText ? ` · ${detailText}` : ""}`
+    };
   });
+
+  const folderStatusText = computed(() => folderStatus.value.title);
+  const selectedStatusText = computed(() => selectedStatus.value.title);
 
   return {
     filterActive,
     emptyText,
     emptyHintText,
-    selectedCountText,
-    totalCountText,
+    folderStatus,
+    selectedStatus,
     folderStatusText,
     selectedStatusText
   };

@@ -29,6 +29,8 @@ const tabStripRef = ref<HTMLElement | null>(null);
 const tabScrollRef = ref<HTMLElement | null>(null);
 const contextMenuRef = ref<HTMLElement | null>(null);
 const tabStripWidth = ref(0);
+const pointerInsideTabStrip = ref(false);
+const lockedTabWidth = ref<number | null>(null);
 const canScrollStart = ref(false);
 const canScrollEnd = ref(false);
 const entryDropTargetTabId = ref("");
@@ -52,8 +54,10 @@ const tabWidth = computed(() => {
   return Math.round(Math.max(tabMinWidth, Math.min(tabIdealWidth, fittedWidth)));
 });
 
+const renderedTabWidth = computed(() => lockedTabWidth.value ?? tabWidth.value);
+
 const tabListStyle = computed(() => ({
-  "--tab-width": `${tabWidth.value}px`
+  "--tab-width": `${renderedTabWidth.value}px`
 }));
 
 const setTabButtonRef = (tabId: string, element: unknown) => {
@@ -89,10 +93,9 @@ const updateTabOverflow = () => {
     return;
   }
   const maxScrollLeft = Math.max(0, scroll.scrollWidth - scroll.clientWidth);
-  const idealListWidth = props.tabs.length * tabIdealWidth + Math.max(0, props.tabs.length - 1) * tabGap;
-  const canFitAtIdealWidth = idealListWidth <= scroll.clientWidth + 1;
-  canScrollStart.value = !canFitAtIdealWidth && scroll.scrollLeft > 1;
-  canScrollEnd.value = !canFitAtIdealWidth && maxScrollLeft > 1 && scroll.scrollLeft < maxScrollLeft - 1;
+  const canScroll = maxScrollLeft > 1;
+  canScrollStart.value = canScroll && scroll.scrollLeft > 1;
+  canScrollEnd.value = canScroll && scroll.scrollLeft < maxScrollLeft - 1;
 }
 
 const scheduleTabOverflowUpdate = () => {
@@ -131,15 +134,25 @@ useOutsidePointerDown({
   onOutsidePointerDown: () => emit("close-context-menu")
 });
 
-watch(() => [props.activeTabId, props.tabs.length] as const, () => {
+watch(() => props.activeTabId, () => {
   void revealActiveTab();
+}, {immediate: true});
+
+watch(() => props.tabs.length, () => {
   scheduleTabOverflowRefresh();
 }, {immediate: true});
 
-watch(() => props.tabs.map(tab => `${tab.id}:${tab.title}`).join("|"), async () => {
-  await nextTick();
-  scheduleTabOverflowRefresh();
-}, {flush: "post", immediate: true});
+watch(() => [props.tabs.length, tabWidth.value] as const, ([nextCount, nextWidth], previous) => {
+  if (!previous) return;
+  const [previousCount, previousWidth] = previous;
+  if (nextCount < previousCount && nextWidth > previousWidth && pointerInsideTabStrip.value) {
+    lockedTabWidth.value ??= previousWidth;
+    return;
+  }
+  if (lockedTabWidth.value !== null && nextWidth <= lockedTabWidth.value) {
+    lockedTabWidth.value = null;
+  }
+}, {flush: "sync"});
 
 watch(() => [props.contextMenu.visible, props.contextMenu.tabId, props.contextMenu.x, props.contextMenu.y] as const, ([visible]) => {
   if (visible) void refreshContextMenu();
@@ -153,6 +166,18 @@ watch(() => props.contextMenu.visible, async (visible, wasVisible) => {
 const handleWindowResize = () => {
   scheduleTabOverflowUpdate();
   if (props.contextMenu.visible) void refreshContextMenu();
+}
+
+const handleTabStripPointerEnter = () => {
+  pointerInsideTabStrip.value = true;
+}
+
+const handleTabStripPointerLeave = () => {
+  pointerInsideTabStrip.value = false;
+  if (lockedTabWidth.value !== null) {
+    lockedTabWidth.value = null;
+    scheduleTabOverflowRefresh();
+  }
 }
 
 const handleTabScroll = () => {
@@ -359,7 +384,12 @@ const handleAddDrop = (event: DragEvent) => {
 </script>
 
 <template>
-  <nav ref="tabStripRef" class="tab-strip" aria-label="目录标签">
+  <nav
+      ref="tabStripRef"
+      class="tab-strip"
+      aria-label="目录标签"
+      @pointerenter="handleTabStripPointerEnter"
+      @pointerleave="handleTabStripPointerLeave">
     <div
         class="tab-scroll-frame"
         :class="{canScrollStart, canScrollEnd}">
@@ -368,7 +398,7 @@ const handleAddDrop = (event: DragEvent) => {
           class="tab-scroll"
           @scroll="handleTabScroll"
           @wheel="handleTabWheel">
-        <transition-group name="tab-motion" tag="div" class="tab-list" :style="tabListStyle">
+        <div class="tab-list" :style="tabListStyle">
           <button
               v-for="tab in tabs"
               :key="tab.id"
@@ -384,7 +414,7 @@ const handleAddDrop = (event: DragEvent) => {
               :title="`${tab.path} · 中键关闭`"
               draggable="true"
               @click="emit('activate-tab', tab.id)"
-              @mousedown.middle.prevent.stop="emit('tab-aux-click', $event, tab.id)"
+              @mousedown.middle.prevent.stop
               @auxclick="emit('tab-aux-click', $event, tab.id)"
               @contextmenu="emit('tab-context-menu', $event, tab.id)"
               @keydown="handleTabKeyDown($event, tab)"
@@ -396,10 +426,12 @@ const handleAddDrop = (event: DragEvent) => {
             <icon icon="file.folder" />
             <span>{{ tab.title }}</span>
             <span class="tab-close" title="关闭标签页 (Ctrl+W)" @click="emit('close-tab', $event, tab.id)">
-              <icon icon="action.close" size="small" />
+              <span class="tab-close-icon-motion">
+                <icon icon="action.close" size="0.98rem" />
+              </span>
             </span>
           </button>
-        </transition-group>
+        </div>
       </div>
     </div>
     <button
@@ -409,7 +441,9 @@ const handleAddDrop = (event: DragEvent) => {
         @dragover="handleAddDragOver"
         @dragleave="handleAddDragLeave"
         @drop="handleAddDrop">
-      <icon icon="action.add" />
+      <span class="tab-add-icon-motion">
+        <icon icon="action.add" size="1.12rem" />
+      </span>
     </button>
   </nav>
 
@@ -486,10 +520,10 @@ const handleAddDrop = (event: DragEvent) => {
 }
 
 .tab-button {
-  @apply relative inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm shadow-sm;
-  width: var(--tab-width, 10.5rem);
-  min-width: var(--tab-width, 10.5rem);
-  max-width: var(--tab-width, 10.5rem);
+  @apply relative inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border py-0 pl-3 pr-1.5 text-sm shadow-sm;
+  width: var(--tab-width, 13rem);
+  min-width: var(--tab-width, 13rem);
+  max-width: var(--tab-width, 13rem);
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);
   color: var(--app-text);
@@ -498,10 +532,7 @@ const handleAddDrop = (event: DragEvent) => {
       min-width 0.16s ease,
       max-width 0.16s ease,
       opacity 0.16s ease,
-      transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
       border-color 0.14s ease,
-      background 0.14s ease,
-      color 0.14s ease,
       box-shadow 0.14s ease;
 }
 
@@ -576,7 +607,32 @@ const handleAddDrop = (event: DragEvent) => {
 }
 
 .tab-close {
-  @apply ml-auto inline-flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-black/10;
+  @apply ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md hover:bg-black/10;
+  color: currentColor;
+  transition: background 0.14s ease, color 0.14s ease, transform 0.14s ease;
+}
+
+.tab-close:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.tab-close:active {
+  transform: scale(0.94);
+}
+
+.tab-close-icon-motion,
+.tab-add-icon-motion {
+  @apply inline-flex items-center justify-center;
+  transition: transform 0.16s ease;
+}
+
+.tab-close:hover .tab-close-icon-motion,
+.tab-close:focus-visible .tab-close-icon-motion {
+  transform: scale(1.08);
+}
+
+.tab-close:active .tab-close-icon-motion {
+  transform: scale(0.9);
 }
 
 .tab-add {
@@ -591,33 +647,17 @@ const handleAddDrop = (event: DragEvent) => {
   background: var(--app-accent-hover, #eff6ff);
 }
 
+.tab-add:hover .tab-add-icon-motion,
+.tab-add:focus-visible .tab-add-icon-motion {
+  transform: scale(1.12);
+}
+
 .tab-add:active {
   transform: scale(0.96);
 }
 
-.tab-motion-enter-active,
-.tab-motion-leave-active {
-  transition:
-      opacity 0.16s ease,
-      transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.tab-motion-enter-from {
-  opacity: 0;
-  transform: translateY(6px) scale(0.96);
-}
-
-.tab-motion-leave-to {
-  opacity: 0;
-  transform: translateY(-4px) scale(0.96);
-}
-
-.tab-motion-leave-active {
-  @apply absolute;
-}
-
-.tab-motion-move {
-  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+.tab-add:active .tab-add-icon-motion {
+  transform: scale(0.92);
 }
 
 .tab-context-menu {
@@ -654,5 +694,23 @@ const handleAddDrop = (event: DragEvent) => {
 .tab-context-separator {
   @apply my-1 border-t;
   border-color: var(--app-border-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-close,
+  .tab-close-icon-motion,
+  .tab-add,
+  .tab-add-icon-motion {
+    transition: none;
+  }
+
+  .tab-close:hover .tab-close-icon-motion,
+  .tab-close:focus-visible .tab-close-icon-motion,
+  .tab-close:active .tab-close-icon-motion,
+  .tab-add:hover .tab-add-icon-motion,
+  .tab-add:focus-visible .tab-add-icon-motion,
+  .tab-add:active .tab-add-icon-motion {
+    transform: none;
+  }
 }
 </style>

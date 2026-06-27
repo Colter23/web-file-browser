@@ -52,6 +52,12 @@ const classicSymbolIcons: Record<string, string> = {
   "action.drag-handle": "icon-listview",
   "action.tools": "icon-wrench",
 
+  "nav.back": "icon-back_android",
+  "nav.forward": "icon-back_android",
+  "nav.up": "icon-back_android",
+  "nav.refresh": "icon-refresh",
+  "nav.recent": "icon-refresh",
+
   "playback.sequence": "icon-listview",
   "playback.repeat-one": "icon-refresh",
   "playback.repeat-all": "icon-refresh",
@@ -98,6 +104,8 @@ const classicSymbolIcons: Record<string, string> = {
 const classicSymbolTransforms: Record<string, string> = {
   "action.next": "rotate(180deg)",
   "action.up": "rotate(90deg)",
+  "nav.forward": "rotate(180deg)",
+  "nav.up": "rotate(90deg)",
   "action.exit-fullscreen": "scale(0.82)",
   "view.preview-pane-close": "scaleX(-1)"
 };

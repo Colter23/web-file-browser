@@ -229,7 +229,7 @@ const visualIconSize = computed(() => {
             {{ segment.text }}
           </span>
         </span>
-        <span v-if="viewMode !== 'details'" class="entry-meta">{{ typeText }}</span>
+        <span v-if="viewMode === 'list' || viewMode === 'tiles'" class="entry-meta">{{ typeText }}</span>
       </div>
     </div>
     <span v-if="viewMode === 'details'" class="entry-date">{{ modifiedText }}</span>
@@ -303,7 +303,7 @@ const visualIconSize = computed(() => {
 }
 
 .entry-item.view-tiles {
-  @apply grid min-h-20 grid-cols-[3.5rem_minmax(0,1fr)] grid-rows-[auto_auto] items-center gap-x-3 gap-y-1 p-2;
+  @apply grid min-h-20 grid-cols-[3.5rem_minmax(0,1fr)] grid-rows-[auto_auto] items-center gap-x-3 gap-y-0.5 p-2;
 }
 
 .entry-name-cell {
@@ -376,7 +376,7 @@ const visualIconSize = computed(() => {
 }
 
 .entry-item.view-tiles .entry-main {
-  @apply flex-col items-start gap-1 self-end;
+  @apply flex-col items-start gap-0.5 self-end;
 }
 
 .entry-item.view-details .entry-main,
@@ -520,21 +520,17 @@ const visualIconSize = computed(() => {
 }
 
 .entry-tile-meta {
-  @apply col-start-2 self-start;
+  @apply col-start-2 self-start text-[11px];
 }
 
 .entry-item.view-list .entry-main {
   @apply grid min-w-0 items-center gap-x-2;
-  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-columns: minmax(0, 1fr) minmax(3.5rem, max-content);
 }
 
 .entry-item.view-list .entry-meta {
-  @apply shrink-0 whitespace-nowrap;
+  @apply shrink-0 whitespace-nowrap text-right;
   overflow: visible;
   text-overflow: clip;
-}
-
-.entry-item.view-icons .entry-meta {
-  @apply text-[11px] leading-none;
 }
 </style>

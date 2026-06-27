@@ -7,6 +7,7 @@ import arrowClockwiseDashesSvg from "@fluentui/svg-icons/icons/arrow_clockwise_d
 import arrowSquareDownSvg from "@fluentui/svg-icons/icons/arrow_square_down_24_color.svg?raw";
 import arrowSyncSvg from "@fluentui/svg-icons/icons/arrow_sync_24_color.svg?raw";
 import boardSvg from "@fluentui/svg-icons/icons/board_24_color.svg?raw";
+import calendarClockSvg from "@fluentui/svg-icons/icons/calendar_clock_24_color.svg?raw";
 import checkmarkCircleSvg from "@fluentui/svg-icons/icons/checkmark_circle_24_color.svg?raw";
 import checkboxSvg from "@fluentui/svg-icons/icons/checkbox_24_color.svg?raw";
 import clipboardTaskSvg from "@fluentui/svg-icons/icons/clipboard_task_24_color.svg?raw";
@@ -29,6 +30,7 @@ import laptopSvg from "@fluentui/svg-icons/icons/laptop_24_color.svg?raw";
 import linkSvg from "@fluentui/svg-icons/icons/link_24_color.svg?raw";
 import linkMultipleSvg from "@fluentui/svg-icons/icons/link_multiple_24_color.svg?raw";
 import lockClosedSvg from "@fluentui/svg-icons/icons/lock_closed_24_color.svg?raw";
+import numberSymbolSquareSvg from "@fluentui/svg-icons/icons/number_symbol_square_24_color.svg?raw";
 import optionsSvg from "@fluentui/svg-icons/icons/options_24_color.svg?raw";
 import paintBrushSvg from "@fluentui/svg-icons/icons/paint_brush_24_color.svg?raw";
 import personSvg from "@fluentui/svg-icons/icons/person_24_color.svg?raw";
@@ -83,6 +85,12 @@ const fluentColorIcons: Record<string, string> = {
   "action.warning": warningSvg,
   "action.properties": contentViewSvg,
   "action.tools": wrenchScrewdriverSvg,
+
+  "nav.refresh": arrowClockwiseDashesSvg,
+  "nav.recent": historySvg,
+
+  "sort.modified": calendarClockSvg,
+  "sort.size": numberSymbolSquareSvg,
 
   "appearance.system": laptopSvg,
   "appearance.light": weatherSunnyLowSvg,

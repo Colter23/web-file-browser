@@ -7,14 +7,20 @@ import arrowClockwiseSvg from "@fluentui/svg-icons/icons/arrow_clockwise_24_fill
 import arrowCounterClockwiseSvg from "@fluentui/svg-icons/icons/arrow_counterclockwise_24_filled.svg?raw";
 import arrowDownloadSvg from "@fluentui/svg-icons/icons/arrow_download_24_filled.svg?raw";
 import arrowExportSvg from "@fluentui/svg-icons/icons/arrow_export_24_filled.svg?raw";
+import arrowLeftSvg from "@fluentui/svg-icons/icons/arrow_left_24_filled.svg?raw";
 import arrowMaximizeSvg from "@fluentui/svg-icons/icons/arrow_maximize_24_filled.svg?raw";
+import arrowRightSvg from "@fluentui/svg-icons/icons/arrow_right_24_filled.svg?raw";
 import arrowRepeatAllSvg from "@fluentui/svg-icons/icons/arrow_repeat_all_24_filled.svg?raw";
 import arrowRepeatOneSvg from "@fluentui/svg-icons/icons/arrow_repeat_1_24_filled.svg?raw";
 import arrowShuffleSvg from "@fluentui/svg-icons/icons/arrow_shuffle_24_filled.svg?raw";
+import arrowSortDownLinesSvg from "@fluentui/svg-icons/icons/arrow_sort_down_lines_24_filled.svg?raw";
+import arrowSortUpLinesSvg from "@fluentui/svg-icons/icons/arrow_sort_up_lines_24_filled.svg?raw";
 import arrowUploadSvg from "@fluentui/svg-icons/icons/arrow_upload_24_filled.svg?raw";
+import arrowUpSvg from "@fluentui/svg-icons/icons/arrow_up_24_filled.svg?raw";
 import boardSvg from "@fluentui/svg-icons/icons/board_24_filled.svg?raw";
 import boxSvg from "@fluentui/svg-icons/icons/box_24_filled.svg?raw";
 import broomSvg from "@fluentui/svg-icons/icons/broom_24_filled.svg?raw";
+import calendarClockSvg from "@fluentui/svg-icons/icons/calendar_clock_24_filled.svg?raw";
 import checkmarkSvg from "@fluentui/svg-icons/icons/checkmark_24_filled.svg?raw";
 import chevronDownSvg from "@fluentui/svg-icons/icons/chevron_down_24_filled.svg?raw";
 import chevronLeftSvg from "@fluentui/svg-icons/icons/chevron_left_24_filled.svg?raw";
@@ -57,6 +63,7 @@ import listSvg from "@fluentui/svg-icons/icons/list_24_filled.svg?raw";
 import moreHorizontalSvg from "@fluentui/svg-icons/icons/more_horizontal_24_filled.svg?raw";
 import musicNoteSvg from "@fluentui/svg-icons/icons/music_note_2_24_filled.svg?raw";
 import navigationSvg from "@fluentui/svg-icons/icons/navigation_24_filled.svg?raw";
+import numberSymbolSquareSvg from "@fluentui/svg-icons/icons/number_symbol_square_24_filled.svg?raw";
 import openSvg from "@fluentui/svg-icons/icons/open_24_filled.svg?raw";
 import panelBottomContractSvg from "@fluentui/svg-icons/icons/panel_bottom_contract_20_filled.svg?raw";
 import panelRightSvg from "@fluentui/svg-icons/icons/panel_right_24_filled.svg?raw";
@@ -79,6 +86,8 @@ import speakerSvg from "@fluentui/svg-icons/icons/speaker_2_24_filled.svg?raw";
 import starSvg from "@fluentui/svg-icons/icons/star_24_filled.svg?raw";
 import textBulletListSvg from "@fluentui/svg-icons/icons/text_bullet_list_24_filled.svg?raw";
 import textFontSvg from "@fluentui/svg-icons/icons/text_font_24_filled.svg?raw";
+import textSortAscendingSvg from "@fluentui/svg-icons/icons/text_sort_ascending_24_filled.svg?raw";
+import textSortDescendingSvg from "@fluentui/svg-icons/icons/text_sort_descending_24_filled.svg?raw";
 import videoClipSvg from "@fluentui/svg-icons/icons/video_clip_24_filled.svg?raw";
 import warningSvg from "@fluentui/svg-icons/icons/warning_24_filled.svg?raw";
 import weatherMoonSvg from "@fluentui/svg-icons/icons/weather_moon_24_filled.svg?raw";
@@ -161,6 +170,20 @@ export const fluentIcons: Record<string, string> = {
   "action.down": chevronDownSvg,
   "action.drag-handle": reOrderDotsSvg,
   "action.tools": wrenchSvg,
+
+  "nav.back": arrowLeftSvg,
+  "nav.forward": arrowRightSvg,
+  "nav.up": arrowUpSvg,
+  "nav.refresh": arrowClockwiseSvg,
+  "nav.recent": historySvg,
+
+  "sort.name": textSortAscendingSvg,
+  "sort.modified": calendarClockSvg,
+  "sort.size": numberSymbolSquareSvg,
+  "sort.asc": arrowSortUpLinesSvg,
+  "sort.desc": arrowSortDownLinesSvg,
+  "sort.small-large": textSortAscendingSvg,
+  "sort.large-small": textSortDescendingSvg,
 
   "playback.sequence": pauseSvg,
   "playback.repeat-one": arrowRepeatOneSvg,

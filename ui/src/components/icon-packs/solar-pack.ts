@@ -8,6 +8,9 @@ import altArrowRightIcon from "@iconify-icons/solar/alt-arrow-right-bold-duotone
 import altArrowUpIcon from "@iconify-icons/solar/alt-arrow-up-bold-duotone";
 import archiveIcon from "@iconify-icons/solar/archive-bold-duotone";
 import archiveDownIcon from "@iconify-icons/solar/archive-down-bold-duotone";
+import arrowLeftIcon from "@iconify-icons/solar/arrow-left-bold-duotone";
+import arrowRightIcon from "@iconify-icons/solar/arrow-right-bold-duotone";
+import arrowUpIcon from "@iconify-icons/solar/arrow-up-bold-duotone";
 import boxIcon from "@iconify-icons/solar/box-bold-duotone";
 import broomIcon from "@iconify-icons/solar/broom-bold-duotone";
 import checkCircleIcon from "@iconify-icons/solar/check-circle-bold-duotone";
@@ -66,6 +69,10 @@ import shuffleIcon from "@iconify-icons/solar/shuffle-bold-duotone";
 import sidebarIcon from "@iconify-icons/solar/siderbar-bold-duotone";
 import sidebarMinimalisticIcon from "@iconify-icons/solar/sidebar-minimalistic-bold-duotone";
 import sledgehammerIcon from "@iconify-icons/solar/sledgehammer-bold-duotone";
+import sortByAlphabetIcon from "@iconify-icons/solar/sort-by-alphabet-bold-duotone";
+import sortByTimeIcon from "@iconify-icons/solar/sort-by-time-bold-duotone";
+import sortFromBottomToTopIcon from "@iconify-icons/solar/sort-from-bottom-to-top-bold-duotone";
+import sortFromTopToBottomIcon from "@iconify-icons/solar/sort-from-top-to-bottom-bold-duotone";
 import speakerIcon from "@iconify-icons/solar/speaker-bold-duotone";
 import squareAltArrowRightIcon from "@iconify-icons/solar/square-alt-arrow-right-bold-duotone";
 import starIcon from "@iconify-icons/solar/star-bold-duotone";
@@ -170,6 +177,20 @@ const solarIcons: Record<string, SolarIconData> = {
   "action.down": altArrowDownIcon,
   "action.drag-handle": reorderIcon,
   "action.tools": sledgehammerIcon,
+
+  "nav.back": arrowLeftIcon,
+  "nav.forward": arrowRightIcon,
+  "nav.up": arrowUpIcon,
+  "nav.refresh": refreshIcon,
+  "nav.recent": historyIcon,
+
+  "sort.name": sortByAlphabetIcon,
+  "sort.modified": sortByTimeIcon,
+  "sort.size": sortFromTopToBottomIcon,
+  "sort.asc": sortFromBottomToTopIcon,
+  "sort.desc": sortFromTopToBottomIcon,
+  "sort.small-large": sortFromBottomToTopIcon,
+  "sort.large-small": sortFromTopToBottomIcon,
 
   "playback.sequence": pauseCircleIcon,
   "playback.repeat-one": repeatOneIcon,

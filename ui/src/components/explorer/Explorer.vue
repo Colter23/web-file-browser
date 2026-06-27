@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, nextTick, onBeforeUnmount, watch} from "vue";
+import {computed, nextTick, onBeforeUnmount, ref, watch} from "vue";
 import {useFileStore} from "../../store";
 import {useDetailsColumns} from "../../composables/useDetailsColumns.ts";
 import {useExplorerContextMenu} from "../../composables/useExplorerContextMenu.ts";
@@ -124,8 +124,12 @@ const props = withDefaults(defineProps<{
 
 const fileStore = useFileStore();
 const SLOW_RENAME_DELAY_MS = 560;
+const explorerFocusVisible = ref(false);
 let delayedRenameTimer: number | undefined;
 let delayedRenamePath = "";
+let keyboardInputActive = false;
+
+const nonNavigationKeys = new Set(["Alt", "AltGraph", "CapsLock", "Control", "Fn", "Meta", "NumLock", "ScrollLock", "Shift"]);
 
 const clearDelayedRename = () => {
   if (delayedRenameTimer !== undefined) {
@@ -230,6 +234,8 @@ const {
   filterActive,
   emptyText,
   emptyHintText,
+  folderStatus,
+  selectedStatus,
   folderStatusText,
   selectedStatusText
 } = useExplorerStatusText({
@@ -529,6 +535,29 @@ const fitDetailsColumn = (key: DetailsColumnKey) => {
   focusViewport();
 }
 
+const markPointerInput = () => {
+  keyboardInputActive = false;
+  explorerFocusVisible.value = false;
+}
+
+const markKeyboardInput = (event: KeyboardEvent) => {
+  if (nonNavigationKeys.has(event.key)) return;
+  keyboardInputActive = true;
+  if (isViewportActive() && !renamingPath.value) explorerFocusVisible.value = true;
+}
+
+const handleViewportFocus = () => {
+  explorerFocusVisible.value = keyboardInputActive && !renamingPath.value;
+  ensureFocusAnchor();
+}
+
+const handleViewportFocusOut = (event: FocusEvent) => {
+  const current = event.currentTarget;
+  const next = event.relatedTarget;
+  if (current instanceof HTMLElement && next instanceof Node && current.contains(next)) return;
+  explorerFocusVisible.value = false;
+}
+
 const selectPathForRename = async (path: string) => {
   const entry = entryByPath(path);
   if (!entry) return false;
@@ -746,6 +775,7 @@ const beginEntryDragFromPointer = (event: DragEvent, entry: ExplorerEntry) => {
 }
 
 const handleExplorerKeyDown = (event: KeyboardEvent) => {
+  markKeyboardInput(event);
   if (!renamingPath.value) clearDelayedRename();
   void handleKeyDown(event);
 }
@@ -799,7 +829,7 @@ defineExpose({
 </script>
 
 <template>
-  <section class="explorer-shell">
+  <section class="explorer-shell" :class="{focusVisible: explorerFocusVisible}" @pointerdown.capture="markPointerInput">
     <div
         ref="viewportRef"
         class="explorer-viewport"
@@ -810,7 +840,8 @@ defineExpose({
         :aria-busy="loading || loadingMore"
         :aria-activedescendant="focusedPath ? entryDomId(focusedPath) : undefined"
         tabindex="0"
-        @focus="ensureFocusAnchor"
+        @focus="handleViewportFocus"
+        @focusout="handleViewportFocusOut"
         @click="activateViewport"
         @mousedown="beginMarqueeSelection"
         @scroll="handleViewportScroll"
@@ -900,7 +931,11 @@ defineExpose({
       </div>
     </div>
 
-    <explorer-status-bar :folder-status-text="folderStatusText" :selected-status-text="selectedStatusText" />
+    <explorer-status-bar
+        :folder-status="folderStatus"
+        :selection-status="selectedStatus"
+        :folder-status-text="folderStatusText"
+        :selected-status-text="selectedStatusText" />
 
     <explorer-context-menu
         v-if="contextMenu.visible"
@@ -958,13 +993,20 @@ defineExpose({
   background: var(--app-panel-solid);
 }
 
+.explorer-shell.focusVisible:has(.explorer-viewport:focus-within)::after {
+  content: "";
+  @apply pointer-events-none absolute inset-x-0 top-0 z-40;
+  bottom: 2rem;
+  box-shadow: inset 0 0 0 2px var(--app-accent, #2563eb);
+}
+
 .explorer-viewport {
   @apply relative grow overflow-auto outline-none select-none;
   background: var(--app-panel-solid);
 }
 
 .explorer-viewport:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--app-accent, #2563eb);
+  outline: none;
 }
 
 .explorer-viewport.dropCurrent {
@@ -988,7 +1030,7 @@ defineExpose({
 }
 
 .explorer-viewport.view-list .entry-surface {
-  @apply grid auto-rows-[2rem] grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-x-3 gap-y-1 p-2;
+  @apply grid auto-rows-[2rem] grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-x-3 gap-y-1 p-2;
 }
 
 .explorer-viewport.view-icons .entry-surface {

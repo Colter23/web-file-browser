@@ -1,6 +1,11 @@
 <script setup lang="ts">
+import {nextTick, onBeforeUnmount, onMounted, ref} from "vue";
+import type {CSSProperties} from "vue";
 import type {DirSortKey, DirSortOrder, ExplorerIconSize, ExplorerViewMode} from "../../class";
 import type {ExplorerViewModeSelection} from "../../composables/useExplorerViewMode.ts";
+import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
+import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
+import {scrollHorizontallyWithWheel} from "../../utils/wheel.ts";
 import Icon from "../Icon.vue";
 import SortMenu from "./SortMenu.vue";
 import ViewModeMenu from "./ViewModeMenu.vue";
@@ -43,63 +48,158 @@ const emit = defineEmits<{
   (e: "set-sort-order", order: DirSortOrder): void;
   (e: "toggle-preview"): void;
 }>();
+
+const commandBarRef = ref<HTMLElement | null>(null);
+const commandActionsRef = ref<HTMLElement | null>(null);
+const createButtonRef = ref<HTMLButtonElement | null>(null);
+const createMenuRef = ref<HTMLElement | null>(null);
+const createMenuOpen = ref(false);
+const createMenuStyle = ref<CSSProperties>({});
+
+const closeCreateMenu = () => {
+  createMenuOpen.value = false;
+}
+
+const updateCreateMenuPosition = () => {
+  const bar = commandBarRef.value;
+  const button = createButtonRef.value;
+  if (!bar || !button) return;
+  const barRect = bar.getBoundingClientRect();
+  const buttonRect = button.getBoundingClientRect();
+  const menuWidth = 224;
+  const left = Math.min(Math.max(8, buttonRect.left - barRect.left), Math.max(8, barRect.width - menuWidth - 8));
+  createMenuStyle.value = {
+    left: `${left}px`,
+    top: `${buttonRect.bottom - barRect.top + 6}px`
+  };
+}
+
+const focusCreateButton = async () => {
+  await nextTick();
+  createButtonRef.value?.focus({preventScroll: true});
+}
+
+const {
+  focusFirstMenuButton,
+  handleMenuKeyDown: handleCreateMenuKeyDown
+} = useMenuKeyboardNavigation({
+  menuRef: createMenuRef,
+  onEscape: () => {
+    closeCreateMenu();
+    void focusCreateButton();
+  }
+});
+
+const openCreateMenu = async () => {
+  updateCreateMenuPosition();
+  createMenuOpen.value = true;
+  await focusFirstMenuButton();
+}
+
+const toggleCreateMenu = async () => {
+  if (createMenuOpen.value) {
+    closeCreateMenu();
+    return;
+  }
+  await openCreateMenu();
+}
+
+const handleCreateButtonKeyDown = (event: KeyboardEvent) => {
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  event.preventDefault();
+  if (!createMenuOpen.value) void openCreateMenu();
+  else void focusFirstMenuButton();
+}
+
+const emitCreateAction = (type: "file" | "folder") => {
+  closeCreateMenu();
+  if (type === "file") emit("create-file");
+  else emit("create-folder");
+}
+
+useOutsidePointerDown({
+  refs: [createButtonRef, createMenuRef],
+  enabled: () => createMenuOpen.value,
+  onOutsidePointerDown: closeCreateMenu
+});
+
+onMounted(() => {
+  commandActionsRef.value?.addEventListener("wheel", scrollHorizontallyWithWheel, {passive: false});
+  commandActionsRef.value?.addEventListener("scroll", updateCreateMenuPosition, {passive: true});
+  window.addEventListener("resize", updateCreateMenuPosition);
+});
+
+onBeforeUnmount(() => {
+  commandActionsRef.value?.removeEventListener("wheel", scrollHorizontallyWithWheel);
+  commandActionsRef.value?.removeEventListener("scroll", updateCreateMenuPosition);
+  window.removeEventListener("resize", updateCreateMenuPosition);
+});
 </script>
 
 <template>
-  <div class="command-bar">
-    <div class="command-actions" aria-label="文件操作">
-      <button class="command-button strong" title="上传" @click="emit('upload')">
-        <icon icon="action.upload" />
-        <span>上传</span>
-      </button>
-      <button class="command-button" @click="emit('create-file')">
-        <icon icon="action.new-file" />
-        <span>新建文件</span>
-      </button>
-      <button class="command-button" title="新建文件夹 (Ctrl+Shift+N)" @click="emit('create-folder')">
-        <icon icon="action.new-folder" />
-        <span>新建文件夹</span>
-      </button>
-      <span class="command-separator"></span>
-      <button class="command-button" :disabled="!hasSelection" title="剪切 (Ctrl+X)" @click="emit('cut')">
-        <icon icon="action.cut" />
-        <span>剪切</span>
-      </button>
-      <button class="command-button" :disabled="!hasSelection" title="复制 (Ctrl+C)" @click="emit('copy')">
-        <icon icon="action.copy" />
-        <span>复制</span>
-      </button>
-      <button class="command-button" :disabled="!canPasteSelection" title="粘贴 (Ctrl+V)" @click="emit('paste')">
-        <icon icon="action.paste" />
-        <span>粘贴</span>
-      </button>
-      <span class="command-separator"></span>
-      <button class="command-button" :disabled="!canDownloadSelection" @click="emit('download')">
-        <icon icon="action.download" />
-        <span>下载</span>
-      </button>
-      <button class="command-button" :disabled="!canPreviewSelection" title="预览 (Space / Ctrl+Enter)" @click="emit('preview')">
-        <icon icon="action.preview" />
-        <span>预览</span>
-      </button>
-      <button class="command-button" :disabled="!canArchiveSelection" @click="emit('archive')">
-        <icon icon="action.archive" />
-        <span>压缩</span>
-      </button>
-      <button class="command-button" :disabled="!canExtractSelection" @click="emit('extract')">
-        <icon icon="action.extract" />
-        <span>解压</span>
-      </button>
-      <button class="command-button" :disabled="!canRenameSelection" @click="emit('rename')">
-        <icon icon="action.rename" />
-        <span>重命名</span>
-      </button>
-      <button class="command-button danger" :disabled="!canDeleteSelection" @click="emit('delete')">
-        <icon icon="action.delete" />
-        <span>删除</span>
-      </button>
+  <div ref="commandBarRef" class="command-bar">
+    <div ref="commandActionsRef" class="command-actions" aria-label="文件操作">
+      <div class="command-group command-group-primary" role="group" aria-label="新建和上传">
+        <button class="command-button strong" title="上传" @click="emit('upload')">
+          <icon icon="action.upload" />
+          <span>上传</span>
+        </button>
+        <button
+            ref="createButtonRef"
+            class="command-button"
+            :class="{active: createMenuOpen}"
+            title="新建文件或文件夹"
+            aria-haspopup="menu"
+            :aria-expanded="createMenuOpen"
+            @click="toggleCreateMenu"
+            @keydown="handleCreateButtonKeyDown">
+          <icon icon="action.new-file" />
+          <span>新建</span>
+          <icon class="command-button-caret icon-motion-caret" :class="{'is-open': createMenuOpen}" icon="action.down" />
+        </button>
+      </div>
+      <div class="command-group" role="group" aria-label="剪贴板">
+        <button class="command-button" :disabled="!hasSelection" title="剪切 (Ctrl+X)" @click="emit('cut')">
+          <icon icon="action.cut" />
+          <span>剪切</span>
+        </button>
+        <button class="command-button" :disabled="!hasSelection" title="复制 (Ctrl+C)" @click="emit('copy')">
+          <icon icon="action.copy" />
+          <span>复制</span>
+        </button>
+        <button class="command-button" :disabled="!canPasteSelection" title="粘贴 (Ctrl+V)" @click="emit('paste')">
+          <icon icon="action.paste" />
+          <span>粘贴</span>
+        </button>
+      </div>
+      <div class="command-group" role="group" aria-label="所选项目操作">
+        <button class="command-button" :disabled="!canDownloadSelection" title="下载" @click="emit('download')">
+          <icon icon="action.download" />
+          <span>下载</span>
+        </button>
+        <button class="command-button" :disabled="!canPreviewSelection" title="预览 (Space / Ctrl+Enter)" @click="emit('preview')">
+          <icon icon="action.preview" />
+          <span>预览</span>
+        </button>
+        <button class="command-button" :disabled="!canArchiveSelection" title="压缩" @click="emit('archive')">
+          <icon icon="action.archive" />
+          <span>压缩</span>
+        </button>
+        <button class="command-button" :disabled="!canExtractSelection" title="解压" @click="emit('extract')">
+          <icon icon="action.extract" />
+          <span>解压</span>
+        </button>
+        <button class="command-button" :disabled="!canRenameSelection" title="重命名" @click="emit('rename')">
+          <icon icon="action.rename" />
+          <span>重命名</span>
+        </button>
+        <button class="command-button danger" :disabled="!canDeleteSelection" title="删除" @click="emit('delete')">
+          <icon icon="action.delete" />
+          <span>删除</span>
+        </button>
+      </div>
     </div>
-    <div class="command-view-tools">
+    <div class="command-view-tools" role="group" aria-label="查看和排序">
       <sort-menu
           :sort-key="sortKey"
           :sort-order="sortOrder"
@@ -116,10 +216,33 @@ const emit = defineEmits<{
           class="view-button"
           :class="{active: previewPanelVisible}"
           :disabled="!canTogglePreviewPane"
-          title="预览窗格 (Alt+P)"
+          :title="previewPanelVisible ? '关闭预览窗格 (Alt+P)' : '打开预览窗格 (Alt+P)'"
           @click="emit('toggle-preview')">
         <icon icon="view.preview-pane" />
-        <span>{{ previewPanelVisible ? "关闭预览" : "预览窗格" }}</span>
+        <span>预览窗格</span>
+      </button>
+    </div>
+    <div
+        v-if="createMenuOpen"
+        ref="createMenuRef"
+        class="create-menu-panel"
+        :style="createMenuStyle"
+        role="menu"
+        aria-label="新建"
+        @keydown="handleCreateMenuKeyDown">
+      <button class="create-menu-item" type="button" role="menuitem" tabindex="-1" @click="emitCreateAction('file')">
+        <span class="create-menu-icon"><icon icon="action.new-file" /></span>
+        <span class="create-menu-copy">
+          <strong>新建文件</strong>
+          <small>在当前文件夹创建空文件</small>
+        </span>
+      </button>
+      <button class="create-menu-item" type="button" role="menuitem" tabindex="-1" @click="emitCreateAction('folder')">
+        <span class="create-menu-icon"><icon icon="action.new-folder" /></span>
+        <span class="create-menu-copy">
+          <strong>新建文件夹</strong>
+          <small>快捷键 Ctrl+Shift+N</small>
+        </span>
       </button>
     </div>
   </div>
@@ -129,18 +252,37 @@ const emit = defineEmits<{
 @reference "tailwindcss";
 
 .command-bar {
-  @apply relative z-30 flex h-11 shrink-0 items-center gap-2 overflow-visible border-b px-2.5;
+  @apply relative z-30 flex h-11 shrink-0 items-center gap-2 overflow-visible border-b px-2;
   border-color: var(--app-border-soft);
   background: var(--app-panel-solid);
 }
 
 .command-actions {
-  @apply flex h-full min-w-0 grow items-center gap-0.5 overflow-x-auto overflow-y-hidden;
+  @apply flex h-full min-w-0 grow items-center gap-1 overflow-x-auto overflow-y-hidden pr-1;
   scrollbar-width: none;
 }
 
 .command-actions::-webkit-scrollbar {
   display: none;
+}
+
+.command-group {
+  @apply flex h-8 shrink-0 items-center gap-0.5 rounded-md border border-transparent px-0.5;
+}
+
+.command-group + .command-group {
+  @apply relative ml-1 border-l border-transparent pl-2;
+  border-radius: 0;
+}
+
+.command-group + .command-group::before {
+  content: "";
+  @apply absolute left-0 top-1/2 h-4 w-px -translate-y-1/2;
+  background: color-mix(in srgb, var(--app-divider) 58%, transparent);
+}
+
+.command-group-primary {
+  background: color-mix(in srgb, var(--app-control-solid) 48%, transparent);
 }
 
 .command-button {
@@ -163,6 +305,11 @@ const emit = defineEmits<{
 .command-button.active {
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);
+}
+
+.command-button-caret {
+  @apply -mr-0.5 text-[0.65rem];
+  color: var(--app-text-subtle);
 }
 
 .command-button.strong {
@@ -192,23 +339,113 @@ const emit = defineEmits<{
   color: color-mix(in srgb, var(--app-danger) 38%, var(--app-text-disabled));
 }
 
-.command-separator {
-  @apply mx-1 h-5 w-px shrink-0;
-  background: var(--app-divider);
-}
-
 .command-view-tools {
-  @apply flex shrink-0 items-center gap-1.5 border-l pl-2.5;
-  border-color: var(--app-divider);
+  @apply flex h-8 shrink-0 items-center gap-0 overflow-visible rounded-md border;
+  border-color: color-mix(in srgb, var(--app-border-soft) 78%, transparent);
+  background: color-mix(in srgb, var(--app-control-solid) 54%, transparent);
 }
 
 .command-view-tools :deep(.sort-button),
 .command-view-tools :deep(.view-button) {
-  @apply h-8 px-2.5;
+  @apply h-[1.875rem] rounded-none border-transparent bg-transparent px-2 shadow-none;
+}
+
+.command-view-tools :deep(.sort-button),
+.command-view-tools :deep(.view-menu .view-button) {
+  @apply border-r;
+  border-right-color: color-mix(in srgb, var(--app-divider) 62%, transparent);
+}
+
+.command-view-tools :deep(.sort-button) {
+  @apply rounded-l-md;
+}
+
+.command-view-tools > .view-button {
+  @apply rounded-r-md;
+}
+
+.command-view-tools :deep(.sort-button:hover),
+.command-view-tools :deep(.view-button:hover),
+.command-view-tools > .view-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--app-control-hover);
+}
+
+.command-view-tools :deep(.sort-button:hover),
+.command-view-tools :deep(.view-menu .view-button:hover) {
+  border-right-color: color-mix(in srgb, var(--app-divider) 62%, transparent);
+}
+
+.command-view-tools :deep(.sort-button:focus-visible),
+.command-view-tools :deep(.view-button:focus-visible),
+.command-view-tools > .view-button:focus-visible {
+  @apply relative z-10;
+}
+
+.command-view-tools :deep(.sort-button.active),
+.command-view-tools :deep(.view-button.active),
+.command-view-tools > .view-button.active {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 12%, var(--app-panel-solid));
+  color: var(--app-accent, #2563eb);
+}
+
+.command-view-tools :deep(.sort-button.active),
+.command-view-tools :deep(.view-menu .view-button.active) {
+  border-right-color: color-mix(in srgb, var(--app-divider) 62%, transparent);
+}
+
+.create-menu-panel {
+  @apply absolute z-50 w-56 overflow-hidden rounded-md border p-1.5;
+  border-color: var(--app-border-soft);
+  background: var(--app-panel-solid);
+  box-shadow: var(--app-menu-shadow);
+}
+
+.create-menu-item {
+  @apply grid w-full grid-cols-[1.75rem_minmax(0,1fr)] items-center gap-2 rounded-md border border-transparent px-1.5 py-1.5 text-left text-sm;
+  color: var(--app-text-muted);
+}
+
+.create-menu-item:hover {
+  border-color: var(--app-border-soft);
+  background: var(--app-control-hover);
+}
+
+.create-menu-item:focus-visible {
+  @apply outline-none;
+  background: var(--app-accent-soft, #eff6ff);
+  color: var(--app-accent, #2563eb);
+  box-shadow: inset 0 0 0 1px var(--app-accent-border, #bfdbfe);
+}
+
+.create-menu-icon {
+  @apply grid size-7 place-items-center rounded;
+  background: var(--app-control);
+  color: var(--app-text-muted);
+}
+
+.create-menu-item:hover .create-menu-icon,
+.create-menu-item:focus-visible .create-menu-icon {
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 14%, transparent);
+  color: var(--app-accent, #2563eb);
+}
+
+.create-menu-copy {
+  @apply flex min-w-0 flex-col;
+}
+
+.create-menu-copy strong {
+  @apply truncate text-sm font-medium;
+}
+
+.create-menu-copy small {
+  @apply text-xs leading-snug;
+  color: var(--app-text-subtle);
 }
 
 .view-button {
-  @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border px-2.5 text-sm;
+  @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border px-2 text-sm;
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);
   color: var(--app-text-muted);
@@ -231,6 +468,22 @@ const emit = defineEmits<{
 
 .view-button:disabled:hover {
   background: var(--app-control-solid);
+}
+
+@media (max-width: 1180px) {
+  .command-button {
+    @apply px-2;
+  }
+
+  .command-button span,
+  .view-button span {
+    @apply sr-only;
+  }
+
+  .command-view-tools :deep(.sort-button-label),
+  .command-view-tools :deep(.view-button > span) {
+    @apply sr-only;
+  }
 }
 
 </style>

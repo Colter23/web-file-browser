@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type {DirSortKey, DirSortOrder} from "../../class.ts";
+import Icon from "../Icon.vue";
 import type {DetailsColumnKey} from "./types.ts";
 
 const props = defineProps<{
@@ -16,13 +17,12 @@ const emit = defineEmits<{
 }>();
 
 const sortButtonClass = (key: DirSortKey) => ({
-  active: props.sortKey === key,
-  desc: props.sortKey === key && props.sortOrder === "desc"
+  active: props.sortKey === key
 });
 
-const sortIndicator = (key: DirSortKey) => {
+const sortIndicatorIcon = (key: DirSortKey) => {
   if (props.sortKey !== key) return "";
-  return props.sortOrder === "asc" ? "↑" : "↓";
+  return props.sortOrder === "asc" ? "sort.asc" : "sort.desc";
 }
 
 const resizeTitle = (label: string) => `拖拽调整${label}列宽，双击自动适配`;
@@ -32,12 +32,12 @@ const resizeTitle = (label: string) => `拖拽调整${label}列宽，双击自�
   <div class="details-header" :style="gridStyle">
     <button class="sort-button name-cell" :class="sortButtonClass('name')" :disabled="loading" @click.stop="emit('change-sort', 'name')">
       <span>名称</span>
-      <span class="sort-indicator">{{ sortIndicator('name') }}</span>
+      <span class="sort-indicator"><icon v-if="sortIndicatorIcon('name')" :icon="sortIndicatorIcon('name')" size="small" /></span>
       <span class="column-resizer" :title="resizeTitle('名称')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'name')" @pointerdown="emit('resize-column', $event, 'name')"></span>
     </button>
     <button class="sort-button" :class="sortButtonClass('modified')" :disabled="loading" @click.stop="emit('change-sort', 'modified')">
       <span>修改日期</span>
-      <span class="sort-indicator">{{ sortIndicator('modified') }}</span>
+      <span class="sort-indicator"><icon v-if="sortIndicatorIcon('modified')" :icon="sortIndicatorIcon('modified')" size="small" /></span>
       <span class="column-resizer" :title="resizeTitle('修改日期')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'modified')" @pointerdown="emit('resize-column', $event, 'modified')"></span>
     </button>
     <span class="header-cell">
@@ -46,7 +46,7 @@ const resizeTitle = (label: string) => `拖拽调整${label}列宽，双击自�
     </span>
     <button class="sort-button size-cell" :class="sortButtonClass('size')" :disabled="loading" @click.stop="emit('change-sort', 'size')">
       <span>大小</span>
-      <span class="sort-indicator">{{ sortIndicator('size') }}</span>
+      <span class="sort-indicator"><icon v-if="sortIndicatorIcon('size')" :icon="sortIndicatorIcon('size')" size="small" /></span>
       <span class="column-resizer" :title="resizeTitle('大小')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'size')" @pointerdown="emit('resize-column', $event, 'size')"></span>
     </button>
   </div>
@@ -58,24 +58,29 @@ const resizeTitle = (label: string) => `拖拽调整${label}列宽，双击自�
 .details-header {
   @apply sticky top-0 z-10 grid h-9 items-center border-b px-3 text-sm;
   border-color: var(--app-border-soft);
-  background: var(--app-panel-solid);
   color: var(--app-text-subtle);
   grid-template-columns: var(--details-name-width) var(--details-modified-width) var(--details-type-width) var(--details-size-width);
   width: calc(var(--details-grid-width) + 1.5rem);
   min-width: calc(var(--details-grid-width) + 1.5rem);
+  background: var(--app-panel-muted);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--app-panel-solid) 72%, transparent);
 }
 
 .details-header > .header-cell {
-  @apply relative flex h-full items-center truncate px-2;
+  @apply relative flex h-full items-center truncate px-2 font-medium;
 }
 
 .sort-button {
-  @apply relative flex h-full min-w-0 items-center justify-between gap-1 truncate px-2 text-left text-sm disabled:pointer-events-none;
+  @apply relative flex h-full min-w-0 items-center justify-between gap-1 truncate px-2 text-left text-sm font-medium disabled:pointer-events-none;
   color: var(--app-text-subtle);
 }
 
+.sort-button:disabled {
+  opacity: 0.62;
+}
+
 .sort-button:hover:not(:disabled) {
-  background: var(--app-accent-hover, #eff6ff);
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 7%, transparent);
 }
 
 .sort-button:focus-visible {
@@ -86,7 +91,7 @@ const resizeTitle = (label: string) => `拖拽调整${label}列宽，双击自�
 }
 
 .sort-button.active {
-  background: var(--app-accent-soft, #eff6ff);
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 10%, transparent);
   color: var(--app-accent, #2563eb);
 }
 
@@ -95,11 +100,11 @@ const resizeTitle = (label: string) => `拖拽调整${label}列宽，双击自�
 }
 
 .sort-button.size-cell {
-  @apply text-right;
+  @apply justify-end text-right;
 }
 
 .sort-indicator {
-  @apply inline-flex w-3 shrink-0 justify-center text-[11px];
+  @apply inline-flex w-4 shrink-0 justify-center text-[0.78rem];
   color: var(--app-accent, #2563eb);
 }
 
@@ -109,11 +114,13 @@ const resizeTitle = (label: string) => `拖拽调整${label}列宽，双击自�
 
 .column-resizer::after {
   content: "";
-  @apply absolute left-1.5 top-1/2 h-5 -translate-y-1/2 border-l;
+  @apply absolute left-1.5 top-1/2 h-4 -translate-y-1/2 border-l;
   border-color: var(--app-border-soft);
 }
 
-.column-resizer:hover::after {
+.column-resizer:hover::after,
+.sort-button:hover .column-resizer::after,
+.header-cell:hover .column-resizer::after {
   border-color: var(--app-accent, #2563eb);
 }
 </style>

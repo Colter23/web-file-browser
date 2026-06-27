@@ -378,7 +378,7 @@ onBeforeUnmount(() => {
 }
 
 .more-button {
-  @apply inline-flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm backdrop-blur;
+  @apply inline-flex h-12 w-12 items-center justify-center rounded-xl border shadow-sm backdrop-blur;
   border-color: color-mix(in srgb, var(--app-border) 45%, transparent);
   background: var(--app-control);
   color: var(--app-text-muted);

@@ -62,13 +62,13 @@ const viewModeOptions: ViewModeOption[] = [
     shortcut: "Ctrl+Shift+7"
   },
   {
-    key: "icons-large",
+    key: "icons-small",
     mode: "icons",
-    iconSize: "large",
-    label: "大图标",
-    description: "适合浏览图片和媒体",
+    iconSize: "small",
+    label: "小图标",
+    description: "更多项目同屏展示",
     icon: "view.icons",
-    shortcut: "Ctrl+Shift+1/2"
+    shortcut: "Ctrl+Shift+4"
   },
   {
     key: "icons-medium",
@@ -80,13 +80,13 @@ const viewModeOptions: ViewModeOption[] = [
     shortcut: "Ctrl+Shift+3"
   },
   {
-    key: "icons-small",
+    key: "icons-large",
     mode: "icons",
-    iconSize: "small",
-    label: "小图标",
-    description: "更多项目同屏展示",
+    iconSize: "large",
+    label: "大图标",
+    description: "适合浏览图片和媒体",
     icon: "view.icons",
-    shortcut: "Ctrl+Shift+4"
+    shortcut: "Ctrl+Shift+1/2"
   }
 ];
 
@@ -182,22 +182,25 @@ onBeforeUnmount(() => {
       <icon icon="action.down" class="view-caret icon-motion-caret" :class="{'is-open': open}" />
     </button>
     <div v-if="open" ref="viewMenuPanelRef" class="view-menu-panel" role="menu" aria-label="查看模式" @keydown="handleMenuKeyDown">
-      <button
-          v-for="option in viewModeOptions"
-          :key="option.key"
-          class="view-menu-item"
-          :class="{active: isActive(option)}"
-          role="menuitemradio"
-          :aria-checked="isActive(option)"
-          tabindex="-1"
-          @click="select(option)">
-        <icon :icon="option.icon" />
-        <span class="view-menu-copy">
-          <strong>{{ option.label }}</strong>
-          <small>{{ option.description }}</small>
-        </span>
-        <kbd>{{ option.shortcut }}</kbd>
-      </button>
+      <div class="view-menu-list">
+        <button
+            v-for="option in viewModeOptions"
+            :key="option.key"
+            class="view-menu-item"
+            :class="{active: isActive(option)}"
+            role="menuitemradio"
+            :aria-checked="isActive(option)"
+            tabindex="-1"
+            @click="select(option)">
+          <span class="view-option-icon"><icon :icon="option.icon" /></span>
+          <span class="view-menu-copy">
+            <strong>{{ option.label }}</strong>
+            <small>{{ option.description }}</small>
+          </span>
+          <kbd>{{ option.shortcut }}</kbd>
+          <span class="view-check"><icon v-if="isActive(option)" icon="action.check" size="small" /></span>
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -227,29 +230,42 @@ onBeforeUnmount(() => {
   color: var(--app-accent, #2563eb);
 }
 
+.view-button:focus-visible {
+  @apply outline-none;
+  border-color: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
 .view-caret {
   @apply text-[0.65rem];
   color: var(--app-text-subtle);
 }
 
 .view-menu-panel {
-  @apply absolute right-0 top-[calc(100%+0.35rem)] z-50 w-72 overflow-hidden rounded-md border py-1;
+  @apply absolute right-0 top-[calc(100%+0.35rem)] z-50 w-[20.5rem] overflow-hidden rounded-md border p-2;
   border-color: var(--app-border-soft);
   background: var(--app-panel-solid);
   box-shadow: var(--app-menu-shadow);
 }
 
+.view-menu-list {
+  @apply grid gap-1;
+}
+
 .view-menu-item {
-  @apply grid w-full grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left text-sm;
+  @apply grid w-full grid-cols-[2rem_minmax(0,1fr)_auto_1.25rem] items-center gap-2 rounded-md border px-2 py-1.5 text-left text-sm;
+  border-color: transparent;
   color: var(--app-text-muted);
 }
 
 .view-menu-item:hover {
-  background: var(--app-accent-hover, #eff6ff);
+  border-color: var(--app-border-soft);
+  background: var(--app-control-hover);
 }
 
 .view-menu-item.active {
-  background: var(--app-accent-soft, #eff6ff);
+  border-color: var(--app-accent-border, #bfdbfe);
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 12%, var(--app-panel-solid));
   color: var(--app-accent, #2563eb);
 }
 
@@ -258,6 +274,17 @@ onBeforeUnmount(() => {
   background: var(--app-accent-soft, #eff6ff);
   color: var(--app-accent, #2563eb);
   box-shadow: inset 0 0 0 1px var(--app-accent-border, #bfdbfe);
+}
+
+.view-option-icon {
+  @apply grid size-8 place-items-center rounded-md;
+  background: var(--app-control);
+  color: var(--app-text-muted);
+}
+
+.view-menu-item.active .view-option-icon {
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 14%, transparent);
+  color: var(--app-accent, #2563eb);
 }
 
 .view-menu-copy {
@@ -282,5 +309,17 @@ onBeforeUnmount(() => {
   border-color: var(--app-border-soft);
   background: var(--app-panel-muted);
   color: var(--app-text-subtle);
+}
+
+.view-menu-item.active kbd {
+  border-color: color-mix(in srgb, var(--app-accent, #2563eb) 25%, var(--app-border-soft));
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 10%, transparent);
+  color: var(--app-accent, #2563eb);
+}
+
+.view-check {
+  @apply grid size-5 place-items-center rounded-full text-xs font-semibold;
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 12%, transparent);
+  color: var(--app-accent, #2563eb);
 }
 </style>

@@ -1,6 +1,5 @@
 import {computed, nextTick} from "vue";
 import type {ExplorerIconSize, ExplorerViewMode} from "../class.ts";
-import type {ShellNoticeKind} from "../components/shell/types.ts";
 import {useFileStore} from "../store";
 
 export type ExplorerViewModeSelection = {
@@ -12,7 +11,6 @@ export type ExplorerViewModeSelection = {
 type ExplorerViewModeOptions = {
   focusExplorer: () => void;
   closeMenus: () => void;
-  showNotice: (message: string, kind?: ShellNoticeKind, title?: string, timeoutMs?: number) => void;
 }
 
 const viewModeMeta: Record<ExplorerViewMode, {label: string; icon: string}> = {
@@ -38,7 +36,7 @@ const iconSizeLabel: Record<ExplorerIconSize, string> = {
   large: "大图标"
 };
 
-export const useExplorerViewMode = ({focusExplorer, closeMenus, showNotice}: ExplorerViewModeOptions) => {
+export const useExplorerViewMode = ({focusExplorer, closeMenus}: ExplorerViewModeOptions) => {
   const fileStore = useFileStore();
 
   const currentViewModeMeta = computed(() => viewModeMeta[fileStore.viewMode]);
@@ -52,7 +50,6 @@ export const useExplorerViewMode = ({focusExplorer, closeMenus, showNotice}: Exp
     if (selection.iconSize) fileStore.setIconSize(selection.iconSize);
     closeMenus();
     void nextTick(focusExplorer);
-    showNotice(`已切换为${selection.label}`, "info", "查看模式", 1400);
   }
 
   const applyViewShortcut = (code: string) => {

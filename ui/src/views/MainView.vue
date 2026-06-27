@@ -648,8 +648,7 @@ const {
   applyViewShortcut
 } = useExplorerViewMode({
   focusExplorer: () => explorerRef.value?.focus(),
-  closeMenus: closeTabContextMenu,
-  showNotice: showShellNotice
+  closeMenus: closeTabContextMenu
 });
 
 const {
@@ -1186,7 +1185,7 @@ const signOut = async () => {
 }
 
 .top-strip {
-  @apply flex h-12 shrink-0 items-center gap-3;
+  @apply flex h-12 shrink-0 items-center gap-2;
 }
 
 .top-actions {
@@ -1194,7 +1193,7 @@ const signOut = async () => {
 }
 
 .workspace {
-  @apply mt-3 flex min-h-0 grow flex-col overflow-hidden rounded-xl border shadow-sm backdrop-blur;
+  @apply mt-2 flex min-h-0 grow flex-col overflow-hidden rounded-xl border shadow-sm backdrop-blur;
   --sidebar-width: 17rem;
   border-color: var(--app-border);
   background: var(--app-panel);
