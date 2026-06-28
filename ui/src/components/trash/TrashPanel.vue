@@ -48,7 +48,19 @@ const {
 
 const selectedIdSet = computed(() => new Set(props.selectedIds));
 const selectedCount = computed(() => props.selectedIds.length);
+const totalSizeText = computed(() => {
+  const totalSize = props.records.reduce((sum, record) => sum + (record.sizeBytes ?? 0), 0);
+  return props.records.some(record => typeof record.sizeBytes === "number")
+      ? formatEntrySize(totalSize, "-")
+      : "";
+});
 const selectedCountText = computed(() => selectedCount.value ? `已选择 ${selectedCount.value} 项` : "未选择项目");
+const summaryText = computed(() => {
+  if (!props.records.length) return "暂无可恢复项目";
+  const parts = [`${props.records.length} 项`, selectedCountText.value];
+  if (totalSizeText.value) parts.push(totalSizeText.value);
+  return parts.join(" · ");
+});
 const restoreText = computed(() => selectedCount.value > 1 ? `恢复 ${selectedCount.value} 项` : "恢复");
 const deleteText = computed(() => selectedCount.value > 1 ? `永久删除 ${selectedCount.value} 项` : "永久删除");
 const canAct = computed(() => selectedCount.value > 0 && !props.loading && !props.actionLoading);
@@ -69,7 +81,6 @@ const selectedDetails = computed(() => {
   const record = props.selectedRecord;
   if (!record) return [];
   return [
-    {label: "原位置", value: record.originalVirtualPath},
     {label: "删除时间", value: formatEntryDate(record.deletedAt)},
     {label: "大小", value: recordSize(record)},
     {label: "类型", value: record.kind === "folder" ? "文件夹" : "文件"},
@@ -82,6 +93,11 @@ const handleRowClick = (event: MouseEvent, record: TrashRecord) => {
     range: event.shiftKey,
     toggle: event.ctrlKey || event.metaKey
   });
+}
+
+const handleCheckClick = (record: TrashRecord) => {
+  emit("select", record.id, {toggle: true});
+  panelRef.value?.focus({preventScroll: true});
 }
 
 const navigationKeyMap: Record<string, TrashMoveDirection | undefined> = {
@@ -170,7 +186,7 @@ defineExpose({
         <span class="trash-icon"><icon icon="action.trash" /></span>
         <div>
           <p>回收站</p>
-          <small>{{ records.length ? `${records.length} 项 · ${selectedCountText}` : "暂无可恢复项目" }}</small>
+          <small>{{ summaryText }}</small>
         </div>
       </div>
       <div class="trash-actions">
@@ -198,31 +214,43 @@ defineExpose({
       </button>
       <button type="button" class="trash-danger" :disabled="!canBulkAct" @click="emit('empty')">
         <icon icon="action.delete" />
-        <span>清空</span>
+        <span>清空回收站</span>
       </button>
     </div>
 
     <p v-if="message" class="trash-message">{{ message }}</p>
 
-    <div v-if="loading" class="trash-empty">正在加载回收站...</div>
-    <div v-else-if="!records.length" class="trash-empty">回收站为空</div>
+    <div v-if="loading" class="trash-empty">
+      <icon class="icon-motion-spin is-spinning" icon="action.refresh" />
+      <span>正在加载回收站...</span>
+    </div>
+    <div v-else-if="!records.length" class="trash-empty">
+      <icon icon="action.trash" />
+      <span>回收站为空</span>
+    </div>
     <div v-else class="trash-content">
       <div class="trash-list" role="listbox" aria-label="回收站项目" aria-multiselectable="true">
-        <button
+        <div
             v-for="record in records"
             :key="record.id"
-            type="button"
             class="trash-row"
             :class="{active: selectedIdSet.has(record.id), focused: selectedId === record.id}"
             role="option"
+            tabindex="-1"
             :aria-selected="selectedIdSet.has(record.id)"
             :data-trash-id="record.id"
             :title="record.originalVirtualPath"
             @click="event => handleRowClick(event, record)">
-          <span class="trash-row-check" aria-hidden="true">
+          <button
+              type="button"
+              class="trash-row-check"
+              tabindex="-1"
+              :aria-label="selectedIdSet.has(record.id) ? `取消选择 ${recordName(record)}` : `选择 ${recordName(record)}`"
+              :aria-pressed="selectedIdSet.has(record.id)"
+              @click.stop="handleCheckClick(record)">
             <icon v-if="selectedIdSet.has(record.id)" icon="action.check" />
-          </span>
-          <file-type-icon :kind="recordKind(record)" :name="recordName(record)" />
+          </button>
+          <file-type-icon class="trash-row-file-icon" :kind="recordKind(record)" :name="recordName(record)" size="1.35rem" />
           <span class="trash-row-main">
             <strong>{{ recordName(record) }}</strong>
             <small>{{ recordLocation(record) }}</small>
@@ -231,15 +259,23 @@ defineExpose({
             <span>{{ recordSize(record) }}</span>
             <span>{{ formatEntryDate(record.deletedAt) }}</span>
           </span>
-        </button>
+        </div>
       </div>
 
       <div class="trash-detail">
         <div v-if="selectedRecord" class="trash-detail-card">
-          <strong>{{ recordName(selectedRecord) }}</strong>
-          <div v-for="item in selectedDetails" :key="item.label" :title="item.value">
-            <span>{{ item.label }}</span>
-            <small>{{ item.value }}</small>
+          <div class="trash-detail-head" :title="selectedRecord.originalVirtualPath">
+            <file-type-icon :kind="recordKind(selectedRecord)" :name="recordName(selectedRecord)" size="1.4rem" />
+            <span>
+              <strong>{{ recordName(selectedRecord) }}</strong>
+              <small>{{ recordLocation(selectedRecord) }}</small>
+            </span>
+          </div>
+          <div class="trash-detail-fields">
+            <div v-for="item in selectedDetails" :key="item.label" class="trash-detail-field" :title="item.value">
+              <span>{{ item.label }}</span>
+              <small>{{ item.value }}</small>
+            </div>
           </div>
         </div>
       </div>
@@ -316,6 +352,7 @@ defineExpose({
 
 .trash-toolbar {
   @apply justify-start;
+  border-radius: 0.5rem;
 }
 
 .trash-primary,
@@ -372,13 +409,17 @@ defineExpose({
 }
 
 .trash-empty {
-  @apply flex h-20 items-center justify-center rounded-md border border-dashed text-sm;
+  @apply flex h-28 flex-col items-center justify-center gap-2 rounded-md border border-dashed text-sm;
   border-color: var(--app-border-soft);
   color: var(--app-text-subtle);
 }
 
+.trash-empty :deep(.app-icon) {
+  @apply text-2xl;
+}
+
 .trash-content {
-  @apply grid min-h-0 gap-3;
+  @apply grid min-h-0 flex-1 gap-3 overflow-hidden;
   grid-template-columns: minmax(0, 1fr) minmax(14rem, 18rem);
 }
 
@@ -387,36 +428,60 @@ defineExpose({
 }
 
 .trash-row {
-  @apply grid min-h-14 w-full grid-cols-[1rem_1.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md border px-3 py-2 text-left;
+  @apply grid min-h-14 w-full cursor-pointer grid-cols-[1.125rem_1.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors duration-150;
   border-color: transparent;
   color: var(--app-text-muted);
 }
 
-.trash-row:hover,
+.trash-row:hover {
+  border-color: var(--app-border-soft);
+  background: var(--app-control-hover);
+}
+
 .trash-row.active {
   border-color: var(--app-accent-border, #bfdbfe);
-  background: var(--app-accent-soft, #eff6ff);
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 12%, var(--app-panel-solid));
   color: var(--app-accent, #2563eb);
 }
 
 .trash-row.focused {
-  box-shadow: inset 0 0 0 1px var(--app-accent, #2563eb);
+  box-shadow: inset 0 0 0 1px var(--app-accent-border, #bfdbfe);
 }
 
 .trash-row-check {
-  @apply flex h-4 w-4 items-center justify-center rounded border text-[0.625rem];
-  border-color: var(--app-border);
+  @apply grid size-[1.125rem] cursor-pointer place-items-center rounded border text-[0.625rem] shadow-sm transition-colors duration-150;
+  border-color: var(--app-border-soft);
   background: var(--app-control-solid);
-  color: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast);
+}
+
+.trash-row-check:hover {
+  border-color: var(--app-accent, #2563eb);
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 10%, var(--app-panel-solid));
 }
 
 .trash-row.active .trash-row-check {
   border-color: var(--app-accent, #2563eb);
-  background: var(--app-accent-soft, #eff6ff);
+  background: var(--app-accent, #2563eb);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-accent, #2563eb) 14%, transparent);
+}
+
+.trash-row-check:focus-visible {
+  @apply outline-none;
+  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+}
+
+.trash-row.active .trash-row-main small,
+.trash-row.active .trash-row-meta {
+  color: color-mix(in srgb, var(--app-accent, #2563eb) 78%, var(--app-text-subtle));
 }
 
 .trash-row-main {
   @apply flex min-w-0 flex-col gap-0.5;
+}
+
+.trash-row-file-icon {
+  justify-self: center;
 }
 
 .trash-row-main strong,
@@ -440,22 +505,49 @@ defineExpose({
 }
 
 .trash-detail-card {
-  @apply flex min-h-0 flex-col gap-2 rounded-md border p-3 text-xs;
+  @apply flex min-h-0 flex-col gap-3 rounded-md border p-3 text-[0.8125rem];
   border-color: var(--app-border-soft);
   background: var(--app-panel-muted);
 }
 
-.trash-detail-card div {
-  @apply grid min-w-0 gap-1;
+.trash-detail-head {
+  @apply grid min-w-0 grid-cols-[1.4rem_minmax(0,1fr)] items-center gap-2 rounded-md px-1 py-0.5;
 }
 
-.trash-detail-card span {
+.trash-detail-head > span {
+  @apply flex min-w-0 flex-col gap-0.5;
+}
+
+.trash-detail-card strong {
+  @apply truncate text-sm font-semibold;
+  color: var(--app-text);
+}
+
+.trash-detail-head small {
+  @apply truncate text-xs;
   color: var(--app-text-subtle);
 }
 
-.trash-detail-card small {
-  @apply min-w-0 break-all;
-  color: var(--app-text-muted);
+.trash-detail-fields {
+  @apply grid gap-1.5;
+}
+
+.trash-detail-field {
+  @apply grid min-w-0 grid-cols-[4rem_minmax(0,1fr)] gap-2 rounded-md px-2 py-1.5;
+}
+
+.trash-detail-field:nth-child(odd) {
+  background: color-mix(in srgb, var(--app-control) 44%, transparent);
+}
+
+.trash-detail-field span {
+  @apply text-xs leading-5;
+  color: var(--app-text-subtle);
+}
+
+.trash-detail-field small {
+  @apply min-w-0 break-all text-[0.8125rem] leading-5;
+  color: var(--app-text);
 }
 
 @media (max-width: 760px) {
@@ -464,7 +556,7 @@ defineExpose({
   }
 
   .trash-row {
-    grid-template-columns: 1rem 1.25rem minmax(0, 1fr);
+    grid-template-columns: 1.125rem 1.25rem minmax(0, 1fr);
   }
 
   .trash-row-meta {

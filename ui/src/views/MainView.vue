@@ -70,6 +70,7 @@ import {useUploadDrop} from "../composables/useUploadDrop.ts";
 import {useSearchIndexStatusHint} from "../composables/useSearchIndexStatusHint.ts";
 import {useFavorites} from "../composables/useFavorites.ts";
 import {entryFileInfo} from "../utils/file-entry.ts";
+import {parentPath} from "../utils/file-path.ts";
 
 const EditorPanel = defineAsyncComponent(() => import("../components/editor/EditorPanel.vue"));
 
@@ -213,8 +214,8 @@ const {
   emptyTrash,
   cleanupTrash,
   showError: showErrorNotice,
-  onRestored: async () => {
-    await refreshFolderInExplorerAndTree(currentFolder());
+  onRestored: async (response) => {
+    await refreshFolderInExplorerAndTree(parentPath(response.restoredVirtualPath) || currentFolder());
   }
 });
 const explorerRef = ref<ExplorerExpose | null>(null);

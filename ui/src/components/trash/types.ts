@@ -1,6 +1,6 @@
 import type {TrashRecord} from "../../class.ts";
 
-export type TrashConfirmKind = "delete" | "empty";
+export type TrashConfirmKind = "delete" | "empty" | "cleanup";
 
 export type TrashConfirmState = {
   visible: boolean;

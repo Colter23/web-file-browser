@@ -23,6 +23,7 @@ const emit = defineEmits<{
 const panelRef = ref<OperationPanelShellExpose | null>(null);
 
 const isEmptyConfirm = computed(() => props.state.kind === "empty");
+const isCleanupConfirm = computed(() => props.state.kind === "cleanup");
 const selectedCount = computed(() => props.state.records.length);
 const affectedCount = computed(() => isEmptyConfirm.value ? props.totalCount : selectedCount.value);
 const visibleRecords = computed(() => props.state.records.slice(0, 5));
@@ -30,11 +31,13 @@ const extraCount = computed(() => Math.max(0, props.state.records.length - visib
 
 const title = computed(() => {
   if (isEmptyConfirm.value) return `清空回收站？`;
+  if (isCleanupConfirm.value) return "按策略清理回收站？";
   return selectedCount.value > 1 ? `永久删除 ${selectedCount.value} 项？` : `永久删除 ${recordName(props.state.records[0])}？`;
 });
 
 const message = computed(() => {
   if (isEmptyConfirm.value) return `回收站中的 ${affectedCount.value} 项会被永久删除，此操作无法撤销。`;
+  if (isCleanupConfirm.value) return "将根据保留天数和容量上限永久清理符合策略的项目。";
   return selectedCount.value > 1
       ? "这些项目会从回收站永久删除，之后无法从应用内恢复。"
       : "该项目会从回收站永久删除，之后无法从应用内恢复。";
@@ -42,8 +45,10 @@ const message = computed(() => {
 
 const submitText = computed(() => {
   if (props.state.submitting) return "处理中...";
+  if (isCleanupConfirm.value) return "按策略清理";
   return isEmptyConfirm.value ? "清空回收站" : "永久删除";
 });
+const panelIcon = computed(() => isCleanupConfirm.value ? "action.clean" : "action.delete");
 
 const recordName = (record = props.state.records[0]) => {
   if (!record) return "所选项目";
@@ -66,14 +71,14 @@ defineExpose({
       ref="panelRef"
       width="delete"
       variant="red"
-      icon="action.delete"
+      :icon="panelIcon"
       :title="title"
       :subtitle="message"
       :tabindex="-1"
       @close="emit('close')">
-    <div v-if="isEmptyConfirm" class="trash-confirm-warning">
-      <strong>{{ affectedCount }} 项</strong>
-      <span>将会被直接清理，清空后无法通过回收站恢复。</span>
+    <div v-if="isEmptyConfirm || isCleanupConfirm" class="trash-confirm-warning">
+      <strong>{{ isCleanupConfirm ? `当前 ${totalCount} 项` : `${affectedCount} 项` }}</strong>
+      <span>{{ isCleanupConfirm ? "符合清理策略的项目会被永久删除。" : "将会被直接清理，清空后无法通过回收站恢复。" }}</span>
     </div>
     <div v-else class="trash-confirm-list">
       <div v-for="record in visibleRecords" :key="record.id" :title="record.originalVirtualPath">

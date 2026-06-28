@@ -260,16 +260,17 @@ export const useTrashPanel = ({
             ? await deleteSingleRecord(recordsToDelete[0])
             : await deleteTrashRecords(recordsToDelete.map(record => record.id));
         message.value = trashBatchPurgeMessage(response);
-      } else {
+      } else if (confirm.value.kind === "empty") {
         const response = await emptyTrash();
         message.value = response.removed > 0 ? `已清空 ${response.removed} 项` : "回收站已经是空的";
+      } else {
+        const response = await cleanupTrash();
+        message.value = response.removed > 0 ? `已按策略清理 ${response.removed} 项` : "没有需要清理的项目";
       }
       resetConfirm();
       await load(true);
     } catch (error) {
-      confirm.value.error = error instanceof Error ? error.message : confirm.value.kind === "delete"
-          ? "永久删除回收站项目失败"
-          : "清空回收站失败";
+      confirm.value.error = error instanceof Error ? error.message : confirmErrorMessage(confirm.value.kind);
     } finally {
       actionLoading.value = false;
       if (confirm.value.visible) confirm.value.submitting = false;
@@ -277,19 +278,14 @@ export const useTrashPanel = ({
   }
 
   const cleanup = async () => {
-    if (actionLoading.value) return;
-    actionLoading.value = true;
-    message.value = "";
-    try {
-      resetConfirm();
-      const response = await cleanupTrash();
-      message.value = response.removed > 0 ? `已按策略清理 ${response.removed} 项` : "没有需要清理的项目";
-      await load(true);
-    } catch (error) {
-      showError(error, "按策略清理回收站失败", "清理失败");
-    } finally {
-      actionLoading.value = false;
-    }
+    if (!hasRecords.value || actionLoading.value) return;
+    confirm.value = {
+      visible: true,
+      kind: "cleanup",
+      records: [],
+      submitting: false,
+      error: ""
+    };
   }
 
   const restoreSingleRecord = async (record: TrashRecord): Promise<TrashBatchRestoreResponse> => {
@@ -323,6 +319,12 @@ export const useTrashPanel = ({
   const trashBatchPurgeMessage = (response: TrashBatchPurgeResponse) => {
     if (response.failed > 0) return `已永久删除 ${response.success} 项，${response.failed} 项失败`;
     return `已永久删除 ${response.success} 项`;
+  }
+
+  const confirmErrorMessage = (kind: TrashConfirmState["kind"]) => {
+    if (kind === "delete") return "永久删除回收站项目失败";
+    if (kind === "cleanup") return "按策略清理回收站失败";
+    return "清空回收站失败";
   }
 
   return {
