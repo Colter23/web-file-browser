@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -456,7 +457,11 @@ pub enum TaskState {
 #[serde(rename_all = "camelCase")]
 pub struct TaskError {
     pub path: String,
+    pub code: String,
+    pub reason: String,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub params: Option<Map<String, Value>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

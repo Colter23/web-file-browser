@@ -45,6 +45,7 @@ async fn readonly_mount_rejects_write_apis_with_json_error() {
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let body = json_body(response).await;
     assert_eq!(body["code"], "FORBIDDEN");
+    assert_eq!(body["reason"], "MOUNT_READONLY");
     assert_eq!(body["message"], "挂载点是只读模式");
     assert!(!files_dir.join("blocked.txt").exists());
 
@@ -156,6 +157,7 @@ async fn cross_mount_move_is_rejected_through_api() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = json_body(response).await;
     assert_eq!(body["code"], "BAD_REQUEST");
+    assert_eq!(body["reason"], "CROSS_MOUNT_MOVE_FORBIDDEN");
     assert_eq!(body["message"], "不能跨挂载点移动文件");
     assert!(left_dir.join("hello.txt").is_file());
     assert!(!right_dir.join("hello.txt").exists());
@@ -637,6 +639,8 @@ async fn directory_api_enforces_page_size_bounds() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = json_body(response).await;
     assert_eq!(body["code"], "BAD_REQUEST");
+    assert_eq!(body["reason"], "PAGE_SIZE_MUST_BE_POSITIVE");
+    assert_eq!(body["params"]["field"], "limit");
     assert_eq!(body["message"], "分页大小必须大于 0");
 }
 
@@ -795,6 +799,7 @@ async fn head_and_invalid_range_work_through_api() {
     assert_eq!(response.status(), StatusCode::RANGE_NOT_SATISFIABLE);
     let body = json_body(response).await;
     assert_eq!(body["code"], "RANGE_NOT_SATISFIABLE");
+    assert_eq!(body["reason"], "RANGE_START_OUT_OF_BOUNDS");
 }
 
 #[tokio::test]
@@ -874,6 +879,7 @@ async fn streaming_transfer_limit_is_held_until_response_body_is_dropped() {
     assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
     let body = json_body(response).await;
     assert_eq!(body["code"], "TOO_MANY_REQUESTS");
+    assert_eq!(body["reason"], "TRANSFER_CONCURRENCY_LIMITED");
     assert_eq!(body["message"], "文件传输并发过高，请稍后重试");
 
     drop(first_response);

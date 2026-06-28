@@ -89,7 +89,8 @@ fn create_entry_sync(
         }
         CreateEntryType::Folder => {
             if target.existed {
-                return Err(AppError::conflict("仅支持显式覆盖文件，不覆盖目录"));
+                return Err(AppError::conflict("仅支持显式覆盖文件，不覆盖目录")
+                    .with_reason("OVERWRITE_DIR_FORBIDDEN"));
             }
             fs::create_dir(&target.path)?;
         }
@@ -113,7 +114,7 @@ fn move_entry_sync(
 
     let target_parts = split_virtual_path(&request.target_path)?;
     let Some(target_name) = target_parts.last() else {
-        return Err(AppError::bad_request("目标路径不能为空"));
+        return Err(AppError::bad_request("目标路径不能为空").with_reason("TARGET_PATH_EMPTY"));
     };
     let target_name = normalize_child_name(target_name)?;
     let target_parent_parts = target_parts[..target_parts.len() - 1].to_vec();
@@ -125,7 +126,10 @@ fn move_entry_sync(
     if source.mapping.id != target_parent.mapping.id
         || source.mapping.mount_path != target_parent.mapping.mount_path
     {
-        return Err(AppError::bad_request("不能跨挂载点移动文件"));
+        return Err(AppError::bad_request("不能跨挂载点移动文件")
+            .with_reason("CROSS_MOUNT_MOVE_FORBIDDEN")
+            .with_param("sourcePath", source.virtual_path)
+            .with_param("targetPath", request.target_path.clone()));
     }
 
     let desired_virtual_path = join_virtual_path(&target_parent.virtual_path, &target_name);
@@ -147,12 +151,14 @@ fn move_entry_sync(
     )?;
 
     if source.real_path.is_dir() && target.path.starts_with(&source.real_path) {
-        return Err(AppError::bad_request("不能把文件夹移动到自身内部"));
+        return Err(AppError::bad_request("不能把文件夹移动到自身内部")
+            .with_reason("MOVE_FOLDER_INTO_SELF"));
     }
 
     if target.existed {
         if source.real_path.is_dir() {
-            return Err(AppError::conflict("不支持覆盖移动目录"));
+            return Err(AppError::conflict("不支持覆盖移动目录")
+                .with_reason("OVERWRITE_MOVED_DIR_FORBIDDEN"));
         }
         conflict::ensure_file_overwrite_allowed(&target)?;
         conflict::replace_file_sync(&source.real_path, &target.path)?;
@@ -167,10 +173,11 @@ fn move_entry_sync(
 fn ensure_no_symlink(path: &std::path::Path, message: &str) -> Result<(), AppError> {
     let metadata = fs::symlink_metadata(path)?;
     if metadata.file_type().is_symlink() {
-        return Err(AppError::bad_request(format!(
-            "{message}: {}",
-            path.display()
-        )));
+        return Err(
+            AppError::bad_request(format!("{message}: {}", path.display()))
+                .with_reason("SYMLINK_OPERATION_FORBIDDEN")
+                .with_param("path", path.to_string_lossy().to_string()),
+        );
     }
     Ok(())
 }
@@ -181,7 +188,8 @@ fn ensure_not_reserved_path(resolved: &ResolvedPath) -> Result<(), AppError> {
         .first()
         .is_some_and(|name| reserved::is_mount_trash_dir_name(name))
     {
-        return Err(AppError::bad_request("不能操作应用内部回收站目录"));
+        return Err(AppError::bad_request("不能操作应用内部回收站目录")
+            .with_reason("RESERVED_TRASH_PATH_FORBIDDEN"));
     }
     Ok(())
 }
@@ -189,14 +197,17 @@ fn ensure_not_reserved_path(resolved: &ResolvedPath) -> Result<(), AppError> {
 fn delete_path_sync(path: &Path) -> Result<(), AppError> {
     let metadata = fs::symlink_metadata(path)?;
     if metadata.file_type().is_symlink() {
-        return Err(AppError::bad_request("不支持删除符号链接"));
+        return Err(
+            AppError::bad_request("不支持删除符号链接").with_reason("SYMLINK_OPERATION_FORBIDDEN")
+        );
     }
     if metadata.is_dir() {
         fs::remove_dir_all(path)?;
     } else if metadata.is_file() {
         fs::remove_file(path)?;
     } else {
-        return Err(AppError::bad_request("不支持删除特殊文件"));
+        return Err(AppError::bad_request("不支持删除特殊文件")
+            .with_reason("SPECIAL_FILE_DELETE_UNSUPPORTED"));
     }
     Ok(())
 }

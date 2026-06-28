@@ -60,7 +60,10 @@ impl DirectoryListOptions {
         if self.detail == DirectoryDetail::Basic && self.sort != DirectorySort::Name {
             return Err(AppError::bad_request(
                 "detail=basic 仅支持 sort=name，按大小或修改时间排序请使用 detail=full",
-            ));
+            )
+            .with_reason("DIRECTORY_BASIC_DETAIL_REQUIRES_NAME_SORT")
+            .with_param("detail", "basic")
+            .with_param("sort", "name"));
         }
         Ok(self)
     }
@@ -153,8 +156,8 @@ pub fn resolve_existing_sync(
 ) -> Result<ResolvedPath, AppError> {
     let parts = split_virtual_path(path)?;
     let virtual_path = virtual_path_from_parts(&parts);
-    let (mount, relative_parts) = find_mount(snapshot, &parts)
-        .ok_or_else(|| AppError::not_found(format!("查无此路径: {virtual_path}")))?;
+    let (mount, relative_parts) =
+        find_mount(snapshot, &parts).ok_or_else(|| not_found_path(&virtual_path))?;
     let real_path = secure_join_existing(&mount.root_path, &relative_parts, &virtual_path)?;
 
     Ok(ResolvedPath {
@@ -172,8 +175,8 @@ pub fn resolve_existing_no_follow_final_sync(
 ) -> Result<ResolvedPath, AppError> {
     let parts = split_virtual_path(path)?;
     let virtual_path = virtual_path_from_parts(&parts);
-    let (mount, relative_parts) = find_mount(snapshot, &parts)
-        .ok_or_else(|| AppError::not_found(format!("查无此路径: {virtual_path}")))?;
+    let (mount, relative_parts) =
+        find_mount(snapshot, &parts).ok_or_else(|| not_found_path(&virtual_path))?;
     let real_path =
         secure_join_existing_no_follow_final(&mount.root_path, &relative_parts, &virtual_path)?;
 
@@ -192,7 +195,7 @@ pub fn resolve_parent_for_child_sync(
 ) -> Result<ResolvedParentPath, AppError> {
     let parts = split_virtual_path(child_path)?;
     let Some(child_name) = parts.last().cloned() else {
-        return Err(AppError::bad_request("目标路径不能为空"));
+        return Err(AppError::bad_request("目标路径不能为空").with_reason("TARGET_PATH_EMPTY"));
     };
     let parent_parts = parts[..parts.len() - 1].to_vec();
     let parent_virtual_path = virtual_path_from_parts(&parent_parts);
@@ -239,7 +242,9 @@ pub fn join_virtual_path(base: &str, name: &str) -> String {
 pub fn normalize_child_name(name: &str) -> Result<String, AppError> {
     let name = name.trim();
     if name.is_empty() {
-        return Err(AppError::bad_request("名称不能为空"));
+        return Err(AppError::bad_request("名称不能为空")
+            .with_reason("ENTRY_NAME_EMPTY")
+            .with_param("field", "name"));
     }
     validate_path_segment(name)?;
     Ok(name.to_string())
@@ -249,13 +254,14 @@ pub fn ensure_writable(mapping: &PathMapping) -> Result<(), AppError> {
     if mapping.writable {
         Ok(())
     } else {
-        Err(AppError::forbidden("挂载点是只读模式"))
+        Err(AppError::forbidden("挂载点是只读模式").with_reason("MOUNT_READONLY"))
     }
 }
 
 pub fn ensure_not_mount_root(resolved: &ResolvedPath) -> Result<(), AppError> {
     if resolved.relative_parts.is_empty() {
-        Err(AppError::bad_request("不能操作挂载根路径"))
+        Err(AppError::bad_request("不能操作挂载根路径")
+            .with_reason("MOUNT_ROOT_OPERATION_FORBIDDEN"))
     } else {
         Ok(())
     }
@@ -265,9 +271,11 @@ pub fn ensure_folder(path: &Path, virtual_path: &str) -> Result<(), AppError> {
     if path.is_dir() {
         Ok(())
     } else {
-        Err(AppError::bad_request(format!(
-            "路径不是文件夹: {virtual_path}"
-        )))
+        Err(
+            AppError::bad_request(format!("路径不是文件夹: {virtual_path}"))
+                .with_reason("PATH_NOT_FOLDER")
+                .with_param("path", virtual_path),
+        )
     }
 }
 
@@ -275,9 +283,11 @@ pub fn ensure_file(path: &Path, virtual_path: &str) -> Result<(), AppError> {
     if path.is_file() {
         Ok(())
     } else {
-        Err(AppError::bad_request(format!(
-            "路径不是文件: {virtual_path}"
-        )))
+        Err(
+            AppError::bad_request(format!("路径不是文件: {virtual_path}"))
+                .with_reason("PATH_NOT_FILE")
+                .with_param("path", virtual_path),
+        )
     }
 }
 
@@ -288,7 +298,10 @@ fn build_snapshot_sync(mut mappings: Vec<PathMapping>) -> Result<Arc<MappingSnap
     for mapping in &mut mappings {
         let root_path = Path::new(&mapping.folder_path)
             .canonicalize()
-            .map_err(|_| AppError::bad_request(format!("查无此路径: {}", mapping.folder_path)))?;
+            .map_err(|_| {
+                mapping_root_not_found(&mapping.folder_path)
+                    .with_param("mappingMountPath", mapping.mount_path.clone())
+            })?;
         mapping.folder_path = display_path(&root_path);
         mounts.push(MountEntry {
             mapping: mapping.clone(),
@@ -321,8 +334,7 @@ fn metadata_sync_with_options(
 
     if let Some((mount, relative_parts)) = find_mount(snapshot, &parts) {
         let real_path = secure_join_existing(&mount.root_path, &relative_parts, &virtual_path)?;
-        let metadata = fs::metadata(&real_path)
-            .map_err(|_| AppError::not_found(format!("查无此路径: {virtual_path}")))?;
+        let metadata = fs::metadata(&real_path).map_err(|_| not_found_path(&virtual_path))?;
         if metadata.is_dir() {
             let parent_path = join_virtual_parts(&mount.mapping.mount_path, &relative_parts);
             Ok(MetadataEntry::Folder {
@@ -339,7 +351,7 @@ fn metadata_sync_with_options(
     } else {
         let Some(root) = &snapshot.root else {
             if !parts.is_empty() {
-                return Err(AppError::not_found(format!("查无此路径: {virtual_path}")));
+                return Err(not_found_path(&virtual_path));
             }
             return Ok(MetadataEntry::Folder {
                 data: FolderData::full(virtual_path, Vec::new(), Vec::new()),
@@ -347,7 +359,7 @@ fn metadata_sync_with_options(
             });
         };
         let Some(FolderNode::Virtual { children, .. }) = resolve_virtual_node(root, &parts) else {
-            return Err(AppError::not_found(format!("查无此路径: {virtual_path}")));
+            return Err(not_found_path(&virtual_path));
         };
 
         Ok(MetadataEntry::Folder {
@@ -366,19 +378,18 @@ fn basic_metadata_modified_sync(
 
     if let Some((mount, relative_parts)) = find_mount(snapshot, &parts) {
         let real_path = secure_join_existing(&mount.root_path, &relative_parts, &virtual_path)?;
-        let metadata = fs::metadata(&real_path)
-            .map_err(|_| AppError::not_found(format!("查无此路径: {virtual_path}")))?;
+        let metadata = fs::metadata(&real_path).map_err(|_| not_found_path(&virtual_path))?;
         return Ok(Some(listing::modified_to_string(&metadata)));
     }
 
     let Some(root) = &snapshot.root else {
         if !parts.is_empty() {
-            return Err(AppError::not_found(format!("查无此路径: {virtual_path}")));
+            return Err(not_found_path(&virtual_path));
         }
         return Ok(None);
     };
     if resolve_virtual_node(root, &parts).is_none() {
-        return Err(AppError::not_found(format!("查无此路径: {virtual_path}")));
+        return Err(not_found_path(&virtual_path));
     }
     Ok(None)
 }
@@ -408,9 +419,9 @@ fn secure_join_existing(
 
     let target = target
         .canonicalize()
-        .map_err(|_| AppError::not_found(format!("查无此路径: {virtual_path}")))?;
+        .map_err(|_| not_found_path(virtual_path))?;
     if !target.starts_with(root) {
-        return Err(AppError::bad_request("路径越界"));
+        return Err(path_outside_mount());
     }
     Ok(target)
 }
@@ -427,25 +438,24 @@ fn secure_join_existing_no_follow_final(
         target.push(part);
     }
 
-    let metadata = fs::symlink_metadata(&target)
-        .map_err(|_| AppError::not_found(format!("查无此路径: {virtual_path}")))?;
+    let metadata = fs::symlink_metadata(&target).map_err(|_| not_found_path(virtual_path))?;
     if metadata.file_type().is_symlink() {
         let parent = target
             .parent()
             .unwrap_or(root)
             .canonicalize()
-            .map_err(|_| AppError::not_found(format!("查无此路径: {virtual_path}")))?;
+            .map_err(|_| not_found_path(virtual_path))?;
         if !parent.starts_with(root) {
-            return Err(AppError::bad_request("路径越界"));
+            return Err(path_outside_mount());
         }
         return Ok(target);
     }
 
     let target = target
         .canonicalize()
-        .map_err(|_| AppError::not_found(format!("查无此路径: {virtual_path}")))?;
+        .map_err(|_| not_found_path(virtual_path))?;
     if !target.starts_with(root) {
-        return Err(AppError::bad_request("路径越界"));
+        return Err(path_outside_mount());
     }
     Ok(target)
 }
@@ -455,23 +465,44 @@ fn ensure_not_reserved_relative_path(relative_parts: &[String]) -> Result<(), Ap
         .first()
         .is_some_and(|part| reserved::is_mount_trash_dir_name(part))
     {
-        return Err(AppError::bad_request("不能访问应用内部回收站目录"));
+        return Err(AppError::bad_request("不能访问应用内部回收站目录")
+            .with_reason("RESERVED_TRASH_PATH_FORBIDDEN"));
     }
     Ok(())
 }
 
 fn validate_path_segment(part: &str) -> Result<(), AppError> {
     if part == ".." || part.contains('\\') || part.contains('/') {
-        return Err(AppError::bad_request("路径不能包含 .. 或路径分隔符"));
+        return Err(AppError::bad_request("路径不能包含 .. 或路径分隔符")
+            .with_reason("PATH_SEGMENT_INVALID")
+            .with_param("segment", part));
     }
     let part_path = Path::new(part);
     if part_path
         .components()
         .any(|component| !matches!(component, Component::Normal(_)))
     {
-        return Err(AppError::bad_request("路径包含非法片段"));
+        return Err(AppError::bad_request("路径包含非法片段")
+            .with_reason("PATH_SEGMENT_INVALID")
+            .with_param("segment", part));
     }
     Ok(())
+}
+
+fn not_found_path(path: &str) -> AppError {
+    AppError::not_found(format!("查无此路径: {path}"))
+        .with_reason("PATH_NOT_FOUND")
+        .with_param("path", path)
+}
+
+fn path_outside_mount() -> AppError {
+    AppError::bad_request("路径越界").with_reason("PATH_OUTSIDE_MOUNT")
+}
+
+fn mapping_root_not_found(path: &str) -> AppError {
+    AppError::bad_request(format!("挂载本地目录不存在或不可访问: {path}"))
+        .with_reason("MAPPING_FOLDER_PATH_NOT_FOUND")
+        .with_param("path", path)
 }
 
 fn mapping_parts(path: &str) -> Vec<String> {

@@ -74,9 +74,11 @@ impl WriteQuery {
         self.conflict_policy
             .as_deref()
             .map(|value| {
-                value
-                    .parse()
-                    .map_err(|_| AppError::bad_request(format!("不支持的 conflictPolicy: {value}")))
+                value.parse().map_err(|_| {
+                    AppError::bad_request(format!("不支持的 conflictPolicy: {value}"))
+                        .with_reason("CONFLICT_POLICY_UNSUPPORTED")
+                        .with_param("value", value)
+                })
             })
             .transpose()
     }
@@ -87,9 +89,11 @@ impl ContentQuery {
         match self.mode.as_deref().unwrap_or("raw") {
             "raw" => Ok(false),
             "edit" => Ok(true),
-            other => Err(AppError::bad_request(format!(
-                "不支持的 content mode: {other}"
-            ))),
+            other => Err(
+                AppError::bad_request(format!("不支持的 content mode: {other}"))
+                    .with_reason("CONTENT_MODE_UNSUPPORTED")
+                    .with_param("value", other),
+            ),
         }
     }
 }
@@ -98,7 +102,9 @@ impl DirectoryQuery {
     fn into_options(self, max_page_size: usize) -> Result<DirectoryListOptions, AppError> {
         let limit = self.limit.unwrap_or(max_page_size).min(max_page_size);
         if limit == 0 {
-            return Err(AppError::bad_request("分页大小必须大于 0"));
+            return Err(AppError::bad_request("分页大小必须大于 0")
+                .with_reason("PAGE_SIZE_MUST_BE_POSITIVE")
+                .with_param("field", "limit"));
         }
         Ok(DirectoryListOptions {
             offset: self.offset.unwrap_or(0),
@@ -117,7 +123,9 @@ fn parse_detail(value: Option<&str>) -> Result<DirectoryDetail, AppError> {
     match value.unwrap_or("basic") {
         "basic" => Ok(DirectoryDetail::Basic),
         "full" => Ok(DirectoryDetail::Full),
-        other => Err(AppError::bad_request(format!("不支持的 detail: {other}"))),
+        other => Err(AppError::bad_request(format!("不支持的 detail: {other}"))
+            .with_reason("DIRECTORY_DETAIL_UNSUPPORTED")
+            .with_param("value", other)),
     }
 }
 
@@ -126,7 +134,9 @@ fn parse_sort(value: Option<&str>) -> Result<DirectorySort, AppError> {
         "name" => Ok(DirectorySort::Name),
         "modified" => Ok(DirectorySort::Modified),
         "size" => Ok(DirectorySort::Size),
-        other => Err(AppError::bad_request(format!("不支持的 sort: {other}"))),
+        other => Err(AppError::bad_request(format!("不支持的 sort: {other}"))
+            .with_reason("DIRECTORY_SORT_UNSUPPORTED")
+            .with_param("value", other)),
     }
 }
 
@@ -134,7 +144,9 @@ fn parse_order(value: Option<&str>) -> Result<SortOrder, AppError> {
     match value.unwrap_or("asc") {
         "asc" => Ok(SortOrder::Asc),
         "desc" => Ok(SortOrder::Desc),
-        other => Err(AppError::bad_request(format!("不支持的 order: {other}"))),
+        other => Err(AppError::bad_request(format!("不支持的 order: {other}"))
+            .with_reason("SORT_ORDER_UNSUPPORTED")
+            .with_param("value", other)),
     }
 }
 
@@ -143,7 +155,9 @@ fn parse_filter(value: Option<&str>) -> Result<EntryFilter, AppError> {
         "all" => Ok(EntryFilter::All),
         "file" => Ok(EntryFilter::File),
         "folder" => Ok(EntryFilter::Folder),
-        other => Err(AppError::bad_request(format!("不支持的 type: {other}"))),
+        other => Err(AppError::bad_request(format!("不支持的 type: {other}"))
+            .with_reason("ENTRY_TYPE_FILTER_UNSUPPORTED")
+            .with_param("value", other)),
     }
 }
 

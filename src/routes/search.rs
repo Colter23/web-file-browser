@@ -70,10 +70,10 @@ async fn recent(
 async fn rebuild_index(State(state): State<Arc<AppState>>) -> Result<StatusCode, AppError> {
     let runtime = state.settings.runtime().await;
     if !runtime.index_enabled {
-        return Err(AppError::bad_request("搜索索引未启用"));
+        return Err(AppError::bad_request("搜索索引未启用").with_reason("SEARCH_INDEX_DISABLED"));
     }
     if state.search.status().await.state == "scanning" {
-        return Err(AppError::conflict("索引正在重建"));
+        return Err(AppError::conflict("索引正在重建").with_reason("SEARCH_INDEX_SCANNING"));
     }
     let snapshot = state.mapping_store.snapshot().await;
     let search = state.search.clone();
@@ -98,7 +98,9 @@ async fn cancel_index_rebuild(State(state): State<Arc<AppState>>) -> Result<Stat
 fn bounded_limit(limit: Option<usize>, max_limit: usize) -> Result<usize, AppError> {
     let limit = limit.unwrap_or(max_limit);
     if limit == 0 {
-        return Err(AppError::bad_request("分页大小必须大于 0"));
+        return Err(AppError::bad_request("分页大小必须大于 0")
+            .with_reason("PAGE_SIZE_MUST_BE_POSITIVE")
+            .with_param("field", "limit"));
     }
     Ok(limit.min(max_limit))
 }

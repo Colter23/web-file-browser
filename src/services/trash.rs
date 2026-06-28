@@ -54,7 +54,11 @@ pub struct TrashRestoreResult {
 #[serde(rename_all = "camelCase")]
 pub struct TrashBatchItemError {
     pub id: String,
+    pub code: String,
+    pub reason: String,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub params: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -175,7 +179,7 @@ impl TrashService {
             .iter()
             .find(|record| record.id == id)
             .cloned()
-            .ok_or_else(|| AppError::not_found(format!("查无此回收站记录: {id}")))?;
+            .ok_or_else(|| trash_record_not_found(&id))?;
         let restored = tokio::task::spawn_blocking({
             let record = record.clone();
             move || {
@@ -206,10 +210,7 @@ impl TrashService {
                 .find(|record| record.id == id)
                 .cloned()
             else {
-                errors.push(TrashBatchItemError {
-                    id: id.clone(),
-                    message: format!("查无此回收站记录: {id}"),
-                });
+                errors.push(trash_batch_error(id.clone(), trash_record_not_found(&id)));
                 continue;
             };
 
@@ -230,10 +231,7 @@ impl TrashService {
                     available_records.retain(|record| record.id != id);
                     restored.push(result);
                 }
-                Err(error) => errors.push(TrashBatchItemError {
-                    id,
-                    message: error.to_string(),
-                }),
+                Err(error) => errors.push(trash_batch_error(id, error)),
             }
         }
 
@@ -249,7 +247,7 @@ impl TrashService {
             .iter()
             .find(|record| record.id == id)
             .cloned()
-            .ok_or_else(|| AppError::not_found(format!("查无此回收站记录: {id}")))?;
+            .ok_or_else(|| trash_record_not_found(&id))?;
         tokio::task::spawn_blocking(move || purge_record_sync(&record)).await??;
         self.remove_record(&id).await
     }
@@ -266,10 +264,7 @@ impl TrashService {
                 .find(|record| record.id == id)
                 .cloned()
             else {
-                errors.push(TrashBatchItemError {
-                    id: id.clone(),
-                    message: format!("查无此回收站记录: {id}"),
-                });
+                errors.push(trash_batch_error(id.clone(), trash_record_not_found(&id)));
                 continue;
             };
 
@@ -280,10 +275,7 @@ impl TrashService {
                     available_records.retain(|record| record.id != id);
                     purged.push(id);
                 }
-                Err(error) => errors.push(TrashBatchItemError {
-                    id,
-                    message: error.to_string(),
-                }),
+                Err(error) => errors.push(trash_batch_error(id, error)),
             }
         }
 
@@ -441,15 +433,18 @@ fn restore_sync(
     if target.existed {
         match record.kind {
             TrashEntryKind::File => conflict::ensure_file_overwrite_allowed(&target)?,
-            TrashEntryKind::Folder => return Err(AppError::conflict("不支持覆盖恢复目录")),
+            TrashEntryKind::Folder => {
+                return Err(AppError::conflict("不支持覆盖恢复目录")
+                    .with_reason("TRASH_RESTORE_OVERWRITE_FOLDER_FORBIDDEN"));
+            }
         }
         conflict::replace_file_sync(Path::new(&record.trash_path), &target.path)?;
     } else {
         if target.path.exists() {
-            return Err(AppError::conflict(format!(
-                "路径已存在: {}",
-                join_virtual_path(&parent.parent_virtual_path, &target.name)
-            )));
+            let path = join_virtual_path(&parent.parent_virtual_path, &target.name);
+            return Err(AppError::conflict(format!("路径已存在: {path}"))
+                .with_reason("PATH_ALREADY_EXISTS")
+                .with_param("path", path));
         }
         move_payload_with_copy_fallback(Path::new(&record.trash_path), &target.path, &record.kind)?;
     }
@@ -482,13 +477,13 @@ fn record_dir_from_payload<'a>(
 ) -> Result<&'a Path, AppError> {
     let record_dir = payload
         .parent()
-        .ok_or_else(|| AppError::bad_request("回收站记录路径无效"))?;
+        .ok_or_else(|| trash_record_invalid("回收站记录路径无效"))?;
     let dir_name = record_dir
         .file_name()
         .and_then(|name| name.to_str())
-        .ok_or_else(|| AppError::bad_request("回收站记录目录无效"))?;
+        .ok_or_else(|| trash_record_invalid("回收站记录目录无效"))?;
     if dir_name != record.id {
-        return Err(AppError::bad_request("回收站记录目录与记录编号不匹配"));
+        return Err(trash_record_invalid("回收站记录目录与记录编号不匹配"));
     }
     Ok(record_dir)
 }
@@ -501,7 +496,7 @@ fn record_size(record: &TrashRecord) -> Result<u64, AppError> {
     dir_size(
         Path::new(&record.trash_path)
             .parent()
-            .ok_or_else(|| AppError::bad_request("回收站记录路径无效"))?,
+            .ok_or_else(|| trash_record_invalid("回收站记录路径无效"))?,
     )
     .map_err(AppError::from)
 }
@@ -568,6 +563,26 @@ fn atomic_to_option(value: u64) -> Option<u64> {
     value.checked_sub(1)
 }
 
+fn trash_record_not_found(id: &str) -> AppError {
+    AppError::not_found(format!("查无此回收站记录: {id}"))
+        .with_reason("TRASH_RECORD_NOT_FOUND")
+        .with_param("id", id)
+}
+
+fn trash_record_invalid(message: &'static str) -> AppError {
+    AppError::bad_request(message).with_reason("TRASH_RECORD_INVALID")
+}
+
+fn trash_batch_error(id: String, error: AppError) -> TrashBatchItemError {
+    TrashBatchItemError {
+        id,
+        code: error.code().to_string(),
+        reason: error.reason().to_string(),
+        message: error.to_string(),
+        params: error.params().cloned(),
+    }
+}
+
 fn dir_size(path: &Path) -> Result<u64, std::io::Error> {
     let metadata = fs::metadata(path)?;
     if metadata.is_file() {
@@ -592,8 +607,11 @@ fn move_to_trash_sync(
     original_real_path: String,
     actor: String,
 ) -> Result<TrashRecord, AppError> {
-    let metadata = fs::metadata(&source)
-        .map_err(|_| AppError::not_found(format!("查无此路径: {original_virtual_path}")))?;
+    let metadata = fs::metadata(&source).map_err(|_| {
+        AppError::not_found(format!("查无此路径: {original_virtual_path}"))
+            .with_reason("PATH_NOT_FOUND")
+            .with_param("path", original_virtual_path.clone())
+    })?;
     let kind = if metadata.is_dir() {
         TrashEntryKind::Folder
     } else {
@@ -602,9 +620,9 @@ fn move_to_trash_sync(
     let size_bytes = matches!(kind, TrashEntryKind::File).then_some(metadata.len());
 
     let id = Uuid::new_v4().to_string();
-    let name = source
-        .file_name()
-        .ok_or_else(|| AppError::bad_request("不能删除挂载根路径"))?;
+    let name = source.file_name().ok_or_else(|| {
+        AppError::bad_request("不能删除挂载根路径").with_reason("MOUNT_ROOT_OPERATION_FORBIDDEN")
+    })?;
 
     let mount_trash_root = reserved::mount_trash_root(&mount_root);
     let (entry_dir, payload_path) =
@@ -684,16 +702,21 @@ fn prepare_mount_trash_entry_dir_in_root(
 fn ensure_safe_mount_trash_root(root: &Path, mount_root: &Path) -> Result<(), AppError> {
     let metadata = fs::symlink_metadata(root)?;
     if metadata.file_type().is_symlink() {
-        return Err(AppError::bad_request("挂载内回收站不能是符号链接"));
+        return Err(
+            AppError::bad_request("挂载内回收站不能是符号链接").with_reason("TRASH_ROOT_UNSAFE")
+        );
     }
     if !metadata.is_dir() {
-        return Err(AppError::bad_request("挂载内回收站路径不是目录"));
+        return Err(AppError::bad_request("挂载内回收站路径不是目录")
+            .with_reason("TRASH_ROOT_NOT_DIRECTORY"));
     }
 
     let root = root.canonicalize()?;
     let mount_root = mount_root.canonicalize()?;
     if !root.starts_with(&mount_root) {
-        return Err(AppError::bad_request("挂载内回收站路径越界"));
+        return Err(
+            AppError::bad_request("挂载内回收站路径越界").with_reason("TRASH_ROOT_OUTSIDE_MOUNT")
+        );
     }
     Ok(())
 }
@@ -722,10 +745,11 @@ fn move_payload_with_copy_fallback(
     kind: &TrashEntryKind,
 ) -> Result<(), AppError> {
     if target.exists() {
-        return Err(AppError::conflict(format!(
-            "恢复目标已存在: {}",
-            target.display()
-        )));
+        return Err(
+            AppError::conflict(format!("恢复目标已存在: {}", target.display()))
+                .with_reason("TRASH_RESTORE_TARGET_EXISTS")
+                .with_param("path", target.to_string_lossy().to_string()),
+        );
     }
     match fs::rename(source, target) {
         Ok(()) => Ok(()),

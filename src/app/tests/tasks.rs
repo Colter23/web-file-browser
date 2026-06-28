@@ -39,6 +39,8 @@ async fn copy_task_reports_readonly_target_error() {
     assert_eq!(task["state"], "failed");
     assert_eq!(task["errors"].as_array().unwrap().len(), 1);
     assert_eq!(task["errors"][0]["path"], "/source/hello.txt");
+    assert_eq!(task["errors"][0]["code"], "FORBIDDEN");
+    assert_eq!(task["errors"][0]["reason"], "MOUNT_READONLY");
     assert!(
         task["errors"][0]["message"]
             .as_str()
@@ -225,6 +227,7 @@ async fn task_create_rejects_blank_paths_without_creating_task() {
                 "targetPath": "/docs/target"
             }),
             "复制任务 sources 包含空路径",
+            "sources",
         ),
         (
             "/api/tasks/move",
@@ -233,6 +236,7 @@ async fn task_create_rejects_blank_paths_without_creating_task() {
                 "targetPath": " "
             }),
             "移动任务 targetPath 不能为空",
+            "targetPath",
         ),
         (
             "/api/tasks/delete",
@@ -240,6 +244,7 @@ async fn task_create_rejects_blank_paths_without_creating_task() {
                 "paths": [" "]
             }),
             "删除任务 paths 包含空路径",
+            "paths",
         ),
         (
             "/api/tasks/archive",
@@ -249,6 +254,7 @@ async fn task_create_rejects_blank_paths_without_creating_task() {
                 "format": "zip"
             }),
             "压缩任务 targetPath 不能为空",
+            "targetPath",
         ),
         (
             "/api/tasks/archive",
@@ -259,6 +265,7 @@ async fn task_create_rejects_blank_paths_without_creating_task() {
                 "outputName": " "
             }),
             "压缩任务 outputName 不能为空",
+            "outputName",
         ),
         (
             "/api/tasks/extract",
@@ -267,6 +274,7 @@ async fn task_create_rejects_blank_paths_without_creating_task() {
                 "targetPath": "/docs"
             }),
             "解压任务 sourcePath 不能为空",
+            "sourcePath",
         ),
         (
             "/api/tasks/extract",
@@ -276,10 +284,11 @@ async fn task_create_rejects_blank_paths_without_creating_task() {
                 "folderName": "bad/name"
             }),
             "解压任务 folderName 无效: 路径不能包含 .. 或路径分隔符",
+            "folderName",
         ),
     ];
 
-    for (uri, body, expected_message) in cases {
+    for (uri, body, expected_message, expected_field) in cases {
         let response = app
             .clone()
             .oneshot(json_request(Method::POST, uri, Some(&cookie), body))
@@ -289,6 +298,7 @@ async fn task_create_rejects_blank_paths_without_creating_task() {
         let body = json_body(response).await;
         assert_eq!(body["code"], "BAD_REQUEST");
         assert_eq!(body["message"], expected_message);
+        assert_eq!(body["params"]["field"], expected_field);
     }
 
     let tasks = get_json(&app, &cookie, "/api/tasks").await;

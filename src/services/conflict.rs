@@ -23,7 +23,9 @@ pub fn resolve_child(
     match policy {
         ConflictPolicy::Reject => {
             if target.exists() {
-                Err(AppError::conflict(format!("路径已存在: {display_path}")))
+                Err(AppError::conflict(format!("路径已存在: {display_path}"))
+                    .with_reason("PATH_ALREADY_EXISTS")
+                    .with_param("path", display_path))
             } else {
                 Ok(ConflictTarget {
                     path: target,
@@ -43,7 +45,8 @@ pub fn resolve_child(
 
 pub fn ensure_file_overwrite_allowed(target: &ConflictTarget) -> Result<(), AppError> {
     if target.existed && !target.path.is_file() {
-        return Err(AppError::conflict("仅支持显式覆盖文件，不覆盖目录"));
+        return Err(AppError::conflict("仅支持显式覆盖文件，不覆盖目录")
+            .with_reason("OVERWRITE_DIR_FORBIDDEN"));
     }
     Ok(())
 }
@@ -64,7 +67,9 @@ fn replace_existing_file_sync(
     first_error: std::io::Error,
 ) -> Result<(), AppError> {
     if !target.is_file() {
-        return Err(AppError::conflict("仅支持替换文件，不替换目录"));
+        return Err(
+            AppError::conflict("仅支持替换文件，不替换目录").with_reason("OVERWRITE_DIR_FORBIDDEN")
+        );
     }
 
     let backup = backup_sibling_path(target);
@@ -134,7 +139,7 @@ fn auto_rename_child(parent: &Path, desired_name: &str) -> Result<ConflictTarget
         }
     }
 
-    Err(AppError::conflict("无法生成不冲突的文件名"))
+    Err(AppError::conflict("无法生成不冲突的文件名").with_reason("AUTO_RENAME_EXHAUSTED"))
 }
 
 fn numbered_name(name: &str, index: usize) -> String {

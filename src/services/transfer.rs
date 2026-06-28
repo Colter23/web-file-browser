@@ -81,10 +81,11 @@ pub async fn stream_existing_file(
         None => fs::metadata(&resolved.real_path).await?,
     };
     if !metadata.is_file() {
-        return Err(AppError::bad_request(format!(
-            "路径不是文件: {}",
-            resolved.virtual_path
-        )));
+        return Err(
+            AppError::bad_request(format!("路径不是文件: {}", resolved.virtual_path))
+                .with_reason("PATH_NOT_FILE")
+                .with_param("path", resolved.virtual_path.clone()),
+        );
     }
     if let Some(policy) = edit_policy {
         let file = file
@@ -237,30 +238,33 @@ pub fn parse_range_header(
     };
     let value = value
         .to_str()
-        .map_err(|_| AppError::range_not_satisfiable("Range 头无效"))?;
+        .map_err(|_| range_error("Range 头无效", "RANGE_HEADER_INVALID"))?;
     parse_range(value, size).map(Some)
 }
 
 fn parse_range(value: &str, size: u64) -> Result<ByteRange, AppError> {
     if size == 0 {
-        return Err(AppError::range_not_satisfiable("空文件不支持 Range 请求"));
+        return Err(range_error("空文件不支持 Range 请求", "RANGE_EMPTY_FILE"));
     }
     let Some(spec) = value.strip_prefix("bytes=") else {
-        return Err(AppError::range_not_satisfiable("仅支持 bytes Range"));
+        return Err(range_error("仅支持 bytes Range", "RANGE_UNIT_UNSUPPORTED"));
     };
     if spec.contains(',') {
-        return Err(AppError::range_not_satisfiable("暂不支持多段 Range"));
+        return Err(range_error(
+            "暂不支持多段 Range",
+            "RANGE_MULTIPLE_UNSUPPORTED",
+        ));
     }
 
     let Some((start, end)) = spec.split_once('-') else {
-        return Err(AppError::range_not_satisfiable("Range 格式无效"));
+        return Err(range_error("Range 格式无效", "RANGE_FORMAT_INVALID"));
     };
     if start.is_empty() {
         let suffix: u64 = end
             .parse()
-            .map_err(|_| AppError::range_not_satisfiable("Range 后缀无效"))?;
+            .map_err(|_| range_error("Range 后缀无效", "RANGE_SUFFIX_INVALID"))?;
         if suffix == 0 {
-            return Err(AppError::range_not_satisfiable("Range 后缀不能为 0"));
+            return Err(range_error("Range 后缀不能为 0", "RANGE_SUFFIX_ZERO"));
         }
         let length = suffix.min(size);
         return Ok(ByteRange {
@@ -271,18 +275,22 @@ fn parse_range(value: &str, size: u64) -> Result<ByteRange, AppError> {
 
     let start: u64 = start
         .parse()
-        .map_err(|_| AppError::range_not_satisfiable("Range 起点无效"))?;
+        .map_err(|_| range_error("Range 起点无效", "RANGE_START_INVALID"))?;
     if start >= size {
-        return Err(AppError::range_not_satisfiable("Range 起点越界"));
+        return Err(range_error("Range 起点越界", "RANGE_START_OUT_OF_BOUNDS")
+            .with_param("start", start)
+            .with_param("size", size));
     }
     let end = if end.is_empty() {
         size - 1
     } else {
         end.parse()
-            .map_err(|_| AppError::range_not_satisfiable("Range 终点无效"))?
+            .map_err(|_| range_error("Range 终点无效", "RANGE_END_INVALID"))?
     };
     if end < start {
-        return Err(AppError::range_not_satisfiable("Range 终点小于起点"));
+        return Err(range_error("Range 终点小于起点", "RANGE_END_BEFORE_START")
+            .with_param("start", start)
+            .with_param("end", end));
     }
 
     Ok(ByteRange {
@@ -317,10 +325,10 @@ async fn upload_field(
     } else {
         if target.path.exists() {
             let _ = fs::remove_file(&temp_path).await;
-            return Err(AppError::conflict(format!(
-                "路径已存在: {}",
-                join_virtual_path(&parent.virtual_path, &target.name)
-            )));
+            let path = join_virtual_path(&parent.virtual_path, &target.name);
+            return Err(AppError::conflict(format!("路径已存在: {path}"))
+                .with_reason("PATH_ALREADY_EXISTS")
+                .with_param("path", path));
         }
         if let Err(error) = fs::rename(&temp_path, &target.path).await {
             let _ = fs::remove_file(&temp_path).await;
@@ -383,13 +391,16 @@ fn ensure_declared_length_within_limit(
     };
     let length = length
         .to_str()
-        .map_err(|_| AppError::bad_request("Content-Length 无效"))?
+        .map_err(|_| content_length_invalid())?
         .parse::<u64>()
-        .map_err(|_| AppError::bad_request("Content-Length 无效"))?;
+        .map_err(|_| content_length_invalid())?;
     if length > max_bytes {
-        return Err(AppError::payload_too_large(format!(
-            "上传内容超过限制: {max_bytes} bytes"
-        )));
+        return Err(
+            AppError::payload_too_large(format!("上传内容超过限制: {max_bytes} bytes"))
+                .with_reason("UPLOAD_SIZE_LIMIT_EXCEEDED")
+                .with_param("maxBytes", max_bytes)
+                .with_param("contentLength", length),
+        );
     }
     Ok(())
 }
@@ -424,7 +435,11 @@ async fn ensure_editable_file(
             "文件超过在线编辑上限: {virtual_path}，当前 {} bytes，上限 {max_bytes} bytes",
             metadata.len(),
             max_bytes = policy.max_bytes
-        )));
+        ))
+        .with_reason("EDIT_SIZE_LIMIT_EXCEEDED")
+        .with_param("path", virtual_path)
+        .with_param("size", metadata.len())
+        .with_param("maxBytes", policy.max_bytes));
     }
 
     if metadata.len() == 0 {
@@ -439,7 +454,9 @@ async fn ensure_editable_file(
     if !looks_like_text(&sample, complete_sample, path) {
         return Err(AppError::unsupported_media_type(format!(
             "文件看起来不是文本文件，不能在线编辑: {virtual_path}"
-        )));
+        ))
+        .with_reason("EDIT_FILE_NOT_TEXT")
+        .with_param("path", virtual_path));
     }
     file.seek(SeekFrom::Start(0)).await?;
     Ok(())
@@ -460,16 +477,19 @@ fn ensure_editable_kind(
         return Ok(());
     }
 
-    Err(AppError::unsupported_media_type(format!(
-        "文件类型不在允许在线编辑范围内: {virtual_path}"
-    )))
+    Err(
+        AppError::unsupported_media_type(format!("文件类型不在允许在线编辑范围内: {virtual_path}"))
+            .with_reason("EDIT_FILE_TYPE_NOT_ALLOWED")
+            .with_param("path", virtual_path),
+    )
 }
 
 fn ensure_text_chunk(chunk: &[u8]) -> Result<(), AppError> {
     if chunk.contains(&0) {
-        return Err(AppError::unsupported_media_type(
-            "保存内容包含二进制数据，已拒绝写入",
-        ));
+        return Err(
+            AppError::unsupported_media_type("保存内容包含二进制数据，已拒绝写入")
+                .with_reason("EDIT_CONTENT_BINARY"),
+        );
     }
     Ok(())
 }
@@ -480,7 +500,9 @@ async fn verify_if_match(if_match: &str, path: &Path, virtual_path: &str) -> Res
     } else {
         Err(AppError::precondition_failed(format!(
             "文件已被外部修改，请刷新后再保存: {virtual_path}"
-        )))
+        ))
+        .with_reason("FILE_MODIFIED")
+        .with_param("path", virtual_path))
     }
 }
 
@@ -488,6 +510,8 @@ async fn current_content_etag(path: &Path, virtual_path: &str) -> Result<String,
     let metadata = fs::metadata(path).await.map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {
             AppError::precondition_failed(format!("文件已不存在，请刷新后再保存: {virtual_path}"))
+                .with_reason("FILE_MISSING_BEFORE_SAVE")
+                .with_param("path", virtual_path)
         } else {
             AppError::from(error)
         }
@@ -495,7 +519,9 @@ async fn current_content_etag(path: &Path, virtual_path: &str) -> Result<String,
     if !metadata.is_file() {
         return Err(AppError::precondition_failed(format!(
             "路径已不再是文件，请刷新后再保存: {virtual_path}"
-        )));
+        ))
+        .with_reason("PATH_NOT_FILE_BEFORE_SAVE")
+        .with_param("path", virtual_path));
     }
     Ok(content_etag(&metadata))
 }
@@ -503,13 +529,14 @@ async fn current_content_etag(path: &Path, virtual_path: &str) -> Result<String,
 fn required_if_match(headers: &HeaderMap) -> Result<String, AppError> {
     let value = headers.get(IF_MATCH).ok_or_else(|| {
         AppError::precondition_required("保存文件需要 If-Match 头，请重新打开文件后再保存")
+            .with_reason("IF_MATCH_REQUIRED")
     })?;
     let value = value
         .to_str()
-        .map_err(|_| AppError::bad_request("If-Match 头无效"))?
+        .map_err(|_| AppError::bad_request("If-Match 头无效").with_reason("IF_MATCH_INVALID"))?
         .trim();
     if value.is_empty() {
-        return Err(AppError::bad_request("If-Match 头不能为空"));
+        return Err(AppError::bad_request("If-Match 头不能为空").with_reason("IF_MATCH_EMPTY"));
     }
     Ok(value.to_string())
 }
@@ -569,7 +596,9 @@ async fn replace_existing_file(
     first_error: std::io::Error,
 ) -> Result<(), AppError> {
     if !target.is_file() {
-        return Err(AppError::conflict("仅支持替换文件，不替换目录"));
+        return Err(
+            AppError::conflict("仅支持替换文件，不替换目录").with_reason("OVERWRITE_DIR_FORBIDDEN")
+        );
     }
 
     let backup = replacement_backup_path(target);
@@ -603,9 +632,9 @@ fn replacement_backup_path(target: &Path) -> PathBuf {
 }
 
 fn temp_path_for(target: &Path) -> Result<PathBuf, AppError> {
-    let parent = target
-        .parent()
-        .ok_or_else(|| AppError::bad_request("目标路径没有父目录"))?;
+    let parent = target.parent().ok_or_else(|| {
+        AppError::bad_request("目标路径没有父目录").with_reason("TARGET_PARENT_MISSING")
+    })?;
     let name = target
         .file_name()
         .map(|name| name.to_string_lossy())
@@ -618,17 +647,28 @@ fn checked_add_len(
     chunk_len: usize,
     max_bytes: Option<u64>,
 ) -> Result<u64, AppError> {
-    let next = current
-        .checked_add(chunk_len as u64)
-        .ok_or_else(|| AppError::payload_too_large("上传内容过大"))?;
+    let next = current.checked_add(chunk_len as u64).ok_or_else(|| {
+        AppError::payload_too_large("上传内容过大").with_reason("UPLOAD_SIZE_LIMIT_EXCEEDED")
+    })?;
     if let Some(max_bytes) = max_bytes
         && next > max_bytes
     {
-        return Err(AppError::payload_too_large(format!(
-            "上传内容超过限制: {max_bytes} bytes"
-        )));
+        return Err(
+            AppError::payload_too_large(format!("上传内容超过限制: {max_bytes} bytes"))
+                .with_reason("UPLOAD_SIZE_LIMIT_EXCEEDED")
+                .with_param("maxBytes", max_bytes)
+                .with_param("writtenBytes", next),
+        );
     }
     Ok(next)
+}
+
+fn range_error(message: &'static str, reason: &'static str) -> AppError {
+    AppError::range_not_satisfiable(message).with_reason(reason)
+}
+
+fn content_length_invalid() -> AppError {
+    AppError::bad_request("Content-Length 无效").with_reason("CONTENT_LENGTH_INVALID")
 }
 
 fn looks_like_text(sample: &[u8], complete_sample: bool, path: &Path) -> bool {

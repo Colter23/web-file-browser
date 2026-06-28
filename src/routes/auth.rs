@@ -41,7 +41,7 @@ pub async fn require_auth(
     if authenticated {
         Ok(next.run(request).await)
     } else {
-        Err(AppError::unauthorized("请先登录"))
+        Err(AppError::unauthorized("请先登录").with_reason("AUTH_REQUIRED"))
     }
 }
 
@@ -50,7 +50,8 @@ async fn login(
     Json(request): Json<LoginRequest>,
 ) -> Result<(HeaderMap, Json<SessionResponse>), AppError> {
     if !state.auth_store.has_admin_password().await {
-        return Err(AppError::conflict("管理员密码尚未初始化，请先完成首次设置"));
+        return Err(AppError::conflict("管理员密码尚未初始化，请先完成首次设置")
+            .with_reason("ADMIN_PASSWORD_NOT_CONFIGURED"));
     }
 
     if !state
@@ -58,7 +59,9 @@ async fn login(
         .verify_admin_password(request.password)
         .await?
     {
-        return Err(AppError::unauthorized("管理员密码不正确"));
+        return Err(
+            AppError::unauthorized("管理员密码不正确").with_reason("ADMIN_PASSWORD_INCORRECT")
+        );
     }
 
     let token = state.auth.create_session().await;
@@ -85,7 +88,8 @@ async fn setup_password(
 ) -> Result<(HeaderMap, Json<SessionResponse>), AppError> {
     validate_setup_password(&request)?;
     if state.auth_store.has_admin_password().await {
-        return Err(AppError::conflict("管理员密码已经初始化，请直接登录"));
+        return Err(AppError::conflict("管理员密码已经初始化，请直接登录")
+            .with_reason("ADMIN_PASSWORD_ALREADY_CONFIGURED"));
     }
 
     state
@@ -148,7 +152,8 @@ async fn change_password(
         .verify_admin_password(request.current_password)
         .await?
     {
-        return Err(AppError::unauthorized("当前管理员密码不正确"));
+        return Err(AppError::unauthorized("当前管理员密码不正确")
+            .with_reason("CURRENT_PASSWORD_INCORRECT"));
     }
 
     state
@@ -177,20 +182,30 @@ async fn change_password(
 
 fn validate_new_password(request: &ChangePasswordRequest) -> Result<(), AppError> {
     if request.current_password.is_empty() {
-        return Err(AppError::bad_request("当前密码不能为空"));
+        return Err(AppError::bad_request("当前密码不能为空")
+            .with_reason("CURRENT_PASSWORD_EMPTY")
+            .with_param("field", "currentPassword"));
     }
     if request.new_password.chars().count() < 8 {
-        return Err(AppError::bad_request("新密码长度不能少于 8 个字符"));
+        return Err(AppError::bad_request("新密码长度不能少于 8 个字符")
+            .with_reason("PASSWORD_TOO_SHORT")
+            .with_param("field", "newPassword")
+            .with_param("minLength", 8));
     }
     if request.current_password == request.new_password {
-        return Err(AppError::bad_request("新密码不能与当前密码相同"));
+        return Err(
+            AppError::bad_request("新密码不能与当前密码相同").with_reason("PASSWORD_REUSED")
+        );
     }
     Ok(())
 }
 
 fn validate_setup_password(request: &SetupPasswordRequest) -> Result<(), AppError> {
     if request.password.chars().count() < 8 {
-        return Err(AppError::bad_request("管理员密码长度不能少于 8 个字符"));
+        return Err(AppError::bad_request("管理员密码长度不能少于 8 个字符")
+            .with_reason("PASSWORD_TOO_SHORT")
+            .with_param("field", "password")
+            .with_param("minLength", 8));
     }
     Ok(())
 }

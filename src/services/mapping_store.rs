@@ -95,7 +95,7 @@ impl MappingStore {
 
         let mut mappings = self.mappings.write().await;
         let Some(index) = mappings.iter().position(|current| current.id == Some(id)) else {
-            return Err(AppError::not_found(format!("查无此映射: {id}")));
+            return Err(mapping_not_found(id));
         };
 
         validate_mount_conflict(&mappings, &mapping.mount_path, Some(id))?;
@@ -112,7 +112,7 @@ impl MappingStore {
                 .iter()
                 .any(|mapping| mapping.id == Some(requested.id))
             {
-                return Err(AppError::not_found(format!("查无此映射: {}", requested.id)));
+                return Err(mapping_not_found(requested.id));
             }
         }
 
@@ -137,7 +137,7 @@ impl MappingStore {
         mappings.retain(|mapping| mapping.id != Some(id));
 
         if mappings.len() == before_len {
-            return Err(AppError::not_found(format!("查无此映射: {id}")));
+            return Err(mapping_not_found(id));
         }
 
         let next = mappings.clone();
@@ -163,16 +163,24 @@ async fn normalize_mapping(mut mapping: PathMapping) -> Result<PathMapping, AppE
 
     let raw_folder_path = mapping.folder_path.trim();
     if raw_folder_path.is_empty() {
-        return Err(AppError::bad_request("本地文件路径不能为空"));
+        return Err(AppError::bad_request("本地文件路径不能为空")
+            .with_reason("MAPPING_FOLDER_PATH_EMPTY")
+            .with_param("field", "folderPath"));
     }
 
     let folder_path = tokio::fs::canonicalize(raw_folder_path)
         .await
-        .map_err(|_| AppError::bad_request(format!("查无此路径: {raw_folder_path}")))?;
+        .map_err(|_| {
+            AppError::bad_request(format!("查无此路径: {raw_folder_path}"))
+                .with_reason("MAPPING_FOLDER_PATH_NOT_FOUND")
+                .with_param("path", raw_folder_path)
+        })?;
     if !folder_path.is_dir() {
-        return Err(AppError::bad_request(format!(
-            "路径不是文件夹: {raw_folder_path}"
-        )));
+        return Err(
+            AppError::bad_request(format!("路径不是文件夹: {raw_folder_path}"))
+                .with_reason("MAPPING_FOLDER_PATH_NOT_FOLDER")
+                .with_param("path", raw_folder_path),
+        );
     }
 
     mapping.folder_path = display_path(&folder_path);
@@ -184,7 +192,9 @@ async fn normalize_mapping(mut mapping: PathMapping) -> Result<PathMapping, AppE
 pub fn normalize_mount_path(raw: &str) -> Result<String, AppError> {
     let raw = raw.trim().replace('\\', "/");
     if raw.is_empty() {
-        return Err(AppError::bad_request("挂载路径不能为空"));
+        return Err(AppError::bad_request("挂载路径不能为空")
+            .with_reason("MOUNT_PATH_EMPTY")
+            .with_param("field", "mountPath"));
     }
 
     let raw = if raw.starts_with('/') {
@@ -199,7 +209,9 @@ pub fn normalize_mount_path(raw: &str) -> Result<String, AppError> {
             continue;
         }
         if part == ".." {
-            return Err(AppError::bad_request("挂载路径不能包含 .."));
+            return Err(AppError::bad_request("挂载路径不能包含 ..")
+                .with_reason("MOUNT_PATH_INVALID")
+                .with_param("segment", part));
         }
         parts.push(part);
     }
@@ -219,7 +231,7 @@ fn validate_mount_conflict(
     if new_mount_path == "/" && !mappings.is_empty() {
         let only_ignored = mappings.iter().all(|mapping| mapping.id == ignore_id);
         if !only_ignored {
-            return Err(AppError::conflict("路径映射冲突"));
+            return Err(AppError::conflict("路径映射冲突").with_reason("MAPPING_CONFLICT"));
         }
     }
 
@@ -229,14 +241,25 @@ fn validate_mount_conflict(
         }
         let existing = mapping.mount_path.as_str();
         if existing == new_mount_path {
-            return Err(AppError::conflict("路径映射重复"));
+            return Err(AppError::conflict("路径映射重复")
+                .with_reason("MAPPING_DUPLICATED")
+                .with_param("mountPath", new_mount_path));
         }
         if mount_paths_overlap(existing, new_mount_path) {
-            return Err(AppError::conflict("路径映射冲突"));
+            return Err(AppError::conflict("路径映射冲突")
+                .with_reason("MAPPING_CONFLICT")
+                .with_param("mountPath", new_mount_path)
+                .with_param("existingMountPath", existing));
         }
     }
 
     Ok(())
+}
+
+fn mapping_not_found(id: i64) -> AppError {
+    AppError::not_found(format!("查无此映射: {id}"))
+        .with_reason("MAPPING_NOT_FOUND")
+        .with_param("id", id)
 }
 
 fn sorted_mappings(mappings: &[PathMapping]) -> Vec<PathMapping> {

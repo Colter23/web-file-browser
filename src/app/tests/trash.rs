@@ -396,6 +396,8 @@ async fn trash_batch_restore_and_purge_report_partial_errors() {
     assert_eq!(body["success"], 2);
     assert_eq!(body["failed"], 1);
     assert_eq!(body["errors"][0]["id"], "missing-restore");
+    assert_eq!(body["errors"][0]["code"], "NOT_FOUND");
+    assert_eq!(body["errors"][0]["reason"], "TRASH_RECORD_NOT_FOUND");
     assert!(files_dir.join("restore-a.txt").is_file());
     assert!(files_dir.join("restore-b.txt").is_file());
 
@@ -416,6 +418,8 @@ async fn trash_batch_restore_and_purge_report_partial_errors() {
     assert_eq!(body["success"], 2);
     assert_eq!(body["failed"], 1);
     assert_eq!(body["errors"][0]["id"], "missing-purge");
+    assert_eq!(body["errors"][0]["code"], "NOT_FOUND");
+    assert_eq!(body["errors"][0]["reason"], "TRASH_RECORD_NOT_FOUND");
     assert!(!files_dir.join("purge-a.txt").exists());
     assert!(!files_dir.join("purge-b.txt").exists());
 

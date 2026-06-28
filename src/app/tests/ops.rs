@@ -40,6 +40,7 @@ async fn protected_api_requires_login_with_json_error() {
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(body["code"], "UNAUTHORIZED");
+    assert_eq!(body["reason"], "AUTH_REQUIRED");
     assert_eq!(body["message"], "请先登录");
 }
 
@@ -86,6 +87,8 @@ async fn trusted_proxy_headers_enforce_forwarded_ip_concurrency_through_middlewa
     assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
     let body = json_body(response).await;
     assert_eq!(body["code"], "TOO_MANY_REQUESTS");
+    assert_eq!(body["reason"], "IP_CONCURRENCY_LIMITED");
+    assert_eq!(body["params"]["limit"], 1);
     assert_eq!(body["message"], "当前 IP 并发请求过高，请稍后重试");
 
     first_upload.abort();
@@ -136,6 +139,7 @@ async fn protected_routes_ignore_spoofed_proxy_headers_by_default() {
     assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
     let body = json_body(response).await;
     assert_eq!(body["code"], "TOO_MANY_REQUESTS");
+    assert_eq!(body["reason"], "IP_CONCURRENCY_LIMITED");
     assert_eq!(body["message"], "当前 IP 并发请求过高，请稍后重试");
 
     first_upload.abort();

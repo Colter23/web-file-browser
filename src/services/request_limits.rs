@@ -80,17 +80,19 @@ impl RequestLimitState {
     }
 
     fn acquire_dir_scan(&self) -> Result<OwnedSemaphorePermit, AppError> {
-        self.dir_scan
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| AppError::too_many_requests("目录扫描并发过高，请稍后重试"))
+        self.dir_scan.clone().try_acquire_owned().map_err(|_| {
+            AppError::too_many_requests("目录扫描并发过高，请稍后重试")
+                .with_reason("DIR_SCAN_CONCURRENCY_LIMITED")
+                .with_param("limit", self.dir_scan_limit)
+        })
     }
 
     fn acquire_transfer(&self) -> Result<OwnedSemaphorePermit, AppError> {
-        self.transfer
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| AppError::too_many_requests("文件传输并发过高，请稍后重试"))
+        self.transfer.clone().try_acquire_owned().map_err(|_| {
+            AppError::too_many_requests("文件传输并发过高，请稍后重试")
+                .with_reason("TRANSFER_CONCURRENCY_LIMITED")
+                .with_param("limit", self.transfer_limit)
+        })
     }
 
     async fn acquire_ip(&self, ip: String) -> Result<OwnedSemaphorePermit, AppError> {
@@ -100,9 +102,11 @@ impl RequestLimitState {
             .entry(ip)
             .or_insert_with(|| Arc::new(Semaphore::new(self.per_ip_limit)))
             .clone();
-        semaphore
-            .try_acquire_owned()
-            .map_err(|_| AppError::too_many_requests("当前 IP 并发请求过高，请稍后重试"))
+        semaphore.try_acquire_owned().map_err(|_| {
+            AppError::too_many_requests("当前 IP 并发请求过高，请稍后重试")
+                .with_reason("IP_CONCURRENCY_LIMITED")
+                .with_param("limit", self.per_ip_limit)
+        })
     }
 
     async fn metrics(&self) -> RequestLimitMetrics {

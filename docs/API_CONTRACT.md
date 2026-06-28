@@ -7,7 +7,7 @@
 - API 前缀为 `/api`，前端默认同源调用，不需要额外配置 base URL。
 - 除 `GET /api/`、`GET /api/health`、`GET /api/ready`、`POST /api/auth/setup`、`POST /api/auth/login`、`GET /api/auth/session` 外，其余接口默认要求登录。
 - 认证使用 Cookie：登录成功后后端写入 `wfb_session`，前端请求需要带凭据。
-- 错误响应统一为 `{ "code": "...", "message": "..." }`，错误码详见 [API_ERRORS.md](API_ERRORS.md)。
+- 错误响应统一为 `{ "code": "...", "reason": "...", "message": "...", "params": { ... } }`，其中 `params` 可省略。前端国际化优先使用 `reason` 和 `params`，中文 `message` 作为兜底提示。错误码详见 [API_ERRORS.md](API_ERRORS.md)。
 - 路径参数 `{path...}` 使用虚拟路径去掉开头 `/` 后的部分，例如虚拟路径 `/files/a.txt` 对应 `/api/file/files/a.txt`。
 - 写操作冲突策略支持 `autoRename`、`reject`、`overwrite`。默认来自后端配置，当前默认是 `autoRename`。
 - 写操作可用查询参数 `conflictPolicy=` 或 `conflict=` 指定冲突策略；部分 JSON 请求体也支持 `conflictPolicy`。
@@ -129,6 +129,8 @@
 ```
 
 成功返回 `201`，响应体是新建映射的数字 `id`。
+
+常见错误：`400 BAD_REQUEST` + `MAPPING_FOLDER_PATH_NOT_FOUND` 表示提交的本地 `folderPath` 不存在或不可访问；这是配置参数错误，不等同于文件浏览时虚拟路径不存在的 `404 PATH_NOT_FOUND`。
 
 ### `PUT /api/mapping/{id}`
 
@@ -445,6 +447,8 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
   "errors": [
     {
       "path": "/files/b.bin",
+      "code": "FORBIDDEN",
+      "reason": "MOUNT_READONLY",
       "message": "错误信息"
     }
   ],
@@ -593,6 +597,8 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
   "errors": [
     {
       "id": "uuid-2",
+      "code": "NOT_FOUND",
+      "reason": "TRASH_RECORD_NOT_FOUND",
       "message": "错误信息"
     }
   ],
@@ -623,6 +629,8 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
   "errors": [
     {
       "id": "uuid-2",
+      "code": "NOT_FOUND",
+      "reason": "TRASH_RECORD_NOT_FOUND",
       "message": "错误信息"
     }
   ],

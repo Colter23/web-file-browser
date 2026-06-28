@@ -80,6 +80,36 @@ async fn mapping_reorder_rejects_unknown_id() {
 }
 
 #[tokio::test]
+async fn mapping_rejects_missing_local_folder_as_bad_request() {
+    let (root, app) = test_app("mapping-missing-local-folder").await;
+    let missing_dir = root.path().join("missing");
+
+    let cookie = login_cookie(&app).await;
+    let response = app
+        .clone()
+        .oneshot(json_request(
+            Method::POST,
+            "/api/mapping",
+            Some(&cookie),
+            json!({
+                "mountPath": "/missing",
+                "folderPath": path_text(&missing_dir),
+                "remark": "不存在的本地目录",
+                "order": 0,
+                "writable": true
+            }),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = json_body(response).await;
+    assert_eq!(body["code"], "BAD_REQUEST");
+    assert_eq!(body["reason"], "MAPPING_FOLDER_PATH_NOT_FOUND");
+    assert_eq!(body["params"]["path"], path_text(&missing_dir));
+}
+
+#[tokio::test]
 async fn mapping_paths_do_not_expose_windows_extended_prefix() {
     let (root, app) = test_app("mapping-display-path").await;
     let files_dir = root.path().join("files");

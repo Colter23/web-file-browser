@@ -84,12 +84,18 @@ async fn create_copy_task(
     let target_path = request
         .target_path
         .clone()
-        .ok_or_else(|| AppError::bad_request("复制任务需要 targetPath"))?;
+        .ok_or_else(|| task_field_missing("复制任务需要 targetPath", "targetPath"))?;
     if request.sources.is_empty() {
-        return Err(AppError::bad_request("复制任务 sources 不能为空"));
+        return Err(task_list_empty("复制任务 sources 不能为空", "sources"));
     }
-    ensure_non_blank_paths("复制任务 sources", &request.sources)?;
-    ensure_non_blank_path("复制任务 targetPath", &target_path)?;
+    ensure_non_blank_paths(
+        TaskField::new("复制任务 sources", "sources"),
+        &request.sources,
+    )?;
+    ensure_non_blank_path(
+        TaskField::new("复制任务 targetPath", "targetPath"),
+        &target_path,
+    )?;
     let task = state
         .tasks
         .create(TaskKind::Copy, request.sources.len(), 0)
@@ -108,12 +114,18 @@ async fn create_move_task(
     let target_path = request
         .target_path
         .clone()
-        .ok_or_else(|| AppError::bad_request("移动任务需要 targetPath"))?;
+        .ok_or_else(|| task_field_missing("移动任务需要 targetPath", "targetPath"))?;
     if request.sources.is_empty() {
-        return Err(AppError::bad_request("移动任务 sources 不能为空"));
+        return Err(task_list_empty("移动任务 sources 不能为空", "sources"));
     }
-    ensure_non_blank_paths("移动任务 sources", &request.sources)?;
-    ensure_non_blank_path("移动任务 targetPath", &target_path)?;
+    ensure_non_blank_paths(
+        TaskField::new("移动任务 sources", "sources"),
+        &request.sources,
+    )?;
+    ensure_non_blank_path(
+        TaskField::new("移动任务 targetPath", "targetPath"),
+        &target_path,
+    )?;
     let task = state
         .tasks
         .create(TaskKind::Move, request.sources.len(), 0)
@@ -130,9 +142,9 @@ async fn create_delete_task(
     Json(request): Json<DeleteTaskRequest>,
 ) -> Result<Json<TaskResponse>, AppError> {
     if request.paths.is_empty() {
-        return Err(AppError::bad_request("删除任务 paths 不能为空"));
+        return Err(task_list_empty("删除任务 paths 不能为空", "paths"));
     }
-    ensure_non_blank_paths("删除任务 paths", &request.paths)?;
+    ensure_non_blank_paths(TaskField::new("删除任务 paths", "paths"), &request.paths)?;
     let task = state
         .tasks
         .create(TaskKind::Delete, request.paths.len(), 0)
@@ -147,11 +159,20 @@ async fn create_archive_task(
     Json(request): Json<ArchiveTaskRequest>,
 ) -> Result<Json<TaskResponse>, AppError> {
     if request.sources.is_empty() {
-        return Err(AppError::bad_request("压缩任务 sources 不能为空"));
+        return Err(task_list_empty("压缩任务 sources 不能为空", "sources"));
     }
-    ensure_non_blank_paths("压缩任务 sources", &request.sources)?;
-    ensure_non_blank_path("压缩任务 targetPath", &request.target_path)?;
-    ensure_optional_child_name("压缩任务 outputName", request.output_name.as_deref())?;
+    ensure_non_blank_paths(
+        TaskField::new("压缩任务 sources", "sources"),
+        &request.sources,
+    )?;
+    ensure_non_blank_path(
+        TaskField::new("压缩任务 targetPath", "targetPath"),
+        &request.target_path,
+    )?;
+    ensure_optional_child_name(
+        TaskField::new("压缩任务 outputName", "outputName"),
+        request.output_name.as_deref(),
+    )?;
     let task = state
         .tasks
         .create(TaskKind::Archive, request.sources.len(), 0)
@@ -167,9 +188,18 @@ async fn create_extract_task(
     State(state): State<Arc<AppState>>,
     Json(request): Json<ExtractTaskRequest>,
 ) -> Result<Json<TaskResponse>, AppError> {
-    ensure_non_blank_path("解压任务 sourcePath", &request.source_path)?;
-    ensure_non_blank_path("解压任务 targetPath", &request.target_path)?;
-    ensure_optional_child_name("解压任务 folderName", request.folder_name.as_deref())?;
+    ensure_non_blank_path(
+        TaskField::new("解压任务 sourcePath", "sourcePath"),
+        &request.source_path,
+    )?;
+    ensure_non_blank_path(
+        TaskField::new("解压任务 targetPath", "targetPath"),
+        &request.target_path,
+    )?;
+    ensure_optional_child_name(
+        TaskField::new("解压任务 folderName", "folderName"),
+        request.folder_name.as_deref(),
+    )?;
     let task = state.tasks.create(TaskKind::Extract, 1, 0).await?;
     let id = task.id.clone();
     let runtime = state.settings.runtime().await;
@@ -178,30 +208,62 @@ async fn create_extract_task(
     Ok(Json(TaskResponse { id }))
 }
 
-fn ensure_non_blank_path(label: &str, path: &str) -> Result<(), AppError> {
+#[derive(Clone, Copy)]
+struct TaskField {
+    label: &'static str,
+    name: &'static str,
+}
+
+impl TaskField {
+    fn new(label: &'static str, name: &'static str) -> Self {
+        Self { label, name }
+    }
+}
+
+fn ensure_non_blank_path(field: TaskField, path: &str) -> Result<(), AppError> {
     if path.trim().is_empty() {
-        return Err(AppError::bad_request(format!("{label} 不能为空")));
+        return Err(AppError::bad_request(format!("{} 不能为空", field.label))
+            .with_reason("TASK_PATH_EMPTY")
+            .with_param("field", field.name));
     }
     Ok(())
 }
 
-fn ensure_non_blank_paths(label: &str, paths: &[String]) -> Result<(), AppError> {
+fn ensure_non_blank_paths(field: TaskField, paths: &[String]) -> Result<(), AppError> {
     if paths.iter().any(|path| path.trim().is_empty()) {
-        return Err(AppError::bad_request(format!("{label} 包含空路径")));
+        return Err(AppError::bad_request(format!("{} 包含空路径", field.label))
+            .with_reason("TASK_PATH_LIST_CONTAINS_EMPTY")
+            .with_param("field", field.name));
     }
     Ok(())
 }
 
-fn ensure_optional_child_name(label: &str, name: Option<&str>) -> Result<(), AppError> {
+fn ensure_optional_child_name(field: TaskField, name: Option<&str>) -> Result<(), AppError> {
     let Some(name) = name else {
         return Ok(());
     };
     if name.trim().is_empty() {
-        return Err(AppError::bad_request(format!("{label} 不能为空")));
+        return Err(AppError::bad_request(format!("{} 不能为空", field.label))
+            .with_reason("TASK_OUTPUT_NAME_EMPTY")
+            .with_param("field", field.name));
     }
-    normalize_child_name(name)
-        .map(|_| ())
-        .map_err(|error| AppError::bad_request(format!("{label} 无效: {error}")))
+    normalize_child_name(name).map(|_| ()).map_err(|error| {
+        AppError::bad_request(format!("{} 无效: {error}", field.label))
+            .with_reason("TASK_OUTPUT_NAME_INVALID")
+            .with_param("field", field.name)
+    })
+}
+
+fn task_field_missing(message: &'static str, field: &'static str) -> AppError {
+    AppError::bad_request(message)
+        .with_reason("TASK_FIELD_REQUIRED")
+        .with_param("field", field)
+}
+
+fn task_list_empty(message: &'static str, field: &'static str) -> AppError {
+    AppError::bad_request(message)
+        .with_reason("TASK_LIST_EMPTY")
+        .with_param("field", field)
 }
 
 fn spawn_copy_task(
@@ -215,7 +277,7 @@ fn spawn_copy_task(
         let Ok(_permit) = state.tasks.acquire_run_permit().await else {
             let _ = state
                 .tasks
-                .add_error(&task_id, String::new(), "任务调度器不可用".to_string())
+                .add_error(&task_id, String::new(), task_scheduler_unavailable())
                 .await;
             let _ = state.tasks.finish(&task_id).await;
             return;
@@ -242,10 +304,7 @@ fn spawn_copy_task(
                     let _ = state.tasks.item_done(&task_id, 0).await;
                 }
                 Err(error) => {
-                    let _ = state
-                        .tasks
-                        .add_error(&task_id, source_path, error.to_string())
-                        .await;
+                    let _ = state.tasks.add_error(&task_id, source_path, error).await;
                 }
             }
         }
@@ -264,7 +323,7 @@ fn spawn_move_task(
         let Ok(_permit) = state.tasks.acquire_run_permit().await else {
             let _ = state
                 .tasks
-                .add_error(&task_id, String::new(), "任务调度器不可用".to_string())
+                .add_error(&task_id, String::new(), task_scheduler_unavailable())
                 .await;
             let _ = state.tasks.finish(&task_id).await;
             return;
@@ -291,10 +350,7 @@ fn spawn_move_task(
                     let _ = state.tasks.item_done(&task_id, 0).await;
                 }
                 Err(error) => {
-                    let _ = state
-                        .tasks
-                        .add_error(&task_id, source_path, error.to_string())
-                        .await;
+                    let _ = state.tasks.add_error(&task_id, source_path, error).await;
                 }
             }
         }
@@ -307,7 +363,7 @@ fn spawn_delete_task(state: Arc<AppState>, task_id: String, paths: Vec<String>, 
         let Ok(_permit) = state.tasks.acquire_run_permit().await else {
             let _ = state
                 .tasks
-                .add_error(&task_id, String::new(), "任务调度器不可用".to_string())
+                .add_error(&task_id, String::new(), task_scheduler_unavailable())
                 .await;
             let _ = state.tasks.finish(&task_id).await;
             return;
@@ -327,10 +383,7 @@ fn spawn_delete_task(state: Arc<AppState>, task_id: String, paths: Vec<String>, 
                     let _ = state.tasks.item_done(&task_id, bytes).await;
                 }
                 Err(error) => {
-                    let _ = state
-                        .tasks
-                        .add_error(&task_id, path, error.to_string())
-                        .await;
+                    let _ = state.tasks.add_error(&task_id, path, error).await;
                 }
             }
         }
@@ -348,7 +401,7 @@ fn spawn_archive_task(
         let Ok(_permit) = state.tasks.acquire_run_permit().await else {
             let _ = state
                 .tasks
-                .add_error(&task_id, String::new(), "任务调度器不可用".to_string())
+                .add_error(&task_id, String::new(), task_scheduler_unavailable())
                 .await;
             let _ = state.tasks.finish(&task_id).await;
             return;
@@ -359,10 +412,7 @@ fn spawn_archive_task(
         match result {
             Ok(_) => {}
             Err(error) => {
-                let _ = state
-                    .tasks
-                    .add_error(&task_id, source_summary, error.to_string())
-                    .await;
+                let _ = state.tasks.add_error(&task_id, source_summary, error).await;
             }
         }
         let _ = state.tasks.finish(&task_id).await;
@@ -379,7 +429,7 @@ fn spawn_extract_task(
         let Ok(_permit) = state.tasks.acquire_run_permit().await else {
             let _ = state
                 .tasks
-                .add_error(&task_id, String::new(), "任务调度器不可用".to_string())
+                .add_error(&task_id, String::new(), task_scheduler_unavailable())
                 .await;
             let _ = state.tasks.finish(&task_id).await;
             return;
@@ -390,14 +440,15 @@ fn spawn_extract_task(
         match result {
             Ok(_) => {}
             Err(error) => {
-                let _ = state
-                    .tasks
-                    .add_error(&task_id, source_path, error.to_string())
-                    .await;
+                let _ = state.tasks.add_error(&task_id, source_path, error).await;
             }
         }
         let _ = state.tasks.finish(&task_id).await;
     });
+}
+
+fn task_scheduler_unavailable() -> AppError {
+    AppError::internal("任务调度器不可用").with_reason("TASK_SCHEDULER_UNAVAILABLE")
 }
 
 async fn archive_task(

@@ -204,10 +204,16 @@ impl TaskService {
         Ok(())
     }
 
-    pub async fn add_error(&self, id: &str, path: String, message: String) -> Result<(), AppError> {
+    pub async fn add_error(&self, id: &str, path: String, error: AppError) -> Result<(), AppError> {
         let mut tasks = self.tasks.write().await;
         if let Some(task) = tasks.get_mut(id) {
-            task.errors.push(TaskError { path, message });
+            task.errors.push(TaskError {
+                path,
+                code: error.code().to_string(),
+                reason: error.reason().to_string(),
+                message: error.to_string(),
+                params: error.params().cloned(),
+            });
         }
         Ok(())
     }
@@ -427,7 +433,11 @@ mod tests {
         service.bytes_done(&running.id, 128).await.unwrap();
         let failed = service.create(TaskKind::Delete, 1, 0).await.unwrap();
         service
-            .add_error(&failed.id, "/repo/a.txt".to_string(), "失败".to_string())
+            .add_error(
+                &failed.id,
+                "/repo/a.txt".to_string(),
+                AppError::bad_request("失败").with_reason("TEST_ERROR"),
+            )
             .await
             .unwrap();
         service.finish(&failed.id).await.unwrap();
