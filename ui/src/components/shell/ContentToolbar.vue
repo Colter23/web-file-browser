@@ -315,7 +315,7 @@ defineExpose({
 }
 
 .search-box {
-  @apply relative flex h-9 min-w-56 w-[18.5rem] max-w-[26vw] shrink items-center gap-1.5 rounded-md border px-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] transition-[width,max-width,border-color,box-shadow,background-color] duration-150 ease-out;
+  @apply relative flex h-9 min-w-56 w-[18.5rem] max-w-[26vw] shrink items-center gap-1.5 rounded-md border py-0 pl-2 pr-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] transition-[width,max-width,border-color,box-shadow,background-color] duration-150 ease-out;
   border-color: var(--app-border);
   background: var(--app-control-solid);
   color: var(--app-text-subtle);

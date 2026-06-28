@@ -219,6 +219,8 @@ onBeforeUnmount(() => {
 
 .path-box {
   @apply shrink overflow-x-scroll;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .path-item {

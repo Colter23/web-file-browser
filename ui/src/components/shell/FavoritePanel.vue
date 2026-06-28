@@ -567,15 +567,6 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
   @apply flex max-h-40 flex-col gap-0.5 overflow-auto pr-1;
 }
 
-.favorite-list::-webkit-scrollbar {
-  width: 8px;
-}
-
-.favorite-list::-webkit-scrollbar-thumb {
-  @apply rounded-full;
-  background: var(--app-border);
-}
-
 .favorite-row {
   @apply relative grid h-8 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 rounded-sm border border-transparent px-1.5 text-left;
   color: var(--app-text-muted);

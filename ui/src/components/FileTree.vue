@@ -604,17 +604,4 @@ watch([() => props.currentPath, () => props.data], () => {
   color: var(--app-text-disabled);
 }
 
-.file-tree::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.file-tree::-webkit-scrollbar-thumb {
-  @apply rounded-full;
-  background: var(--app-border);
-}
-
-.file-tree::-webkit-scrollbar-track {
-  @apply bg-transparent;
-}
 </style>
