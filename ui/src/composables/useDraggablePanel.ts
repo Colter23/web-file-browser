@@ -22,9 +22,11 @@ const isInteractiveTarget = (target: EventTarget | null) => {
 export const useDraggablePanel = ({panelRef, initialYRatio = 0.45, padding = 12}: DraggablePanelOptions) => {
   const position = ref<Point | null>(null);
   const dragging = ref(false);
+  const anchoredToDefault = ref(true);
   let offsetX = 0;
   let offsetY = 0;
   let initialPositionFrame: number | undefined;
+  let resizeObserver: ResizeObserver | undefined;
 
   const clampToViewport = (point: Point): Point => {
     const rect = panelRef.value?.getBoundingClientRect();
@@ -101,6 +103,7 @@ export const useDraggablePanel = ({panelRef, initialYRatio = 0.45, padding = 12}
     offsetX = event.clientX - rect.left;
     offsetY = event.clientY - rect.top;
     position.value = clampToViewport({x: rect.left, y: rect.top});
+    anchoredToDefault.value = false;
     dragging.value = true;
     event.preventDefault();
     window.addEventListener("pointermove", handlePointerMove);
@@ -109,11 +112,12 @@ export const useDraggablePanel = ({panelRef, initialYRatio = 0.45, padding = 12}
   }
 
   const resetPosition = () => {
+    anchoredToDefault.value = true;
     placeInitialPosition();
   }
 
   const handleWindowResize = () => {
-    if (!position.value) {
+    if (!position.value || anchoredToDefault.value) {
       placeInitialPosition();
       return;
     }
@@ -122,11 +126,19 @@ export const useDraggablePanel = ({panelRef, initialYRatio = 0.45, padding = 12}
 
   onMounted(() => {
     void scheduleInitialPosition();
+    if (typeof ResizeObserver === "function" && panelRef.value) {
+      resizeObserver = new ResizeObserver(() => {
+        if (!anchoredToDefault.value || dragging.value) return;
+        void scheduleInitialPosition();
+      });
+      resizeObserver.observe(panelRef.value);
+    }
     window.addEventListener("resize", handleWindowResize);
   });
 
   onBeforeUnmount(() => {
     if (initialPositionFrame) window.cancelAnimationFrame(initialPositionFrame);
+    resizeObserver?.disconnect();
     finishDrag();
     window.removeEventListener("resize", handleWindowResize);
   });
