@@ -1159,6 +1159,7 @@ const signOut = async () => {
         </Transition>
 
         <image-viewer
+            v-if="imageViewerVisible"
             :visible="imageViewerVisible"
             :entry="imageViewerEntry"
             :entries="imageViewerEntries"
@@ -1180,6 +1181,7 @@ const signOut = async () => {
         </audio-player>
 
         <video-viewer
+            v-if="videoViewerVisible"
             :visible="videoViewerVisible"
             :entry="videoViewerEntry"
             :entries="videoViewerEntries"
@@ -1190,6 +1192,7 @@ const signOut = async () => {
         </video-viewer>
 
         <pdf-viewer
+            v-if="pdfViewerVisible"
             :visible="pdfViewerVisible"
             :entry="pdfViewerEntry"
             :entries="pdfViewerEntries"

@@ -300,7 +300,7 @@ onBeforeUnmount(() => {
         v-if="currentEntry"
         ref="viewerRef"
         class="image-viewer"
-        :class="{pageFullscreen}"
+        :class="{pageFullscreen, browserFullscreen}"
         tabindex="-1"
         @keydown.esc.prevent.stop="close">
       <image-viewer-toolbar
@@ -367,7 +367,7 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--app-accent, #2563eb) 7%, rgba(2, 6, 23, 0.78));
 }
 
-.image-viewer.pageFullscreen {
+.image-viewer:is(.pageFullscreen, .browserFullscreen) {
   @apply fixed inset-0 z-50 rounded-none;
 }
 

@@ -5,8 +5,10 @@ import type {ShellNoticePayload} from "../shell/types.ts";
 import {downloadUrl} from "../../network/api.ts";
 import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
 import {readBooleanStorage, readNumberStorage, writeBooleanStorage, writeNumberStorage} from "../../utils/safe-storage.ts";
-import FileTypeIcon from "../FileTypeIcon.vue";
 import Icon from "../Icon.vue";
+import ViewerActionGroup from "./ViewerActionGroup.vue";
+import ViewerStatus from "./ViewerStatus.vue";
+import ViewerToolbar from "./ViewerToolbar.vue";
 
 const props = defineProps<{
   visible: boolean;
@@ -597,55 +599,44 @@ onBeforeUnmount(() => {
         :class="{pageFullscreen, browserFullscreen}"
         tabindex="-1"
         @keydown.esc.prevent.stop="close">
-      <div class="video-viewer-toolbar">
-        <div class="video-viewer-title">
-          <span class="video-viewer-title-icon">
-            <file-type-icon kind="video" :name="currentEntry.name" :extension="currentEntry.extension" size="1.15rem" />
-          </span>
-          <span class="video-viewer-title-text">
-            <strong>{{ currentEntry.name }}</strong>
-            <span>{{ subtitle }}</span>
-          </span>
-        </div>
-        <div class="video-viewer-actions">
-          <div class="video-viewer-action-group">
-            <button title="上一个视频 (←)" :disabled="!canShowPrevious" @click="showAdjacent(-1)">
-              <icon icon="action.previous" color="currentColor" size="1.1rem" />
-            </button>
-            <button title="下一个视频 (→)" :disabled="!canShowNext" @click="showAdjacent(1)">
-              <icon icon="action.next" color="currentColor" size="1.1rem" />
-            </button>
-          </div>
-          <div class="video-viewer-action-group">
-            <button
-                class="video-auto-play"
-                :title="autoPlayTitle"
-                :class="{active: autoPlay}"
-                :aria-pressed="autoPlay"
-                @click="toggleAutoPlay">
-              <icon icon="action.play" color="currentColor" />
-              <span>自动播放</span>
-              <span class="video-switch" aria-hidden="true"></span>
-            </button>
-          </div>
-          <div class="video-viewer-action-group">
-            <button :title="pageFullscreenTitle" :class="{active: pageFullscreen}" @click="togglePageFullscreen">
-              <icon :icon="pageFullscreenIcon" color="currentColor" />
-            </button>
-            <button :title="browserFullscreenTitle" :class="{active: browserFullscreen}" @click="toggleBrowserFullscreen">
-              <icon :icon="browserFullscreenIcon" color="currentColor" />
-            </button>
-          </div>
-          <div class="video-viewer-action-group">
-            <button title="下载" @click="downloadCurrent">
-              <icon icon="action.download" color="currentColor" />
-            </button>
-            <button title="关闭" @click="close">
-              <icon icon="action.close" color="currentColor" />
-            </button>
-          </div>
-        </div>
-      </div>
+      <viewer-toolbar kind="video" :name="currentEntry.name" :extension="currentEntry.extension" :subtitle="subtitle" icon-tone="video">
+        <viewer-action-group>
+          <button title="上一个视频 (←)" :disabled="!canShowPrevious" @click="showAdjacent(-1)">
+            <icon icon="action.previous" color="currentColor" size="1.1rem" />
+          </button>
+          <button title="下一个视频 (→)" :disabled="!canShowNext" @click="showAdjacent(1)">
+            <icon icon="action.next" color="currentColor" size="1.1rem" />
+          </button>
+        </viewer-action-group>
+        <viewer-action-group>
+          <button
+              class="video-auto-play"
+              :title="autoPlayTitle"
+              :class="{active: autoPlay}"
+              :aria-pressed="autoPlay"
+              @click="toggleAutoPlay">
+            <icon icon="action.play" color="currentColor" />
+            <span>自动播放</span>
+            <span class="video-switch" aria-hidden="true"></span>
+          </button>
+        </viewer-action-group>
+        <viewer-action-group>
+          <button :title="pageFullscreenTitle" :class="{active: pageFullscreen}" @click="togglePageFullscreen">
+            <icon :icon="pageFullscreenIcon" color="currentColor" />
+          </button>
+          <button :title="browserFullscreenTitle" :class="{active: browserFullscreen}" @click="toggleBrowserFullscreen">
+            <icon :icon="browserFullscreenIcon" color="currentColor" />
+          </button>
+        </viewer-action-group>
+        <viewer-action-group>
+          <button title="下载" @click="downloadCurrent">
+            <icon icon="action.download" color="currentColor" />
+          </button>
+          <button title="关闭" @click="close">
+            <icon icon="action.close" color="currentColor" />
+          </button>
+        </viewer-action-group>
+      </viewer-toolbar>
       <div class="video-viewer-stage">
         <div class="video-viewer-layout">
           <div class="video-viewer-card" :style="cardStyle">
@@ -728,8 +719,8 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
-        <div v-if="loading" class="video-viewer-status">正在加载视频...</div>
-        <div v-if="error" class="video-viewer-status error">{{ error }}</div>
+        <viewer-status v-if="loading">正在加载视频...</viewer-status>
+        <viewer-status v-if="error" tone="error">{{ error }}</viewer-status>
       </div>
     </section>
   </Teleport>
@@ -747,65 +738,8 @@ onBeforeUnmount(() => {
   @apply fixed inset-0 z-50 rounded-none;
 }
 
-.video-viewer-toolbar {
-  @apply flex min-h-14 shrink-0 items-center justify-between gap-3 border-b px-3.5 backdrop-blur;
-  border-color: color-mix(in srgb, var(--app-accent, #2563eb) 10%, rgba(255, 255, 255, 0.12));
-  background: color-mix(in srgb, var(--app-accent, #2563eb) 6%, rgba(15, 23, 42, 0.74));
-}
-
-.video-viewer-title {
-  @apply flex min-w-0 items-center gap-2.5;
-}
-
-.video-viewer-title-icon {
-  @apply grid h-8 w-8 shrink-0 place-items-center rounded-md border border-white/10 bg-white/10 text-pink-200 shadow-sm;
-}
-
-.video-viewer-title-text {
-  @apply flex min-w-0 flex-col;
-}
-
-.video-viewer-title strong {
-  @apply truncate text-sm font-semibold leading-5;
-}
-
-.video-viewer-title-text > span {
-  @apply truncate text-xs leading-4 text-slate-300;
-}
-
-.video-viewer-actions {
-  @apply flex shrink-0 items-center gap-1.5 text-xs text-slate-100;
-}
-
-.video-viewer-action-group {
-  @apply inline-flex h-9 items-center overflow-hidden rounded-lg border p-0.5 shadow-sm;
-  border-color: color-mix(in srgb, var(--app-accent, #2563eb) 10%, rgba(255, 255, 255, 0.14));
-  background: color-mix(in srgb, var(--app-accent, #2563eb) 3%, rgba(255, 255, 255, 0.1));
-}
-
-.video-viewer-actions button {
-  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-transparent bg-transparent px-2 text-sm font-medium text-white transition hover:bg-white/20;
-}
-
-.video-viewer-actions button.video-auto-play {
+:deep(button.video-auto-play) {
   @apply gap-1.5 px-2.5 text-xs;
-}
-
-.video-viewer-actions button:disabled {
-  @apply cursor-not-allowed opacity-35 hover:bg-transparent;
-}
-
-.video-viewer-actions button:focus-visible {
-  @apply outline-none;
-  border-color: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent, #2563eb) 45%, rgba(255, 255, 255, 0.25));
-}
-
-.video-viewer-actions button.active {
-  @apply text-white;
-  border-color: color-mix(in srgb, var(--app-accent-border, #bfdbfe) 72%, transparent);
-  background: color-mix(in srgb, var(--app-accent, #2563eb) 32%, rgba(255, 255, 255, 0.04));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-accent-border, #bfdbfe) 22%, transparent);
 }
 
 .video-switch {
@@ -1022,24 +956,7 @@ onBeforeUnmount(() => {
   height: 0.75rem;
 }
 
-.video-viewer-status {
-  @apply absolute left-1/2 top-1/2 rounded-lg border border-white/10 bg-slate-950/65 px-3 py-2 text-sm text-slate-100 shadow-xl backdrop-blur;
-  transform: translate(-50%, -50%);
-}
-
-.video-viewer-status.error {
-  @apply border-red-300/30 bg-red-950/70 text-red-100;
-}
-
 @media (max-width: 840px) {
-  .video-viewer-toolbar {
-    @apply items-start;
-  }
-
-  .video-viewer-actions {
-    @apply flex-wrap justify-end;
-  }
-
   .video-volume input[type="range"] {
     @apply w-16;
   }

@@ -4,8 +4,10 @@ import type {ExplorerEntry} from "../explorer/types.ts";
 import type {ShellNoticePayload} from "../shell/types.ts";
 import {fileContentUrl} from "../../network/api.ts";
 import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
-import FileTypeIcon from "../FileTypeIcon.vue";
 import Icon from "../Icon.vue";
+import ViewerActionGroup from "./ViewerActionGroup.vue";
+import ViewerStatus from "./ViewerStatus.vue";
+import ViewerToolbar from "./ViewerToolbar.vue";
 
 const props = defineProps<{
   visible: boolean;
@@ -181,48 +183,37 @@ onBeforeUnmount(() => {
         :class="{pageFullscreen, browserFullscreen}"
         tabindex="-1"
         @keydown.esc.prevent.stop="close">
-      <div class="pdf-viewer-toolbar">
-        <div class="pdf-viewer-title">
-          <span class="pdf-viewer-title-icon">
-            <file-type-icon kind="pdf" :name="currentEntry.name" :extension="currentEntry.extension" size="1.15rem" />
-          </span>
-          <span class="pdf-viewer-title-text">
-            <strong>{{ currentEntry.name }}</strong>
-            <span>{{ subtitle }}</span>
-          </span>
-        </div>
-        <div class="pdf-viewer-actions">
-          <div class="pdf-viewer-action-group">
-            <button title="上一份 PDF (←)" :disabled="!canShowPrevious" @click="showAdjacent(-1)">
-              <icon icon="action.previous" color="currentColor" size="1.1rem" />
-            </button>
-            <button title="下一份 PDF (→)" :disabled="!canShowNext" @click="showAdjacent(1)">
-              <icon icon="action.next" color="currentColor" size="1.1rem" />
-            </button>
-          </div>
-          <div class="pdf-viewer-action-group">
-            <button title="新窗口打开" @click="openInNewWindow">
-              <icon icon="action.open-new-tab" color="currentColor" />
-            </button>
-          </div>
-          <div class="pdf-viewer-action-group">
-            <button :title="pageFullscreenTitle" :class="{active: pageFullscreen}" @click="togglePageFullscreen">
-              <icon :icon="pageFullscreenIcon" color="currentColor" />
-            </button>
-            <button :title="browserFullscreenTitle" :class="{active: browserFullscreen}" @click="toggleBrowserFullscreen">
-              <icon :icon="browserFullscreenIcon" color="currentColor" />
-            </button>
-          </div>
-          <div class="pdf-viewer-action-group">
-            <button title="下载" @click="downloadCurrent">
-              <icon icon="action.download" color="currentColor" />
-            </button>
-            <button title="关闭" @click="close">
-              <icon icon="action.close" color="currentColor" />
-            </button>
-          </div>
-        </div>
-      </div>
+      <viewer-toolbar kind="pdf" :name="currentEntry.name" :extension="currentEntry.extension" :subtitle="subtitle" icon-tone="pdf">
+        <viewer-action-group>
+          <button title="上一份 PDF (←)" :disabled="!canShowPrevious" @click="showAdjacent(-1)">
+            <icon icon="action.previous" color="currentColor" size="1.1rem" />
+          </button>
+          <button title="下一份 PDF (→)" :disabled="!canShowNext" @click="showAdjacent(1)">
+            <icon icon="action.next" color="currentColor" size="1.1rem" />
+          </button>
+        </viewer-action-group>
+        <viewer-action-group>
+          <button title="新窗口打开" @click="openInNewWindow">
+            <icon icon="action.open-new-tab" color="currentColor" />
+          </button>
+        </viewer-action-group>
+        <viewer-action-group>
+          <button :title="pageFullscreenTitle" :class="{active: pageFullscreen}" @click="togglePageFullscreen">
+            <icon :icon="pageFullscreenIcon" color="currentColor" />
+          </button>
+          <button :title="browserFullscreenTitle" :class="{active: browserFullscreen}" @click="toggleBrowserFullscreen">
+            <icon :icon="browserFullscreenIcon" color="currentColor" />
+          </button>
+        </viewer-action-group>
+        <viewer-action-group>
+          <button title="下载" @click="downloadCurrent">
+            <icon icon="action.download" color="currentColor" />
+          </button>
+          <button title="关闭" @click="close">
+            <icon icon="action.close" color="currentColor" />
+          </button>
+        </viewer-action-group>
+      </viewer-toolbar>
       <div class="pdf-viewer-stage">
         <iframe
             v-if="sourceUrl"
@@ -231,7 +222,7 @@ onBeforeUnmount(() => {
             :title="currentEntry.name"
             @load="handleLoad">
         </iframe>
-        <div v-if="loading" class="pdf-viewer-status">正在加载 PDF...</div>
+        <viewer-status v-if="loading">正在加载 PDF...</viewer-status>
       </div>
     </section>
   </Teleport>
@@ -249,63 +240,6 @@ onBeforeUnmount(() => {
   @apply fixed inset-0 z-50 rounded-none;
 }
 
-.pdf-viewer-toolbar {
-  @apply flex min-h-14 shrink-0 items-center justify-between gap-3 border-b px-3.5 backdrop-blur;
-  border-color: color-mix(in srgb, var(--app-accent, #2563eb) 10%, rgba(255, 255, 255, 0.12));
-  background: color-mix(in srgb, var(--app-accent, #2563eb) 6%, rgba(15, 23, 42, 0.74));
-}
-
-.pdf-viewer-title {
-  @apply flex min-w-0 items-center gap-2.5;
-}
-
-.pdf-viewer-title-icon {
-  @apply grid h-8 w-8 shrink-0 place-items-center rounded-md border border-white/10 bg-white/10 text-blue-200 shadow-sm;
-}
-
-.pdf-viewer-title-text {
-  @apply flex min-w-0 flex-col;
-}
-
-.pdf-viewer-title strong {
-  @apply truncate text-sm font-semibold leading-5;
-}
-
-.pdf-viewer-title-text > span {
-  @apply truncate text-xs leading-4 text-slate-300;
-}
-
-.pdf-viewer-actions {
-  @apply flex shrink-0 items-center gap-1.5 text-xs text-slate-100;
-}
-
-.pdf-viewer-action-group {
-  @apply inline-flex h-9 items-center overflow-hidden rounded-lg border p-0.5 shadow-sm;
-  border-color: color-mix(in srgb, var(--app-accent, #2563eb) 10%, rgba(255, 255, 255, 0.14));
-  background: color-mix(in srgb, var(--app-accent, #2563eb) 3%, rgba(255, 255, 255, 0.1));
-}
-
-.pdf-viewer-actions button {
-  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-transparent bg-transparent px-2 text-sm font-medium text-white transition hover:bg-white/20;
-}
-
-.pdf-viewer-actions button:disabled {
-  @apply cursor-not-allowed opacity-35 hover:bg-transparent;
-}
-
-.pdf-viewer-actions button:focus-visible {
-  @apply outline-none;
-  border-color: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent, #2563eb) 45%, rgba(255, 255, 255, 0.25));
-}
-
-.pdf-viewer-actions button.active {
-  @apply text-white;
-  border-color: color-mix(in srgb, var(--app-accent-border, #bfdbfe) 72%, transparent);
-  background: color-mix(in srgb, var(--app-accent, #2563eb) 36%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-accent-border, #bfdbfe) 22%, transparent);
-}
-
 .pdf-viewer-stage {
   @apply relative min-h-0 grow overflow-hidden;
   background: color-mix(in srgb, var(--app-accent, #2563eb) 4%, rgba(2, 6, 23, 0.18));
@@ -313,20 +247,5 @@ onBeforeUnmount(() => {
 
 .pdf-viewer-frame {
   @apply block h-full w-full border-0 bg-white;
-}
-
-.pdf-viewer-status {
-  @apply absolute left-1/2 top-1/2 rounded-lg border border-white/10 bg-slate-950/65 px-3 py-2 text-sm text-slate-100 shadow-xl backdrop-blur;
-  transform: translate(-50%, -50%);
-}
-
-@media (max-width: 840px) {
-  .pdf-viewer-toolbar {
-    @apply items-start;
-  }
-
-  .pdf-viewer-actions {
-    @apply flex-wrap justify-end;
-  }
 }
 </style>
