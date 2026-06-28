@@ -19,18 +19,18 @@ defineProps<{
 @reference "tailwindcss";
 
 .preview-tool-row {
-  @apply flex h-9 shrink-0 items-center gap-2 border-b px-3 text-xs;
+  @apply flex min-h-9 shrink-0 items-center gap-1.5 border-b px-2.5 py-1 text-xs;
   border-color: var(--app-border-soft);
-  background: var(--app-panel-solid);
+  background: color-mix(in srgb, var(--app-panel-solid) 78%, var(--app-panel-muted));
   color: var(--app-text-subtle);
 }
 
 .preview-tool-actions {
-  @apply flex min-w-0 items-center gap-1;
+  @apply flex min-w-0 shrink-0 items-center gap-1;
 }
 
 :slotted(button) {
-  @apply inline-flex h-6 items-center gap-1 rounded border border-transparent px-2 disabled:cursor-not-allowed disabled:hover:border-transparent disabled:hover:bg-transparent;
+  @apply inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-transparent px-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:hover:border-transparent disabled:hover:bg-transparent;
   color: var(--app-text-muted);
 }
 
@@ -40,7 +40,8 @@ defineProps<{
 
 :slotted(button:hover:not(:disabled)) {
   border-color: var(--app-border-soft);
-  background: var(--app-accent-hover, #eff6ff);
+  background: var(--app-control-hover);
+  color: var(--app-text);
 }
 
 :slotted(button:focus-visible) {
@@ -56,6 +57,8 @@ defineProps<{
 }
 
 .preview-tool-status {
-  @apply ml-auto shrink-0 tabular-nums;
+  @apply ml-auto min-w-0 truncate rounded-full px-2 py-0.5 tabular-nums;
+  background: color-mix(in srgb, var(--app-control-solid) 72%, transparent);
+  color: var(--app-text-subtle);
 }
 </style>

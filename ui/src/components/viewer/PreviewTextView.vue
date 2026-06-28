@@ -103,13 +103,16 @@ onBeforeUnmount(resetPreviewRuntime);
 
 .preview-body {
   @apply min-h-0 grow overflow-auto text-sm;
+  background: var(--app-panel-muted);
   color: var(--app-text-muted);
 }
 
 .preview-body pre {
-  @apply min-h-full whitespace-pre-wrap break-words p-3 font-mono text-xs leading-5;
+  @apply m-2 whitespace-pre-wrap break-words rounded-lg border p-3 font-mono text-xs leading-5 shadow-sm;
+  border-color: var(--app-border-soft);
   background: var(--app-panel-solid);
   color: var(--app-text);
+  min-height: calc(100% - 1rem);
 }
 
 .preview-body pre.nowrap {
@@ -117,7 +120,7 @@ onBeforeUnmount(resetPreviewRuntime);
 }
 
 .preview-placeholder {
-  @apply flex h-full min-h-48 flex-col items-center justify-center gap-3 text-center;
+  @apply flex h-full min-h-48 flex-col items-center justify-center gap-3 px-5 text-center;
   color: var(--app-text-subtle);
 }
 

@@ -31,7 +31,7 @@ const openPdfInNewWindow = () => {
     </button>
     <button title="在新窗口打开 PDF" @click="openPdfInNewWindow">
       <icon icon="action.open-new-tab" color="currentColor" />
-      <span>新窗口打开</span>
+      <span>新窗口</span>
     </button>
   </preview-tool-row>
   <div class="preview-body pdf">
@@ -50,27 +50,27 @@ const openPdfInNewWindow = () => {
 
 .preview-body {
   @apply min-h-0 grow overflow-hidden text-sm;
+  background: var(--app-panel-muted);
   color: var(--app-text-muted);
 }
 
 .preview-body.pdf {
   @apply p-2;
-  background: var(--app-panel-muted);
 }
 
 .pdf-frame {
-  @apply block h-full min-h-0 w-full rounded-md border shadow-sm;
+  @apply block h-full min-h-0 w-full rounded-lg border shadow-sm;
   border-color: var(--app-border-soft);
   background: var(--app-panel-solid);
 }
 
 .preview-placeholder {
-  @apply flex h-full min-h-48 flex-col items-center justify-center gap-3 text-center;
+  @apply flex h-full min-h-48 flex-col items-center justify-center gap-3 px-5 text-center;
   color: var(--app-text-subtle);
 }
 
 .preview-placeholder button {
-  @apply rounded-md border px-3 py-1.5 text-sm;
+  @apply rounded-md border px-3 py-1.5 text-sm font-medium;
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);
   color: var(--app-text-muted);

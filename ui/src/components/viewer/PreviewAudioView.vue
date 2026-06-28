@@ -43,22 +43,23 @@ const openAudioPlayer = () => emit("open-audio", props.entry);
 
 .preview-body {
   @apply min-h-0 grow overflow-auto text-sm;
+  background: var(--app-panel-muted);
   color: var(--app-text-muted);
 }
 
 .preview-body.audio {
-  @apply flex items-center justify-center p-4;
-  background: var(--app-panel-muted);
+  @apply flex items-center justify-center p-3;
 }
 
 .audio-preview-card {
-  @apply flex w-full max-w-[18rem] flex-col items-center gap-3 rounded-lg border p-4 text-center;
+  @apply flex w-full max-w-[18rem] flex-col items-center gap-3 rounded-xl border p-4 text-center shadow-sm;
   border-color: var(--app-border-soft);
-  background: var(--app-panel-solid);
+  background: linear-gradient(180deg, var(--app-panel-solid), var(--app-control));
 }
 
 .audio-preview-icon {
-  @apply flex h-14 w-14 items-center justify-center rounded-xl text-2xl;
+  @apply flex h-14 w-14 items-center justify-center rounded-xl border text-2xl;
+  border-color: var(--app-border-soft);
   background: color-mix(in srgb, var(--app-accent-soft, #eff6ff) 72%, var(--app-control-solid));
   color: var(--app-accent, #2563eb);
 }

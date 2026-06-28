@@ -38,15 +38,16 @@ const openVideoPreview = () => emit("open-video", props.entry);
 
 .preview-body {
   @apply min-h-0 grow overflow-auto text-sm;
+  background: var(--app-panel-muted);
   color: var(--app-text-muted);
 }
 
 .preview-body.video {
   @apply flex items-center justify-center p-3;
-  background: var(--app-panel-muted);
 }
 
 .preview-body video {
-  @apply max-h-full max-w-full rounded-md bg-black shadow-sm;
+  @apply max-h-full max-w-full rounded-lg border bg-black shadow-sm;
+  border-color: var(--app-border-soft);
 }
 </style>

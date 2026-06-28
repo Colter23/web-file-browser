@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import {computed} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
+import FileTypeIcon from "../FileTypeIcon.vue";
 import Icon from "../Icon.vue";
 import type {ShellNoticePayload} from "../shell/types.ts";
-import {entryMetaRows, entryPreviewKind, entryPreviewTypeText, isEditableEntry} from "../../utils/file-entry.ts";
+import {entryMetaRows, entryPreviewKind, entryPreviewTypeText, fileEntryIconKind, isEditableEntry} from "../../utils/file-entry.ts";
 import PreviewHeader from "./PreviewHeader.vue";
 import PreviewAudioView from "./PreviewAudioView.vue";
 import PreviewImageView from "./PreviewImageView.vue";
@@ -41,6 +42,7 @@ const previewSubtitleText = computed(() => props.entry ? previewTypeText.value :
 const emptyTitleText = computed(() => props.emptyTitle || "选择一个文件以预览");
 const emptySubtitleText = computed(() => props.emptySubtitle || "");
 const emptyIconName = computed(() => props.emptyIcon || "file.file");
+const previewIconKind = computed(() => props.entry ? fileEntryIconKind(props.entry, props.editableExtensions) : null);
 
 const canEditPreview = computed(() => {
   return isEditableEntry(props.entry, props.editableExtensions);
@@ -69,7 +71,17 @@ const downloadPreview = () => {
       :can-download="Boolean(entry)"
       @edit="editPreview"
       @download="downloadPreview"
-      @close="emit('close')" />
+      @close="emit('close')">
+    <template #icon>
+      <file-type-icon
+          v-if="previewIconKind"
+          :kind="previewIconKind"
+          :name="entry?.name"
+          :extension="entry?.extension"
+          size="1.35rem" />
+      <icon v-else icon="view.preview-pane" />
+    </template>
+  </preview-header>
   <preview-meta-list v-if="entry" :items="previewMeta" />
   <preview-image-view v-if="entry && previewKind === 'image'" :entry="entry" @open-image="emit('open-image', $event)" />
   <preview-text-view v-else-if="entry && previewKind === 'text'" :entry="entry" :reload-key="reloadKey" @notice="emit('notice', $event)" />
@@ -95,19 +107,12 @@ const downloadPreview = () => {
 
 .preview-body {
   @apply min-h-0 grow overflow-auto text-sm;
+  background: var(--app-panel-muted);
   color: var(--app-text-muted);
 }
 
-.preview-body.video {
-  background: var(--app-panel-muted);
-}
-
-.preview-body video {
-  @apply m-auto max-h-full max-w-full;
-}
-
 .preview-placeholder {
-  @apply flex h-full min-h-48 flex-col items-center justify-center gap-3 text-center;
+  @apply mx-auto flex h-full min-h-48 max-w-64 flex-col items-center justify-center gap-3 px-5 text-center;
   color: var(--app-text-subtle);
 }
 
@@ -125,7 +130,7 @@ const downloadPreview = () => {
 }
 
 .preview-placeholder button {
-  @apply rounded-md border px-3 py-1.5 text-sm;
+  @apply rounded-md border px-3 py-1.5 text-sm font-medium;
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);
   color: var(--app-text-muted);

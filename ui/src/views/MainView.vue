@@ -1291,16 +1291,17 @@ const signOut = async () => {
 .preview-pane {
   @apply relative flex min-h-0 flex-col border-l;
   border-color: var(--app-border-soft);
-  background: var(--app-panel-solid);
+  background: var(--app-panel-muted);
+  box-shadow: -10px 0 24px rgba(15, 23, 42, 0.04);
 }
 
 .preview-resizer {
-  @apply absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize touch-none;
+  @apply absolute -left-1.5 top-0 z-10 h-full w-3 cursor-col-resize touch-none;
 }
 
 .preview-resizer::after {
   content: "";
-  @apply absolute left-1 top-0 h-full w-px bg-transparent;
+  @apply absolute left-1/2 top-2 bottom-2 w-px -translate-x-1/2 rounded-full bg-transparent;
 }
 
 .preview-resizer:hover::after,

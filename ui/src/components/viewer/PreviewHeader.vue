@@ -17,18 +17,25 @@ const emit = defineEmits<{
 
 <template>
   <div class="preview-header">
-    <div class="preview-title-block">
-      <span class="preview-title">{{ title }}</span>
-      <span class="preview-subtitle">{{ subtitle }}</span>
+    <div class="preview-heading">
+      <div class="preview-icon">
+        <slot name="icon">
+          <icon icon="view.preview-pane" />
+        </slot>
+      </div>
+      <div class="preview-title-block">
+        <span class="preview-title">{{ title }}</span>
+        <span class="preview-subtitle">{{ subtitle }}</span>
+      </div>
     </div>
     <div class="preview-actions">
-      <button v-if="canEdit" title="编辑" @click="emit('edit')">
+      <button v-if="canEdit" title="编辑" aria-label="编辑" @click="emit('edit')">
         <icon icon="action.edit" />
       </button>
-      <button title="下载" :disabled="!canDownload" @click="emit('download')">
+      <button v-if="canDownload" title="下载" aria-label="下载" @click="emit('download')">
         <icon icon="action.download" />
       </button>
-      <button title="关闭预览" @click="emit('close')">
+      <button title="关闭预览" aria-label="关闭预览" @click="emit('close')">
         <icon icon="action.close" />
       </button>
     </div>
@@ -39,9 +46,21 @@ const emit = defineEmits<{
 @reference "tailwindcss";
 
 .preview-header {
-  @apply flex min-h-12 shrink-0 items-center justify-between gap-2 border-b px-3 text-sm font-medium;
+  @apply flex min-h-[3.25rem] shrink-0 items-center justify-between gap-2 border-b px-3 py-2 text-sm font-medium;
   border-color: var(--app-border-soft);
+  background: linear-gradient(180deg, var(--app-panel-solid), var(--app-panel-muted));
   color: var(--app-text);
+}
+
+.preview-heading {
+  @apply flex min-w-0 flex-1 items-center gap-2.5;
+}
+
+.preview-icon {
+  @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-xl;
+  border-color: var(--app-border-soft);
+  background: var(--app-control);
+  color: var(--app-accent, #2563eb);
 }
 
 .preview-title-block {
@@ -49,11 +68,11 @@ const emit = defineEmits<{
 }
 
 .preview-title {
-  @apply min-w-0 truncate;
+  @apply min-w-0 truncate text-[13px] leading-5;
 }
 
 .preview-subtitle {
-  @apply text-xs font-normal;
+  @apply truncate text-xs font-normal leading-4;
   color: var(--app-text-subtle);
 }
 
@@ -62,14 +81,20 @@ const emit = defineEmits<{
 }
 
 .preview-header button {
-  @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-40;
-  border-color: var(--app-border-soft);
-  background: var(--app-control-solid);
+  @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-transparent transition disabled:cursor-not-allowed disabled:opacity-40;
+  background: transparent;
   color: var(--app-text-muted);
 }
 
 .preview-header button:hover:not(:disabled) {
-  background: var(--app-accent-hover, #eff6ff);
+  border-color: var(--app-border-soft);
+  background: var(--app-control-hover);
+  color: var(--app-text);
+  transform: translateY(-1px);
+}
+
+.preview-header button:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .preview-header button:focus-visible {
