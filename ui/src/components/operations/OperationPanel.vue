@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, ref} from "vue";
+import {computed, nextTick, ref, watch} from "vue";
 import type {ArchiveFormat} from "../../class";
 import OperationPanelShell from "./OperationPanelShell.vue";
 import type {OperationPanelState} from "./types.ts";
@@ -56,8 +56,29 @@ const panelIcon = computed(() => {
   }
 });
 
+const focusNameInput = async () => {
+  await nextTick();
+  const selectInput = () => {
+    const input = nameInputRef.value;
+    if (!input || props.state.submitting) return;
+    input.focus({preventScroll: true});
+    input.select();
+  }
+  if (typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(selectInput);
+    return;
+  }
+  selectInput();
+}
+
+watch(() => props.state.visible, visible => {
+  if (visible) void focusNameInput();
+}, {flush: "post"});
+
 defineExpose({
-  focus: () => nameInputRef.value?.focus()
+  focus: () => {
+    void focusNameInput();
+  }
 });
 </script>
 

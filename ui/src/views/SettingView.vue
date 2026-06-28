@@ -1972,13 +1972,14 @@ select:disabled {
 }
 
 .switch-field {
-  @apply flex cursor-pointer items-start gap-3 rounded-md border p-3 transition;
+  @apply flex w-full cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 text-xs transition;
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);
 }
 
 .switch-field:hover {
-  background: var(--app-control-hover);
+  border-color: color-mix(in srgb, var(--app-accent-border, #bfdbfe) 46%, var(--app-border-soft));
+  background: color-mix(in srgb, var(--app-accent-soft, #eff6ff) 30%, var(--app-control-solid));
 }
 
 .switch-field input {
@@ -1986,12 +1987,12 @@ select:disabled {
 }
 
 .switch-track {
-  @apply mt-0.5 flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition;
+  @apply flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors;
   background: var(--app-control-hover);
 }
 
 .switch-track span {
-  @apply h-4 w-4 rounded-full transition;
+  @apply h-4 w-4 rounded-full transition-transform;
   background: var(--app-panel-solid);
   box-shadow: 0 1px 3px color-mix(in srgb, var(--app-shadow, rgba(15, 23, 42, 0.2)) 28%, transparent);
 }
@@ -2005,17 +2006,25 @@ select:disabled {
 }
 
 .switch-field:focus-within {
-  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+  border-color: var(--app-accent-border, #bfdbfe);
+}
+
+.switch-field:focus-within .switch-track {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-accent, #2563eb) 16%, transparent);
 }
 
 .switch-copy {
-  @apply flex min-w-0 flex-col gap-1 text-xs;
+  @apply flex min-w-0 flex-col gap-0.5 text-xs;
   color: var(--app-text-subtle);
 }
 
 .switch-copy strong {
-  @apply text-sm font-medium;
+  @apply text-[0.8125rem] font-semibold leading-4;
   color: var(--app-text);
+}
+
+.switch-copy small {
+  @apply leading-4;
 }
 
 .mapping-delete-summary {

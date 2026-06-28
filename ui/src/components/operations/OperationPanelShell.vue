@@ -50,6 +50,8 @@ defineExpose({
         ref="shellRef"
         :class="shellClass"
         :style="panelStyle"
+        role="dialog"
+        :aria-label="title"
         :tabindex="tabindex"
         @submit.prevent="emit('submit')"
         @keydown.esc.prevent.stop="emit('close')">
@@ -65,7 +67,9 @@ defineExpose({
           <icon icon="action.close" />
         </button>
       </div>
-      <slot />
+      <div class="operation-shell-body">
+        <slot />
+      </div>
       <div v-if="$slots.actions" class="operation-shell-actions">
         <slot name="actions" />
       </div>
@@ -85,10 +89,15 @@ defineExpose({
   background: var(--app-panel-solid);
   color: var(--app-text-muted);
   box-shadow: var(--app-menu-shadow);
+  animation: operation-shell-pop 0.14s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .operation-shell.is-dragging {
   @apply select-none;
+}
+
+.operation-shell:focus-visible {
+  box-shadow: var(--app-menu-shadow), 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
 }
 
 .operation-shell.width-operation {
@@ -106,10 +115,11 @@ defineExpose({
 
 .operation-shell-header {
   @apply flex cursor-move select-none items-start gap-3;
+  touch-action: none;
 }
 
 .operation-shell-icon {
-  @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xl;
+  @apply flex h-[2.625rem] w-[2.625rem] shrink-0 items-center justify-center rounded-lg text-[1.3125rem];
 }
 
 .operation-shell-icon.blue {
@@ -137,8 +147,12 @@ defineExpose({
 }
 
 .operation-shell-title span {
-  @apply truncate text-xs leading-5;
+  @apply text-xs leading-5;
   color: var(--app-text-subtle);
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .operation-shell-close {
@@ -157,7 +171,40 @@ defineExpose({
   box-shadow: 0 0 0 2px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
 }
 
+.operation-shell-body {
+  @apply -mx-1 flex min-h-0 flex-col gap-3 overflow-auto px-1 py-0.5;
+}
+
 .operation-shell-actions {
-  @apply flex justify-end gap-2 pt-1;
+  @apply -mx-4 -mb-4 flex shrink-0 flex-wrap justify-end gap-2 border-t px-4 py-3;
+  border-color: var(--app-border-soft);
+  background: color-mix(in srgb, var(--app-panel-muted) 54%, transparent);
+}
+
+.operation-shell-actions :deep(button) {
+  min-width: 5rem;
+}
+
+@keyframes operation-shell-pop {
+  from {
+    opacity: 0;
+    scale: 0.985;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@media (max-width: 480px) {
+  .operation-shell-actions :deep(button) {
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .operation-shell {
+    animation: none;
+  }
 }
 </style>

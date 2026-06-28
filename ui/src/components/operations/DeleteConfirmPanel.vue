@@ -72,7 +72,8 @@ defineExpose({
           :checked="state.permanent"
           :disabled="state.submitting"
           @change="event => emit('update:permanent', (event.target as HTMLInputElement).checked)">
-      <span>
+      <span class="delete-confirm-switch" aria-hidden="true"><span></span></span>
+      <span class="delete-confirm-copy">
         <strong>永久删除</strong>
         <small>跳过回收站，删除后无法从应用内恢复。</small>
       </span>
@@ -115,51 +116,74 @@ defineExpose({
 }
 
 .delete-confirm-permanent {
-  @apply flex cursor-pointer items-start gap-3 rounded-md border p-3 text-xs transition;
+  @apply flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 text-xs transition;
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);
   color: var(--app-text-muted);
 }
 
 .delete-confirm-permanent:hover {
-  background: var(--app-control-hover);
+  border-color: color-mix(in srgb, var(--app-danger-border) 46%, var(--app-border-soft));
+  background: color-mix(in srgb, var(--app-danger-soft) 30%, var(--app-control-solid));
 }
 
 .delete-confirm-permanent.active {
-  border-color: var(--app-danger-border);
-  background: var(--app-danger-soft);
-  color: var(--app-danger-text);
+  border-color: color-mix(in srgb, var(--app-danger-border) 68%, var(--app-border-soft));
+  background: color-mix(in srgb, var(--app-danger-soft) 58%, var(--app-control-solid));
+  color: var(--app-danger);
 }
 
 .delete-confirm-permanent input {
-  @apply mt-0.5 h-4 w-4 shrink-0;
-  accent-color: var(--app-danger);
+  @apply sr-only;
 }
 
-.delete-confirm-permanent span {
-  @apply flex min-w-0 flex-col gap-1;
+.delete-confirm-switch {
+  @apply flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors;
+  background: var(--app-control-hover);
+}
+
+.delete-confirm-switch span {
+  @apply h-4 w-4 rounded-full transition-transform;
+  background: var(--app-panel-solid);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--app-shadow, rgba(15, 23, 42, 0.2)) 28%, transparent);
+}
+
+.delete-confirm-permanent input:checked + .delete-confirm-switch {
+  background: var(--app-danger);
+}
+
+.delete-confirm-permanent input:checked + .delete-confirm-switch span {
+  transform: translateX(1rem);
+}
+
+.delete-confirm-copy {
+  @apply flex min-w-0 flex-col gap-0.5;
 }
 
 .delete-confirm-permanent strong {
-  @apply text-sm font-semibold;
+  @apply text-[0.8125rem] font-semibold leading-4;
   color: var(--app-text);
 }
 
 .delete-confirm-permanent.active strong {
-  color: var(--app-danger-text);
+  color: var(--app-danger);
 }
 
 .delete-confirm-permanent small {
-  @apply leading-5;
+  @apply leading-4;
   color: var(--app-text-subtle);
 }
 
 .delete-confirm-permanent.active small {
-  color: var(--app-danger-text);
+  color: color-mix(in srgb, var(--app-danger) 72%, var(--app-text-subtle));
 }
 
 .delete-confirm-permanent:focus-within {
-  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
+  border-color: var(--app-danger-border);
+}
+
+.delete-confirm-permanent:focus-within .delete-confirm-switch {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-danger) 16%, transparent);
 }
 
 .delete-confirm-error {
