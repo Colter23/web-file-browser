@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {nextTick, onBeforeUnmount, onMounted, watch} from "vue";
+import {nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ComponentPublicInstance} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import {downloadUrl} from "../../network/api.ts";
@@ -16,6 +16,8 @@ const emit = defineEmits<{
 }>();
 
 const thumbRefs = new Map<string, HTMLElement>();
+const reduceMotion = ref(false);
+let reduceMotionMedia: MediaQueryList | null = null;
 
 const setThumbRef = (path: string, element: Element | ComponentPublicInstance | null) => {
   if (element instanceof HTMLElement) {
@@ -25,9 +27,17 @@ const setThumbRef = (path: string, element: Element | ComponentPublicInstance | 
   }
 }
 
+const handleReduceMotionChange = (event: MediaQueryListEvent) => {
+  reduceMotion.value = event.matches;
+}
+
 const revealActiveThumb = async () => {
   await nextTick();
-  thumbRefs.get(props.currentPath)?.scrollIntoView({block: "nearest", inline: "center"});
+  thumbRefs.get(props.currentPath)?.scrollIntoView({
+    block: "nearest",
+    inline: "center",
+    behavior: reduceMotion.value ? "auto" : "smooth"
+  });
 }
 
 watch(() => [props.currentPath, props.items.length] as const, () => {
@@ -35,10 +45,14 @@ watch(() => [props.currentPath, props.items.length] as const, () => {
 }, {flush: "post"});
 
 onMounted(() => {
+  reduceMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
+  reduceMotion.value = reduceMotionMedia.matches;
+  reduceMotionMedia.addEventListener("change", handleReduceMotionChange);
   void revealActiveThumb();
 });
 
 onBeforeUnmount(() => {
+  reduceMotionMedia?.removeEventListener("change", handleReduceMotionChange);
   thumbRefs.clear();
 });
 </script>
@@ -54,7 +68,7 @@ onBeforeUnmount(() => {
         :title="`${item.index + 1} / ${imageCount} · ${item.entry.name}`"
         @click="emit('select', item.index)">
       <img :src="downloadUrl(item.entry.path)" :alt="item.entry.name" loading="lazy">
-      <span>{{ item.index + 1 }}</span>
+      <span class="image-viewer-thumb-index">{{ item.index + 1 }}</span>
     </button>
   </div>
 </template>
@@ -63,11 +77,14 @@ onBeforeUnmount(() => {
 @reference "tailwindcss";
 
 .image-viewer-filmstrip {
-  @apply flex h-24 shrink-0 items-center gap-2 overflow-x-auto border-t border-white/10 bg-slate-950/45 px-4 py-2 backdrop-blur;
+  @apply flex h-20 shrink-0 items-center gap-2 overflow-x-auto border-t px-3 py-2 backdrop-blur;
+  border-color: color-mix(in srgb, var(--app-accent, #2563eb) 10%, rgba(255, 255, 255, 0.1));
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 4%, rgba(15, 23, 42, 0.48));
 }
 
 .image-viewer-thumb {
-  @apply relative h-16 w-20 shrink-0 overflow-hidden rounded-md border border-white/10 bg-white/5 p-0.5 text-white opacity-75 outline-none hover:border-white/35 hover:opacity-100;
+  @apply relative h-14 w-[4.5rem] shrink-0 overflow-hidden rounded-md border border-white/10 bg-white/5 p-0.5 text-white outline-none transition hover:border-white/35 hover:bg-white/10 hover:opacity-100;
+  opacity: 0.72;
 }
 
 .image-viewer-thumb.active {
@@ -87,7 +104,7 @@ onBeforeUnmount(() => {
   @apply h-full w-full rounded object-cover;
 }
 
-.image-viewer-thumb span {
-  @apply absolute bottom-1 right-1 rounded bg-slate-950/70 px-1 text-[10px] leading-4 text-slate-100;
+.image-viewer-thumb-index {
+  @apply absolute bottom-1 right-1 min-w-4 rounded bg-slate-950/72 px-1 text-center text-[10px] font-semibold leading-4 text-slate-100;
 }
 </style>

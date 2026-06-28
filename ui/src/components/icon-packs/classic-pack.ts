@@ -76,6 +76,17 @@ const classicSymbolIcons: Record<string, string> = {
   "view.video": "icon-file-fill",
   "view.pdf": "icon-file-common-filling",
 
+  "viewer.page-fullscreen": "icon-viewgrid",
+  "viewer.page-fullscreen-off": "icon-viewgrid",
+  "viewer.browser-fullscreen": "icon-viewgrid",
+  "viewer.browser-fullscreen-off": "icon-viewgrid",
+  "viewer.filmstrip": "icon-listview",
+  "viewer.filmstrip-off": "icon-view-list",
+  "viewer.zoom-in": "icon-add",
+  "viewer.zoom-out": "icon-add",
+  "viewer.rotate-left": "icon-refresh",
+  "viewer.rotate-right": "icon-refresh",
+
   "file.home": "icon-home-fill",
   "file.folder": "icon-folder-fill",
   "file.folder-open": "icon-folder-open-fill",
@@ -107,6 +118,10 @@ const classicSymbolTransforms: Record<string, string> = {
   "nav.forward": "rotate(180deg)",
   "nav.up": "rotate(90deg)",
   "action.exit-fullscreen": "scale(0.82)",
+  "viewer.page-fullscreen-off": "scale(0.82)",
+  "viewer.browser-fullscreen-off": "scale(0.82)",
+  "viewer.zoom-out": "rotate(45deg)",
+  "viewer.rotate-left": "scaleX(-1)",
   "view.preview-pane-close": "scaleX(-1)"
 };
 

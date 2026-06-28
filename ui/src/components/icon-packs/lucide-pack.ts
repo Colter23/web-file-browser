@@ -25,6 +25,7 @@ import {
   Copy,
   Download,
   Eraser,
+  Expand,
   Eye,
   File,
   FileArchive,
@@ -43,6 +44,8 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  GalleryHorizontal,
+  GalleryThumbnails,
   Grid2X2,
   GripVertical,
   History,
@@ -74,11 +77,14 @@ import {
   Repeat,
   Repeat1,
   Rows3,
+  RotateCcw,
+  RotateCw,
   Save,
   Scissors,
   Search,
   Settings,
   Share2,
+  Shrink,
   Shuffle,
   SquareArrowOutUpRight,
   SquarePen,
@@ -93,7 +99,9 @@ import {
   Volume2,
   VolumeX,
   Wrench,
-  X
+  X,
+  ZoomIn,
+  ZoomOut
 } from "lucide-vue-next";
 import type {AppIconPack} from "./types.ts";
 
@@ -188,6 +196,17 @@ const lucideIcons: Record<string, Component> = {
   "view.playlist": ListMusic,
   "view.video": Video,
   "view.pdf": FileText,
+
+  "viewer.page-fullscreen": Maximize2,
+  "viewer.page-fullscreen-off": Minimize2,
+  "viewer.browser-fullscreen": Expand,
+  "viewer.browser-fullscreen-off": Shrink,
+  "viewer.filmstrip": GalleryThumbnails,
+  "viewer.filmstrip-off": GalleryHorizontal,
+  "viewer.zoom-in": ZoomIn,
+  "viewer.zoom-out": ZoomOut,
+  "viewer.rotate-left": RotateCcw,
+  "viewer.rotate-right": RotateCw,
 
   "file.home": House,
   "file.folder": Folder,

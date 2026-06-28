@@ -34,7 +34,9 @@ import fileTextIcon from "@iconify-icons/solar/file-text-bold-duotone";
 import folderIcon from "@iconify-icons/solar/folder-bold-duotone";
 import folderOpenIcon from "@iconify-icons/solar/folder-open-bold-duotone";
 import fullScreenIcon from "@iconify-icons/solar/full-screen-bold-duotone";
+import fullScreenSquareIcon from "@iconify-icons/solar/full-screen-square-bold-duotone";
 import galleryIcon from "@iconify-icons/solar/gallery-bold-duotone";
+import galleryWideIcon from "@iconify-icons/solar/gallery-wide-bold-duotone";
 import hamburgerMenuIcon from "@iconify-icons/solar/hamburger-menu-bold-duotone";
 import historyIcon from "@iconify-icons/solar/history-bold-duotone";
 import homeIcon from "@iconify-icons/solar/home-bold-duotone";
@@ -44,6 +46,8 @@ import listIcon from "@iconify-icons/solar/list-bold-duotone";
 import listCheckIcon from "@iconify-icons/solar/list-check-bold-duotone";
 import logout2Icon from "@iconify-icons/solar/logout-2-bold-duotone";
 import magnifierIcon from "@iconify-icons/solar/magnifer-bold-duotone";
+import magnifierZoomInIcon from "@iconify-icons/solar/magnifer-zoom-in-bold-duotone";
+import magnifierZoomOutIcon from "@iconify-icons/solar/magnifer-zoom-out-bold-duotone";
 import maximizeSquareIcon from "@iconify-icons/solar/maximize-square-bold-duotone";
 import menuDotsIcon from "@iconify-icons/solar/menu-dots-bold-duotone";
 import minimizeSquareIcon from "@iconify-icons/solar/minimize-square-bold-duotone";
@@ -58,6 +62,7 @@ import playIcon from "@iconify-icons/solar/play-bold-duotone";
 import playlistMinimalisticIcon from "@iconify-icons/solar/playlist-minimalistic-2-bold-duotone";
 import presentationGraphIcon from "@iconify-icons/solar/presentation-graph-bold-duotone";
 import quitFullScreenIcon from "@iconify-icons/solar/quit-full-screen-bold-duotone";
+import quitFullScreenSquareIcon from "@iconify-icons/solar/quit-full-screen-square-bold-duotone";
 import refreshIcon from "@iconify-icons/solar/refresh-bold-duotone";
 import reorderIcon from "@iconify-icons/solar/reorder-bold-duotone";
 import repeatIcon from "@iconify-icons/solar/repeat-bold-duotone";
@@ -80,6 +85,8 @@ import sunIcon from "@iconify-icons/solar/sun-bold-duotone";
 import textIcon from "@iconify-icons/solar/text-bold-duotone";
 import trashBinTrashIcon from "@iconify-icons/solar/trash-bin-trash-bold-duotone";
 import uploadIcon from "@iconify-icons/solar/upload-bold-duotone";
+import undoLeftIcon from "@iconify-icons/solar/undo-left-bold-duotone";
+import undoRightIcon from "@iconify-icons/solar/undo-right-bold-duotone";
 import userIcon from "@iconify-icons/solar/user-bold-duotone";
 import videoFrameIcon from "@iconify-icons/solar/video-frame-bold-duotone";
 import volumeCrossIcon from "@iconify-icons/solar/volume-cross-bold-duotone";
@@ -213,6 +220,17 @@ const solarIcons: Record<string, SolarIconData> = {
   "view.playlist": playlistMinimalisticIcon,
   "view.video": videoFrameIcon,
   "view.pdf": fileTextIcon,
+
+  "viewer.page-fullscreen": maximizeSquareIcon,
+  "viewer.page-fullscreen-off": minimizeSquareIcon,
+  "viewer.browser-fullscreen": fullScreenSquareIcon,
+  "viewer.browser-fullscreen-off": quitFullScreenSquareIcon,
+  "viewer.filmstrip": galleryWideIcon,
+  "viewer.filmstrip-off": galleryIcon,
+  "viewer.zoom-in": magnifierZoomInIcon,
+  "viewer.zoom-out": magnifierZoomOutIcon,
+  "viewer.rotate-left": undoLeftIcon,
+  "viewer.rotate-right": undoRightIcon,
 
   "file.home": homeIcon,
   "file.folder": folderIcon,

@@ -32,7 +32,8 @@ const loading = ref(false);
 const error = ref("");
 const pageFullscreen = ref(false);
 const browserFullscreen = ref(false);
-const showFilmstrip = ref(readBooleanStorage(filmstripStorageKey, true));
+const showFilmstrip = ref(readBooleanStorage(filmstripStorageKey, false));
+const rotation = ref(0);
 
 const currentEntry = computed(() => props.visible ? props.entry : null);
 
@@ -54,7 +55,22 @@ const {
   startPan,
   movePan,
   stopPan
-} = useImageZoomPan({minZoom, maxZoom, zoomStep, canPan: () => props.visible});
+} = useImageZoomPan({minZoom, maxZoom, canPan: () => props.visible});
+
+const normalizedRotation = computed(() => ((rotation.value % 360) + 360) % 360);
+const rotatedSideways = computed(() => normalizedRotation.value === 90 || normalizedRotation.value === 270);
+const transformedImageStyle = computed(() => {
+  const style = {...imageStyle.value};
+  if (fit.value && rotatedSideways.value) {
+    style.maxWidth = "var(--image-viewer-stage-fit-height, 100%)";
+    style.maxHeight = "var(--image-viewer-stage-fit-width, 100%)";
+  }
+  style.transform = [
+    style.transform === "none" ? "" : style.transform,
+    normalizedRotation.value ? `rotate(${normalizedRotation.value}deg)` : ""
+  ].filter(Boolean).join(" ") || "none";
+  return style;
+});
 
 const currentIndex = computed(() => {
   const entry = props.entry;
@@ -93,6 +109,7 @@ const resetRuntimeState = () => {
   error.value = "";
   pageFullscreen.value = false;
   browserFullscreen.value = false;
+  rotation.value = 0;
   resetZoom();
 }
 
@@ -100,6 +117,7 @@ const prepareEntry = async () => {
   if (!props.visible || !props.entry) return;
   loading.value = true;
   error.value = "";
+  rotation.value = 0;
   resetZoom();
   await nextTick();
   viewerRef.value?.focus();
@@ -160,6 +178,10 @@ const toggleFilmstrip = () => {
   writeBooleanStorage(filmstripStorageKey, showFilmstrip.value);
 }
 
+const rotateImage = (direction: -1 | 1) => {
+  rotation.value = (normalizedRotation.value + direction * 90 + 360) % 360;
+}
+
 const handleLoad = () => {
   loading.value = false;
   error.value = "";
@@ -181,15 +203,17 @@ const downloadCurrent = () => {
 const handleWindowKeyDown = (event: KeyboardEvent) => {
   if (!props.visible) return;
   const key = event.key.toLowerCase();
+  const hasSystemModifier = event.ctrlKey || event.metaKey || event.altKey;
   const takeOver = () => {
     event.preventDefault();
     event.stopImmediatePropagation();
   }
-  if (key === "escape") {
+  if (!hasSystemModifier && key === "escape") {
     takeOver();
     close();
     return;
   }
+  if (hasSystemModifier) return;
   if (event.key === "ArrowLeft") {
     takeOver();
     showAdjacent(-1);
@@ -230,6 +254,11 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
     setActualSize();
     return;
   }
+  if (key === "r") {
+    takeOver();
+    rotateImage(event.shiftKey ? -1 : 1);
+    return;
+  }
   if (key === "f") {
     takeOver();
     void togglePageFullscreen();
@@ -238,9 +267,7 @@ const handleWindowKeyDown = (event: KeyboardEvent) => {
   if (key === "t") {
     takeOver();
     toggleFilmstrip();
-    return;
   }
-  if (event.ctrlKey || event.metaKey || event.altKey) takeOver();
 }
 
 watch(() => props.visible, visible => {
@@ -287,6 +314,7 @@ onBeforeUnmount(() => {
           :can-zoom-out="canZoomOut"
           :can-zoom-in="canZoomIn"
           :zoom-step="zoomStep"
+          :rotation="normalizedRotation"
           :page-fullscreen="pageFullscreen"
           :browser-fullscreen="browserFullscreen"
           :show-filmstrip="showFilmstrip"
@@ -296,6 +324,7 @@ onBeforeUnmount(() => {
           @reset-zoom="resetZoom"
           @actual-size="setActualSize"
           @zoom="zoomImage"
+          @rotate="rotateImage"
           @toggle-page-fullscreen="togglePageFullscreen"
           @toggle-browser-fullscreen="toggleBrowserFullscreen"
           @toggle-filmstrip="toggleFilmstrip"
@@ -309,7 +338,8 @@ onBeforeUnmount(() => {
           :can-pan="canPan"
           :dragging="dragging"
           :title="stageTitle"
-          :image-style="imageStyle"
+          :image-style="transformedImageStyle"
+          :rotated-sideways="rotatedSideways"
           @pointer-down="startPan"
           @pointer-move="movePan"
           @pointer-up="stopPan"
@@ -333,7 +363,8 @@ onBeforeUnmount(() => {
 @reference "tailwindcss";
 
 .image-viewer {
-  @apply absolute inset-0 z-40 flex flex-col overflow-hidden rounded-lg bg-slate-950/72 text-white outline-none backdrop-blur-sm;
+  @apply absolute inset-0 z-40 flex flex-col overflow-hidden rounded-lg text-white outline-none backdrop-blur-sm;
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 7%, rgba(2, 6, 23, 0.78));
 }
 
 .image-viewer.pageFullscreen {

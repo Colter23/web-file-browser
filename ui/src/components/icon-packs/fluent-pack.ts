@@ -1,6 +1,7 @@
 import {defineComponent, h} from "vue";
 import type {Component} from "vue";
 import addSvg from "@fluentui/svg-icons/icons/add_24_filled.svg?raw";
+import addCircleSvg from "@fluentui/svg-icons/icons/add_circle_24_filled.svg?raw";
 import archiveSvg from "@fluentui/svg-icons/icons/archive_24_filled.svg?raw";
 import archiveRestoreSvg from "@fluentui/svg-icons/icons/archive_arrow_back_24_filled.svg?raw";
 import arrowClockwiseSvg from "@fluentui/svg-icons/icons/arrow_clockwise_24_filled.svg?raw";
@@ -46,6 +47,7 @@ import documentTableSvg from "@fluentui/svg-icons/icons/document_table_24_filled
 import documentTextSvg from "@fluentui/svg-icons/icons/document_text_24_filled.svg?raw";
 import editSvg from "@fluentui/svg-icons/icons/edit_24_filled.svg?raw";
 import eyeSvg from "@fluentui/svg-icons/icons/eye_24_filled.svg?raw";
+import filmstripImageSvg from "@fluentui/svg-icons/icons/filmstrip_image_24_filled.svg?raw";
 import folderAddSvg from "@fluentui/svg-icons/icons/folder_add_24_filled.svg?raw";
 import folderOpenSvg from "@fluentui/svg-icons/icons/folder_open_24_filled.svg?raw";
 import folderSvg from "@fluentui/svg-icons/icons/folder_24_filled.svg?raw";
@@ -73,6 +75,8 @@ import playSvg from "@fluentui/svg-icons/icons/play_24_filled.svg?raw";
 import reOrderDotsSvg from "@fluentui/svg-icons/icons/re_order_dots_vertical_24_filled.svg?raw";
 import renameSvg from "@fluentui/svg-icons/icons/rename_24_filled.svg?raw";
 import resizeSmallSvg from "@fluentui/svg-icons/icons/resize_small_24_filled.svg?raw";
+import rotateLeftSvg from "@fluentui/svg-icons/icons/rotate_left_24_filled.svg?raw";
+import rotateRightSvg from "@fluentui/svg-icons/icons/rotate_right_24_filled.svg?raw";
 import saveSvg from "@fluentui/svg-icons/icons/save_24_filled.svg?raw";
 import searchSvg from "@fluentui/svg-icons/icons/search_24_filled.svg?raw";
 import selectAllOffSvg from "@fluentui/svg-icons/icons/select_all_off_24_filled.svg?raw";
@@ -84,6 +88,7 @@ import slideTextSvg from "@fluentui/svg-icons/icons/slide_text_24_filled.svg?raw
 import speakerMuteSvg from "@fluentui/svg-icons/icons/speaker_mute_24_filled.svg?raw";
 import speakerSvg from "@fluentui/svg-icons/icons/speaker_2_24_filled.svg?raw";
 import starSvg from "@fluentui/svg-icons/icons/star_24_filled.svg?raw";
+import subtractCircleSvg from "@fluentui/svg-icons/icons/subtract_circle_24_filled.svg?raw";
 import textBulletListSvg from "@fluentui/svg-icons/icons/text_bullet_list_24_filled.svg?raw";
 import textFontSvg from "@fluentui/svg-icons/icons/text_font_24_filled.svg?raw";
 import textSortAscendingSvg from "@fluentui/svg-icons/icons/text_sort_ascending_24_filled.svg?raw";
@@ -92,6 +97,7 @@ import videoClipSvg from "@fluentui/svg-icons/icons/video_clip_24_filled.svg?raw
 import warningSvg from "@fluentui/svg-icons/icons/warning_24_filled.svg?raw";
 import weatherMoonSvg from "@fluentui/svg-icons/icons/weather_moon_24_filled.svg?raw";
 import weatherSunnySvg from "@fluentui/svg-icons/icons/weather_sunny_24_filled.svg?raw";
+import windowSvg from "@fluentui/svg-icons/icons/window_24_filled.svg?raw";
 import windowConsoleSvg from "@fluentui/svg-icons/icons/window_console_20_filled.svg?raw";
 import wrenchSvg from "@fluentui/svg-icons/icons/wrench_24_filled.svg?raw";
 import type {AppIconPack} from "./types.ts";
@@ -206,6 +212,17 @@ export const fluentIcons: Record<string, string> = {
   "view.playlist": textBulletListSvg,
   "view.video": videoClipSvg,
   "view.pdf": documentPdfSvg,
+
+  "viewer.page-fullscreen": arrowMaximizeSvg,
+  "viewer.page-fullscreen-off": resizeSmallSvg,
+  "viewer.browser-fullscreen": fullScreenMaximizeSvg,
+  "viewer.browser-fullscreen-off": fullScreenMinimizeSvg,
+  "viewer.filmstrip": filmstripImageSvg,
+  "viewer.filmstrip-off": windowSvg,
+  "viewer.zoom-in": addCircleSvg,
+  "viewer.zoom-out": subtractCircleSvg,
+  "viewer.rotate-left": rotateLeftSvg,
+  "viewer.rotate-right": rotateRightSvg,
 
   "file.home": homeSvg,
   "file.folder": folderSvg,
