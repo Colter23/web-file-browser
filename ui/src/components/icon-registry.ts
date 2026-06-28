@@ -13,16 +13,10 @@ const iconPackLoaders: Record<AppIconStyle, () => Promise<AppIconPack>> = {
 };
 
 const iconPackPromises: Partial<Record<AppIconStyle, Promise<AppIconPack>>> = {};
-let classicPackPromise: Promise<AppIconPack> | undefined;
 
 const loadIconPack = (style: AppIconStyle) => {
   iconPackPromises[style] ??= iconPackLoaders[style]();
   return iconPackPromises[style];
-};
-
-const loadClassicCompatibilityPack = () => {
-  classicPackPromise ??= import("./icon-packs/classic-pack.ts").then(module => module.classicIconPack);
-  return classicPackPromise;
 };
 
 export const resolveAppIcon = async (style: AppIconStyle, icon: string): Promise<AppIconDefinition | undefined> => {
@@ -36,6 +30,5 @@ export const resolveAppIcon = async (style: AppIconStyle, icon: string): Promise
     if (fallbackIcon) return fallbackIcon;
   }
 
-  const classicPack = await loadClassicCompatibilityPack();
-  return classicPack.resolve(icon);
+  return undefined;
 };
