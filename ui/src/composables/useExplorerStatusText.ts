@@ -1,6 +1,7 @@
 import {computed} from "vue";
 import type {ComputedRef, Ref} from "vue";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
+import {useI18n} from "../i18n";
 import {formatEntrySize} from "../utils/file-entry.ts";
 import type {ExplorerDataSourceMode} from "./useExplorerFolderData.ts";
 
@@ -43,20 +44,22 @@ export const useExplorerStatusText = ({
   sourceTitle,
   resultTotal
 }: ExplorerStatusTextOptions) => {
+  const {locale, t} = useI18n();
   const filterActive = computed(() => Boolean(filterKeyword.value));
+  const listSeparator = computed(() => locale.value === "zh-CN" ? "，" : ", ");
 
   const emptyText = computed(() => {
-    if (sourceMode.value === "search") return `${sourceTitle.value} 没有结果`;
-    if (sourceMode.value === "recent") return "暂无最近文件";
-    if (filterActive.value) return `没有匹配“${filterKeyword.value}”的项目`;
-    return "此文件夹为空";
+    if (sourceMode.value === "search") return t("explorer.noSearchResult", {title: sourceTitle.value});
+    if (sourceMode.value === "recent") return t("explorer.noRecent");
+    if (filterActive.value) return t("explorer.noMatch", {keyword: filterKeyword.value});
+    return t("explorer.emptyFolder");
   });
 
   const emptyHintText = computed(() => {
-    if (sourceMode.value === "search") return "可以换个关键词，或清除搜索回到当前文件夹。";
-    if (sourceMode.value === "recent") return "打开或编辑文件后，最近文件会显示在这里。";
+    if (sourceMode.value === "search") return t("explorer.searchHint");
+    if (sourceMode.value === "recent") return t("explorer.recentHint");
     if (!filterActive.value) return "";
-    return hasMore.value ? "当前只筛选已加载项目，清除筛选后可继续加载更多。" : "清除筛选可查看全部已加载项目。";
+    return hasMore.value ? t("explorer.filterLoadedHint") : t("explorer.filterAllHint");
   });
 
   const selectedFileEntries = computed(() => selectedEntries.value.filter(entry => entry.type === "file"));
@@ -74,21 +77,23 @@ export const useExplorerStatusText = ({
     const folderCount = source.filter(entry => entry.type === "folder").length;
     const fileCount = source.length - folderCount;
     const sourceText = sourceMode.value === "search"
-        ? "搜索结果"
+        ? t("explorer.searchResults")
         : sourceMode.value === "recent"
-          ? "最近文件"
-          : filterActive.value ? "筛选结果" : "当前目录";
+          ? t("explorer.recentFiles")
+          : filterActive.value ? t("explorer.filterResults") : t("explorer.currentDirectory");
     const totalText = sourceMode.value === "search" && resultTotal.value !== null
-        ? `${source.length} / ${resultTotal.value} 项`
-        : `${source.length} 项`;
+        ? `${source.length} / ${t("common.items", {count: resultTotal.value})}`
+        : t("common.items", {count: source.length});
     const countParts = [];
-    if (folderCount) countParts.push(`${folderCount} 个文件夹`);
-    if (fileCount) countParts.push(`${fileCount} 个文件`);
-    const countText = countParts.length ? `${totalText} · ${countParts.join("，")}` : totalText;
+    if (folderCount) countParts.push(t("common.folders", {count: folderCount}));
+    if (fileCount) countParts.push(t("common.files", {count: fileCount}));
+    const countText = countParts.length ? t("explorer.countText", {total: totalText, parts: countParts.join(listSeparator.value)}) : totalText;
     const moreText = hasMore.value
-        ? filterActive.value ? "仅筛选已加载" : "还有更多"
+        ? filterActive.value ? t("explorer.loadedOnly") : t("explorer.moreAvailable")
         : "";
-    const title = `${sourceText}：${countText}${moreText ? `，${moreText}` : ""}`;
+    const title = moreText
+        ? t("explorer.folderStatusTitleWithMore", {source: sourceText, count: countText, more: moreText})
+        : t("explorer.folderStatusTitle", {source: sourceText, count: countText});
     return {sourceText, countText, moreText, title};
   });
 
@@ -96,8 +101,8 @@ export const useExplorerStatusText = ({
     const fileCount = selectedFileEntries.value.length;
     if (!fileCount) return "";
     const missing = selectedMissingSizeCount.value;
-    if (missing === fileCount) return `${fileCount} 个文件大小未加载`;
-    if (missing) return `${formatEntrySize(selectedKnownSize.value)} 已知，${missing} 个文件未加载大小`;
+    if (missing === fileCount) return t("explorer.fileSizesUnloaded", {count: fileCount});
+    if (missing) return t("explorer.knownFileSize", {size: formatEntrySize(selectedKnownSize.value), count: missing});
     return formatEntrySize(selectedKnownSize.value);
   });
 
@@ -106,17 +111,17 @@ export const useExplorerStatusText = ({
     if (!selectedCount) {
       return {
         active: false,
-        countText: "未选择项目",
+        countText: t("common.noSelection"),
         detailText: "",
-        title: "未选择项目"
+        title: t("common.noSelection")
       };
     }
     const detail = [];
-    if (selectedFileEntries.value.length) detail.push(`${selectedFileEntries.value.length} 个文件`);
-    if (selectedFolderCount.value) detail.push(`${selectedFolderCount.value} 个文件夹`);
+    if (selectedFileEntries.value.length) detail.push(t("common.files", {count: selectedFileEntries.value.length}));
+    if (selectedFolderCount.value) detail.push(t("common.folders", {count: selectedFolderCount.value}));
     if (selectedSizeText.value) detail.push(selectedSizeText.value);
-    const countText = `已选择 ${selectedCount} 项`;
-    const detailText = detail.join("，");
+    const countText = t("explorer.selected", {count: selectedCount});
+    const detailText = detail.join(listSeparator.value);
     return {
       active: true,
       countText,

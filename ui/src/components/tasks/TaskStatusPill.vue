@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed} from "vue";
 import type {TaskStatus} from "../../class.ts";
+import {useI18n} from "../../i18n";
 import {
   formatTaskBytes,
   taskCurrentPath,
@@ -24,15 +25,16 @@ const emit = defineEmits<{
   (e: "dismiss"): void;
 }>();
 
+const {t} = useI18n();
 const statusClass = computed(() => props.failed ? "failed" : props.task ? taskStateClass(props.task.state) : "idle");
 const progressText = computed(() => props.task ? taskProgress(props.task) : "0%");
 const titleText = computed(() => {
-  if (!props.task) return "后台任务";
-  if (props.activeCount > 1) return `${props.activeCount} 个后台任务`;
-  return `${taskKindText(props.task.kind)}任务`;
+  if (!props.task) return t("tasks.background");
+  if (props.activeCount > 1) return t("tasks.backgroundCount", {count: props.activeCount});
+  return t("tasks.kindTask", {kind: taskKindText(props.task.kind)});
 });
 const detailText = computed(() => {
-  if (!props.task) return "点击查看任务详情";
+  if (!props.task) return t("tasks.openDetails");
   const currentPath = taskCurrentPath(props.task);
   if (currentPath && props.task.state === "running") return currentPath;
   const speed = props.task.speedBytesPerSec > 0 ? ` · ${formatTaskBytes(props.task.speedBytesPerSec)}/s` : "";
@@ -48,7 +50,7 @@ const detailText = computed(() => {
         :class="statusClass"
         role="status"
         aria-live="polite">
-      <button class="task-pill-main" type="button" title="打开后台任务" @click="emit('open')">
+      <button class="task-pill-main" type="button" :title="t('tasks.openPanel')" @click="emit('open')">
         <span class="task-pill-icon">
           <icon :class="{'icon-motion-spin is-spinning': task.state === 'running'}" :icon="task.state === 'running' ? 'action.refresh' : 'view.details'" />
         </span>
@@ -61,7 +63,7 @@ const detailText = computed(() => {
           <span :style="{width: progressText}"></span>
         </span>
       </button>
-      <button class="task-pill-close" type="button" title="隐藏任务提示" @click="emit('dismiss')">
+      <button class="task-pill-close" type="button" :title="t('tasks.dismiss')" @click="emit('dismiss')">
         <icon icon="action.close" />
       </button>
     </div>

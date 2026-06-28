@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import {useI18n} from "../../i18n";
+
 defineProps<{
   messageText: string;
   filePathText: string;
@@ -13,6 +15,8 @@ defineProps<{
 const emit = defineEmits<{
   (e: "reload"): void;
 }>();
+
+const {t} = useI18n();
 </script>
 
 <template>
@@ -22,7 +26,7 @@ const emit = defineEmits<{
       <span v-else>{{ filePathText }}</span>
     </div>
     <div class="status-right">
-      <button v-if="conflict" class="status-action" @click="emit('reload')">重新载入</button>
+      <button v-if="conflict" class="status-action" @click="emit('reload')">{{ t("editor.statusReload") }}</button>
       <span>{{ cursorText }}</span>
       <span v-if="selectionText">{{ selectionText }}</span>
       <span>{{ modeText }}</span>

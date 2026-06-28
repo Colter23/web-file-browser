@@ -2,6 +2,7 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {StyleValue} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
+import {useI18n} from "../../i18n";
 import {downloadUrl} from "../../network/api.ts";
 import ViewerStatus from "./ViewerStatus.vue";
 
@@ -29,6 +30,7 @@ const emit = defineEmits<{
   (e: "error"): void;
 }>();
 
+const {t} = useI18n();
 const stageRef = ref<HTMLElement | null>(null);
 const stageWidth = ref(0);
 const stageHeight = ref(0);
@@ -80,7 +82,7 @@ onBeforeUnmount(() => {
       @lostpointercapture="emit('lost-pointer-capture')"
       @wheel="emit('wheel', $event)"
       @dblclick="emit('toggle-zoom')">
-    <viewer-status v-if="loading">正在加载图片...</viewer-status>
+    <viewer-status v-if="loading">{{ t("viewer.imageLoading") }}</viewer-status>
     <viewer-status v-if="error" tone="error">{{ error }}</viewer-status>
     <img
         :key="entry.path"

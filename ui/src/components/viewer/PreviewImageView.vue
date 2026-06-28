@@ -2,6 +2,7 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import {useImageZoomPan} from "../../composables/useImageZoomPan.ts";
+import {useI18n} from "../../i18n";
 import {downloadUrl} from "../../network/api.ts";
 import Icon from "../Icon.vue";
 import PreviewToolRow from "./PreviewToolRow.vue";
@@ -14,6 +15,7 @@ const emit = defineEmits<{
   (e: "open-image", entry: ExplorerEntry): void;
 }>();
 
+const {t} = useI18n();
 const previewStageRef = ref<HTMLElement | null>(null);
 const imageNaturalWidth = ref(0);
 const imageNaturalHeight = ref(0);
@@ -86,23 +88,23 @@ onBeforeUnmount(() => {
 <template>
   <preview-tool-row class="image-preview-tool-row">
     <div class="preview-image-tool-group">
-      <button title="缩小" aria-label="缩小" :disabled="!canZoomOutPreviewImage" @click="zoomPreviewImage(-25)">
+      <button :title="t('preview.zoomOut')" :aria-label="t('preview.zoomOut')" :disabled="!canZoomOutPreviewImage" @click="zoomPreviewImage(-25)">
         <icon icon="viewer.zoom-out" color="currentColor" />
       </button>
       <button
           class="zoom-mode-button"
           :class="{active: previewImageFit || previewActualSizeActive}"
-          :title="previewImageFit ? '当前适应窗口' : '当前按倍率查看，点击适应窗口'"
+          :title="previewImageFit ? t('preview.currentFit') : t('preview.currentZoom')"
           @click="resetPreviewImageZoom">
-        <span>{{ previewImageFit ? "适应" : previewZoomText }}</span>
+        <span>{{ previewImageFit ? t("preview.fit") : previewZoomText }}</span>
       </button>
-      <button title="放大" aria-label="放大" :disabled="!canZoomInPreviewImage" @click="zoomPreviewImage(25)">
+      <button :title="t('preview.zoomIn')" :aria-label="t('preview.zoomIn')" :disabled="!canZoomInPreviewImage" @click="zoomPreviewImage(25)">
         <icon icon="viewer.zoom-in" color="currentColor" />
       </button>
     </div>
-    <button class="open-viewer-button" title="打开图片查看" @click="openImagePreview">
+    <button class="open-viewer-button" :title="t('preview.openImage')" @click="openImagePreview">
       <icon icon="view.image" color="currentColor" />
-      <span>查看</span>
+      <span>{{ t("preview.view") }}</span>
     </button>
   </preview-tool-row>
   <div class="preview-body image">

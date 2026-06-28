@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
+import {useI18n} from "../../i18n";
 import Icon from "../Icon.vue";
 import ViewerActionGroup from "./ViewerActionGroup.vue";
 import ViewerToolbar from "./ViewerToolbar.vue";
@@ -37,29 +38,30 @@ const emit = defineEmits<{
   (e: "close"): void;
 }>();
 
-const pageFullscreenTitle = computed(() => props.pageFullscreen ? "退出网页全屏 (F)" : "网页全屏 (F)");
-const browserFullscreenTitle = computed(() => props.browserFullscreen ? "退出浏览器全屏" : "浏览器全屏");
-const filmstripTitle = computed(() => props.showFilmstrip ? "隐藏缩略图 (T)" : "显示缩略图 (T)");
+const {t} = useI18n();
+const pageFullscreenTitle = computed(() => props.pageFullscreen ? t("viewer.exitPageFullscreen") : t("viewer.pageFullscreen"));
+const browserFullscreenTitle = computed(() => props.browserFullscreen ? t("viewer.exitBrowserFullscreen") : t("viewer.browserFullscreen"));
+const filmstripTitle = computed(() => props.showFilmstrip ? t("viewer.hideFilmstrip") : t("viewer.showFilmstrip"));
 const pageFullscreenIcon = computed(() => props.pageFullscreen ? "viewer.page-fullscreen-off" : "viewer.page-fullscreen");
 const browserFullscreenIcon = computed(() => props.browserFullscreen ? "viewer.browser-fullscreen-off" : "viewer.browser-fullscreen");
 const filmstripIcon = computed(() => props.showFilmstrip ? "viewer.filmstrip-off" : "viewer.filmstrip");
-const zoomModeTitle = computed(() => props.fit ? "当前适应窗口，点击按原始大小查看 (1)" : "当前按倍率查看，点击适应窗口 (0)");
-const zoomModeLabel = computed(() => props.fit ? "适应" : props.zoomText);
+const zoomModeTitle = computed(() => props.fit ? t("viewer.zoomFitToActual") : t("viewer.zoomToFit"));
+const zoomModeLabel = computed(() => props.fit ? t("preview.fit") : props.zoomText);
 const rotationLabel = computed(() => props.rotation ? `${props.rotation}°` : "0°");
 </script>
 
 <template>
   <viewer-toolbar kind="image" :name="entry.name" :extension="entry.extension" :subtitle="subtitle" icon-tone="image">
     <viewer-action-group>
-      <button title="上一张 (←)" :disabled="!canShowPrevious" @click="emit('previous')">
+      <button :title="t('viewer.previousImage')" :disabled="!canShowPrevious" @click="emit('previous')">
         <icon icon="action.previous" color="currentColor" size="1.1rem" />
       </button>
-      <button title="下一张 (→)" :disabled="!canShowNext" @click="emit('next')">
+      <button :title="t('viewer.nextImage')" :disabled="!canShowNext" @click="emit('next')">
         <icon icon="action.next" color="currentColor" size="1.1rem" />
       </button>
     </viewer-action-group>
     <viewer-action-group class="zoom-group">
-      <button class="zoom-step" title="缩小 (-)" :disabled="!canZoomOut" @click="emit('zoom', -zoomStep)">
+      <button class="zoom-step" :title="t('viewer.zoomOutShortcut')" :disabled="!canZoomOut" @click="emit('zoom', -zoomStep)">
         <icon icon="viewer.zoom-out" color="currentColor" />
       </button>
       <button
@@ -69,18 +71,18 @@ const rotationLabel = computed(() => props.rotation ? `${props.rotation}°` : "0
           @click="fit ? emit('actual-size') : emit('reset-zoom')">
         <span class="zoom-mode-label">{{ zoomModeLabel }}</span>
       </button>
-      <button class="zoom-step" title="放大 (+)" :disabled="!canZoomIn" @click="emit('zoom', zoomStep)">
+      <button class="zoom-step" :title="t('viewer.zoomInShortcut')" :disabled="!canZoomIn" @click="emit('zoom', zoomStep)">
         <icon icon="viewer.zoom-in" color="currentColor" />
       </button>
     </viewer-action-group>
     <viewer-action-group>
-      <button title="向左旋转 (Shift+R)" @click="emit('rotate', -1)">
+      <button :title="t('viewer.rotateLeft')" @click="emit('rotate', -1)">
         <icon icon="viewer.rotate-left" color="currentColor" />
       </button>
-      <button :title="`当前旋转 ${rotationLabel}`" class="rotation-state" disabled>
+      <button :title="t('viewer.rotation', {rotation: rotationLabel})" class="rotation-state" disabled>
         {{ rotationLabel }}
       </button>
-      <button title="向右旋转 (R)" @click="emit('rotate', 1)">
+      <button :title="t('viewer.rotateRight')" @click="emit('rotate', 1)">
         <icon icon="viewer.rotate-right" color="currentColor" />
       </button>
     </viewer-action-group>
@@ -96,10 +98,10 @@ const rotationLabel = computed(() => props.rotation ? `${props.rotation}°` : "0
       </button>
     </viewer-action-group>
     <viewer-action-group>
-      <button title="下载" @click="emit('download')">
+      <button :title="t('common.download')" @click="emit('download')">
         <icon icon="action.download" color="currentColor" />
       </button>
-      <button title="关闭" @click="emit('close')">
+      <button :title="t('common.close')" @click="emit('close')">
         <icon icon="action.close" color="currentColor" />
       </button>
     </viewer-action-group>

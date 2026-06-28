@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import {computed} from "vue";
+import {useI18n} from "../../i18n";
+import type {MessageKey} from "../../i18n";
 import type {FileEntryIconKind} from "../../utils/file-entry.ts";
 import FileTypeIcon from "../FileTypeIcon.vue";
 import Icon from "../Icon.vue";
@@ -30,6 +32,8 @@ const emit = defineEmits<{
   (e: "update:defaultEditMode", value: boolean): void;
 }>();
 
+const {t} = useI18n();
+
 const inputNumber = (event: Event) => {
   const input = event.target as HTMLInputElement | null;
   return Number(input?.value ?? 0);
@@ -53,9 +57,9 @@ const stepFontSize = (step: number) => updateFontSizeValue(props.fontSize + step
 const stepTabSize = (step: number) => updateTabSizeValue(props.tabSize + step);
 
 const themeGroups = computed(() => [
-  {title: "跟随", items: props.themes.automatic},
-  {title: "浅色", items: props.themes.light},
-  {title: "深色", items: props.themes.dark}
+  {title: t("editor.themeFollow"), items: props.themes.automatic},
+  {title: t("editor.themeLight"), items: props.themes.light},
+  {title: t("editor.themeDark"), items: props.themes.dark}
 ].filter(group => group.items.length));
 
 const fileIconKinds = new Set<FileEntryIconKind>([
@@ -94,6 +98,16 @@ const modeIconName = (mode: EditorModeOption) => {
   if (mode.regular === "^Dockerfile$") return "Dockerfile";
   const extension = modeIconExtension(mode);
   return extension ? `example.${extension}` : mode.name;
+}
+
+const editorThemeName = (theme: {key: string; name: string}) => {
+  const key = `editor.theme.${theme.key}` as MessageKey;
+  return t(key) === key ? theme.name : t(key);
+}
+
+const editorHighlightName = (highlight: {key: string; name: string}) => {
+  const key = `editor.highlight.${highlight.key}` as MessageKey;
+  return t(key) === key ? highlight.name : t(key);
 }
 
 const menuLayerStyle = computed(() => {
@@ -138,7 +152,7 @@ const menuLayerStyle = computed(() => {
             :class="{active: currentTheme === theme.key}"
             @click="emit('change-theme', theme.key)">
           <icon :icon="theme.icon ?? 'action.appearance'" />
-          <span>{{ theme.name }}</span>
+          <span>{{ editorThemeName(theme) }}</span>
         </button>
       </template>
     </div>
@@ -150,17 +164,17 @@ const menuLayerStyle = computed(() => {
           :class="{active: currentHighlight === highlight.key}"
           @click="emit('change-highlight', highlight.key)">
         <icon :icon="highlight.icon ?? 'file.code'" />
-        <span>{{ highlight.name }}</span>
+        <span>{{ editorHighlightName(highlight) }}</span>
       </button>
     </div>
 
     <div v-if="activeMenu === 'settings'" class="editor-menu settings-menu">
       <div class="setting-row">
         <div class="setting-copy">
-          <span class="setting-label">字号</span>
-          <span class="setting-hint">Ctrl + 滚轮缩放</span>
+          <span class="setting-label">{{ t("editor.fontSize") }}</span>
+          <span class="setting-hint">{{ t("editor.fontSizeHint") }}</span>
         </div>
-        <div class="number-stepper" aria-label="字号">
+        <div class="number-stepper" :aria-label="t('editor.fontSize')">
           <button type="button" :disabled="fontSize <= 12" @click="stepFontSize(-1)">-</button>
           <input :value="fontSize" type="number" min="12" max="28" step="1" inputmode="numeric" @input="updateFontSize">
           <button type="button" :disabled="fontSize >= 28" @click="stepFontSize(1)">+</button>
@@ -168,10 +182,10 @@ const menuLayerStyle = computed(() => {
       </div>
       <div class="setting-row">
         <div class="setting-copy">
-          <span class="setting-label">Tab 宽度</span>
-          <span class="setting-hint">缩进空格数</span>
+          <span class="setting-label">{{ t("editor.tabSize") }}</span>
+          <span class="setting-hint">{{ t("editor.tabSizeHint") }}</span>
         </div>
-        <div class="number-stepper" aria-label="Tab 宽度">
+        <div class="number-stepper" :aria-label="t('editor.tabSize')">
           <button type="button" :disabled="tabSize <= 2" @click="stepTabSize(-1)">-</button>
           <input :value="tabSize" type="number" min="2" max="8" step="1" inputmode="numeric" @input="updateTabSize">
           <button type="button" :disabled="tabSize >= 8" @click="stepTabSize(1)">+</button>
@@ -179,15 +193,15 @@ const menuLayerStyle = computed(() => {
       </div>
       <div class="setting-row switch-row">
         <div class="setting-copy">
-          <span class="setting-label">自动换行</span>
-          <span class="setting-hint">长行在窗口内折行</span>
+          <span class="setting-label">{{ t("editor.wrap") }}</span>
+          <span class="setting-hint">{{ t("editor.wrapHint") }}</span>
         </div>
         <button
             type="button"
             class="switch-control"
             :class="{active: wrap}"
             role="switch"
-            aria-label="自动换行"
+            :aria-label="t('editor.wrap')"
             :aria-checked="wrap"
             @click="emit('update:wrap', !wrap)">
           <span></span>
@@ -195,15 +209,15 @@ const menuLayerStyle = computed(() => {
       </div>
       <div class="setting-row switch-row">
         <div class="setting-copy">
-          <span class="setting-label">默认编辑模式</span>
-          <span class="setting-hint">新打开文件直接可编辑</span>
+          <span class="setting-label">{{ t("editor.defaultEditMode") }}</span>
+          <span class="setting-hint">{{ t("editor.defaultEditModeHint") }}</span>
         </div>
         <button
             type="button"
             class="switch-control"
             :class="{active: defaultEditMode}"
             role="switch"
-            aria-label="默认编辑模式"
+            :aria-label="t('editor.defaultEditMode')"
             :aria-checked="defaultEditMode"
             @click="emit('update:defaultEditMode', !defaultEditMode)">
           <span></span>

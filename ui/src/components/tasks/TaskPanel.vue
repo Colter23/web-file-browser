@@ -3,6 +3,7 @@ import {computed, nextTick, ref, watch} from "vue";
 import type {TaskKind, TaskStatus} from "../../class.ts";
 import type {TaskCancelConfirmState} from "../../composables/useTaskPanel.ts";
 import {useDraggablePanel} from "../../composables/useDraggablePanel.ts";
+import {useI18n} from "../../i18n";
 import {
   canCancelTask,
   formatTaskBytes,
@@ -36,6 +37,7 @@ const emit = defineEmits<{
   (e: "confirm-cancel"): void;
 }>();
 
+const {t} = useI18n();
 const panelRef = ref<HTMLElement | null>(null);
 const cancelConfirmRef = ref<HTMLElement | null>(null);
 const {
@@ -72,27 +74,27 @@ const taskStats = computed(() => {
 });
 
 const taskSummaryText = computed(() => {
-  if (!props.tasks.length) return "暂无后台任务";
+  if (!props.tasks.length) return t("tasks.empty");
   const parts: string[] = [];
-  if (taskStats.value.running) parts.push(`运行 ${taskStats.value.running}`);
-  if (taskStats.value.queued) parts.push(`排队 ${taskStats.value.queued}`);
-  if (taskStats.value.failed) parts.push(`失败 ${taskStats.value.failed}`);
-  if (taskStats.value.totalErrors) parts.push(`错误 ${taskStats.value.totalErrors}`);
+  if (taskStats.value.running) parts.push(t("tasks.runningCount", {count: taskStats.value.running}));
+  if (taskStats.value.queued) parts.push(t("tasks.queuedCount", {count: taskStats.value.queued}));
+  if (taskStats.value.failed) parts.push(t("tasks.failedCount", {count: taskStats.value.failed}));
+  if (taskStats.value.totalErrors) parts.push(t("tasks.errorCount", {count: taskStats.value.totalErrors}));
   if (parts.length) return parts.join(" · ");
-  if (taskStats.value.cancelled && taskStats.value.completed) return `完成 ${taskStats.value.completed} · 取消 ${taskStats.value.cancelled}`;
-  if (taskStats.value.cancelled) return `已取消 ${taskStats.value.cancelled}/${props.tasks.length}`;
-  return `已完成 ${taskStats.value.completed}/${props.tasks.length}`;
+  if (taskStats.value.cancelled && taskStats.value.completed) return t("tasks.completedCancelled", {completed: taskStats.value.completed, cancelled: taskStats.value.cancelled});
+  if (taskStats.value.cancelled) return t("tasks.cancelledRatio", {cancelled: taskStats.value.cancelled, total: props.tasks.length});
+  return t("tasks.completedRatio", {completed: taskStats.value.completed, total: props.tasks.length});
 });
 
-const taskRefreshText = computed(() => props.lastUpdatedAt ? `上次刷新：${props.lastUpdatedAt}` : "打开后自动刷新任务状态");
+const taskRefreshText = computed(() => props.lastUpdatedAt ? t("tasks.lastRefresh", {time: props.lastUpdatedAt}) : t("tasks.autoRefresh"));
 const taskPanelSubtitle = computed(() => props.message || taskRefreshText.value);
 const taskOverviewItems = computed<TaskOverviewItem[]>(() => {
   const items: TaskOverviewItem[] = [];
-  if (taskStats.value.running) items.push({key: "running", label: "运行", value: taskStats.value.running});
-  if (taskStats.value.queued) items.push({key: "queued", label: "排队", value: taskStats.value.queued});
-  if (taskStats.value.failed) items.push({key: "failed", label: "失败", value: taskStats.value.failed});
-  if (taskStats.value.completed) items.push({key: "completed", label: "完成", value: taskStats.value.completed});
-  if (taskStats.value.cancelled) items.push({key: "cancelled", label: "取消", value: taskStats.value.cancelled});
+  if (taskStats.value.running) items.push({key: "running", label: t("tasks.running"), value: taskStats.value.running});
+  if (taskStats.value.queued) items.push({key: "queued", label: t("tasks.queued"), value: taskStats.value.queued});
+  if (taskStats.value.failed) items.push({key: "failed", label: t("tasks.failed"), value: taskStats.value.failed});
+  if (taskStats.value.completed) items.push({key: "completed", label: t("tasks.completed"), value: taskStats.value.completed});
+  if (taskStats.value.cancelled) items.push({key: "cancelled", label: t("tasks.cancelled"), value: taskStats.value.cancelled});
   return items;
 });
 
@@ -127,12 +129,12 @@ const orderedTasks = computed(() => {
   });
 });
 
-const taskCancelTitle = computed(() => props.cancelConfirm.task ? `取消${taskKindText(props.cancelConfirm.task.kind)}任务？` : "取消任务？");
+const taskCancelTitle = computed(() => props.cancelConfirm.task ? t("tasks.cancelTitle", {kind: taskKindText(props.cancelConfirm.task.kind)}) : t("tasks.cancelTitleFallback"));
 
 const taskCancelMessage = computed(() => {
   const task = props.cancelConfirm.task;
-  if (!task) return "任务取消请求会发送给后端。";
-  return `#${shortTaskId(task.id)} · ${taskStateText(task.state)} · ${taskProgress(task)}`;
+  if (!task) return t("tasks.cancelMessageFallback");
+  return t("tasks.cancelMessage", {id: shortTaskId(task.id), state: taskStateText(task.state), progress: taskProgress(task)});
 });
 const taskErrorsTitle = (task: TaskStatus) => task.errors.map(error => `${error.path}：${error.message}`).join("\n");
 
@@ -149,30 +151,30 @@ defineExpose({
 
 <template>
   <teleport to="body">
-    <section ref="panelRef" class="task-panel" :class="{'is-dragging': dragging}" :style="panelStyle" aria-label="后台任务" tabindex="-1">
-      <div class="task-panel-header" title="拖动移动任务面板，双击回到默认位置" @pointerdown="startDrag" @dblclick="resetPosition">
+    <section ref="panelRef" class="task-panel" :class="{'is-dragging': dragging}" :style="panelStyle" :aria-label="t('tasks.background')" tabindex="-1">
+      <div class="task-panel-header" :title="t('tasks.dragTitle')" @pointerdown="startDrag" @dblclick="resetPosition">
         <div class="task-panel-heading">
           <div class="task-panel-icon">
             <icon icon="view.details" />
           </div>
           <div class="task-panel-copy">
-            <p class="task-panel-title">后台任务</p>
+            <p class="task-panel-title">{{ t("tasks.background") }}</p>
             <p class="task-panel-message">{{ taskPanelSubtitle }}</p>
           </div>
         </div>
         <div class="task-panel-actions" @pointerdown.stop @dblclick.stop>
-          <button type="button" class="task-icon-button" :disabled="loading" title="刷新任务" @click="emit('refresh')">
+          <button type="button" class="task-icon-button" :disabled="loading" :title="t('tasks.refresh')" @click="emit('refresh')">
             <icon class="icon-motion-spin" :class="{'is-spinning': loading}" icon="action.refresh" size="normal" />
           </button>
           <button
               type="button"
               class="task-icon-button"
               :disabled="loading || cleanupLoading || cleanupTaskCount === 0"
-              :title="cleanupTaskCount > 0 ? `清理 ${cleanupTaskCount} 条已结束任务` : '没有可清理的已结束任务'"
+              :title="cleanupTaskCount > 0 ? t('tasks.cleanup', {count: cleanupTaskCount}) : t('tasks.noCleanupTitle')"
               @click="emit('cleanup-finished')">
             <icon class="icon-motion-brush" :class="{'is-brushing': cleanupLoading}" icon="action.clean" size="normal" />
           </button>
-          <button type="button" class="task-icon-button" title="关闭任务面板" @click="emit('close')">
+          <button type="button" class="task-icon-button" :title="t('tasks.closePanel')" @click="emit('close')">
             <icon icon="action.close" size="normal" />
           </button>
         </div>
@@ -189,15 +191,15 @@ defineExpose({
             <strong>{{ item.value }}</strong>
           </span>
           <span v-if="taskStats.totalErrors" class="task-metric failed">
-            <small>错误</small>
+            <small>{{ t("tasks.errors") }}</small>
             <strong>{{ taskStats.totalErrors }}</strong>
           </span>
         </div>
       </div>
 
-      <div v-if="loading" class="task-empty">正在加载任务...</div>
-      <div v-else-if="!tasks.length" class="task-empty">暂无后台任务</div>
-      <div v-else class="task-list" role="list" aria-label="后台任务列表">
+      <div v-if="loading" class="task-empty">{{ t("tasks.loading") }}</div>
+      <div v-else-if="!tasks.length" class="task-empty">{{ t("tasks.empty") }}</div>
+      <div v-else class="task-list" role="list" :aria-label="t('tasks.list')">
         <article v-for="task in orderedTasks" :key="task.id" :class="['task-row', taskStateClass(task.state), taskKindClass(task.kind)]" role="listitem">
           <div class="task-row-accent" aria-hidden="true"></div>
           <span class="task-kind-icon">
@@ -210,14 +212,14 @@ defineExpose({
                 <span :class="['task-state', taskStateClass(task.state)]">{{ taskStateText(task.state) }}</span>
                 <span class="task-id">#{{ shortTaskId(task.id) }}</span>
                 <span v-if="taskCurrentPath(task)" class="task-current" :title="taskCurrentPath(task)">
-                  当前：{{ taskCurrentPath(task) }}
+                  {{ t("tasks.currentPath", {path: taskCurrentPath(task)}) }}
                 </span>
               </div>
               <div class="task-meta">
                 <span>{{ taskBytesText(task) }}</span>
                 <span>{{ formatTaskBytes(task.speedBytesPerSec) }}/s</span>
                 <span>{{ taskItemsText(task) }}</span>
-                <span v-if="task.errors.length" class="task-errors" :title="taskErrorsTitle(task)">错误 {{ task.errors.length }}</span>
+                <span v-if="task.errors.length" class="task-errors" :title="taskErrorsTitle(task)">{{ t("tasks.errorLabel", {count: task.errors.length}) }}</span>
               </div>
             </div>
             <div class="task-progress">
@@ -229,7 +231,7 @@ defineExpose({
           </div>
           <button v-if="canCancelTask(task)" type="button" class="task-cancel" @click="emit('cancel', task)">
             <icon icon="action.close" size="small" />
-            <span>取消</span>
+            <span>{{ t("tasks.cancel") }}</span>
           </button>
         </article>
       </div>
@@ -245,9 +247,9 @@ defineExpose({
           <span v-if="cancelConfirm.error" class="task-cancel-error">{{ cancelConfirm.error }}</span>
         </div>
         <div class="task-cancel-actions">
-          <button type="button" class="task-cancel-secondary" :disabled="cancelConfirm.submitting" @click="emit('close-cancel')">保留任务</button>
+          <button type="button" class="task-cancel-secondary" :disabled="cancelConfirm.submitting" @click="emit('close-cancel')">{{ t("tasks.keepTask") }}</button>
           <button type="button" class="task-cancel-primary" :disabled="cancelConfirm.submitting" @click="emit('confirm-cancel')">
-            {{ cancelConfirm.submitting ? "发送中..." : "确认取消" }}
+            {{ cancelConfirm.submitting ? t("tasks.sending") : t("tasks.confirmCancel") }}
           </button>
         </div>
       </section>

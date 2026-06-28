@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed, ref} from "vue";
+import {useI18n} from "../../i18n";
 import {formatEntrySize} from "../../utils/file-entry.ts";
 import {parentPath} from "../../utils/file-path.ts";
 import FileTypeIcon from "../FileTypeIcon.vue";
@@ -20,6 +21,7 @@ const emit = defineEmits<{
   (e: "submit"): void;
 }>();
 
+const {t} = useI18n();
 const panelRef = ref<OperationPanelShellExpose | null>(null);
 
 const isEmptyConfirm = computed(() => props.state.kind === "empty");
@@ -30,30 +32,30 @@ const visibleRecords = computed(() => props.state.records.slice(0, 5));
 const extraCount = computed(() => Math.max(0, props.state.records.length - visibleRecords.value.length));
 
 const title = computed(() => {
-  if (isEmptyConfirm.value) return `清空回收站？`;
-  if (isCleanupConfirm.value) return "按策略清理回收站？";
-  return selectedCount.value > 1 ? `永久删除 ${selectedCount.value} 项？` : `永久删除 ${recordName(props.state.records[0])}？`;
+  if (isEmptyConfirm.value) return t("trash.emptyTitle");
+  if (isCleanupConfirm.value) return t("trash.cleanupTitle");
+  return selectedCount.value > 1 ? t("trash.deleteTitleMany", {count: selectedCount.value}) : t("trash.deleteTitle", {name: recordName(props.state.records[0])});
 });
 
 const message = computed(() => {
-  if (isEmptyConfirm.value) return `回收站中的 ${affectedCount.value} 项会被永久删除，此操作无法撤销。`;
-  if (isCleanupConfirm.value) return "将根据保留天数和容量上限永久清理符合策略的项目。";
+  if (isEmptyConfirm.value) return t("trash.emptyMessage", {count: affectedCount.value});
+  if (isCleanupConfirm.value) return t("trash.cleanupMessage");
   return selectedCount.value > 1
-      ? "这些项目会从回收站永久删除，之后无法从应用内恢复。"
-      : "该项目会从回收站永久删除，之后无法从应用内恢复。";
+      ? t("trash.deleteManyMessage")
+      : t("trash.deleteSingleMessage");
 });
 
 const submitText = computed(() => {
-  if (props.state.submitting) return "处理中...";
-  if (isCleanupConfirm.value) return "按策略清理";
-  return isEmptyConfirm.value ? "清空回收站" : "永久删除";
+  if (props.state.submitting) return t("trash.processing");
+  if (isCleanupConfirm.value) return t("trash.cleanup");
+  return isEmptyConfirm.value ? t("trash.empty") : t("trash.permanentDelete");
 });
 const panelIcon = computed(() => isCleanupConfirm.value ? "action.clean" : "action.delete");
 
 const recordName = (record = props.state.records[0]) => {
-  if (!record) return "所选项目";
+  if (!record) return t("delete.selectedItem");
   const parts = record.originalVirtualPath.split("/").filter(Boolean);
-  return parts[parts.length - 1] || record.originalVirtualPath || "未知项目";
+  return parts[parts.length - 1] || record.originalVirtualPath || t("trash.unknownItem");
 }
 
 const recordKind = (record = props.state.records[0]) => record?.kind === "folder" ? "folder" : "file";
@@ -77,8 +79,8 @@ defineExpose({
       :tabindex="-1"
       @close="emit('close')">
     <div v-if="isEmptyConfirm || isCleanupConfirm" class="trash-confirm-warning">
-      <strong>{{ isCleanupConfirm ? `当前 ${totalCount} 项` : `${affectedCount} 项` }}</strong>
-      <span>{{ isCleanupConfirm ? "符合清理策略的项目会被永久删除。" : "将会被直接清理，清空后无法通过回收站恢复。" }}</span>
+      <strong>{{ isCleanupConfirm ? t("trash.currentCount", {count: totalCount}) : t("trash.directCleanCount", {count: affectedCount}) }}</strong>
+      <span>{{ isCleanupConfirm ? t("trash.cleanupWarning") : t("trash.emptyWarning") }}</span>
     </div>
     <div v-else class="trash-confirm-list">
       <div v-for="record in visibleRecords" :key="record.id" :title="record.originalVirtualPath">
@@ -88,12 +90,12 @@ defineExpose({
         <small>{{ recordSize(record) }}</small>
       </div>
       <div v-if="extraCount" class="trash-confirm-more">
-        另有 {{ extraCount }} 项
+        {{ t("trash.extraItems", {count: extraCount}) }}
       </div>
     </div>
     <p v-if="state.error" class="trash-confirm-error">{{ state.error }}</p>
     <template #actions>
-      <button type="button" class="trash-confirm-secondary" :disabled="state.submitting" @click="emit('close')">取消</button>
+      <button type="button" class="trash-confirm-secondary" :disabled="state.submitting" @click="emit('close')">{{ t("trash.cancel") }}</button>
       <button type="button" class="trash-confirm-primary" :disabled="state.submitting" @click="emit('submit')">
         {{ submitText }}
       </button>

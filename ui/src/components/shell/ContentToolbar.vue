@@ -4,6 +4,8 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref} from "vue";
 import type {DirEntryFilter, SearchScope} from "../../class.ts";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
+import type {MessageKey} from "../../i18n";
+import {useI18n} from "../../i18n";
 import Breadcrumb from "../Breadcrumb.vue";
 import Icon from "../Icon.vue";
 import type {ExplorerEntryPathDropPayload} from "../explorer/types.ts";
@@ -44,21 +46,22 @@ const emit = defineEmits<{
   (e: "clear-search"): void;
 }>();
 
+const {t} = useI18n();
 const breadcrumbRef = ref<BreadcrumbExpose | null>(null);
 const searchOptionsMenuRef = ref<HTMLElement | null>(null);
 const searchOptionsPanelRef = ref<HTMLElement | null>(null);
 const searchOptionsButtonRef = ref<HTMLButtonElement | null>(null);
 const searchOptionsMenuOpen = ref(false);
 
-const searchTypeOptions: Array<{type: DirEntryFilter; label: string; icon: string; title: string}> = [
-  {type: "all", label: "全部", icon: "action.search", title: "搜索全部项目"},
-  {type: "file", label: "文件", icon: "file.file", title: "只搜索文件"},
-  {type: "folder", label: "文件夹", icon: "file.folder", title: "只搜索文件夹"}
+const searchTypeOptions: Array<{type: DirEntryFilter; labelKey: MessageKey; icon: string; titleKey: MessageKey}> = [
+  {type: "all", labelKey: "search.typeAll", icon: "action.search", titleKey: "search.typeAllTitle"},
+  {type: "file", labelKey: "search.typeFile", icon: "file.file", titleKey: "search.typeFileTitle"},
+  {type: "folder", labelKey: "search.typeFolder", icon: "file.folder", titleKey: "search.typeFolderTitle"}
 ];
 
-const searchScopeOptions: Array<{scope: SearchScope; label: string; icon: string; title: string}> = [
-  {scope: "mount", label: "当前挂载", icon: "file.folder", title: "只搜索当前挂载点"},
-  {scope: "all", label: "全部位置", icon: "file.home", title: "搜索所有挂载位置"}
+const searchScopeOptions: Array<{scope: SearchScope; labelKey: MessageKey; icon: string; titleKey: MessageKey}> = [
+  {scope: "mount", labelKey: "search.scopeMount", icon: "file.folder", titleKey: "search.scopeMountTitle"},
+  {scope: "all", labelKey: "search.scopeAll", icon: "file.home", titleKey: "search.scopeAllTitle"}
 ];
 
 const activeSearchType = computed(() => {
@@ -144,7 +147,7 @@ defineExpose({
 
 <template>
   <div class="path-row">
-    <div class="nav-cluster" role="group" aria-label="导航">
+    <div class="nav-cluster" role="group" :aria-label="t('nav.group')">
       <button class="nav-button nav-button-arrow" :disabled="!canNavigateBack" :title="navigateBackTitle" @click="emit('navigate-back')">
         <span class="nav-icon-motion nav-icon-motion-back">
           <icon icon="nav.back" size="1.42rem" :stroke-width="2.15" />
@@ -160,10 +163,10 @@ defineExpose({
           <icon icon="nav.up" size="1.42rem" :stroke-width="2.15" />
         </span>
       </button>
-      <button class="nav-button nav-button-tool" title="刷新 (F5 / Ctrl+R)" @click="emit('refresh')">
+      <button class="nav-button nav-button-tool" :title="t('nav.refresh')" @click="emit('refresh')">
         <icon class="icon-motion-spin" icon="nav.refresh" size="1.32rem" />
       </button>
-      <button class="nav-button nav-button-tool" title="最近文件" @click="emit('show-recent')">
+      <button class="nav-button nav-button-tool" :title="t('nav.recent')" @click="emit('show-recent')">
         <icon icon="nav.recent" size="1.32rem" />
       </button>
     </div>
@@ -178,9 +181,9 @@ defineExpose({
           :ref="setSearchInputRef"
           :value="searchText"
           type="search"
-          placeholder="搜索当前文件夹"
-          aria-label="搜索当前文件夹"
-          title="输入后筛选当前文件夹，按 Enter 搜索索引 (Ctrl+F / Ctrl+E)"
+          :placeholder="t('search.placeholder')"
+          :aria-label="t('search.placeholder')"
+          :title="t('search.inputTitle')"
           @input="emit('update:search-text', ($event.target as HTMLInputElement).value)"
           @keydown.enter.prevent="emit('search-enter')"
           @keydown.escape.prevent="emit('search-escape')">
@@ -190,12 +193,12 @@ defineExpose({
             type="button"
             class="search-options-trigger"
             :class="{active: searchOptionsActive}"
-            :title="`${activeSearchScope.label} · ${activeSearchType.title}`"
+            :title="`${t(activeSearchScope.labelKey)} · ${t(activeSearchType.titleKey)}`"
             aria-haspopup="menu"
             :aria-expanded="searchOptionsMenuOpen"
             @click.prevent="toggleSearchOptionsMenu"
             @keydown="handleSearchOptionsButtonKeyDown">
-          <span class="search-options-trigger-label">{{ activeSearchType.label }}</span>
+          <span class="search-options-trigger-label">{{ t(activeSearchType.labelKey) }}</span>
           <icon class="search-options-caret icon-motion-caret" :class="{'is-open': searchOptionsMenuOpen}" icon="action.down" />
         </button>
         <div
@@ -203,9 +206,9 @@ defineExpose({
             ref="searchOptionsPanelRef"
             class="search-options-panel"
             role="menu"
-            aria-label="搜索选项"
+            :aria-label="t('search.options')"
             @keydown="handleMenuKeyDown">
-          <p class="search-options-title">类型</p>
+          <p class="search-options-title">{{ t("search.type") }}</p>
           <button
               v-for="option in searchTypeOptions"
               :key="option.type"
@@ -217,11 +220,11 @@ defineExpose({
               tabindex="-1"
               @click.prevent="selectSearchType(option.type)">
             <span class="search-options-icon"><icon :icon="option.icon" /></span>
-            <span>{{ option.label }}</span>
+            <span>{{ t(option.labelKey) }}</span>
             <span class="search-options-check"><icon v-if="searchType === option.type" icon="action.check" size="small" /></span>
           </button>
           <div class="search-options-separator"></div>
-          <p class="search-options-title">范围</p>
+          <p class="search-options-title">{{ t("search.scope") }}</p>
           <button
               v-for="option in searchScopeOptions"
               :key="option.scope"
@@ -231,15 +234,15 @@ defineExpose({
               role="menuitemradio"
               :aria-checked="searchScope === option.scope"
               tabindex="-1"
-              :title="option.title"
+              :title="t(option.titleKey)"
               @click.prevent="selectSearchScope(option.scope)">
             <span class="search-options-icon"><icon :icon="option.icon" /></span>
-            <span>{{ option.label }}</span>
+            <span>{{ t(option.labelKey) }}</span>
             <span class="search-options-check"><icon v-if="searchScope === option.scope" icon="action.check" size="small" /></span>
           </button>
         </div>
       </div>
-      <button v-if="isFiltering" type="button" class="search-clear-button" title="清除筛选" @click.prevent="emit('clear-search')">
+      <button v-if="isFiltering" type="button" class="search-clear-button" :title="t('search.clear')" @click.prevent="emit('clear-search')">
         <icon icon="action.close" />
       </button>
     </div>

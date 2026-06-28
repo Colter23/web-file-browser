@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type {ExplorerEntry} from "../explorer/types.ts";
+import {useI18n} from "../../i18n";
 import {downloadUrl} from "../../network/api.ts";
 import Icon from "../Icon.vue";
 import PreviewToolRow from "./PreviewToolRow.vue";
@@ -12,14 +13,15 @@ const emit = defineEmits<{
   (e: "open-video", entry: ExplorerEntry): void;
 }>();
 
+const {t} = useI18n();
 const openVideoPreview = () => emit("open-video", props.entry);
 </script>
 
 <template>
   <preview-tool-row>
-    <button title="打开视频播放器" @click="openVideoPreview">
+    <button :title="t('preview.openVideoPlayer')" @click="openVideoPreview">
       <icon icon="view.video" color="currentColor" />
-      <span>打开播放器</span>
+      <span>{{ t("preview.openPlayer") }}</span>
     </button>
   </preview-tool-row>
   <div class="preview-body video">

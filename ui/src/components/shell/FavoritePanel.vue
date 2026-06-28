@@ -4,6 +4,7 @@ import type {FavoriteItem} from "../../class.ts";
 import {readBooleanStorage, writeBooleanStorage} from "../../utils/safe-storage.ts";
 import {normalizePathText} from "../../utils/file-path.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
+import {useI18n} from "../../i18n";
 import Icon from "../Icon.vue";
 import FileTypeIcon from "../FileTypeIcon.vue";
 import type {ShellNoticeKind} from "./types.ts";
@@ -29,6 +30,7 @@ const emit = defineEmits<{
   (e: "notice", payload: {message: string; kind?: ShellNoticeKind; title?: string}): void;
 }>();
 
+const {t} = useI18n();
 const collapsed = ref(readBooleanStorage(collapsedStorageKey, false));
 const renamingFavoriteId = ref("");
 const renameDraft = ref("");
@@ -94,7 +96,7 @@ const focusRemoveConfirmButton = async (favoriteId: string) => {
   removeConfirmButtonRefs.get(favoriteId)?.focus({preventScroll: true});
 }
 
-const emitNotice = (message: string, kind: ShellNoticeKind = "info", title = "收藏夹") => {
+const emitNotice = (message: string, kind: ShellNoticeKind = "info", title = t("favorite.title")) => {
   emit("notice", {message, kind, title});
 }
 
@@ -145,7 +147,7 @@ const confirmRemove = (favorite: FavoriteItem) => {
 const handleOpen = (favorite: FavoriteItem) => {
   clearRemoveConfirm();
   if (favorite.missing) {
-    emitNotice("该收藏目录已经缺失，请检查或移除收藏项。", "warning");
+    emitNotice(t("favorite.missingNotice"), "warning");
     return;
   }
   emit("open", favorite);
@@ -154,7 +156,7 @@ const handleOpen = (favorite: FavoriteItem) => {
 const handleOpenNewTab = (favorite: FavoriteItem) => {
   clearRemoveConfirm();
   if (favorite.missing) {
-    emitNotice("该收藏目录已经缺失，请检查或移除收藏项。", "warning");
+    emitNotice(t("favorite.missingNotice"), "warning");
     return;
   }
   emit("open-new-tab", favorite);
@@ -179,7 +181,7 @@ const commitRename = (favorite: FavoriteItem) => {
   if (renamingFavoriteId.value !== favorite.id) return;
   const nextName = renameDraft.value.trim();
   if (!nextName) {
-    emitNotice("收藏夹名称不能为空", "warning");
+    emitNotice(t("favorite.nameRequired"), "warning");
     void nextTick(() => {
       renameInputRef.value?.focus({preventScroll: true});
       renameInputRef.value?.select();
@@ -258,9 +260,9 @@ const handleFavoriteKeyDown = (event: KeyboardEvent, favorite: FavoriteItem) => 
 const copyFavoritePath = async (favorite: FavoriteItem) => {
   try {
     await navigator.clipboard.writeText(favorite.path);
-    emitNotice("收藏路径已复制", "success");
+    emitNotice(t("favorite.pathCopied"), "success");
   } catch {
-    emitNotice("浏览器未允许写入剪贴板，请手动复制路径。", "error", "复制路径失败");
+    emitNotice(t("favorite.clipboardDenied"), "error", t("favorite.copyPathFailed"));
   }
 }
 
@@ -350,13 +352,13 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
 </script>
 
 <template>
-  <section class="favorite-panel" :class="{collapsed}" aria-label="收藏夹">
+  <section class="favorite-panel" :class="{collapsed}" :aria-label="t('favorite.title')">
     <div class="favorite-header">
       <button
           class="favorite-collapse"
           type="button"
           :aria-expanded="!collapsed"
-          :title="collapsed ? '展开收藏夹' : '折叠收藏夹'"
+          :title="collapsed ? t('favorite.expand') : t('favorite.collapse')"
           @click="toggleCollapsed">
         <span class="favorite-title-spacer" aria-hidden="true"></span>
         <span class="favorite-caret-slot" aria-hidden="true">
@@ -365,9 +367,9 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
         <span class="favorite-header-icon" aria-hidden="true">
           <icon icon="action.favorite" size="1.05rem" />
         </span>
-        <span class="favorite-title">收藏夹</span>
+        <span class="favorite-title">{{ t("favorite.title") }}</span>
       </button>
-      <button class="favorite-refresh" :disabled="loading" title="刷新收藏夹" @click="emit('refresh')">
+      <button class="favorite-refresh" :disabled="loading" :title="t('favorite.refresh')" @click="emit('refresh')">
         <icon class="icon-motion-spin" :class="{'is-spinning': loading}" icon="action.refresh" />
       </button>
     </div>
@@ -375,8 +377,8 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
     <Transition name="sidebar-section">
       <div v-if="!collapsed" class="favorite-body-shell">
         <div class="favorite-body">
-          <div v-if="loading && !favorites.length" class="favorite-empty">正在加载...</div>
-          <div v-else-if="!favorites.length" class="favorite-empty">暂无收藏</div>
+          <div v-if="loading && !favorites.length" class="favorite-empty">{{ t("explorer.loading") }}</div>
+          <div v-else-if="!favorites.length" class="favorite-empty">{{ t("favorite.empty") }}</div>
           <div v-else class="favorite-list" role="list" @dragend="clearDropState">
             <div
                 v-for="favorite in favorites"
@@ -412,7 +414,7 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
                 </span>
                 <span class="favorite-copy">
                   <span class="favorite-name">{{ favorite.name }}</span>
-                  <small>{{ favorite.missing ? "目录缺失" : favorite.path }}</small>
+                  <small>{{ favorite.missing ? t("favorite.missing") : favorite.path }}</small>
                 </span>
               </button>
               <div v-else :ref="setRenameEditRef" class="favorite-edit">
@@ -432,13 +434,13 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
                     @blur="commitRename(favorite)">
               </div>
               <span v-if="shouldShowFavoriteActions(favorite)" class="favorite-actions">
-                <button class="favorite-action" title="在新标签页中打开" @click.stop="handleOpenNewTab(favorite)">
+                <button class="favorite-action" :title="t('context.openNewTab')" @click.stop="handleOpenNewTab(favorite)">
                   <icon icon="action.open-new-tab" />
                 </button>
-                <button class="favorite-action" title="重命名收藏项" @click.stop="startRename(favorite)">
+                <button class="favorite-action" :title="t('context.renameFavorite')" @click.stop="startRename(favorite)">
                   <icon icon="action.rename" />
                 </button>
-                <button class="favorite-action danger" title="从收藏夹移除" @click.stop="startRemoveConfirm(favorite)">
+                <button class="favorite-action danger" :title="t('context.removeFavorite')" @click.stop="startRemoveConfirm(favorite)">
                   <icon icon="action.close" />
                 </button>
               </span>
@@ -446,11 +448,11 @@ const handleDrop = (event: DragEvent, favorite: FavoriteItem) => {
                 <button
                     :ref="element => setRemoveConfirmButtonRef(favorite.id, element)"
                     class="favorite-action confirm"
-                    title="确认移除收藏项"
+                    :title="t('favorite.confirmRemove')"
                     @click.stop="confirmRemove(favorite)">
                   <icon icon="action.trash" />
                 </button>
-                <button class="favorite-action cancel" title="取消移除" @click.stop="cancelRemoveConfirm(favorite.id)">
+                <button class="favorite-action cancel" :title="t('favorite.cancelRemove')" @click.stop="cancelRemoveConfirm(favorite.id)">
                   <icon icon="action.close" />
                 </button>
               </span>

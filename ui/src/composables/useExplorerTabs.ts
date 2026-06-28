@@ -2,6 +2,7 @@ import {computed, ref} from "vue";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import type {ShellNoticeKind} from "../components/shell/types.ts";
 import type {TabContextMenuState, TabDropPlacement} from "../components/tabs/types.ts";
+import {translate} from "../i18n";
 import {useFileStore} from "../store";
 import {parentPath} from "../utils/file-path.ts";
 
@@ -161,7 +162,7 @@ export const useExplorerTabs = ({
     if (!tab) return false;
     closeTransientPanels();
     await syncActiveTabContext();
-    showNotice(`已重新打开：${tab.title}`, "info", "标签页", 1600);
+    showNotice(translate("tabs.reopened", {title: tab.title}), "info", translate("tabs.noticeTitle"), 1600);
     return true;
   }
 

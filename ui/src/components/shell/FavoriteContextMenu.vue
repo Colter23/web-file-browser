@@ -4,6 +4,7 @@ import type {FavoriteItem} from "../../class.ts";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
 import {useViewportMenuPosition} from "../../composables/useViewportMenuPosition.ts";
+import {useI18n} from "../../i18n";
 import Icon from "../Icon.vue";
 
 const props = defineProps<{
@@ -24,6 +25,7 @@ const emit = defineEmits<{
   (e: "remove"): void;
 }>();
 
+const {t} = useI18n();
 const menuRef = ref<HTMLElement | null>(null);
 const {menuPosition, placeMenu} = useViewportMenuPosition({menuRef});
 const openDisabled = computed(() => props.loading || props.favorite.missing === true);
@@ -64,35 +66,35 @@ watch(() => [props.x, props.y, props.favorite.id] as const, () => {
         class="favorite-context-menu"
         :style="{left: `${menuPosition.x}px`, top: `${menuPosition.y}px`}"
         role="menu"
-        aria-label="收藏项菜单"
+        :aria-label="t('context.favoriteMenu')"
         @click.stop
         @contextmenu.prevent.stop
         @keydown="handleMenuKeyDown">
       <button role="menuitem" class="context-row" :disabled="openDisabled" @click="emit('open')">
         <span class="context-row-icon"><icon icon="action.open" /></span>
-        <span class="context-row-label">打开</span>
+        <span class="context-row-label">{{ t("context.open") }}</span>
       </button>
       <button role="menuitem" class="context-row" :disabled="openDisabled" @click="emit('open-new-tab')">
         <span class="context-row-icon"><icon icon="action.open-new-tab" /></span>
-        <span class="context-row-label">在新标签页中打开</span>
+        <span class="context-row-label">{{ t("context.openNewTab") }}</span>
       </button>
       <div class="context-separator"></div>
       <button role="menuitem" class="context-row" @click="emit('rename')">
         <span class="context-row-icon"><icon icon="action.rename" /></span>
-        <span class="context-row-label">重命名收藏项</span>
+        <span class="context-row-label">{{ t("context.renameFavorite") }}</span>
       </button>
       <button role="menuitem" class="context-row" :disabled="loading" @click="emit('refresh')">
         <span class="context-row-icon"><icon class="icon-motion-spin" icon="action.refresh" /></span>
-        <span class="context-row-label">检查收藏夹</span>
+        <span class="context-row-label">{{ t("context.checkFavorite") }}</span>
       </button>
       <button role="menuitem" class="context-row" @click="emit('copy-path')">
         <span class="context-row-icon"><icon icon="action.copy-path" /></span>
-        <span class="context-row-label">复制路径</span>
+        <span class="context-row-label">{{ t("context.copyPath") }}</span>
       </button>
       <div class="context-separator"></div>
       <button role="menuitem" class="context-row danger" @click="emit('remove')">
         <span class="context-row-icon"><icon icon="action.trash" /></span>
-        <span class="context-row-label">从收藏夹移除</span>
+        <span class="context-row-label">{{ t("context.removeFavorite") }}</span>
       </button>
     </div>
   </Teleport>

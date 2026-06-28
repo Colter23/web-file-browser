@@ -3,6 +3,7 @@ import Icon from "./Icon.vue";
 import FileTypeIcon from "./FileTypeIcon.vue";
 import {computed} from "vue";
 import type {FileTreeData, LoadData} from "../class.ts";
+import {useI18n} from "../i18n";
 import {normalizePathText} from "../utils/file-path.ts";
 
 const props = withDefaults(defineProps<{
@@ -21,6 +22,8 @@ const props = withDefaults(defineProps<{
 }>(), {
   deep: 0
 });
+
+const {t} = useI18n();
 
 const emit = defineEmits<{
   (e: "toggle", node: FileTreeData): void;
@@ -102,7 +105,7 @@ const handleDragStart = (event: DragEvent) => {
           :disabled="loading || !canToggle"
           tabindex="-1"
           aria-hidden="true"
-          title="展开或折叠"
+          :title="t('explorer.toggleTreeNode')"
           @pointerdown.prevent
           @click.stop="handleToggle">
         <icon v-if="loading" class="icon-motion-spin is-spinning" icon="action.refresh" size="0.86rem" />
@@ -114,7 +117,7 @@ const handleDragStart = (event: DragEvent) => {
       </span>
       <span class="node-label">
         <span class="node-name">{{ data.name }}</span>
-        <span v-if="favorite && normalizedPath !== '/'" class="node-favorite" aria-label="已收藏" title="已收藏">
+        <span v-if="favorite && normalizedPath !== '/'" class="node-favorite" :aria-label="t('explorer.favorited')" :title="t('explorer.favorited')">
           <icon icon="action.favorite-filled" size="0.72rem" />
         </span>
       </span>

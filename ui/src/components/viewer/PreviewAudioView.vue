@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type {ExplorerEntry} from "../explorer/types.ts";
+import {useI18n} from "../../i18n";
 import {downloadUrl} from "../../network/api.ts";
 import Icon from "../Icon.vue";
 import PreviewToolRow from "./PreviewToolRow.vue";
@@ -12,14 +13,15 @@ const emit = defineEmits<{
   (e: "open-audio", entry: ExplorerEntry): void;
 }>();
 
+const {t} = useI18n();
 const openAudioPlayer = () => emit("open-audio", props.entry);
 </script>
 
 <template>
   <preview-tool-row>
-    <button title="在全局播放器中播放" @click="openAudioPlayer">
+    <button :title="t('preview.playGlobalAudio')" @click="openAudioPlayer">
       <icon icon="view.audio" color="currentColor" />
-      <span>播放</span>
+      <span>{{ t("preview.play") }}</span>
     </button>
   </preview-tool-row>
   <div class="preview-body audio">

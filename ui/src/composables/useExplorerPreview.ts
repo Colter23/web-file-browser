@@ -1,6 +1,7 @@
 import {computed, ref} from "vue";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import type {ShellNoticeKind} from "../components/shell/types.ts";
+import {translate} from "../i18n";
 import {useFileStore} from "../store";
 
 type ImageViewerPayload = {
@@ -70,16 +71,16 @@ export const useExplorerPreview = ({
   const singleSelection = computed(() => selectedCount.value === 1 ? selectedList.value[0] : null);
 
   const previewEmptyTitle = computed(() => {
-    if (!currentSelection.value.length) return "选择一个文件以预览";
-    if (currentSelection.value.length > 1) return `已选择 ${currentSelection.value.length} 项`;
+    if (!currentSelection.value.length) return translate("preview.selectFileToPreview");
+    if (currentSelection.value.length > 1) return translate("explorer.selected", {count: currentSelection.value.length});
     const entry = currentSelection.value[0];
-    return entry?.type === "folder" ? entry.name : "正在准备预览";
+    return entry?.type === "folder" ? entry.name : translate("explorer.preparePreview");
   });
 
   const previewEmptySubtitle = computed(() => {
     if (!currentSelection.value.length) return "";
-    if (currentSelection.value.length > 1) return "选择单个文件后显示预览";
-    return currentSelection.value[0]?.type === "folder" ? "文件夹不能直接预览" : "";
+    if (currentSelection.value.length > 1) return translate("explorer.previewSingleFile");
+    return currentSelection.value[0]?.type === "folder" ? translate("explorer.folderPreviewUnsupported") : "";
   });
 
   const previewEmptyIcon = computed(() => {
@@ -271,7 +272,7 @@ export const useExplorerPreview = ({
 
   const previewSelected = async (entry = getSelectedEntry()) => {
     if (!entry || entry.type !== "file") {
-      showNotice("请选择文件", "warning");
+      showNotice(translate("explorer.selectFileNotice"), "warning");
       return false;
     }
     await setPreviewEntry(entry, true);

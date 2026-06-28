@@ -16,6 +16,7 @@ import {useExplorerStatusText} from "../../composables/useExplorerStatusText.ts"
 import {useExplorerThumbnails} from "../../composables/useExplorerThumbnails.ts";
 import {useExplorerTypeahead} from "../../composables/useExplorerTypeahead.ts";
 import {useExplorerItemRefs, useExplorerViewport} from "../../composables/useExplorerViewport.ts";
+import {useI18n} from "../../i18n";
 import type {DirEntryFilter, SearchScope} from "../../class.ts";
 import {
   entryTypeText,
@@ -123,6 +124,7 @@ const props = withDefaults(defineProps<{
 })
 
 const fileStore = useFileStore();
+const {t} = useI18n();
 const SLOW_RENAME_DELAY_MS = 560;
 const explorerFocusVisible = ref(false);
 let delayedRenameTimer: number | undefined;
@@ -505,11 +507,11 @@ watch(() => props.filterText, resetTypeahead);
 
 const resultActive = computed(() => sourceMode.value !== "folder");
 const emptyActionVisible = computed(() => filterActive.value || resultActive.value);
-const emptyActionText = computed(() => resultActive.value ? "返回当前文件夹" : "清除筛选");
+const emptyActionText = computed(() => resultActive.value ? t("explorer.returnCurrentFolder") : t("explorer.clearFilter"));
 const canLoadMoreEntries = computed(() => sourceMode.value !== "recent" && Boolean(folderData.value.hasMore) && !props.filterText.trim());
 const loadMoreText = computed(() => {
-  if (loadingMore.value) return "正在加载...";
-  return sourceMode.value === "search" ? "加载更多搜索结果" : "加载更多";
+  if (loadingMore.value) return t("explorer.loading");
+  return sourceMode.value === "search" ? t("explorer.loadMoreSearch") : t("explorer.loadMore");
 });
 
 const fileIconKind = (entry: ExplorerEntry) => {
@@ -835,7 +837,7 @@ defineExpose({
         class="explorer-viewport"
         :class="[viewModeClass, itemSizeClass, {dropCurrent: dragState.overCurrentFolder}]"
         role="listbox"
-        aria-label="文件列表"
+        :aria-label="t('explorer.list')"
         aria-multiselectable="true"
         :aria-busy="loading || loadingMore"
         :aria-activedescendant="focusedPath ? entryDomId(focusedPath) : undefined"

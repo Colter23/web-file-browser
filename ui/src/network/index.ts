@@ -1,5 +1,6 @@
 import axios, {AxiosRequestConfig, AxiosResponse} from "axios";
 import config from "../config";
+import {translate} from "../i18n";
 
 export class ApiError extends Error {
     status?: number;
@@ -34,7 +35,7 @@ instance.interceptors.response.use(
             : undefined;
         const message = typeof data === "object" && data !== null && "message" in data
             ? String(data.message)
-            : error.message ?? "请求失败";
+            : error.message ?? translate("common.requestFailed");
         if (status === 401 && window.location.pathname !== "/login") {
             const redirect = encodeURIComponent(window.location.pathname + window.location.search);
             window.location.href = `/login?redirect=${redirect}`;

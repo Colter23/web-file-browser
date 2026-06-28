@@ -1,5 +1,6 @@
 import {defineStore} from "pinia";
 import type {AppAccentColor, AppColorMode, AppIconStyle, FileIconPalette, FileIconStyle} from "../class.ts";
+import type {MessageKey} from "../i18n";
 import {readStorageItem, writeStorageItem} from "../utils/safe-storage.ts";
 
 const storageKeys = {
@@ -12,40 +13,47 @@ const storageKeys = {
 
 export type ResolvedColorMode = "light" | "dark";
 
-export const iconStyleOptions: {value: AppIconStyle; label: string}[] = [
-  {value: "lucide", label: "线性"},
-  {value: "fluent", label: "填充"},
-  {value: "solar", label: "双色"}
+export const iconStyleOptions: {value: AppIconStyle; labelKey: MessageKey}[] = [
+  {value: "lucide", labelKey: "appearance.iconLucide"},
+  {value: "fluent", labelKey: "appearance.iconFluent"},
+  {value: "solar", labelKey: "appearance.iconSolar"}
 ];
 
-export const fileIconStyleOptions: {value: FileIconStyle; label: string}[] = [
-  {value: "inherit", label: "跟随样式"},
-  {value: "vscode-icons", label: "VSCode"},
-  {value: "catppuccin", label: "Catppuccin"}
+export const fileIconStyleOptions: {value: FileIconStyle; labelKey: MessageKey}[] = [
+  {value: "inherit", labelKey: "appearance.fileIconInherit"},
+  {value: "vscode-icons", labelKey: "appearance.fileIconVscode"},
+  {value: "catppuccin", labelKey: "appearance.fileIconCatppuccin"}
 ];
 
-export const fileIconPaletteOptions: {value: FileIconPalette; label: string}[] = [
-  {value: "category", label: "按类型着色"},
-  {value: "accent", label: "跟随主题色"}
+export const fileIconPaletteOptions: {value: FileIconPalette; labelKey: MessageKey}[] = [
+  {value: "category", labelKey: "appearance.paletteCategory"},
+  {value: "accent", labelKey: "appearance.paletteAccent"}
 ];
 
-export const accentColorOptions: {value: AppAccentColor; label: string; color: string; contrast: string; soft: string; border: string}[] = [
-  {value: "blue", label: "蓝色", color: "#2563eb", contrast: "#ffffff", soft: "#eff6ff", border: "#bfdbfe"},
-  {value: "sky", label: "湖蓝", color: "#0369a1", contrast: "#ffffff", soft: "#f0f9ff", border: "#bae6fd"},
-  {value: "teal", label: "青绿", color: "#0f766e", contrast: "#ffffff", soft: "#f0fdfa", border: "#99f6e4"},
-  {value: "emerald", label: "森绿", color: "#15803d", contrast: "#ffffff", soft: "#f0fdf4", border: "#bbf7d0"},
-  {value: "slate", label: "灰蓝", color: "#475569", contrast: "#ffffff", soft: "#f8fafc", border: "#cbd5e1"},
-  {value: "violet", label: "紫色", color: "#7c3aed", contrast: "#ffffff", soft: "#f5f3ff", border: "#ddd6fe"},
-  {value: "pink", label: "粉色", color: "#db2777", contrast: "#ffffff", soft: "#fdf2f8", border: "#fbcfe8"},
-  {value: "rose", label: "胭红", color: "#be123c", contrast: "#ffffff", soft: "#fff1f2", border: "#fecdd3"},
-  {value: "orange", label: "赤橙", color: "#c2410c", contrast: "#ffffff", soft: "#fff7ed", border: "#fed7aa"},
-  {value: "amber", label: "琥珀", color: "#a16207", contrast: "#ffffff", soft: "#fffbeb", border: "#fde68a"}
+export const accentColorOptions: {
+  value: AppAccentColor;
+  labelKey: MessageKey;
+  color: string;
+  contrast: string;
+  soft: string;
+  border: string;
+}[] = [
+  {value: "blue", labelKey: "appearance.accentBlue", color: "#2563eb", contrast: "#ffffff", soft: "#eff6ff", border: "#bfdbfe"},
+  {value: "sky", labelKey: "appearance.accentSky", color: "#0369a1", contrast: "#ffffff", soft: "#f0f9ff", border: "#bae6fd"},
+  {value: "teal", labelKey: "appearance.accentTeal", color: "#0f766e", contrast: "#ffffff", soft: "#f0fdfa", border: "#99f6e4"},
+  {value: "emerald", labelKey: "appearance.accentEmerald", color: "#15803d", contrast: "#ffffff", soft: "#f0fdf4", border: "#bbf7d0"},
+  {value: "slate", labelKey: "appearance.accentSlate", color: "#475569", contrast: "#ffffff", soft: "#f8fafc", border: "#cbd5e1"},
+  {value: "violet", labelKey: "appearance.accentViolet", color: "#7c3aed", contrast: "#ffffff", soft: "#f5f3ff", border: "#ddd6fe"},
+  {value: "pink", labelKey: "appearance.accentPink", color: "#db2777", contrast: "#ffffff", soft: "#fdf2f8", border: "#fbcfe8"},
+  {value: "rose", labelKey: "appearance.accentRose", color: "#be123c", contrast: "#ffffff", soft: "#fff1f2", border: "#fecdd3"},
+  {value: "orange", labelKey: "appearance.accentOrange", color: "#c2410c", contrast: "#ffffff", soft: "#fff7ed", border: "#fed7aa"},
+  {value: "amber", labelKey: "appearance.accentAmber", color: "#a16207", contrast: "#ffffff", soft: "#fffbeb", border: "#fde68a"}
 ];
 
-export const colorModeOptions: {value: AppColorMode; label: string}[] = [
-  {value: "system", label: "跟随系统"},
-  {value: "light", label: "亮色"},
-  {value: "dark", label: "暗色"}
+export const colorModeOptions: {value: AppColorMode; labelKey: MessageKey}[] = [
+  {value: "system", labelKey: "appearance.system"},
+  {value: "light", labelKey: "appearance.light"},
+  {value: "dark", labelKey: "appearance.dark"}
 ];
 
 const iconStyles = iconStyleOptions.map(option => option.value);

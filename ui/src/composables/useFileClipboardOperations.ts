@@ -2,6 +2,7 @@ import {computed, ref} from "vue";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import type {FileClipboardAction} from "../components/operations/types.ts";
 import type {ShellNoticeKind} from "../components/shell/types.ts";
+import {useI18n} from "../i18n";
 import {createCopyTask, createMoveTask} from "../network/api.ts";
 import {isSameOrDescendantPath, parentPath} from "../utils/file-path.ts";
 
@@ -41,28 +42,29 @@ export const useFileClipboardOperations = ({
   taskStarted,
   setTaskMessage
 }: FileClipboardOptions) => {
+  const {t} = useI18n();
   const fileClipboardAction = ref<FileClipboardAction | null>(null);
   const fileClipboardEntries = ref<ExplorerEntry[]>([]);
 
   const clipboardPaths = computed(() => fileClipboardEntries.value.map(entry => entry.path));
   const hasClipboard = computed(() => Boolean(fileClipboardAction.value && fileClipboardEntries.value.length));
   const clipboardText = computed(() => {
-    if (!hasClipboard.value) return "剪贴板为空";
-    const actionText = fileClipboardAction.value === "cut" ? "剪切" : "复制";
-    return `${actionText} ${fileClipboardEntries.value.length} 项`;
+    if (!hasClipboard.value) return t("clipboard.empty");
+    const key = fileClipboardAction.value === "cut" ? "clipboard.cutItems" : "clipboard.copyItems";
+    return t(key, {count: fileClipboardEntries.value.length});
   });
 
   const setFileClipboard = (action: FileClipboardAction, entry = selectedEntry()) => {
     const entries = selectedEntries(entry);
     if (!entries.length) {
-      showNotice("请选择文件或文件夹", "warning");
+      showNotice(t("clipboard.selectFileOrFolder"), "warning");
       return;
     }
     fileClipboardAction.value = action;
     fileClipboardEntries.value = entries;
-    const message = `${action === "cut" ? "已剪切" : "已复制"} ${entries.length} 项`;
+    const message = t(action === "cut" ? "clipboard.cutDone" : "clipboard.copyDone", {count: entries.length});
     setTaskMessage(message);
-    showNotice(message, "success", "剪贴板已更新");
+    showNotice(message, "success", t("clipboard.updated"));
   }
 
   const copySelected = (entry?: ExplorerEntry) => {
@@ -78,10 +80,10 @@ export const useFileClipboardOperations = ({
     if (!normalizedPaths.length) return;
     try {
       await navigator.clipboard.writeText(normalizedPaths.join("\n"));
-      const message = normalizedPaths.length === 1 ? "已复制路径" : `已复制 ${normalizedPaths.length} 个路径`;
-      showNotice(message, "success", "路径已复制");
+      const message = normalizedPaths.length === 1 ? t("context.pathCopied") : t("context.pathsCopied", {count: normalizedPaths.length});
+      showNotice(message, "success", t("context.pathCopiedTitle"));
     } catch {
-      showNotice("浏览器未允许写入剪贴板，请手动复制路径。", "error", "复制路径失败");
+      showNotice(t("favorite.clipboardDenied"), "error", t("favorite.copyPathFailed"));
     }
   }
 
@@ -94,19 +96,19 @@ export const useFileClipboardOperations = ({
 
   const pasteSelected = async () => {
     if (!hasClipboard.value || !fileClipboardAction.value) {
-      showNotice("剪贴板为空", "warning");
+      showNotice(t("clipboard.empty"), "warning");
       return;
     }
     const targetPath = currentFolder();
     const entries = fileClipboardEntries.value;
     const nestedFolder = entries.find(entry => entry.type === "folder" && isSameOrDescendantPath(targetPath, entry.path));
     if (nestedFolder) {
-      showNotice(`不能将 ${nestedFolder.name} 粘贴到它自身或子文件夹中`, "warning");
+      showNotice(t("clipboard.cannotPasteIntoSelf", {name: nestedFolder.name}), "warning");
       return;
     }
     const sameFolder = entries.some(entry => parentPath(entry.path) === targetPath);
     if (fileClipboardAction.value === "cut" && sameFolder) {
-      showNotice("剪切项已经在当前文件夹中", "warning");
+      showNotice(t("clipboard.cutAlreadyHere"), "warning");
       return;
     }
     try {
@@ -114,14 +116,14 @@ export const useFileClipboardOperations = ({
       const task = fileClipboardAction.value === "cut"
           ? await createMoveTask(sources, targetPath)
           : await createCopyTask(sources, targetPath);
-      await taskStarted(task.id, fileClipboardAction.value === "cut" ? "移动任务" : "复制任务");
+      await taskStarted(task.id, fileClipboardAction.value === "cut" ? t("clipboard.moveTask") : t("clipboard.copyTask"));
       if (fileClipboardAction.value === "cut") {
         fileClipboardAction.value = null;
         fileClipboardEntries.value = [];
       }
       await refreshCurrent();
     } catch (error) {
-      showError(error, "创建粘贴任务失败", "粘贴失败");
+      showError(error, t("clipboard.pasteFailed"), t("clipboard.pasteFailedTitle"));
     }
   }
 
@@ -129,12 +131,12 @@ export const useFileClipboardOperations = ({
     if (!entries.length) return;
     const nestedFolder = entries.find(entry => entry.type === "folder" && isSameOrDescendantPath(targetPath, entry.path));
     if (nestedFolder) {
-      showNotice(`不能将 ${nestedFolder.name} 放入它自身或子文件夹中`, "warning");
+      showNotice(t("clipboard.cannotDropIntoSelf", {name: nestedFolder.name}), "warning");
       return;
     }
     const sameFolder = entries.some(entry => parentPath(entry.path) === targetPath);
     if (action === "move" && sameFolder) {
-      setTaskMessage("拖拽目标已经是当前位置");
+      setTaskMessage(t("clipboard.dropSameTarget"));
       return;
     }
     try {
@@ -142,11 +144,11 @@ export const useFileClipboardOperations = ({
       const task = action === "copy"
           ? await createCopyTask(sources, targetPath)
           : await createMoveTask(sources, targetPath);
-      await taskStarted(task.id, action === "copy" ? "复制任务" : "移动任务");
+      await taskStarted(task.id, action === "copy" ? t("clipboard.copyTask") : t("clipboard.moveTask"));
       if (action === "move") removeEntriesFromCutClipboard(sources);
       await refreshCurrent();
     } catch (error) {
-      showError(error, "创建拖拽任务失败", "拖拽失败");
+      showError(error, t("clipboard.dropFailed"), t("clipboard.dropFailedTitle"));
     }
   }
 

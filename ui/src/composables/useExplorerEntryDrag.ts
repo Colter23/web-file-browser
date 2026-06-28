@@ -1,6 +1,7 @@
 import {computed, reactive, ref} from "vue";
 import type {ComputedRef, Ref} from "vue";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
+import {translate} from "../i18n";
 import {
   clearActiveInternalEntryDragEntries,
   hasInternalEntryDragData,
@@ -68,8 +69,7 @@ export const useExplorerEntryDrag = ({
 
   const dragHintText = computed(() => {
     if (!dragState.active || !draggingEntries.value.length || !dragState.overPath && !dragState.overCurrentFolder) return "";
-    const actionText = dragState.copy ? "复制" : "移动";
-    return `${actionText} ${draggingEntries.value.length} 项`;
+    return translate(dragState.copy ? "explorer.dragCopy" : "explorer.dragMove", {count: draggingEntries.value.length});
   });
 
   const selectedEntriesForDrag = (entry: ExplorerEntry) => {

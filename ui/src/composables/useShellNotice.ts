@@ -1,5 +1,7 @@
 import {ref} from "vue";
 import type {ShellNoticeKind} from "../components/shell/types.ts";
+import {useI18n} from "../i18n";
+import type {MessageKey} from "../i18n";
 
 type ShellNoticeState = {
   id: number;
@@ -10,19 +12,20 @@ type ShellNoticeState = {
   durationMs: number;
 }
 
-const defaultTitle: Record<ShellNoticeKind, string> = {
-  info: "提示",
-  success: "完成",
-  warning: "需要注意",
-  error: "操作失败"
+const defaultTitleKey: Record<ShellNoticeKind, MessageKey> = {
+  info: "notice.info",
+  success: "notice.success",
+  warning: "notice.warning",
+  error: "notice.error"
 };
 
 export const useShellNotice = () => {
+  const {t} = useI18n();
   const notice = ref<ShellNoticeState>({
     id: 0,
     visible: false,
     kind: "info",
-    title: "提示",
+    title: t("notice.info"),
     message: "",
     durationMs: 3500
   });
@@ -59,14 +62,14 @@ export const useShellNotice = () => {
       id: ++noticeId,
       visible: true,
       kind,
-      title: title ?? defaultTitle[kind],
+      title: title ?? t(defaultTitleKey[kind]),
       message,
       durationMs: duration
     };
     startTimer(duration);
   }
 
-  const showError = (error: unknown, fallback: string, title = "操作失败") => {
+  const showError = (error: unknown, fallback: string, title = t("notice.error")) => {
     show(error instanceof Error && error.message ? error.message : fallback, "error", title);
   }
 

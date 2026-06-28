@@ -11,6 +11,8 @@ import {
 } from "../../store/appearance.ts";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
+import {useI18n} from "../../i18n";
+import type {LocaleCode} from "../../i18n";
 import Icon from "../Icon.vue";
 
 defineProps<{
@@ -27,6 +29,7 @@ const emit = defineEmits<{
 }>();
 
 const appearanceStore = useAppearanceStore();
+const {locale, localeOptions, setLocale, t} = useI18n();
 const menuRef = ref<HTMLElement | null>(null);
 const menuPanelRef = ref<HTMLElement | null>(null);
 const menuButtonRef = ref<HTMLButtonElement | null>(null);
@@ -44,21 +47,30 @@ const fileIconPaletteIcons: Record<FileIconPalette, string> = {
 };
 
 const activeColorModeLabel = computed(() => {
-  return colorModeOptions.find(option => option.value === appearanceStore.colorMode)?.label ?? "跟随系统";
+  const option = colorModeOptions.find(item => item.value === appearanceStore.colorMode) ?? colorModeOptions[0];
+  return t(option.labelKey);
 });
 const activeIconStyleLabel = computed(() => {
-  return iconStyleOptions.find(option => option.value === appearanceStore.iconStyle)?.label ?? "线性";
+  const option = iconStyleOptions.find(item => item.value === appearanceStore.iconStyle) ?? iconStyleOptions[0];
+  return t(option.labelKey);
 });
 const activeFileIconStyleLabel = computed(() => {
-  return fileIconStyleOptions.find(option => option.value === appearanceStore.fileIconStyle)?.label ?? "跟随样式";
+  const option = fileIconStyleOptions.find(item => item.value === appearanceStore.fileIconStyle) ?? fileIconStyleOptions[0];
+  return t(option.labelKey);
 });
 const activeAccentColorLabel = computed(() => {
-  return accentColorOptions.find(option => option.value === appearanceStore.accentColor)?.label ?? "蓝色";
+  const option = accentColorOptions.find(item => item.value === appearanceStore.accentColor) ?? accentColorOptions[0];
+  return t(option.labelKey);
 });
-const menuTitle = computed(() => `更多选项：${activeColorModeLabel.value}，${activeIconStyleLabel.value}`);
-const menuButtonLabel = computed(() => open.value ? "关闭主菜单" : menuTitle.value);
+const menuTitle = computed(() => t("moreMenu.title", {colorMode: activeColorModeLabel.value, iconStyle: activeIconStyleLabel.value}));
+const menuButtonLabel = computed(() => open.value ? t("moreMenu.closeMain") : menuTitle.value);
 const appearanceSummary = computed(() => {
-  return `${activeColorModeLabel.value} · ${activeAccentColorLabel.value} · ${activeIconStyleLabel.value} · ${activeFileIconStyleLabel.value}`;
+  return t("appearance.menuSummary", {
+    colorMode: activeColorModeLabel.value,
+    accentColor: activeAccentColorLabel.value,
+    iconStyle: activeIconStyleLabel.value,
+    fileIconStyle: activeFileIconStyleLabel.value
+  });
 });
 
 const close = () => {
@@ -144,6 +156,10 @@ const selectAccentColor = (color: AppAccentColor) => {
   appearanceStore.setAccentColor(color);
 }
 
+const selectLocale = (value: LocaleCode) => {
+  setLocale(value);
+}
+
 const handleButtonKeyDown = (event: KeyboardEvent) => {
   if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
   event.preventDefault();
@@ -199,26 +215,47 @@ onBeforeUnmount(() => {
           class="more-menu-panel"
           :class="{'appearance-view': activeView === 'appearance'}"
           role="menu"
-          aria-label="更多选项"
+          :aria-label="t('moreMenu.aria')"
           @keydown="handleMenuKeyDown">
         <Transition :name="activeView === 'appearance' ? 'menu-view-forward' : 'menu-view-back'" mode="out-in">
           <div v-if="activeView === 'main'" key="main" class="menu-view">
             <button class="command-item" role="menuitem" tabindex="-1" @click="closeAndEmit('open-settings')">
               <icon icon="action.settings" />
               <span class="item-copy">
-                <strong>设置</strong>
-                <small>系统、挂载与运行状态</small>
+                <strong>{{ t("common.settings") }}</strong>
+                <small>{{ t("moreMenu.settingsHint") }}</small>
               </span>
             </button>
 
             <button class="command-item submenu-launch" role="menuitem" tabindex="-1" @click="showAppearance">
               <icon icon="action.appearance" />
               <span class="item-copy">
-                <strong>外观和主题</strong>
+                <strong>{{ t("appearance.menu") }}</strong>
                 <small>{{ appearanceSummary }}</small>
               </span>
               <icon class="submenu-caret" icon="action.next" />
             </button>
+
+            <div class="language-menu-item" role="group" :aria-label="t('app.language')">
+              <icon icon="action.language" />
+              <span class="item-copy">
+                <strong>{{ t("app.language") }}</strong>
+              </span>
+              <div class="locale-switch" role="radiogroup" :aria-label="t('app.language')">
+                <button
+                    v-for="option in localeOptions"
+                    :key="option.value"
+                    class="locale-option"
+                    :class="{active: locale === option.value}"
+                    role="radio"
+                    type="button"
+                    tabindex="-1"
+                    :aria-checked="locale === option.value"
+                    @click="selectLocale(option.value)">
+                  {{ t(option.labelKey) }}
+                </button>
+              </div>
+            </div>
 
             <div class="menu-separator"></div>
 
@@ -226,15 +263,15 @@ onBeforeUnmount(() => {
               <icon icon="view.details" />
               <span class="item-copy">
                 <strong>{{ taskButtonText }}</strong>
-                <small>后台任务与传输进度</small>
+                <small>{{ t("moreMenu.tasksHint") }}</small>
               </span>
             </button>
 
             <button class="command-item" :class="{active: trashActive}" role="menuitem" tabindex="-1" @click="closeAndEmit('toggle-trash')">
               <icon icon="action.trash" />
               <span class="item-copy">
-                <strong>回收站</strong>
-                <small>恢复或永久删除项目</small>
+                <strong>{{ t("common.trash") }}</strong>
+                <small>{{ t("moreMenu.trashHint") }}</small>
               </span>
             </button>
 
@@ -243,27 +280,27 @@ onBeforeUnmount(() => {
             <button class="command-item danger" role="menuitem" tabindex="-1" @click="closeAndEmit('sign-out')">
               <icon icon="action.logout" />
               <span class="item-copy">
-                <strong>退出</strong>
-                <small>退出当前会话</small>
+                <strong>{{ t("common.signOut") }}</strong>
+                <small>{{ t("moreMenu.signOutHint") }}</small>
               </span>
             </button>
           </div>
 
           <div v-else key="appearance" class="menu-view appearance-menu-view">
             <div class="submenu-header">
-              <button class="submenu-back" type="button" role="menuitem" tabindex="-1" aria-label="返回主菜单" @click="showMain">
+              <button class="submenu-back" type="button" role="menuitem" tabindex="-1" :aria-label="t('moreMenu.back')" @click="showMain">
                 <icon icon="action.previous" />
               </button>
               <span class="item-copy">
-                <strong>外观和主题</strong>
+                <strong>{{ t("appearance.menu") }}</strong>
               </span>
             </div>
 
-            <section class="preference-section" aria-label="颜色模式">
+            <section class="preference-section" :aria-label="t('appearance.colorMode')">
               <div class="preference-heading">
-                <span>颜色模式</span>
+                <span>{{ t("appearance.colorMode") }}</span>
               </div>
-              <div class="segmented-group" role="radiogroup" aria-label="颜色模式">
+              <div class="segmented-group" role="radiogroup" :aria-label="t('appearance.colorMode')">
                 <button
                     v-for="option in colorModeOptions"
                     :key="option.value"
@@ -275,16 +312,16 @@ onBeforeUnmount(() => {
                     :aria-checked="appearanceStore.colorMode === option.value"
                     @click="selectColorMode(option.value)">
                   <icon class="option-icon" :icon="colorModeIcons[option.value]" />
-                  <span>{{ option.label }}</span>
+                  <span>{{ t(option.labelKey) }}</span>
                 </button>
               </div>
             </section>
 
-            <section class="preference-section" aria-label="图标样式">
+            <section class="preference-section" :aria-label="t('appearance.iconStyle')">
               <div class="preference-heading">
-                <span>图标样式</span>
+                <span>{{ t("appearance.iconStyle") }}</span>
               </div>
-              <div class="segmented-group" role="radiogroup" aria-label="图标样式">
+              <div class="segmented-group" role="radiogroup" :aria-label="t('appearance.iconStyle')">
                 <button
                     v-for="option in iconStyleOptions"
                     :key="option.value"
@@ -298,16 +335,16 @@ onBeforeUnmount(() => {
                   <span class="style-preview-frame">
                     <icon class="style-preview-icon" icon="file.folder" size="1.15rem" :icon-style="option.value" />
                   </span>
-                  <span>{{ option.label }}</span>
+                  <span>{{ t(option.labelKey) }}</span>
                 </button>
               </div>
             </section>
 
-            <section class="preference-section" aria-label="文件图标">
+            <section class="preference-section" :aria-label="t('appearance.fileIconStyle')">
               <div class="preference-heading">
-                <span>文件图标</span>
+                <span>{{ t("appearance.fileIconStyle") }}</span>
               </div>
-              <div class="segmented-group" role="radiogroup" aria-label="文件图标">
+              <div class="segmented-group" role="radiogroup" :aria-label="t('appearance.fileIconStyle')">
                 <button
                     v-for="option in fileIconStyleOptions"
                     :key="option.value"
@@ -321,16 +358,16 @@ onBeforeUnmount(() => {
                   <span class="style-preview-frame">
                     <icon class="style-preview-icon" icon="file.folder" size="1.15rem" :icon-style="fileIconPreviewStyle(option.value)" />
                   </span>
-                  <span>{{ option.label }}</span>
+                  <span>{{ t(option.labelKey) }}</span>
                 </button>
               </div>
             </section>
 
-            <section class="preference-section" aria-label="文件图标着色">
+            <section class="preference-section" :aria-label="t('appearance.fileIconPalette')">
               <div class="preference-heading">
-                <span>文件图标着色</span>
+                <span>{{ t("appearance.fileIconPalette") }}</span>
               </div>
-              <div class="segmented-group" role="radiogroup" aria-label="文件图标着色">
+              <div class="segmented-group" role="radiogroup" :aria-label="t('appearance.fileIconPalette')">
                 <button
                     v-for="option in fileIconPaletteOptions"
                     :key="option.value"
@@ -342,16 +379,16 @@ onBeforeUnmount(() => {
                     :aria-checked="appearanceStore.fileIconPalette === option.value"
                     @click="selectFileIconPalette(option.value)">
                   <icon class="option-icon" :icon="fileIconPaletteIcons[option.value]" />
-                  <span>{{ option.label }}</span>
+                  <span>{{ t(option.labelKey) }}</span>
                 </button>
               </div>
             </section>
 
-            <section class="preference-section" aria-label="主题色">
+            <section class="preference-section" :aria-label="t('appearance.accentColor')">
               <div class="preference-heading">
-                <span>主题色</span>
+                <span>{{ t("appearance.accentColor") }}</span>
               </div>
-              <div class="accent-grid" role="radiogroup" aria-label="主题色">
+              <div class="accent-grid" role="radiogroup" :aria-label="t('appearance.accentColor')">
                 <button
                     v-for="option in accentColorOptions"
                     :key="option.value"
@@ -361,10 +398,10 @@ onBeforeUnmount(() => {
                     :aria-checked="appearanceStore.accentColor === option.value"
                     type="button"
                     tabindex="-1"
-                    :title="option.label"
+                    :title="t(option.labelKey)"
                     @click="selectAccentColor(option.value)">
                   <span class="accent-swatch" :style="{backgroundColor: option.color}"></span>
-                  <span>{{ option.label }}</span>
+                  <span>{{ t(option.labelKey) }}</span>
                 </button>
               </div>
             </section>
@@ -491,6 +528,15 @@ onBeforeUnmount(() => {
   color: var(--app-text-muted);
 }
 
+.language-menu-item {
+  @apply grid w-full grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-3 py-2 text-sm;
+  color: var(--app-text-muted);
+}
+
+.language-menu-item:focus-within {
+  background: color-mix(in srgb, var(--app-accent-soft, #eff6ff) 58%, transparent);
+}
+
 .submenu-launch {
   @apply grid-cols-[1.25rem_minmax(0,1fr)_1rem];
 }
@@ -502,13 +548,15 @@ onBeforeUnmount(() => {
 .command-item:hover,
 .segmented-option:hover,
 .accent-button:hover,
+.locale-option:hover,
 .submenu-back:hover {
   background: var(--app-accent-hover, #eff6ff);
 }
 
 .command-item.active,
 .segmented-option.active,
-.accent-button.active {
+.accent-button.active,
+.locale-option.active {
   background: var(--app-accent-selected, #dbeafe);
   color: var(--app-accent-strong, #1d4ed8);
   box-shadow: inset 0 0 0 1px var(--app-accent-border, #bfdbfe);
@@ -517,6 +565,7 @@ onBeforeUnmount(() => {
 .command-item:focus-visible,
 .segmented-option:focus-visible,
 .accent-button:focus-visible,
+.locale-option:focus-visible,
 .submenu-back:focus-visible {
   @apply outline-none;
   background: var(--app-accent-soft, #eff6ff);
@@ -547,6 +596,26 @@ onBeforeUnmount(() => {
 
 .command-item.active .item-copy small {
   color: var(--app-accent, #2563eb);
+}
+
+.locale-switch {
+  @apply grid grid-cols-2 gap-0.5 rounded-md border p-0.5;
+  min-width: 8.75rem;
+  border-color: color-mix(in srgb, var(--app-border) 54%, transparent);
+  background: var(--app-control-solid);
+}
+
+.locale-option {
+  @apply inline-flex min-h-[1.8rem] items-center justify-center rounded px-2 text-xs font-medium;
+  color: var(--app-text-muted);
+  transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.locale-option.active {
+  @apply font-semibold;
+  background: var(--app-accent, #2563eb);
+  color: var(--app-accent-contrast, #fff);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--app-accent, #2563eb) 24%, transparent);
 }
 
 .submenu-header {

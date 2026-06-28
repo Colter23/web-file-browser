@@ -1,5 +1,6 @@
 import {computed, type ComputedRef} from "vue";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
+import {translate} from "../i18n";
 import {isExtractableArchiveEntry} from "../utils/file-entry.ts";
 
 type MainViewSelectionCommandsOptions = {
@@ -28,8 +29,10 @@ export const useMainViewSelectionCommands = ({
   const canExtractSelection = computed(() => isExtractableArchiveEntry(singleSelection.value));
   const canPasteSelection = computed(() => hasClipboard.value);
   const selectionStatusText = computed(() => {
-    const selectionText = hasSelection.value ? `已选择 ${selectedCount.value} 项` : "未选择项目";
-    return `${selectionText} · ${clipboardText.value}`;
+    const selectionText = hasSelection.value
+        ? translate("explorer.selected", {count: selectedCount.value})
+        : translate("common.noSelection");
+    return translate("clipboard.selectionStatus", {selection: selectionText, clipboard: clipboardText.value});
   });
 
   return {

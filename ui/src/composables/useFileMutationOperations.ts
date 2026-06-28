@@ -3,6 +3,7 @@ import type {ArchiveFormat} from "../class.ts";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import type {DeleteConfirmState, OperationPanelState} from "../components/operations/types.ts";
 import type {ShellNoticeKind} from "../components/shell/types.ts";
+import {useI18n} from "../i18n";
 import {
   createArchiveTask,
   createDeleteTask,
@@ -70,15 +71,16 @@ export const useFileMutationOperations = ({
   openOperationPanel,
   openDeleteConfirm
 }: FileMutationOperationsOptions) => {
+  const {t} = useI18n();
   const creatingShortcutFolder = ref(false);
 
   const openCreatePanel = (type: "file" | "folder") => {
     openOperationPanel({
       kind: type === "file" ? "createFile" : "createFolder",
-      title: type === "file" ? "新建文件" : "新建文件夹",
-      message: `位置：${currentFolder()}`,
-      primaryText: "创建",
-      name: type === "file" ? "新建文件.txt" : "新建文件夹",
+      title: type === "file" ? t("common.createFile") : t("common.createFolder"),
+      message: t("operation.location", {path: currentFolder()}),
+      primaryText: t("operation.create"),
+      name: type === "file" ? t("operation.newFileName") : t("operation.newFolderName"),
       format: "zip",
       entries: [],
       sourceEntry: null
@@ -89,15 +91,15 @@ export const useFileMutationOperations = ({
     if (creatingShortcutFolder.value) return;
     creatingShortcutFolder.value = true;
     closePanels();
-    const folderName = "新建文件夹";
+    const folderName = t("operation.newFolderName");
     try {
       const created = await createEntry(currentFolder(), "folder", folderName);
-      setTaskMessage(`已创建：${folderName}`);
+      setTaskMessage(t("operation.created", {name: folderName}));
       await refreshCurrent();
       const renamed = await selectPathForRename(created.path);
-      if (!renamed) showNotice("新文件夹已创建，但当前页未找到它，请刷新或调整排序后重命名。", "warning");
+      if (!renamed) showNotice(t("operation.folderCreatedMissing"), "warning");
     } catch (error) {
-      showError(error, "新建文件夹失败");
+      showError(error, t("operation.createFolderFailed"));
     } finally {
       creatingShortcutFolder.value = false;
     }
@@ -105,7 +107,7 @@ export const useFileMutationOperations = ({
 
   const startRenameSelected = () => {
     if (!singleSelectedEntry()) {
-      showNotice("请选择一个文件或文件夹", "warning");
+      showNotice(t("operation.selectOneFileOrFolder"), "warning");
       return;
     }
     startExplorerRename();
@@ -116,13 +118,13 @@ export const useFileMutationOperations = ({
     if (!nextName || nextName === entry.name) return;
     try {
       const renamed = await moveEntry(entry.path, joinPath(parentPath(entry.path), nextName));
-      setTaskMessage(`已重命名：${nextName}`);
+      setTaskMessage(t("operation.renamed", {name: nextName}));
       await refreshCurrent();
       const selected = await selectPath(renamed.path);
-      if (!selected) showNotice("已重命名，但当前页未找到该项目，请刷新或调整排序后查看。", "warning");
+      if (!selected) showNotice(t("operation.renamedMissing"), "warning");
       complete?.(true);
     } catch (error) {
-      showError(error, "重命名失败", "重命名失败");
+      showError(error, t("operation.renameFailed"), t("operation.renameFailed"));
       complete?.(false);
     }
   }
@@ -130,7 +132,7 @@ export const useFileMutationOperations = ({
   const deleteSelected = async (entry = selectedEntry()) => {
     const entries = selectedEntries(entry);
     if (!entries.length) {
-      showNotice("请选择文件或文件夹", "warning");
+      showNotice(t("clipboard.selectFileOrFolder"), "warning");
       return;
     }
     await openDeleteConfirm(entries);
@@ -144,12 +146,12 @@ export const useFileMutationOperations = ({
     try {
       const permanent = deleteConfirm.value.permanent;
       const task = await createDeleteTask(entries.map(item => item.path), permanent);
-      await taskStarted(task.id, permanent ? "永久删除任务" : "删除任务");
+      await taskStarted(task.id, permanent ? t("operation.permanentDeleteTask") : t("operation.deleteTask"));
       removeEntriesFromCutClipboard(entries.map(item => item.path));
       resetDeleteConfirm();
       await refreshCurrent();
     } catch (error) {
-      deleteConfirm.value.error = error instanceof Error ? error.message : "创建删除任务失败";
+      deleteConfirm.value.error = error instanceof Error ? error.message : t("operation.createDeleteTaskFailed");
     } finally {
       if (deleteConfirm.value.visible) deleteConfirm.value.submitting = false;
     }
@@ -158,16 +160,16 @@ export const useFileMutationOperations = ({
   const archiveSelected = (entry = selectedEntry()) => {
     const entries = selectedEntries(entry);
     if (!entries.length) {
-      showNotice("请选择文件或文件夹", "warning");
+      showNotice(t("clipboard.selectFileOrFolder"), "warning");
       return;
     }
     const format: ArchiveFormat = "zip";
-    const defaultName = entries.length === 1 ? `${entries[0].name}${archiveFormatExtension(format)}` : `选中项目${archiveFormatExtension(format)}`;
+    const defaultName = entries.length === 1 ? `${entries[0].name}${archiveFormatExtension(format)}` : `${t("operation.selectedItemsName")}${archiveFormatExtension(format)}`;
     openOperationPanel({
       kind: "archive",
-      title: entries.length === 1 ? `压缩 ${entries[0].name}` : `压缩 ${entries.length} 项`,
-      message: `输出位置：${currentFolder()}`,
-      primaryText: "开始压缩",
+      title: entries.length === 1 ? t("operation.archiveTitle", {name: entries[0].name}) : t("operation.archiveTitleMany", {count: entries.length}),
+      message: t("operation.outputLocation", {path: currentFolder()}),
+      primaryText: t("operation.startArchive"),
       name: defaultName,
       format,
       entries,
@@ -177,14 +179,14 @@ export const useFileMutationOperations = ({
 
   const extractSelected = (entry = singleSelectedEntry()) => {
     if (!isArchiveFile(entry)) {
-      showNotice("请选择一个 zip、tar.gz 或 tgz 压缩包", "warning");
+      showNotice(t("operation.selectArchive"), "warning");
       return;
     }
     openOperationPanel({
       kind: "extract",
-      title: `解压 ${entry.name}`,
-      message: `输出位置：${currentFolder()}`,
-      primaryText: "开始解压",
+      title: t("operation.extractTitle", {name: entry.name}),
+      message: t("operation.outputLocation", {path: currentFolder()}),
+      primaryText: t("operation.startExtract"),
       name: archiveStem(entry.name),
       format: "zip",
       entries: [],
@@ -197,14 +199,14 @@ export const useFileMutationOperations = ({
     if (!panel.kind || panel.submitting) return;
     const name = panel.name.trim();
     if (!name) {
-      showNotice(`${operationPanelNameLabel.value}不能为空`, "warning");
+      showNotice(t("operation.required", {label: operationPanelNameLabel.value}), "warning");
       return;
     }
     panel.submitting = true;
     try {
       if (panel.kind === "createFile" || panel.kind === "createFolder") {
         await createEntry(currentFolder(), panel.kind === "createFile" ? "file" : "folder", name);
-        setTaskMessage(`已创建：${name}`);
+        setTaskMessage(t("operation.created", {name}));
         resetOperationPanel();
         await refreshCurrent();
         return;
@@ -212,17 +214,17 @@ export const useFileMutationOperations = ({
       if (panel.kind === "archive") {
         const task = await createArchiveTask(panel.entries.map(item => item.path), currentFolder(), panel.format, name);
         resetOperationPanel();
-        await taskStarted(task.id, "压缩任务");
+        await taskStarted(task.id, t("operation.archiveTask"));
         return;
       }
       if (panel.kind === "extract" && panel.sourceEntry) {
         const task = await createExtractTask(panel.sourceEntry.path, currentFolder(), name);
         resetOperationPanel();
-        await taskStarted(task.id, "解压任务");
+        await taskStarted(task.id, t("operation.extractTask"));
       }
     } catch (error) {
       operationPanel.value.submitting = false;
-      showError(error, "操作失败");
+      showError(error, t("operation.operationFailed"));
     }
   }
 

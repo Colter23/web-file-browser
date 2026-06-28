@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import {useI18n} from "../../i18n";
+
 defineProps<{
   loading: boolean;
   message: string;
@@ -11,10 +13,12 @@ defineProps<{
 const emit = defineEmits<{
   (e: "clear-filter"): void;
 }>();
+
+const {t} = useI18n();
 </script>
 
 <template>
-  <div v-if="loading" class="explorer-empty">正在加载...</div>
+  <div v-if="loading" class="explorer-empty">{{ t("explorer.loading") }}</div>
   <div v-else-if="message" class="explorer-empty error">{{ message }}</div>
   <div v-else class="explorer-empty">
     <span>{{ emptyText }}</span>

@@ -1,6 +1,7 @@
 import {computed, ref} from "vue";
 import type {ComputedRef} from "vue";
 import type {ExplorerTab} from "../class.ts";
+import {useI18n} from "../i18n";
 import {useFileStore} from "../store";
 import {normalizePathText, parentPath} from "../utils/file-path.ts";
 
@@ -31,6 +32,7 @@ export const useExplorerNavigation = ({
   shouldIgnoreNavigationShortcut
 }: ExplorerNavigationOptions) => {
   const fileStore = useFileStore();
+  const {t} = useI18n();
   const historyMouseButton = ref(-1);
 
   const currentFolder = () => fileStore.currentPath || "/";
@@ -43,9 +45,9 @@ export const useExplorerNavigation = ({
   });
   const navigateForwardTarget = computed(() => activeTab.value?.forwardStack?.[0] ?? "");
   const navigateUpTarget = computed(() => canNavigateUp.value ? parentPath(currentFolder()) : "");
-  const navigateBackTitle = computed(() => navigateBackTarget.value ? `后退到 ${navigateBackTarget.value} (Alt+← / 鼠标后退键)` : "后退 (Alt+← / 鼠标后退键)");
-  const navigateForwardTitle = computed(() => navigateForwardTarget.value ? `前进到 ${navigateForwardTarget.value} (Alt+→ / 鼠标前进键)` : "前进 (Alt+→ / 鼠标前进键)");
-  const navigateUpTitle = computed(() => navigateUpTarget.value ? `返回上级 ${navigateUpTarget.value} (Alt+↑)` : "返回上级 (Alt+↑)");
+  const navigateBackTitle = computed(() => navigateBackTarget.value ? t("nav.backTo", {path: navigateBackTarget.value}) : t("nav.back"));
+  const navigateForwardTitle = computed(() => navigateForwardTarget.value ? t("nav.forwardTo", {path: navigateForwardTarget.value}) : t("nav.forward"));
+  const navigateUpTitle = computed(() => navigateUpTarget.value ? t("nav.upTo", {path: navigateUpTarget.value}) : t("nav.up"));
 
   const finishPathNavigation = async (path: string, focusAfterNavigation = true) => {
     closeTransientPanels();

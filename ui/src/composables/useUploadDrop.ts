@@ -1,4 +1,5 @@
 import {computed, ref} from "vue";
+import {useI18n} from "../i18n";
 
 type UploadDropOptions = {
   canAccept: () => boolean;
@@ -13,12 +14,13 @@ const hasDraggedFiles = (event: DragEvent) => {
 }
 
 export const useUploadDrop = ({canAccept, currentFolder, upload}: UploadDropOptions) => {
+  const {t} = useI18n();
   const active = ref(false);
   const uploading = ref(false);
   let dragDepth = 0;
 
-  const title = computed(() => uploading.value ? "正在上传文件..." : "释放鼠标上传文件");
-  const subtitle = computed(() => uploading.value ? `目标：${currentFolder()}` : `上传到 ${currentFolder()}`);
+  const title = computed(() => uploading.value ? t("upload.uploading") : t("upload.dropToUpload"));
+  const subtitle = computed(() => uploading.value ? t("upload.target", {path: currentFolder()}) : t("upload.to", {path: currentFolder()}));
 
   const reset = () => {
     dragDepth = 0;

@@ -1,6 +1,7 @@
 import {computed, nextTick, ref} from "vue";
 import type {ComponentPublicInstance, ComputedRef, Ref} from "vue";
 import type {CodeEditorExpose, EditorCursorStatus, EditorSearchOptions} from "../components/editor/types.ts";
+import {useI18n} from "../i18n";
 
 type EditorSearchOptionsConfig = {
   editorRef: Ref<CodeEditorExpose | null>;
@@ -17,6 +18,7 @@ export const useEditorSearch = ({
   isEditorActive,
   closeMenus
 }: EditorSearchOptionsConfig) => {
+  const {t} = useI18n();
   const searchVisible = ref(false);
   const replaceVisible = ref(false);
   const searchText = ref("");
@@ -56,7 +58,7 @@ export const useEditorSearch = ({
       new RegExp(searchText.value);
       return "";
     } catch {
-      return "正则表达式无效";
+      return t("editor.invalidRegex");
     }
   });
 
@@ -109,7 +111,7 @@ export const useEditorSearch = ({
       return false;
     }
     const found = editorRef.value?.find?.(searchOptions(backwards)) ?? false;
-    searchStatus.value = found ? "" : "未找到";
+    searchStatus.value = found ? "" : t("editor.notFound");
     if (keepSearchFocus) {
       nextTick(() => searchInputRef.value?.focus());
     }
@@ -154,7 +156,7 @@ export const useEditorSearch = ({
     if (!replaced && runSearch(false)) {
       replaced = editorRef.value?.replaceCurrent?.(replaceText.value) ?? false;
     }
-    searchStatus.value = replaced ? "已替换" : regexErrorText.value || "未找到";
+    searchStatus.value = replaced ? t("editor.replaced") : regexErrorText.value || t("editor.notFound");
     if (replaced) await nextTick(() => runSearch(false));
   }
 
@@ -162,7 +164,7 @@ export const useEditorSearch = ({
     if (!canReplace.value) return;
     if (!runSearch(false)) return;
     const replaced = editorRef.value?.replaceAll?.(replaceText.value) ?? false;
-    searchStatus.value = replaced ? "已全部替换" : "未找到";
+    searchStatus.value = replaced ? t("editor.replacedAll") : t("editor.notFound");
   }
 
   const focusReplaceInput = () => {
@@ -189,12 +191,12 @@ export const useEditorSearch = ({
 
   const submitGotoLine = () => {
     if (!canGotoLine.value) {
-      gotoStatus.value = "行号无效";
+      gotoStatus.value = t("editor.invalidLine");
       gotoInputRef.value?.focus();
       return;
     }
     const moved = editorRef.value?.gotoLine?.(gotoLineNumber.value) ?? false;
-    gotoStatus.value = moved ? "" : "无法跳转";
+    gotoStatus.value = moved ? "" : t("editor.gotoFailed");
     if (moved) closeGoto();
   }
 

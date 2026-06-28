@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed, ref} from "vue";
 import {useDraggablePanel} from "../../composables/useDraggablePanel.ts";
+import {useI18n} from "../../i18n";
 import Icon from "../Icon.vue";
 
 type OperationPanelShellTag = "form" | "section";
@@ -27,6 +28,7 @@ const emit = defineEmits<{
   (e: "submit"): void;
 }>();
 
+const {t} = useI18n();
 const shellRef = ref<HTMLElement | null>(null);
 const {
   dragging,
@@ -55,7 +57,7 @@ defineExpose({
         :tabindex="tabindex"
         @submit.prevent="emit('submit')"
         @keydown.esc.prevent.stop="emit('close')">
-      <div class="operation-shell-header" title="拖动移动面板" @pointerdown="startDrag" @dblclick="resetPosition">
+      <div class="operation-shell-header" :title="t('operation.dragPanel')" @pointerdown="startDrag" @dblclick="resetPosition">
         <div :class="iconClass">
           <icon :icon="icon" />
         </div>
@@ -63,7 +65,7 @@ defineExpose({
           <strong>{{ title }}</strong>
           <span>{{ subtitle }}</span>
         </div>
-        <button type="button" class="operation-shell-close" title="关闭" @click="emit('close')">
+        <button type="button" class="operation-shell-close" :title="t('common.close')" @click="emit('close')">
           <icon icon="action.close" />
         </button>
       </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {useI18n} from "../../i18n";
 import Icon from "../Icon.vue";
 import type {EditorMenuAnchor, EditorMenuName} from "./types.ts";
 
@@ -23,6 +24,8 @@ const emit = defineEmits<{
   (e: "save"): void;
   (e: "close"): void;
 }>();
+
+const {t} = useI18n();
 
 const emitMenuToggle = (menu: EditorMenuName, event: MouseEvent, align: EditorMenuAnchor["align"] = "end") => {
   const target = event.currentTarget as HTMLElement | null;
@@ -54,24 +57,24 @@ const emitMenuToggle = (menu: EditorMenuName, event: MouseEvent, align: EditorMe
 
     <div class="editor-actions">
       <div class="action-cluster mode-cluster">
-        <div class="edit-mode-control" role="group" aria-label="编辑器模式">
+        <div class="edit-mode-control" role="group" :aria-label="t('editor.modeGroup')">
           <button
               type="button"
               :class="{active: !editMode}"
               :disabled="loading || saving"
-              title="查看模式"
+              :title="t('editor.viewMode')"
               @click.stop="emit('update:editMode', false)">
             <icon icon="action.preview" />
-            <span>查看</span>
+            <span>{{ t("editor.view") }}</span>
           </button>
           <button
               type="button"
               :class="{active: editMode}"
               :disabled="loading || saving"
-              title="编辑模式"
+              :title="t('editor.editMode')"
               @click.stop="emit('update:editMode', true)">
             <icon icon="action.edit" />
-            <span>编辑</span>
+            <span>{{ t("editor.edit") }}</span>
           </button>
         </div>
       </div>
@@ -79,30 +82,30 @@ const emitMenuToggle = (menu: EditorMenuName, event: MouseEvent, align: EditorMe
       <div class="action-cluster menu-cluster">
         <button class="menu-button" :class="{active: activeMenu === 'language'}" data-editor-menu-button @click.stop="emitMenuToggle('language', $event, 'start')">
           <icon icon="file.text" />
-          <span>语言：{{ selectedModeName }}</span>
+          <span>{{ t("editor.languageLabel", {name: selectedModeName}) }}</span>
         </button>
         <button class="menu-button" :class="{active: activeMenu === 'theme'}" data-editor-menu-button @click.stop="emitMenuToggle('theme', $event, 'start')">
           <icon icon="action.appearance" />
-          <span>主题：{{ selectedThemeName }}</span>
+          <span>{{ t("editor.themeLabel", {name: selectedThemeName}) }}</span>
         </button>
         <button class="menu-button" :class="{active: activeMenu === 'highlight'}" data-editor-menu-button @click.stop="emitMenuToggle('highlight', $event, 'start')">
           <icon icon="file.code" />
-          <span>高亮：{{ selectedHighlightName }}</span>
+          <span>{{ t("editor.highlightLabel", {name: selectedHighlightName}) }}</span>
         </button>
       </div>
       <span class="toolbar-separator" aria-hidden="true"></span>
       <div class="action-cluster command-cluster">
-        <button class="icon-button" :class="{active: activeMenu === 'settings'}" data-editor-menu-button title="编辑设置" @click.stop="emitMenuToggle('settings', $event)">
+        <button class="icon-button" :class="{active: activeMenu === 'settings'}" data-editor-menu-button :title="t('editor.settings')" @click.stop="emitMenuToggle('settings', $event)">
           <icon icon="action.settings" />
         </button>
-        <button class="icon-button" :disabled="loading" title="重新载入" @click.stop="emit('reload')">
+        <button class="icon-button" :disabled="loading" :title="t('editor.reloadShortcut')" @click.stop="emit('reload')">
           <icon class="icon-motion-spin" :class="{'is-spinning': loading}" icon="action.refresh" />
         </button>
-        <button class="save-button" :disabled="!canSave" title="保存 (Ctrl+S)" @click.stop="emit('save')">
+        <button class="save-button" :disabled="!canSave" :title="t('editor.saveShortcut')" @click.stop="emit('save')">
           <icon icon="action.save" :color="canSave ? 'var(--app-accent-contrast)' : 'var(--app-text-disabled)'" />
-          <span>{{ saving ? "保存中" : "保存" }}</span>
+          <span>{{ saving ? t("editor.saving") : t("editor.save") }}</span>
         </button>
-        <button class="icon-button close-button" title="关闭 (Esc)" @click.stop="emit('close')">
+        <button class="icon-button close-button" :title="t('editor.closeShortcut')" @click.stop="emit('close')">
           <icon icon="action.close" />
         </button>
       </div>

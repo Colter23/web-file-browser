@@ -4,6 +4,8 @@ import type {StyleValue} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import type {ShellNoticePayload} from "../shell/types.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
+import {useI18n} from "../../i18n";
+import type {MessageKey} from "../../i18n";
 import {downloadUrl} from "../../network/api.ts";
 import {formatEntrySize} from "../../utils/file-entry.ts";
 import {
@@ -34,39 +36,39 @@ const playerPositionStorageKey = "explorer.audioPlayer.position";
 const defaultPlayerBottomOffset = 90;
 const legacyPlayerBottomOffset = 16;
 const titleLoopGap = 32;
-const playModeMeta: Record<AudioPlayMode, {label: string; icon: string; title: string}> = {
+const playModeMeta: Record<AudioPlayMode, {labelKey: MessageKey; icon: string; titleKey: MessageKey}> = {
   "sequence": {
-    label: "播完暂停",
+    labelKey: "audio.mode.sequenceLabel",
     icon: "playback.sequence",
-    title: "按列表播放，播完后暂停"
+    titleKey: "audio.mode.sequenceTitle"
   },
   "repeat-one": {
-    label: "单曲循环",
+    labelKey: "audio.mode.repeatOneLabel",
     icon: "playback.repeat-one",
-    title: "循环播放当前音频"
+    titleKey: "audio.mode.repeatOneTitle"
   },
   "repeat-all": {
-    label: "列表循环",
+    labelKey: "audio.mode.repeatAllLabel",
     icon: "playback.repeat-all",
-    title: "列表播完后从头继续"
+    titleKey: "audio.mode.repeatAllTitle"
   },
   "shuffle": {
-    label: "随机播放",
+    labelKey: "audio.mode.shuffleLabel",
     icon: "playback.shuffle",
-    title: "随机播放列表中的音频"
+    titleKey: "audio.mode.shuffleTitle"
   }
 };
-const playerSizeMeta: Record<AudioPlayerSize, {label: string; icon: string}> = {
+const playerSizeMeta: Record<AudioPlayerSize, {labelKey: MessageKey; icon: string}> = {
   large: {
-    label: "大面板",
+    labelKey: "audio.size.large",
     icon: "action.player-small"
   },
   small: {
-    label: "小面板",
+    labelKey: "audio.size.small",
     icon: "action.player-mini"
   },
   mini: {
-    label: "mini 面板",
+    labelKey: "audio.size.mini",
     icon: "action.player-large"
   }
 };
@@ -106,6 +108,7 @@ const emit = defineEmits<{
   (e: "notice", payload: ShellNoticePayload): void;
 }>();
 
+const {t} = useI18n();
 const audioRef = ref<HTMLAudioElement | null>(null);
 const playerRef = ref<HTMLElement | null>(null);
 const playlistRef = ref<HTMLElement | null>(null);
@@ -157,16 +160,19 @@ const canShowNext = computed(() => {
   if (playMode.value === "repeat-all" || playMode.value === "shuffle") return count > 1;
   return currentIndex.value >= 0 && currentIndex.value < count - 1;
 });
-const playTitle = computed(() => isPlaying.value ? "暂停" : "播放");
-const muteTitle = computed(() => muted.value || volume.value === 0 ? "取消静音" : "静音");
-const playlistTitle = computed(() => playlistVisible.value ? "关闭播放列表" : "打开播放列表");
-const playlistCountText = computed(() => `${playlistEntries.value.length} 首`);
-const playModeLabel = computed(() => playModeMeta[playMode.value].label);
+const playTitle = computed(() => isPlaying.value ? t("audio.pause") : t("audio.play"));
+const muteTitle = computed(() => muted.value || volume.value === 0 ? t("audio.unmute") : t("audio.mute"));
+const playlistTitle = computed(() => playlistVisible.value ? t("audio.closePlaylist") : t("audio.openPlaylist"));
+const playlistCountText = computed(() => t("audio.playlistCount", {count: playlistEntries.value.length}));
+const playModeLabel = computed(() => t(playModeMeta[playMode.value].labelKey));
 const playModeIcon = computed(() => playModeMeta[playMode.value].icon);
-const playModeTitle = computed(() => `播放模式：${playModeMeta[playMode.value].title}`);
+const playModeTitle = computed(() => t("audio.playModeTitle", {title: t(playModeMeta[playMode.value].titleKey)}));
 const nextPlayerSize = computed(() => playerSizes[(playerSizes.indexOf(playerSize.value) + 1) % playerSizes.length]);
 const playerSizeIcon = computed(() => playerSizeMeta[playerSize.value].icon);
-const playerSizeTitle = computed(() => `当前${playerSizeMeta[playerSize.value].label}，切换为${playerSizeMeta[nextPlayerSize.value].label}`);
+const playerSizeTitle = computed(() => t("audio.playerSizeTitle", {
+  current: t(playerSizeMeta[playerSize.value].labelKey),
+  next: t(playerSizeMeta[nextPlayerSize.value].labelKey)
+}));
 const miniToolsSide = computed(() => {
   const position = playerPosition.value;
   if (playerSize.value !== "mini" || !position) return "right";
@@ -200,8 +206,8 @@ const subtitle = computed(() => {
   const entry = currentEntry.value;
   if (!entry) return "";
   const countText = playlistEntries.value.length > 1 && currentIndex.value >= 0
-      ? `${currentIndex.value + 1} / ${playlistEntries.value.length} 首`
-      : "1 首";
+      ? t("audio.trackCountWithIndex", {index: currentIndex.value + 1, count: playlistEntries.value.length})
+      : t("audio.trackCount");
   return `${countText} · ${formatEntrySize(entry.size, "0 B")} · ${currentTimeText.value} / ${durationText.value}`;
 });
 const progressMax = computed(() => Number.isFinite(duration.value) && duration.value > 0 ? duration.value : 0);
@@ -218,7 +224,11 @@ const progressHoverPercent = computed(() => `${Math.min(100, Math.max(0, progres
 const progressHoverTimeText = computed(() => timeText(progressHoverRatio.value * progressMax.value));
 const volumePercent = computed(() => `${Math.round(volume.value * 100)}%`);
 const audibleVolumePercent = computed(() => `${Math.round((muted.value ? 0 : volume.value) * 100)}%`);
-const volumeTitle = computed(() => `音量 ${audibleVolumePercent.value}`);
+const volumeTitle = computed(() => t("audio.volumeTitle", {volume: audibleVolumePercent.value}));
+const muteButtonTitle = computed(() => t("audio.currentVolumeTitle", {
+  action: muteTitle.value,
+  volume: audibleVolumePercent.value
+}));
 
 const progressStyle = computed(() => ({
   "--audio-progress": progressPercent.value,
@@ -398,8 +408,8 @@ const playAudio = async () => {
     isPlaying.value = false;
     emit("notice", {
       kind: "warning",
-      title: "无法自动播放",
-      message: "浏览器阻止了本次自动播放，可手动点击播放按钮继续。"
+      title: t("audio.autoPlayFailedTitle"),
+      message: t("audio.autoPlayBlocked")
     });
   }
 }
@@ -695,7 +705,7 @@ const handleEnded = () => {
 const handleError = () => {
   loading.value = false;
   isPlaying.value = false;
-  error.value = "音频加载失败，请检查文件是否仍可读取或浏览器是否支持此格式。";
+  error.value = t("audio.loadFailed");
 }
 
 const handleWindowKeyDown = (event: KeyboardEvent) => {
@@ -811,7 +821,7 @@ onBeforeUnmount(resetPlayer);
 <template>
   <Teleport to="body">
     <Transition name="audio-player">
-      <section v-if="currentEntry" ref="playerRef" :class="playerClass" :style="playerStyle" aria-label="音乐播放器">
+      <section v-if="currentEntry" ref="playerRef" :class="playerClass" :style="playerStyle" :aria-label="t('audio.player')">
         <audio
             ref="audioRef"
             :src="sourceUrl"
@@ -833,8 +843,8 @@ onBeforeUnmount(resetPlayer);
                 class="audio-player-art"
                 :class="{playing: isPlaying}"
                 tabindex="0"
-                title="拖动移动播放器，双击回到底部"
-                aria-label="拖动移动音乐播放器"
+                :title="t('audio.dragReset')"
+                :aria-label="t('audio.dragPlayer')"
                 @pointerdown="startPlayerDrag"
                 @dblclick="resetPlayerPosition"
                 @keydown="handlePlayerHandleKeyDown">
@@ -859,17 +869,17 @@ onBeforeUnmount(resetPlayer);
                     </span>
                   </strong>
                 </div>
-                <div class="audio-player-compact-controls" aria-label="播放控制">
+                <div class="audio-player-compact-controls" :aria-label="t('audio.playControls')">
                   <button class="mode-button" :title="playModeTitle" @click="togglePlayMode">
                     <icon :icon="playModeIcon" color="currentColor" />
                   </button>
-                  <button class="track-button" title="上一首" :disabled="!canShowPrevious" @click="showPreviousTrack">
+                  <button class="track-button" :title="t('audio.previous')" :disabled="!canShowPrevious" @click="showPreviousTrack">
                     <icon icon="action.previous" color="currentColor" />
                   </button>
                   <button class="play-button" :title="playTitle" @click="togglePlay">
                     <icon :icon="isPlaying ? 'action.pause' : 'action.play'" color="currentColor" />
                   </button>
-                  <button class="track-button" title="下一首" :disabled="!canShowNext" @click="showNextTrack">
+                  <button class="track-button" :title="t('audio.next')" :disabled="!canShowNext" @click="showNextTrack">
                     <icon icon="action.next" color="currentColor" />
                   </button>
                   <button
@@ -885,7 +895,7 @@ onBeforeUnmount(resetPlayer);
               </div>
               <div class="audio-player-subtitle">{{ subtitle }}</div>
               <div v-if="loading || error" class="audio-player-status" :class="{error: Boolean(error)}">
-                {{ error || "正在加载音频..." }}
+                {{ error || t("audio.loading") }}
               </div>
             </div>
           </div>
@@ -895,13 +905,13 @@ onBeforeUnmount(resetPlayer);
               <icon :icon="playModeIcon" color="currentColor" />
               <span>{{ playModeLabel }}</span>
             </button>
-            <button class="track-button" title="上一首" :disabled="!canShowPrevious" @click="showPreviousTrack">
+            <button class="track-button" :title="t('audio.previous')" :disabled="!canShowPrevious" @click="showPreviousTrack">
               <icon icon="action.previous" color="currentColor" />
             </button>
             <button class="play-button" :title="playTitle" @click="togglePlay">
               <icon :icon="isPlaying ? 'action.pause' : 'action.play'" color="currentColor" />
             </button>
-            <button class="track-button" title="下一首" :disabled="!canShowNext" @click="showNextTrack">
+            <button class="track-button" :title="t('audio.next')" :disabled="!canShowNext" @click="showNextTrack">
               <icon icon="action.next" color="currentColor" />
             </button>
             <button
@@ -921,23 +931,23 @@ onBeforeUnmount(resetPlayer);
                 :volume="volume"
                 :volume-style="volumeStyle"
                 :volume-title="volumeTitle"
-                :mute-title="muteTitle"
+                :mute-button-title="muteButtonTitle"
                 :audible-volume-percent="audibleVolumePercent"
                 :variant="playerSize === 'large' ? 'inline' : 'floating'"
                 @toggle-mute="toggleMute"
                 @update-volume="updateVolume" />
-            <button class="icon-action download-action" title="下载" @click="downloadCurrent">
+            <button class="icon-action download-action" :title="t('common.download')" @click="downloadCurrent">
               <icon icon="action.download" color="currentColor" />
             </button>
             <button class="icon-action size-action" :title="playerSizeTitle" @click="cyclePlayerSize">
               <icon :icon="playerSizeIcon" color="currentColor" />
             </button>
-            <button class="icon-action close-action" title="关闭播放器" @click="close">
+            <button class="icon-action close-action" :title="t('audio.closePlayer')" @click="close">
               <icon icon="action.close" color="currentColor" />
             </button>
           </div>
 
-          <div class="audio-player-mini-tools" aria-label="mini 播放器工具">
+          <div class="audio-player-mini-tools" :aria-label="t('audio.playlistTools')">
             <button
                 class="icon-action playlist-action"
                 :class="{active: playlistVisible}"
@@ -952,7 +962,7 @@ onBeforeUnmount(resetPlayer);
                 :volume="volume"
                 :volume-style="volumeStyle"
                 :volume-title="volumeTitle"
-                :mute-title="muteTitle"
+                :mute-button-title="muteButtonTitle"
                 :audible-volume-percent="audibleVolumePercent"
                 variant="floating"
                 @toggle-mute="toggleMute"
@@ -960,7 +970,7 @@ onBeforeUnmount(resetPlayer);
             <button class="icon-action size-action" :title="playerSizeTitle" @click="cyclePlayerSize">
               <icon :icon="playerSizeIcon" color="currentColor" />
             </button>
-            <button class="icon-action close-action" title="关闭播放器" @click="close">
+            <button class="icon-action close-action" :title="t('audio.closePlayer')" @click="close">
               <icon icon="action.close" color="currentColor" />
             </button>
           </div>
@@ -984,7 +994,7 @@ onBeforeUnmount(resetPlayer);
               :max="progressMax"
               step="0.1"
               :value="currentTime"
-              aria-label="播放进度"
+              :aria-label="t('audio.progress')"
               @input="updateProgress">
           <span class="audio-player-time-badge">{{ progressHoverTimeText }}</span>
         </div>
@@ -997,13 +1007,13 @@ onBeforeUnmount(resetPlayer);
           ref="playlistRef"
           class="audio-playlist"
           :style="playlistStyle"
-          aria-label="播放列表">
+          :aria-label="t('audio.playlist')">
         <div class="audio-playlist-header">
           <div>
-            <strong>播放列表</strong>
+            <strong>{{ t("audio.playlist") }}</strong>
             <span>{{ playlistCountText }}</span>
           </div>
-          <button title="关闭播放列表" @click="playlistVisible = false">
+          <button :title="t('audio.closePlaylist')" @click="playlistVisible = false">
             <icon icon="action.close" color="currentColor" />
           </button>
         </div>

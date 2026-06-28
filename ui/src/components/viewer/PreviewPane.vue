@@ -4,6 +4,7 @@ import type {ExplorerEntry} from "../explorer/types.ts";
 import FileTypeIcon from "../FileTypeIcon.vue";
 import Icon from "../Icon.vue";
 import type {ShellNoticePayload} from "../shell/types.ts";
+import {useI18n} from "../../i18n";
 import {entryMetaRows, entryPreviewKind, entryPreviewTypeText, fileEntryIconKind, isEditableEntry} from "../../utils/file-entry.ts";
 import PreviewHeader from "./PreviewHeader.vue";
 import PreviewAudioView from "./PreviewAudioView.vue";
@@ -34,12 +35,13 @@ const emit = defineEmits<{
   (e: "notice", payload: ShellNoticePayload): void;
 }>();
 
+const {t} = useI18n();
 const previewKind = computed<PreviewKind>(() => entryPreviewKind(props.entry, props.editableExtensions));
 const previewTypeText = computed(() => entryPreviewTypeText(previewKind.value));
 
-const previewTitleText = computed(() => props.entry?.name ?? "预览窗格");
-const previewSubtitleText = computed(() => props.entry ? previewTypeText.value : "选择一个文件");
-const emptyTitleText = computed(() => props.emptyTitle || "选择一个文件以预览");
+const previewTitleText = computed(() => props.entry?.name ?? t("preview.paneTitle"));
+const previewSubtitleText = computed(() => props.entry ? previewTypeText.value : t("preview.selectFile"));
+const emptyTitleText = computed(() => props.emptyTitle || t("preview.selectFileToPreview"));
 const emptySubtitleText = computed(() => props.emptySubtitle || "");
 const emptyIconName = computed(() => props.emptyIcon || "file.file");
 const previewIconKind = computed(() => props.entry ? fileEntryIconKind(props.entry, props.editableExtensions) : null);
@@ -96,8 +98,8 @@ const downloadPreview = () => {
     </div>
     <div v-else class="preview-placeholder">
       <icon icon="file.file" size="3rem" />
-      <span>暂不支持预览此类型</span>
-      <button @click="downloadPreview">下载文件</button>
+      <span>{{ t("preview.unsupported") }}</span>
+      <button @click="downloadPreview">{{ t("preview.downloadFile") }}</button>
     </div>
   </div>
 </template>

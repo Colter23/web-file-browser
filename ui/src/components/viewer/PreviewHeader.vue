@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Icon from "../Icon.vue";
+import {useI18n} from "../../i18n";
 
 defineProps<{
   title: string;
@@ -13,6 +14,8 @@ const emit = defineEmits<{
   (e: "download"): void;
   (e: "close"): void;
 }>();
+
+const {t} = useI18n();
 </script>
 
 <template>
@@ -29,13 +32,13 @@ const emit = defineEmits<{
       </div>
     </div>
     <div class="preview-actions">
-      <button v-if="canEdit" title="编辑" aria-label="编辑" @click="emit('edit')">
+      <button v-if="canEdit" :title="t('preview.edit')" :aria-label="t('preview.edit')" @click="emit('edit')">
         <icon icon="action.edit" />
       </button>
-      <button v-if="canDownload" title="下载" aria-label="下载" @click="emit('download')">
+      <button v-if="canDownload" :title="t('preview.download')" :aria-label="t('preview.download')" @click="emit('download')">
         <icon icon="action.download" />
       </button>
-      <button title="关闭预览" aria-label="关闭预览" @click="emit('close')">
+      <button :title="t('preview.close')" :aria-label="t('preview.close')" @click="emit('close')">
         <icon icon="action.close" />
       </button>
     </div>

@@ -1,5 +1,6 @@
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import type {ShellNoticeKind} from "../components/shell/types.ts";
+import {useI18n} from "../i18n";
 import {useFileClipboardOperations} from "./useFileClipboardOperations.ts";
 import {useFileMutationOperations} from "./useFileMutationOperations.ts";
 import {useFileOperationPanels} from "./useFileOperationPanels.ts";
@@ -40,6 +41,7 @@ export const useFileOperations = ({
   focusDeleteConfirm,
   focusPropertiesPanel
 }: FileOperationsOptions) => {
+  const {t} = useI18n();
   const {
     operationPanel,
     deleteConfirm,
@@ -112,7 +114,7 @@ export const useFileOperations = ({
 
   const showProperties = async (entries = selectedEntries()) => {
     if (!entries.length) {
-      showNotice("请选择文件或文件夹", "warning");
+      showNotice(t("clipboard.selectFileOrFolder"), "warning");
       return;
     }
     await openPropertiesPanel(entries);

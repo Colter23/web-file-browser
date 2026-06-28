@@ -2,6 +2,7 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import type {ShellNoticePayload} from "../shell/types.ts";
+import {useI18n} from "../../i18n";
 import {downloadUrl} from "../../network/api.ts";
 import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
 import {readBooleanStorage, readNumberStorage, writeBooleanStorage, writeNumberStorage} from "../../utils/safe-storage.ts";
@@ -28,6 +29,7 @@ const emit = defineEmits<{
   (e: "notice", payload: ShellNoticePayload): void;
 }>();
 
+const {t} = useI18n();
 const viewerRef = ref<HTMLElement | null>(null);
 const videoRef = ref<HTMLVideoElement | null>(null);
 const loading = ref(false);
@@ -73,11 +75,11 @@ const currentIndex = computed(() => {
 const videoCount = computed(() => props.entries.length);
 const canShowPrevious = computed(() => currentIndex.value > 0);
 const canShowNext = computed(() => currentIndex.value >= 0 && currentIndex.value < props.entries.length - 1);
-const pageFullscreenTitle = computed(() => pageFullscreen.value ? "退出网页全屏 (F)" : "网页全屏 (F)");
-const browserFullscreenTitle = computed(() => browserFullscreen.value ? "退出浏览器全屏" : "浏览器全屏");
-const autoPlayTitle = computed(() => autoPlay.value ? "关闭自动播放" : "开启自动播放");
-const playTitle = computed(() => playing.value ? "暂停视频 (Space)" : "播放视频 (Space)");
-const muteTitle = computed(() => muted.value || volume.value === 0 ? "取消静音" : "静音");
+const pageFullscreenTitle = computed(() => pageFullscreen.value ? t("viewer.exitPageFullscreen") : t("viewer.pageFullscreen"));
+const browserFullscreenTitle = computed(() => browserFullscreen.value ? t("viewer.exitBrowserFullscreen") : t("viewer.browserFullscreen"));
+const autoPlayTitle = computed(() => autoPlay.value ? t("viewer.videoAutoPlayOn") : t("viewer.videoAutoPlayOff"));
+const playTitle = computed(() => playing.value ? t("viewer.videoPause") : t("viewer.videoPlay"));
+const muteTitle = computed(() => muted.value || volume.value === 0 ? t("viewer.unmute") : t("viewer.mute"));
 const pageFullscreenIcon = computed(() => pageFullscreen.value ? "viewer.page-fullscreen-off" : "viewer.page-fullscreen");
 const browserFullscreenIcon = computed(() => browserFullscreen.value ? "viewer.browser-fullscreen-off" : "viewer.browser-fullscreen");
 const progressMax = computed(() => Number.isFinite(duration.value) && duration.value > 0 ? duration.value : 0);
@@ -226,8 +228,8 @@ const toggleBrowserFullscreen = async () => {
   } catch {
     emit("notice", {
       kind: "warning",
-      title: "无法全屏",
-      message: "当前浏览器未允许进入全屏，仍可在页面内播放视频。"
+      title: t("viewer.fullscreenFailedTitle"),
+      message: t("viewer.videoFullscreenFailed")
     });
   }
 }
@@ -251,10 +253,10 @@ const playCurrentVideo = async (source: "auto" | "manual" = "auto") => {
     shouldResumePlayback.value = false;
     emit("notice", {
       kind: "warning",
-      title: source === "auto" ? "无法自动播放" : "无法播放",
+      title: source === "auto" ? t("viewer.autoPlayFailedTitle") : t("viewer.playFailedTitle"),
       message: source === "auto"
-          ? "浏览器阻止了本次自动播放，可手动点击视频控件继续播放。"
-          : "浏览器没有成功开始播放，请检查文件是否可播放。"
+          ? t("viewer.autoPlayBlocked")
+          : t("viewer.videoPlayFailed")
     });
   }
 }
@@ -345,7 +347,7 @@ const handleReady = () => {
 
 const handleError = () => {
   loading.value = false;
-  error.value = "视频加载失败，请检查文件是否仍可读取或浏览器是否支持此格式。";
+  error.value = t("viewer.videoLoadFailed");
   shouldResumePlayback.value = false;
 }
 
@@ -601,10 +603,10 @@ onBeforeUnmount(() => {
         @keydown.esc.prevent.stop="close">
       <viewer-toolbar kind="video" :name="currentEntry.name" :extension="currentEntry.extension" :subtitle="subtitle" icon-tone="video">
         <viewer-action-group>
-          <button title="上一个视频 (←)" :disabled="!canShowPrevious" @click="showAdjacent(-1)">
+          <button :title="t('viewer.previousVideo')" :disabled="!canShowPrevious" @click="showAdjacent(-1)">
             <icon icon="action.previous" color="currentColor" size="1.1rem" />
           </button>
-          <button title="下一个视频 (→)" :disabled="!canShowNext" @click="showAdjacent(1)">
+          <button :title="t('viewer.nextVideo')" :disabled="!canShowNext" @click="showAdjacent(1)">
             <icon icon="action.next" color="currentColor" size="1.1rem" />
           </button>
         </viewer-action-group>
@@ -616,7 +618,7 @@ onBeforeUnmount(() => {
               :aria-pressed="autoPlay"
               @click="toggleAutoPlay">
             <icon icon="action.play" color="currentColor" />
-            <span>自动播放</span>
+            <span>{{ t("viewer.autoPlay") }}</span>
             <span class="video-switch" aria-hidden="true"></span>
           </button>
         </viewer-action-group>
@@ -629,10 +631,10 @@ onBeforeUnmount(() => {
           </button>
         </viewer-action-group>
         <viewer-action-group>
-          <button title="下载" @click="downloadCurrent">
+          <button :title="t('common.download')" @click="downloadCurrent">
             <icon icon="action.download" color="currentColor" />
           </button>
-          <button title="关闭" @click="close">
+          <button :title="t('common.close')" @click="close">
             <icon icon="action.close" color="currentColor" />
           </button>
         </viewer-action-group>
@@ -683,14 +685,14 @@ onBeforeUnmount(() => {
                       :max="progressMax"
                       step="0.1"
                       :value="currentTime"
-                      aria-label="视频播放进度"
+                      :aria-label="t('viewer.videoProgress')"
                       @input="updateProgress"
                       @change="updateProgress">
                   <span class="video-progress-track" aria-hidden="true"></span>
                   <span class="video-progress-badge">{{ progressHoverTimeText }}</span>
                 </div>
                 <div class="video-volume" :style="volumeStyle">
-                  <button :title="`${muteTitle}，当前音量 ${audibleVolumePercent}`" @click="toggleMute">
+                  <button :title="t('viewer.currentVolume', {action: muteTitle, volume: audibleVolumePercent})" @click="toggleMute">
                     <icon :icon="muted || volume === 0 ? 'action.volume-muted' : 'action.volume'" color="currentColor" />
                   </button>
                   <div
@@ -709,7 +711,7 @@ onBeforeUnmount(() => {
                         max="1"
                         step="0.01"
                         :value="muted ? 0 : volume"
-                        aria-label="视频音量"
+                        :aria-label="t('viewer.videoVolume')"
                         @input="updateVolume"
                         @change="finishVolumeAdjust">
                     <span class="video-volume-badge">{{ volumeHoverText }}</span>
@@ -719,7 +721,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
-        <viewer-status v-if="loading">正在加载视频...</viewer-status>
+        <viewer-status v-if="loading">{{ t("viewer.videoLoading") }}</viewer-status>
         <viewer-status v-if="error" tone="error">{{ error }}</viewer-status>
       </div>
     </section>

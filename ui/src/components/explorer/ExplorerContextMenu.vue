@@ -4,6 +4,8 @@ import type {ExplorerEntry} from "./types.ts";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
 import {useViewportMenuPosition} from "../../composables/useViewportMenuPosition.ts";
+import type {MessageKey} from "../../i18n";
+import {useI18n} from "../../i18n";
 import Icon from "../Icon.vue";
 
 const props = defineProps<{
@@ -55,6 +57,7 @@ const emit = defineEmits<{
   (e: "clear-selection"): void;
 }>();
 
+const {t} = useI18n();
 const menuRef = ref<HTMLElement | null>(null);
 const {menuPosition, placeMenu} = useViewportMenuPosition({menuRef});
 
@@ -66,8 +69,10 @@ const hasFavoriteAction = computed(() => props.canFavorite);
 const hasViewerAction = computed(() => props.canViewImage || props.canPlayAudio || props.canViewVideo || props.canViewPdf || props.canEdit || canPreviewEntry.value);
 const hasTransferAction = computed(() => props.canPaste || props.selectionCount > 0 || props.canExtract || canDownloadEntry.value);
 
-const contextLabel = (single: string, multiple: string) => {
-  return isMultiSelect.value ? `${multiple}（${props.selectionCount} 项）` : single;
+const contextLabel = (singleKey: MessageKey, multipleKey: MessageKey) => {
+  return isMultiSelect.value
+      ? t("context.actionWithCount", {action: t(multipleKey), count: props.selectionCount})
+      : t(singleKey);
 }
 
 const {
@@ -107,6 +112,8 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
     <div
         ref="menuRef"
         class="context-menu"
+        role="menu"
+        :aria-label="t('context.menu')"
         :style="{left: `${menuPosition.x}px`, top: `${menuPosition.y}px`}"
         @click.stop
         @contextmenu.prevent.stop
@@ -114,116 +121,116 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
       <template v-if="background">
         <button class="context-row" @click="emit('create-file')">
           <span class="context-row-icon"><icon icon="action.new-file" /></span>
-          <span class="context-row-label">新建文件</span>
+          <span class="context-row-label">{{ t("common.createFile") }}</span>
         </button>
         <button class="context-row" @click="emit('create-folder')">
           <span class="context-row-icon"><icon icon="action.new-folder" /></span>
-          <span class="context-row-label">新建文件夹</span>
+          <span class="context-row-label">{{ t("common.createFolder") }}</span>
         </button>
         <div class="context-separator"></div>
         <button class="context-row" :disabled="!canPaste" @click="emit('paste')">
           <span class="context-row-icon"><icon icon="action.paste" /></span>
-          <span class="context-row-label">粘贴</span>
+          <span class="context-row-label">{{ t("common.paste") }}</span>
           <span class="context-row-shortcut">Ctrl+V</span>
         </button>
         <button class="context-row" @click="emit('copy-path')">
           <span class="context-row-icon"><icon icon="action.copy-path" /></span>
-          <span class="context-row-label">复制当前路径</span>
+          <span class="context-row-label">{{ t("context.copyCurrentPath") }}</span>
         </button>
         <div class="context-separator"></div>
         <button class="context-row" :disabled="!hasEntries" @click="emit('select-all')">
           <span class="context-row-icon"><icon icon="action.select-all" /></span>
-          <span class="context-row-label">全选</span>
+          <span class="context-row-label">{{ t("context.selectAll") }}</span>
           <span class="context-row-shortcut">Ctrl+A</span>
         </button>
         <button class="context-row" :disabled="!hasEntries" @click="emit('invert-selection')">
           <span class="context-row-icon"><icon icon="action.invert-selection" /></span>
-          <span class="context-row-label">反向选择</span>
+          <span class="context-row-label">{{ t("context.invertSelection") }}</span>
         </button>
         <button class="context-row" :disabled="!hasSelection" @click="emit('clear-selection')">
           <span class="context-row-icon"><icon icon="action.clear-selection" /></span>
-          <span class="context-row-label">取消选择</span>
+          <span class="context-row-label">{{ t("context.clearSelection") }}</span>
         </button>
       </template>
 
       <template v-else>
-        <div class="context-quick-actions" aria-label="常用操作">
+        <div class="context-quick-actions" :aria-label="t('context.quickActions')">
           <button
               class="context-quick-button"
               :disabled="!selectionCount"
-              :title="`${contextLabel('剪切', '剪切选中项')} (Ctrl+X)`"
+              :title="`${contextLabel('common.cut', 'context.cutSelected')} (Ctrl+X)`"
               @click="emit('cut')">
             <icon icon="action.cut" />
-            <span>剪切</span>
+            <span>{{ t("common.cut") }}</span>
           </button>
           <button
               class="context-quick-button"
               :disabled="!selectionCount"
-              :title="`${contextLabel('复制', '复制选中项')} (Ctrl+C)`"
+              :title="`${contextLabel('common.copy', 'context.copySelected')} (Ctrl+C)`"
               @click="emit('copy')">
             <icon icon="action.copy" />
-            <span>复制</span>
+            <span>{{ t("common.copy") }}</span>
           </button>
           <button
               class="context-quick-button"
               :disabled="!primaryEntry || isMultiSelect"
-              title="重命名"
+              :title="t('common.rename')"
               @click="emit('rename')">
             <icon icon="action.rename" />
-            <span>重命名</span>
+            <span>{{ t("common.rename") }}</span>
           </button>
           <button
               class="context-quick-button danger"
               :disabled="!primaryEntry"
-              :title="contextLabel('删除', '删除选中项')"
+              :title="contextLabel('common.delete', 'context.deleteSelected')"
               @click="emit('delete')">
             <icon icon="action.delete" />
-            <span>删除</span>
+            <span>{{ t("common.delete") }}</span>
           </button>
         </div>
         <div class="context-separator"></div>
         <button class="context-row" @click="emit('open')">
           <span class="context-row-icon"><icon icon="action.open" /></span>
-          <span class="context-row-label">打开</span>
+          <span class="context-row-label">{{ t("context.open") }}</span>
           <span class="context-row-shortcut">Enter</span>
         </button>
         <button v-if="canOpenNewTab" class="context-row" @click="emit('open-new-tab')">
           <span class="context-row-icon"><icon icon="action.open-new-tab" /></span>
-          <span class="context-row-label">在新标签页中打开</span>
+          <span class="context-row-label">{{ t("context.openNewTab") }}</span>
         </button>
         <button v-if="favorite && canFavorite" class="context-row" @click="emit('remove-favorite')">
           <span class="context-row-icon favorite"><icon icon="action.favorite-filled" /></span>
-          <span class="context-row-label">从收藏夹移除</span>
+          <span class="context-row-label">{{ t("context.removeFavorite") }}</span>
         </button>
         <button v-else-if="hasFavoriteAction" class="context-row" @click="emit('add-favorite')">
           <span class="context-row-icon favorite"><icon icon="action.favorite" /></span>
-          <span class="context-row-label">添加到收藏夹</span>
+          <span class="context-row-label">{{ t("context.addFavorite") }}</span>
         </button>
         <template v-if="hasViewerAction">
           <div class="context-separator"></div>
           <button v-if="canViewImage" class="context-row" @click="emit('view-image')">
             <span class="context-row-icon"><icon icon="view.image" /></span>
-            <span class="context-row-label">查看图片</span>
+            <span class="context-row-label">{{ t("context.viewImage") }}</span>
           </button>
           <button v-if="canPlayAudio" class="context-row" @click="emit('play-audio')">
             <span class="context-row-icon"><icon icon="view.audio" /></span>
-            <span class="context-row-label">播放音乐</span>
+            <span class="context-row-label">{{ t("context.playAudio") }}</span>
           </button>
           <button v-if="canViewVideo" class="context-row" @click="emit('view-video')">
             <span class="context-row-icon"><icon icon="view.video" /></span>
-            <span class="context-row-label">播放视频</span>
+            <span class="context-row-label">{{ t("context.playVideo") }}</span>
           </button>
           <button v-if="canViewPdf" class="context-row" @click="emit('view-pdf')">
             <span class="context-row-icon"><icon icon="view.pdf" /></span>
-            <span class="context-row-label">查看 PDF</span>
+            <span class="context-row-label">{{ t("context.viewPdf") }}</span>
           </button>
           <button v-if="canEdit" class="context-row" @click="emit('edit')">
             <span class="context-row-icon"><icon icon="action.edit" /></span>
-            <span class="context-row-label">编辑</span>
+            <span class="context-row-label">{{ t("context.edit") }}</span>
           </button>
           <button v-if="canPreviewEntry" class="context-row" @click="emit('preview')">
             <span class="context-row-icon"><icon icon="action.preview" /></span>
-            <span class="context-row-label">预览</span>
+            <span class="context-row-label">{{ t("common.preview") }}</span>
             <span class="context-row-shortcut">Space</span>
           </button>
         </template>
@@ -231,30 +238,30 @@ watch(() => [props.background, props.x, props.y, props.primaryEntry?.path, props
           <div class="context-separator"></div>
           <button v-if="canPaste" class="context-row" @click="emit('paste')">
             <span class="context-row-icon"><icon icon="action.paste" /></span>
-            <span class="context-row-label">粘贴</span>
+            <span class="context-row-label">{{ t("common.paste") }}</span>
             <span class="context-row-shortcut">Ctrl+V</span>
           </button>
           <button v-if="selectionCount" class="context-row" @click="emit('copy-path')">
             <span class="context-row-icon"><icon icon="action.copy-path" /></span>
-            <span class="context-row-label">{{ contextLabel("复制路径", "复制选中项路径") }}</span>
+            <span class="context-row-label">{{ contextLabel("context.copyPath", "context.copySelectedPaths") }}</span>
           </button>
           <button v-if="canDownloadEntry" class="context-row" @click="emit('download')">
             <span class="context-row-icon"><icon icon="action.download" /></span>
-            <span class="context-row-label">下载</span>
+            <span class="context-row-label">{{ t("common.download") }}</span>
           </button>
           <button v-if="selectionCount" class="context-row" @click="emit('archive')">
             <span class="context-row-icon"><icon icon="action.archive" /></span>
-            <span class="context-row-label">{{ contextLabel("压缩", "压缩选中项") }}</span>
+            <span class="context-row-label">{{ contextLabel("common.archive", "context.archiveSelected") }}</span>
           </button>
           <button v-if="canExtract" class="context-row" @click="emit('extract')">
             <span class="context-row-icon"><icon icon="action.extract" /></span>
-            <span class="context-row-label">解压</span>
+            <span class="context-row-label">{{ t("common.extract") }}</span>
           </button>
         </template>
         <div v-if="selectionCount" class="context-separator"></div>
         <button v-if="selectionCount" class="context-row" @click="emit('properties')">
           <span class="context-row-icon"><icon icon="action.properties" /></span>
-          <span class="context-row-label">属性</span>
+          <span class="context-row-label">{{ t("context.properties") }}</span>
           <span class="context-row-shortcut">Alt+Enter</span>
         </button>
       </template>

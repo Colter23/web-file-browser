@@ -3,9 +3,11 @@ import {computed, onMounted, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {getSession, login, setupPassword} from "../network/api";
 import {isApiError} from "../network";
+import {useI18n} from "../i18n";
 
 const route = useRoute();
 const router = useRouter();
+const {t} = useI18n();
 const password = ref("");
 const confirmPassword = ref("");
 const loading = ref(false);
@@ -13,8 +15,12 @@ const checkingSession = ref(true);
 const errorMessage = ref("");
 const authConfigured = ref(true);
 const setupMode = computed(() => !authConfigured.value);
-const titleText = computed(() => setupMode.value ? "首次设置管理员密码" : "管理员登录");
+const titleText = computed(() => setupMode.value ? t("login.initialSetup") : t("login.adminLogin"));
 const passwordAutocomplete = computed(() => setupMode.value ? "new-password" : "current-password");
+const submitText = computed(() => {
+  if (loading.value) return setupMode.value ? t("login.settingUp") : t("login.loggingIn");
+  return setupMode.value ? t("login.setupAndEnter") : t("login.submit");
+});
 const canSubmit = computed(() => {
   if (checkingSession.value || loading.value || password.value.length < 8) return false;
   return !setupMode.value || confirmPassword.value.length >= 8;
@@ -33,7 +39,7 @@ onMounted(async () => {
       await router.replace(redirectPath());
     }
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "读取会话失败";
+    errorMessage.value = error instanceof Error ? error.message : t("login.sessionFailed");
   } finally {
     checkingSession.value = false;
   }
@@ -41,11 +47,11 @@ onMounted(async () => {
 
 const validate = () => {
   if (password.value.length < 8) {
-    errorMessage.value = "密码至少需要 8 个字符";
+    errorMessage.value = t("login.passwordTooShort");
     return false;
   }
   if (setupMode.value && password.value !== confirmPassword.value) {
-    errorMessage.value = "两次输入的密码不一致";
+    errorMessage.value = t("login.passwordMismatch");
     return false;
   }
   return true;
@@ -56,8 +62,8 @@ const handleAuthConflict = (error: unknown, wasSetupMode: boolean) => {
   confirmPassword.value = "";
   authConfigured.value = wasSetupMode;
   errorMessage.value = wasSetupMode
-      ? "管理员密码已经初始化，请直接登录"
-      : "管理员密码尚未初始化，请先设置密码";
+      ? t("login.alreadySetup")
+      : t("login.needsSetup");
   return true;
 }
 
@@ -76,7 +82,7 @@ const submit = async () => {
     if (!handleAuthConflict(error, wasSetupMode)) {
       errorMessage.value = error instanceof Error
           ? error.message
-          : wasSetupMode ? "设置密码失败" : "登录失败";
+          : wasSetupMode ? t("login.setupFailed") : t("login.loginFailed");
     }
   } finally {
     loading.value = false;
@@ -93,7 +99,7 @@ const submit = async () => {
       </div>
 
       <label class="field">
-        <span>管理员密码</span>
+        <span>{{ t("login.adminPassword") }}</span>
         <input
             v-model="password"
             type="password"
@@ -103,17 +109,17 @@ const submit = async () => {
       </label>
 
       <label v-if="setupMode" class="field">
-        <span>确认密码</span>
+        <span>{{ t("login.confirmPassword") }}</span>
         <input v-model="confirmPassword" type="password" minlength="8" autocomplete="new-password">
       </label>
 
       <div v-if="setupMode" class="hint">
-        管理员密码尚未初始化。设置完成后会自动登录，后端只保存密码哈希。
+        {{ t("login.setupHint") }}
       </div>
       <div v-if="errorMessage" class="message">{{ errorMessage }}</div>
 
       <button class="primary-button" type="submit" :disabled="!canSubmit">
-        {{ loading ? (setupMode ? "设置中" : "登录中") : (setupMode ? "设置并进入" : "登录") }}
+        {{ submitText }}
       </button>
     </form>
   </div>

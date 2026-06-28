@@ -1,5 +1,7 @@
 import {computed, reactive, ref} from "vue";
 import type {DetailsColumnKey} from "../components/explorer/types.ts";
+import type {MessageKey} from "../i18n";
+import {useI18n} from "../i18n";
 import {readJsonStorage, writeJsonStorage} from "../utils/safe-storage.ts";
 
 type DetailsColumnFitOptions<Entry> = {
@@ -30,11 +32,11 @@ const maxWidths: DetailsColumnWidths = {
   size: 220
 };
 
-const labels: Record<DetailsColumnKey, string> = {
-  name: "名称",
-  modified: "修改日期",
-  type: "类型",
-  size: "大小"
+const labelKeys: Record<DetailsColumnKey, MessageKey> = {
+  name: "sort.name",
+  modified: "sort.modified",
+  type: "sort.type",
+  size: "sort.size"
 };
 
 const textExtraWidths: Record<DetailsColumnKey, number> = {
@@ -90,6 +92,7 @@ const readFont = (viewport: HTMLElement | null, selector: string) => {
 }
 
 export const useDetailsColumns = () => {
+  const {t} = useI18n();
   const widths = ref<DetailsColumnWidths>(readWidths());
   const resizeState = reactive<{key: DetailsColumnKey | null; startX: number; startWidth: number}>({
     key: null,
@@ -140,7 +143,7 @@ export const useDetailsColumns = () => {
   const fitColumnToContent = <Entry>(key: DetailsColumnKey, options: DetailsColumnFitOptions<Entry>) => {
     const rowFont = readFont(options.viewport, ".entry-item");
     const headerFont = readFont(options.viewport, ".details-header");
-    const headerWidth = measureTextWidth(labels[key], headerFont) + headerExtraWidths[key];
+    const headerWidth = measureTextWidth(t(labelKeys[key]), headerFont) + headerExtraWidths[key];
     const contentWidth = options.entries.reduce((maxWidth, entry) => {
       const textWidth = measureTextWidth(options.value(entry, key), rowFont) + textExtraWidths[key];
       return Math.max(maxWidth, textWidth);

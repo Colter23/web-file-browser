@@ -1,6 +1,7 @@
 import {ref} from "vue";
 import type {IndexStatus} from "../class.ts";
 import type {ShellNoticeKind} from "../components/shell/types.ts";
+import {translate} from "../i18n";
 
 type SearchIndexStatusHintOptions = {
   getIndexStatus: () => Promise<IndexStatus>;
@@ -21,32 +22,34 @@ const indexStateNotice = (status: IndexStatus): {
     return {
       key: "disabled",
       kind: "warning",
-      title: "搜索索引未启用",
-      message: "当前后端未启用搜索索引，索引搜索可能没有结果。"
+      title: translate("search.indexDisabledTitle"),
+      message: translate("search.indexDisabledMessage")
     };
   }
   if (status.state === "building") {
     return {
       key: `building:${status.indexedEntries}`,
       kind: "info",
-      title: "索引重建中",
-      message: `搜索索引正在重建，当前已索引 ${status.indexedEntries ?? 0} 项，结果可能暂时不完整。`
+      title: translate("search.indexBuildingTitle"),
+      message: translate("search.indexBuildingMessage", {count: status.indexedEntries ?? 0})
     };
   }
   if (status.state === "error") {
     return {
       key: `error:${status.lastError ?? ""}`,
       kind: "error",
-      title: "搜索索引异常",
-      message: status.lastError ? `搜索索引异常：${status.lastError}` : "搜索索引状态异常，结果可能不可用。"
+      title: translate("search.indexErrorTitle"),
+      message: status.lastError
+          ? translate("search.indexErrorMessage", {error: status.lastError})
+          : translate("search.indexErrorFallback")
     };
   }
   if (status.indexedEntries === 0) {
     return {
       key: "empty",
       kind: "warning",
-      title: "搜索索引为空",
-      message: "搜索索引目前没有已索引项目，搜索可能没有结果。"
+      title: translate("search.indexEmptyTitle"),
+      message: translate("search.indexEmptyMessage")
     };
   }
   return null;
@@ -86,9 +89,9 @@ export const useSearchIndexStatusHint = ({
       searchIndexStatus.value = null;
       showThrottledNotice(
         "unknown",
-        "无法读取搜索索引状态，仍会尝试搜索。",
+        translate("search.indexUnknownMessage"),
         "warning",
-        "搜索状态未知"
+        translate("search.indexUnknownTitle")
       );
     }
   }

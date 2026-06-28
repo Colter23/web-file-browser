@@ -1,7 +1,8 @@
-import {computed, nextTick, ref} from "vue";
+import {computed, nextTick, ref, watch} from "vue";
 import type {Ref} from "vue";
 import type {DirDetail, DirEntryFilter, DirSortKey, FileInfo, FolderData, FolderQueryParams, SearchResult, SearchScope} from "../class.ts";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
+import {useI18n} from "../i18n";
 import {getFolderData} from "../network/file-api.ts";
 import {getRecentEntries, searchEntries} from "../network/search-api.ts";
 import {useFileStore} from "../store";
@@ -116,16 +117,39 @@ const compareResultEntries = (left: ExplorerEntry, right: ExplorerEntry, key: Di
 
 export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderDataOptions) => {
   const fileStore = useFileStore();
+  const {locale, t} = useI18n();
   const folderData = ref<FolderData>({path: "/", folder: [], file: []});
   const loading = ref(false);
   const loadingMore = ref(false);
   const message = ref("");
   const loadedSignature = ref("");
   const sourceMode = ref<ExplorerDataSourceMode>("folder");
-  const sourceTitle = ref("当前文件夹");
+  const sourceTitle = ref(t("explorer.currentFolder"));
   const resultTotal = ref<number | null>(null);
   const searchContext = ref<{query: string; mount?: string; type?: Exclude<DirEntryFilter, "all">; scope: SearchScope} | null>(null);
   const searchKeyword = computed(() => sourceMode.value === "search" ? searchContext.value?.query ?? "" : "");
+
+  const searchSourceTitle = () => {
+    const context = searchContext.value;
+    if (!context) return t("search.folder");
+    const typeTitle = context.type === "file" ? t("search.files") : context.type === "folder" ? t("search.folders") : t("search.folder");
+    const scopeTitle = context.scope === "all" ? t("search.scopeAll") : t("search.scopeMount");
+    return t("search.title", {type: typeTitle, scope: scopeTitle, keyword: context.query});
+  }
+
+  const updateSourceTitle = () => {
+    if (sourceMode.value === "search") {
+      sourceTitle.value = searchSourceTitle();
+      return;
+    }
+    if (sourceMode.value === "recent") {
+      sourceTitle.value = t("explorer.recentFiles");
+      return;
+    }
+    sourceTitle.value = t("explorer.currentFolder");
+  }
+
+  watch(locale, updateSourceTitle);
 
   const allEntries = computed<ExplorerEntry[]>(() => [
     ...(folderData.value.folder ?? []).map(folder => ({
@@ -189,7 +213,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
     loading.value = true;
     let loaded = false;
     sourceMode.value = "folder";
-    sourceTitle.value = "当前文件夹";
+    sourceTitle.value = t("explorer.currentFolder");
     searchContext.value = null;
     resetForLoad(lifecycle);
     try {
@@ -204,7 +228,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
       lifecycle.afterRender?.();
       loaded = true;
     } catch (error) {
-      message.value = error instanceof Error ? error.message : "加载目录失败";
+      message.value = error instanceof Error ? error.message : t("explorer.loadFailed");
     } finally {
       loading.value = false;
       if (loaded) scheduleAutoLoadMore(lifecycle);
@@ -219,10 +243,8 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
     loadingMore.value = false;
     sourceMode.value = "search";
     const scope = lifecycle.scope ?? (lifecycle.mount ? "mount" : "all");
-    const typeTitle = lifecycle.type === "file" ? "搜索文件" : lifecycle.type === "folder" ? "搜索文件夹" : "搜索";
-    const scopeTitle = scope === "all" ? "全部位置" : "当前挂载";
-    sourceTitle.value = `${typeTitle}（${scopeTitle}）：“${keyword}”`;
     searchContext.value = {query: keyword, mount: lifecycle.mount, type: lifecycle.type, scope};
+    sourceTitle.value = searchSourceTitle();
     resetForLoad(lifecycle);
     let loaded = false;
     try {
@@ -242,7 +264,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
       lifecycle.afterRender?.();
       loaded = true;
     } catch (error) {
-      message.value = error instanceof Error ? error.message : "搜索失败";
+      message.value = error instanceof Error ? error.message : t("explorer.searchFailed");
     } finally {
       loading.value = false;
     }
@@ -253,7 +275,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
     loading.value = true;
     loadingMore.value = false;
     sourceMode.value = "recent";
-    sourceTitle.value = "最近文件";
+    sourceTitle.value = t("explorer.recentFiles");
     searchContext.value = null;
     resetForLoad(lifecycle);
     let loaded = false;
@@ -272,7 +294,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
       lifecycle.afterRender?.();
       loaded = true;
     } catch (error) {
-      message.value = error instanceof Error ? error.message : "加载最近文件失败";
+      message.value = error instanceof Error ? error.message : t("explorer.loadRecentFailed");
     } finally {
       loading.value = false;
     }
@@ -303,7 +325,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
       lifecycle.afterRender?.();
       loaded = true;
     } catch (error) {
-      message.value = error instanceof Error ? error.message : "加载更多搜索结果失败";
+      message.value = error instanceof Error ? error.message : t("explorer.loadMoreSearchFailed");
     } finally {
       loadingMore.value = false;
     }
@@ -328,7 +350,7 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
       lifecycle.afterRender?.();
       loaded = true;
     } catch (error) {
-      message.value = error instanceof Error ? error.message : "加载更多失败";
+      message.value = error instanceof Error ? error.message : t("explorer.loadMoreFailed");
     } finally {
       loadingMore.value = false;
       if (loaded) scheduleAutoLoadMore(lifecycle);

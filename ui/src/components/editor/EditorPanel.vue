@@ -2,6 +2,7 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import CodeEditor from "./CodeEditor.vue";
 import editorConfig from "../../assets/editor-config.json";
+import {useI18n} from "../../i18n";
 import {useFileStore} from "../../store";
 import {useEditorFileSession} from "../../composables/useEditorFileSession.ts";
 import {useEditorPreferences} from "../../composables/useEditorPreferences.ts";
@@ -16,6 +17,7 @@ import EditorStatusBar from "./EditorStatusBar.vue";
 import EditorTitleBar from "./EditorTitleBar.vue";
 
 const fileStore = useFileStore();
+const {t} = useI18n();
 const editorRef = ref<CodeEditorExpose | null>(null);
 const activeMenu = ref<EditorMenuName>("");
 const menuAnchor = ref<EditorMenuAnchor | null>(null);
@@ -363,10 +365,10 @@ onBeforeUnmount(() => {
             @save="save">
         </code-editor>
       </div>
-      <div v-if="loading" class="editor-overlay">正在打开文件...</div>
+      <div v-if="loading" class="editor-overlay">{{ t("editor.loadingFile") }}</div>
       <div v-else-if="errorText" class="editor-overlay error">
         <span>{{ errorText }}</span>
-        <button @click="reload">重试</button>
+        <button @click="reload">{{ t("editor.retry") }}</button>
       </div>
       <editor-confirm-dialog
           :visible="Boolean(pendingAction)"

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed} from "vue";
+import {useI18n} from "../../i18n";
 import Icon from "../Icon.vue";
 import type {ShellNoticeKind} from "./types.ts";
 
@@ -9,6 +10,7 @@ const props = defineProps<{
   title?: string;
 }>();
 
+const {t} = useI18n();
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "pause"): void;
@@ -16,10 +18,10 @@ const emit = defineEmits<{
 }>();
 
 const shellNoticeLabel = computed(() => ({
-  info: "提示",
-  success: "完成",
-  warning: "需要注意",
-  error: "操作失败"
+  info: t("notice.info"),
+  success: t("notice.success"),
+  warning: t("notice.warning"),
+  error: t("notice.error")
 }[props.kind]));
 
 const noticeIcon = computed(() => ({
@@ -46,7 +48,7 @@ const noticeIcon = computed(() => ({
       <strong>{{ title || shellNoticeLabel }}</strong>
       <span>{{ message }}</span>
     </div>
-    <button type="button" class="shell-notice-close" title="关闭提示" @click="emit('close')">
+    <button type="button" class="shell-notice-close" :title="t('notice.close')" @click="emit('close')">
       <icon icon="action.close" />
     </button>
   </section>

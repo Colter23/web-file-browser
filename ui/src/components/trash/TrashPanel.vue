@@ -2,6 +2,7 @@
 import {computed, nextTick, ref, watch} from "vue";
 import type {TrashRecord} from "../../class.ts";
 import {useDraggablePanel} from "../../composables/useDraggablePanel.ts";
+import {useI18n} from "../../i18n";
 import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
 import {parentPath} from "../../utils/file-path.ts";
 import FileTypeIcon from "../FileTypeIcon.vue";
@@ -38,6 +39,7 @@ const emit = defineEmits<{
   (e: "close"): void;
 }>();
 
+const {t} = useI18n();
 const panelRef = ref<HTMLElement | null>(null);
 const {
   dragging,
@@ -54,21 +56,21 @@ const totalSizeText = computed(() => {
       ? formatEntrySize(totalSize, "-")
       : "";
 });
-const selectedCountText = computed(() => selectedCount.value ? `已选择 ${selectedCount.value} 项` : "未选择项目");
+const selectedCountText = computed(() => selectedCount.value ? t("trash.selected", {count: selectedCount.value}) : t("trash.noSelection"));
 const summaryText = computed(() => {
-  if (!props.records.length) return "暂无可恢复项目";
-  const parts = [`${props.records.length} 项`, selectedCountText.value];
+  if (!props.records.length) return t("trash.emptyRecoverable");
+  const parts = [t("trash.summaryCount", {count: props.records.length}), selectedCountText.value];
   if (totalSizeText.value) parts.push(totalSizeText.value);
   return parts.join(" · ");
 });
-const restoreText = computed(() => selectedCount.value > 1 ? `恢复 ${selectedCount.value} 项` : "恢复");
-const deleteText = computed(() => selectedCount.value > 1 ? `永久删除 ${selectedCount.value} 项` : "永久删除");
+const restoreText = computed(() => selectedCount.value > 1 ? t("trash.restoreCount", {count: selectedCount.value}) : t("trash.restore"));
+const deleteText = computed(() => selectedCount.value > 1 ? t("trash.permanentDeleteCount", {count: selectedCount.value}) : t("trash.permanentDelete"));
 const canAct = computed(() => selectedCount.value > 0 && !props.loading && !props.actionLoading);
 const canBulkAct = computed(() => props.records.length > 0 && !props.loading && !props.actionLoading);
 
 const recordName = (record: TrashRecord) => {
   const parts = record.originalVirtualPath.split("/").filter(Boolean);
-  return parts[parts.length - 1] || record.originalVirtualPath || "未知项目";
+  return parts[parts.length - 1] || record.originalVirtualPath || t("trash.unknownItem");
 }
 
 const recordKind = (record: TrashRecord) => record.kind === "folder" ? "folder" : "file";
@@ -81,10 +83,10 @@ const selectedDetails = computed(() => {
   const record = props.selectedRecord;
   if (!record) return [];
   return [
-    {label: "删除时间", value: formatEntryDate(record.deletedAt)},
-    {label: "大小", value: recordSize(record)},
-    {label: "类型", value: record.kind === "folder" ? "文件夹" : "文件"},
-    {label: "操作者", value: record.actor || "-"}
+    {label: t("trash.deletedAt"), value: formatEntryDate(record.deletedAt)},
+    {label: t("trash.size"), value: recordSize(record)},
+    {label: t("trash.type"), value: record.kind === "folder" ? t("common.folder") : t("common.file")},
+    {label: t("trash.actor"), value: record.actor || "-"}
   ];
 });
 
@@ -177,23 +179,23 @@ defineExpose({
         class="trash-panel"
         :class="{'is-dragging': dragging}"
         :style="panelStyle"
-        aria-label="回收站"
+        :aria-label="t('trash.title')"
         tabindex="-1"
         @keydown="handleKeydown"
         @keydown.esc.prevent.stop="emit('close')">
-    <div class="trash-panel-header" title="拖动移动回收站面板" @pointerdown="startDrag" @dblclick="resetPosition">
+    <div class="trash-panel-header" :title="t('trash.dragTitle')" @pointerdown="startDrag" @dblclick="resetPosition">
       <div class="trash-title">
         <span class="trash-icon"><icon icon="action.trash" /></span>
         <div>
-          <p>回收站</p>
+          <p>{{ t("trash.title") }}</p>
           <small>{{ summaryText }}</small>
         </div>
       </div>
       <div class="trash-actions">
-        <button class="trash-icon-button" :disabled="loading" title="刷新回收站" @click="emit('refresh')">
+        <button class="trash-icon-button" :disabled="loading" :title="t('trash.refresh')" @click="emit('refresh')">
           <icon class="icon-motion-spin" :class="{'is-spinning': loading}" icon="action.refresh" />
         </button>
-        <button class="trash-icon-button" title="关闭回收站" @click="emit('close')">
+        <button class="trash-icon-button" :title="t('trash.close')" @click="emit('close')">
           <icon icon="action.close" />
         </button>
       </div>
@@ -210,11 +212,11 @@ defineExpose({
       </button>
       <button type="button" class="trash-secondary" :disabled="!canBulkAct" @click="emit('cleanup')">
         <icon icon="action.clean" />
-        <span>按策略清理</span>
+        <span>{{ t("trash.cleanup") }}</span>
       </button>
       <button type="button" class="trash-danger" :disabled="!canBulkAct" @click="emit('empty')">
         <icon icon="action.delete" />
-        <span>清空回收站</span>
+        <span>{{ t("trash.empty") }}</span>
       </button>
     </div>
 
@@ -222,14 +224,14 @@ defineExpose({
 
     <div v-if="loading" class="trash-empty">
       <icon class="icon-motion-spin is-spinning" icon="action.refresh" />
-      <span>正在加载回收站...</span>
+      <span>{{ t("trash.loading") }}</span>
     </div>
     <div v-else-if="!records.length" class="trash-empty">
       <icon icon="action.trash" />
-      <span>回收站为空</span>
+      <span>{{ t("trash.emptyState") }}</span>
     </div>
     <div v-else class="trash-content">
-      <div class="trash-list" role="listbox" aria-label="回收站项目" aria-multiselectable="true">
+      <div class="trash-list" role="listbox" :aria-label="t('trash.list')" aria-multiselectable="true">
         <div
             v-for="record in records"
             :key="record.id"
@@ -245,7 +247,7 @@ defineExpose({
               type="button"
               class="trash-row-check"
               tabindex="-1"
-              :aria-label="selectedIdSet.has(record.id) ? `取消选择 ${recordName(record)}` : `选择 ${recordName(record)}`"
+              :aria-label="selectedIdSet.has(record.id) ? t('trash.unselect', {name: recordName(record)}) : t('trash.select', {name: recordName(record)})"
               :aria-pressed="selectedIdSet.has(record.id)"
               @click.stop="handleCheckClick(record)">
             <icon v-if="selectedIdSet.has(record.id)" icon="action.check" />

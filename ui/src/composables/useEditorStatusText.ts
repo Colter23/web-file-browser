@@ -2,6 +2,8 @@ import {computed} from "vue";
 import type {Ref} from "vue";
 import type {FileInfo} from "../class.ts";
 import type {EditorCursorStatus, EditorHighlightOption, EditorModeOption, EditorThemeGroups, PendingEditorAction} from "../components/editor/types.ts";
+import {useI18n} from "../i18n";
+import type {MessageKey} from "../i18n";
 import {formatEntrySize} from "../utils/file-entry.ts";
 
 type EditorStatusTextOptions = {
@@ -35,55 +37,64 @@ export const useEditorStatusText = ({
   pendingAction,
   pendingBusy
 }: EditorStatusTextOptions) => {
-  const fileTitle = computed(() => fileInfo.value?.name ?? "未打开文件");
+  const {t} = useI18n();
+  const localizedOptionName = (prefix: "theme" | "highlight", key: string, fallback: string) => {
+    const messageKey = `editor.${prefix}.${key}` as MessageKey;
+    const translated = t(messageKey);
+    return translated === messageKey ? fallback : translated;
+  }
+
+  const fileTitle = computed(() => fileInfo.value?.name ?? t("editor.noFile"));
   const filePathText = computed(() => fileInfo.value?.path ?? "");
 
   const selectedModeName = computed(() => modes.find(mode => mode.key === currentMode.value)?.name ?? currentMode.value);
 
   const selectedThemeName = computed(() => {
     const allThemes = Object.values(themes).flat();
-    return allThemes.find(theme => theme.key === currentTheme.value)?.name ?? currentTheme.value;
+    const theme = allThemes.find(theme => theme.key === currentTheme.value);
+    return localizedOptionName("theme", currentTheme.value, theme?.name ?? currentTheme.value);
   });
 
   const selectedHighlightName = computed(() => {
-    return highlights.find(highlight => highlight.key === currentHighlight.value)?.name ?? currentHighlight.value;
+    const highlight = highlights.find(highlight => highlight.key === currentHighlight.value);
+    return localizedOptionName("highlight", currentHighlight.value, highlight?.name ?? currentHighlight.value);
   });
 
-  const wrapText = computed(() => wrap.value ? "自动换行" : "不换行");
+  const wrapText = computed(() => wrap.value ? t("editor.wrap") : t("editor.noWrap"));
 
   const fileSizeText = computed(() => formatEntrySize(fileInfo.value?.size, "0 B"));
-  const cursorStatusText = computed(() => `第 ${cursorStatus.value.line} 行，第 ${cursorStatus.value.column} 列`);
+  const cursorStatusText = computed(() => t("editor.cursor", {line: cursorStatus.value.line, column: cursorStatus.value.column}));
 
   const selectionStatusText = computed(() => {
     if (!cursorStatus.value.selectedCharacters) return "";
-    const rows = cursorStatus.value.selectedRows > 1 ? `${cursorStatus.value.selectedRows} 行，` : "";
-    return `已选中 ${rows}${cursorStatus.value.selectedCharacters} 字符`;
+    const rows = cursorStatus.value.selectedRows > 1 ? t("editor.selectionRows", {count: cursorStatus.value.selectedRows}) : "";
+    return t("editor.selection", {rows, chars: cursorStatus.value.selectedCharacters});
   });
 
-  const editorMessageText = computed(() => errorText.value || (saveConflict.value ? "文件版本已变化，请重新载入后再保存" : ""));
+  const editorMessageText = computed(() => errorText.value || (saveConflict.value ? t("editor.versionChanged") : ""));
 
   const confirmTitle = computed(() => {
-    if (pendingAction.value === "reload") return "重新载入文件？";
-    if (pendingAction.value === "external") return "离开编辑器？";
-    return "关闭编辑器？";
+    if (pendingAction.value === "reload") return t("editor.confirmReloadTitle");
+    if (pendingAction.value === "external") return t("editor.confirmExternalTitle");
+    return t("editor.confirmCloseTitle");
   });
 
   const confirmDescription = computed(() => {
-    if (pendingAction.value === "reload") return "当前修改还没有保存，重新载入会用磁盘上的最新内容覆盖编辑区。";
-    if (pendingAction.value === "external") return "当前修改还没有保存，继续操作会离开编辑器并丢弃未保存内容。";
-    return "当前修改还没有保存，关闭后未保存的内容会被丢弃。";
+    if (pendingAction.value === "reload") return t("editor.confirmReloadDescription");
+    if (pendingAction.value === "external") return t("editor.confirmExternalDescription");
+    return t("editor.confirmCloseDescription");
   });
 
   const confirmSaveText = computed(() => {
-    if (pendingBusy.value) return "处理中";
-    if (pendingAction.value === "external") return "保存并离开";
-    return pendingAction.value === "reload" ? "保存并重新载入" : "保存并关闭";
+    if (pendingBusy.value) return t("editor.processing");
+    if (pendingAction.value === "external") return t("editor.saveAndLeave");
+    return pendingAction.value === "reload" ? t("editor.saveAndReload") : t("editor.saveAndClose");
   });
 
   const confirmDiscardText = computed(() => {
-    if (pendingAction.value === "reload") return "放弃并重新载入";
-    if (pendingAction.value === "external") return "放弃并离开";
-    return "放弃并关闭";
+    if (pendingAction.value === "reload") return t("editor.discardAndReload");
+    if (pendingAction.value === "external") return t("editor.discardAndLeave");
+    return t("editor.discardAndClose");
   });
 
   return {

@@ -1,4 +1,4 @@
-import {ref} from "vue";
+import {ref, watch} from "vue";
 import type {
   FileTreeData,
   FolderData,
@@ -8,6 +8,7 @@ import type {
   ReorderMappingItem
 } from "../class.ts";
 import {useFileStore} from "../store";
+import {useI18n} from "../i18n";
 import {normalizePathText, parentPath} from "../utils/file-path.ts";
 
 type FileTreeLoaderOptions = {
@@ -37,10 +38,10 @@ const folderDataToTreeNodes = (data: FolderData): FileTreeData[] => {
   }));
 }
 
-const rootTreeNode = (children?: FileTreeData[]): FileTreeData => {
+const rootTreeNode = (name: string, children?: FileTreeData[]): FileTreeData => {
   const node: FileTreeData = {
     path: "/",
-    name: "主页",
+    name,
     isFile: false
   };
   if (children !== undefined) node.children = children;
@@ -150,13 +151,19 @@ export const useFileTreeLoader = ({
   showError
 }: FileTreeLoaderOptions) => {
   const fileStore = useFileStore();
+  const {locale, t} = useI18n();
   const treeData = ref<FileTreeData[]>([]);
   const mountMappings = ref<OrderedMapping[]>([]);
+
+  watch(locale, () => {
+    const root = treeData.value[0];
+    if (root && normalizePathText(root.path) === "/") root.name = t("nav.home");
+  });
 
   const loadRoot = async (_options: {forceRefresh?: boolean} = {}) => {
     const [root, mappings] = await Promise.all([getMappingRoot(), getMappings()]);
     mountMappings.value = sortMappings(mappings);
-    treeData.value = [rootTreeNode(mappingRootToTreeChildren(root, mappings))];
+    treeData.value = [rootTreeNode(t("nav.home"), mappingRootToTreeChildren(root, mappings))];
   }
 
   const handleLoad = async (node: FileTreeData, options: {navigate?: boolean; focusExplorer?: boolean; refresh?: boolean} = {}) => {
@@ -177,7 +184,7 @@ export const useFileTreeLoader = ({
       }
       return true;
     } catch (error) {
-      showError(error, "加载目录失败");
+      showError(error, t("explorer.loadFailed"));
       return false;
     }
   }
@@ -212,7 +219,7 @@ export const useFileTreeLoader = ({
     } catch (error) {
       mountMappings.value = previousMappings;
       treeData.value = previousTree;
-      showError(error, "调整目录树顺序失败", "目录树");
+      showError(error, t("explorer.reorderTreeFailed"), t("explorer.tree"));
       return false;
     }
   }
@@ -235,7 +242,7 @@ export const useFileTreeLoader = ({
       node.children = folderDataToTreeNodes(data);
       return true;
     } catch (error) {
-      showError(error, "刷新文件树失败");
+      showError(error, t("explorer.refreshTreeFailed"));
       return false;
     }
   }

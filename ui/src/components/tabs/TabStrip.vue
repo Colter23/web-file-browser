@@ -7,6 +7,7 @@ import Icon from "../Icon.vue";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
 import {useViewportMenuPosition} from "../../composables/useViewportMenuPosition.ts";
+import {useI18n} from "../../i18n";
 import {hasInternalEntryDragData, readInternalEntryDragData} from "../../utils/internal-entry-drag.ts";
 import {scrollHorizontallyWithWheel} from "../../utils/wheel.ts";
 
@@ -24,6 +25,7 @@ const props = defineProps<{
   canReopenClosedTab: boolean;
 }>();
 
+const {t} = useI18n();
 const tabButtonRefs = new Map<string, HTMLElement>();
 const tabStripRef = ref<HTMLElement | null>(null);
 const tabScrollRef = ref<HTMLElement | null>(null);
@@ -248,6 +250,7 @@ const emit = defineEmits<{
 const isCopyEntryDrop = (event: DragEvent) => Boolean(event.ctrlKey || event.metaKey);
 
 const tabIndexById = (tabId: string) => props.tabs.findIndex(tab => tab.id === tabId);
+const displayTabTitle = (tab: ExplorerTab) => tab.path === "/" ? t("nav.home") : tab.title;
 
 const focusTabByOffset = async (tabId: string, offset: number) => {
   if (!props.tabs.length) return;
@@ -348,7 +351,7 @@ const handleTabDrop = (event: DragEvent, tab: ExplorerTab) => {
     entries,
     target: {
       path: tab.path,
-      name: tab.title
+      name: displayTabTitle(tab)
     },
     action: isCopyEntryDrop(event) ? "copy" : "move"
   });
@@ -387,7 +390,7 @@ const handleAddDrop = (event: DragEvent) => {
   <nav
       ref="tabStripRef"
       class="tab-strip"
-      aria-label="目录标签"
+      :aria-label="t('tabs.aria')"
       @pointerenter="handleTabStripPointerEnter"
       @pointerleave="handleTabStripPointerLeave">
     <div
@@ -411,7 +414,7 @@ const handleAddDrop = (event: DragEvent) => {
                 dropAfter: dropTargetId === tab.id && dropPlacement === 'after',
                 entryDropTarget: entryDropTargetTabId === tab.id
               }"
-              :title="`${tab.path} · 中键关闭`"
+              :title="`${tab.path} · ${t('tabs.middleClickClose')}`"
               draggable="true"
               @click="emit('activate-tab', tab.id)"
               @mousedown.middle.prevent.stop
@@ -424,8 +427,8 @@ const handleAddDrop = (event: DragEvent) => {
               @drop="handleTabDrop($event, tab)"
               @dragend="emit('tab-drag-end')">
             <icon icon="file.folder" />
-            <span>{{ tab.title }}</span>
-            <span class="tab-close" title="关闭标签页 (Ctrl+W)" @click="emit('close-tab', $event, tab.id)">
+            <span>{{ displayTabTitle(tab) }}</span>
+            <span class="tab-close" :title="t('tabs.close')" @click="emit('close-tab', $event, tab.id)">
               <span class="tab-close-icon-motion">
                 <icon icon="action.close" size="0.98rem" />
               </span>
@@ -436,7 +439,7 @@ const handleAddDrop = (event: DragEvent) => {
     </div>
     <button
         :class="['tab-add', {entryDropTarget: addButtonDropTarget}]"
-        title="新建标签页 (Ctrl+T)"
+        :title="t('tabs.newTitle')"
         @click="emit('new-tab')"
         @dragover="handleAddDragOver"
         @dragleave="handleAddDragLeave"
@@ -453,17 +456,17 @@ const handleAddDrop = (event: DragEvent) => {
       class="tab-context-menu"
       :style="{left: `${contextMenuPosition.x}px`, top: `${contextMenuPosition.y}px`}"
       role="menu"
-      aria-label="标签页菜单"
+      :aria-label="t('tabs.menu')"
       @click.stop
       @contextmenu.prevent
       @keydown="handleMenuKeyDown">
-    <button role="menuitem" @click="emit('new-tab')">新建标签页</button>
-    <button role="menuitem" :disabled="!canReopenClosedTab" @click="emit('reopen-closed-tab')">重新打开关闭的标签页</button>
-    <button role="menuitem" :disabled="!contextTarget" @click="emit('duplicate-tab')">复制标签页</button>
+    <button role="menuitem" @click="emit('new-tab')">{{ t("tabs.new") }}</button>
+    <button role="menuitem" :disabled="!canReopenClosedTab" @click="emit('reopen-closed-tab')">{{ t("tabs.reopenClosed") }}</button>
+    <button role="menuitem" :disabled="!contextTarget" @click="emit('duplicate-tab')">{{ t("tabs.duplicate") }}</button>
     <div class="tab-context-separator"></div>
-    <button role="menuitem" :disabled="!canCloseTab" @click="emit('close-context-tab')">关闭标签页</button>
-    <button role="menuitem" :disabled="!canCloseOtherTabs" @click="emit('close-other-tabs')">关闭其他标签页</button>
-    <button role="menuitem" :disabled="!canCloseRightTabs" @click="emit('close-right-tabs')">关闭右侧标签页</button>
+    <button role="menuitem" :disabled="!canCloseTab" @click="emit('close-context-tab')">{{ t("tabs.closeLabel") }}</button>
+    <button role="menuitem" :disabled="!canCloseOtherTabs" @click="emit('close-other-tabs')">{{ t("tabs.closeOthers") }}</button>
+    <button role="menuitem" :disabled="!canCloseRightTabs" @click="emit('close-right-tabs')">{{ t("tabs.closeRight") }}</button>
   </div>
 </template>
 

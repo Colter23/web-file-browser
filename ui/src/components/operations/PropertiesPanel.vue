@@ -2,6 +2,7 @@
 import {computed, ref} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import {entryMetaRows, fileEntryIconName, formatEntrySize} from "../../utils/file-entry.ts";
+import {useI18n} from "../../i18n";
 import OperationPanelShell from "./OperationPanelShell.vue";
 
 type OperationPanelShellExpose = {
@@ -18,6 +19,7 @@ const emit = defineEmits<{
   (e: "close"): void;
 }>();
 
+const {locale, t} = useI18n();
 const panelRef = ref<OperationPanelShellExpose | null>(null);
 
 const singleEntry = computed(() => props.entries.length === 1 ? props.entries[0] : null);
@@ -26,8 +28,8 @@ const fileEntries = computed(() => props.entries.filter(entry => entry.type === 
 const knownSize = computed(() => fileEntries.value.reduce((sum, entry) => sum + (entry.size ?? 0), 0));
 const missingSizeCount = computed(() => fileEntries.value.filter(entry => entry.size === undefined).length);
 
-const title = computed(() => singleEntry.value?.name ?? `${props.entries.length} 个项目`);
-const subtitle = computed(() => singleEntry.value ? "项目属性" : "选中项目属性");
+const title = computed(() => singleEntry.value?.name ?? t("properties.itemsTitle", {count: props.entries.length}));
+const subtitle = computed(() => singleEntry.value ? t("properties.itemProperties") : t("properties.selectedProperties"));
 const panelIcon = computed(() => {
   const entry = singleEntry.value;
   if (!entry) return "view.details";
@@ -35,29 +37,31 @@ const panelIcon = computed(() => {
 });
 const sizeText = computed(() => {
   if (singleEntry.value) return singleEntry.value.type === "file" ? formatEntrySize(singleEntry.value.size, "0 B") : "-";
-  const suffix = missingSizeCount.value ? `，${missingSizeCount.value} 个文件未加载大小` : "";
+  const suffix = missingSizeCount.value
+      ? `${locale.value === "zh-CN" ? "，" : ", "}${t("explorer.fileSizesUnloaded", {count: missingSizeCount.value})}`
+      : "";
   return `${formatEntrySize(knownSize.value, "0 B")}${suffix}`;
 });
 const rows = computed(() => {
   const entry = singleEntry.value;
   if (entry) {
     return [
-      {label: "名称", value: entry.name},
+      {label: t("operation.name"), value: entry.name},
       ...entryMetaRows(entry, {
         sizeText: sizeText.value,
         includeLocation: true,
         includePath: true,
         pathBeforeStats: true,
-        modifiedLabel: "修改时间"
+        modifiedLabel: t("sort.modified")
       })
     ];
   }
   return [
-    {label: "项目", value: `${props.entries.length} 项`},
-    {label: "文件夹", value: `${folderCount.value} 项`},
-    {label: "文件", value: `${fileEntries.value.length} 项`},
-    {label: "已知文件大小", value: sizeText.value},
-    {label: "当前位置", value: props.currentFolder}
+    {label: t("properties.items"), value: t("common.items", {count: props.entries.length})},
+    {label: t("common.folder"), value: t("common.items", {count: folderCount.value})},
+    {label: t("common.file"), value: t("common.items", {count: fileEntries.value.length})},
+    {label: t("properties.knownFileSize"), value: sizeText.value},
+    {label: t("properties.currentLocation"), value: props.currentFolder}
   ];
 });
 
@@ -84,7 +88,7 @@ defineExpose({
       </div>
     </div>
     <template #actions>
-      <button type="button" class="operation-primary" @click="emit('close')">确定</button>
+      <button type="button" class="operation-primary" @click="emit('close')">{{ t("common.close") }}</button>
     </template>
   </operation-panel-shell>
 </template>

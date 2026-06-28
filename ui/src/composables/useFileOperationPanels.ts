@@ -1,6 +1,7 @@
 import {computed, nextTick, ref} from "vue";
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import type {DeleteConfirmState, OperationPanelState, PropertiesPanelState} from "../components/operations/types.ts";
+import {useI18n} from "../i18n";
 
 type FileOperationPanelsOptions = {
   closeShellPanels: () => void;
@@ -16,7 +17,7 @@ const emptyOperationPanel = (): OperationPanelState => ({
   kind: null,
   title: "",
   message: "",
-  primaryText: "确定",
+  primaryText: "",
   name: "",
   format: "zip",
   entries: [],
@@ -43,6 +44,7 @@ export const useFileOperationPanels = ({
   focusDeleteConfirm,
   focusPropertiesPanel
 }: FileOperationPanelsOptions) => {
+  const {t} = useI18n();
   const operationPanel = ref<OperationPanelState>(emptyOperationPanel());
   const deleteConfirm = ref<DeleteConfirmState>(emptyDeleteConfirm());
   const propertiesPanel = ref<PropertiesPanelState>(emptyPropertiesPanel());
@@ -50,15 +52,15 @@ export const useFileOperationPanels = ({
   const operationPanelNameLabel = computed(() => {
     switch (operationPanel.value.kind) {
       case "createFile":
-        return "文件名";
+        return t("operation.fileName");
       case "createFolder":
-        return "文件夹名";
+        return t("operation.folderName");
       case "archive":
-        return "压缩包名称";
+        return t("operation.archiveName");
       case "extract":
-        return "解压到文件夹";
+        return t("operation.extractFolder");
       default:
-        return "名称";
+        return t("operation.name");
     }
   });
 

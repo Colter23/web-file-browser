@@ -2,6 +2,7 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import type {ShellNoticePayload} from "../shell/types.ts";
+import {useI18n} from "../../i18n";
 import {fileContentUrl} from "../../network/api.ts";
 import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
 import Icon from "../Icon.vue";
@@ -22,6 +23,7 @@ const emit = defineEmits<{
   (e: "notice", payload: ShellNoticePayload): void;
 }>();
 
+const {t} = useI18n();
 const viewerRef = ref<HTMLElement | null>(null);
 const loading = ref(false);
 const pageFullscreen = ref(false);
@@ -40,8 +42,8 @@ const currentIndex = computed(() => {
 const pdfCount = computed(() => props.entries.length);
 const canShowPrevious = computed(() => currentIndex.value > 0);
 const canShowNext = computed(() => currentIndex.value >= 0 && currentIndex.value < props.entries.length - 1);
-const pageFullscreenTitle = computed(() => pageFullscreen.value ? "退出网页全屏 (F)" : "网页全屏 (F)");
-const browserFullscreenTitle = computed(() => browserFullscreen.value ? "退出浏览器全屏" : "浏览器全屏");
+const pageFullscreenTitle = computed(() => pageFullscreen.value ? t("viewer.exitPageFullscreen") : t("viewer.pageFullscreen"));
+const browserFullscreenTitle = computed(() => browserFullscreen.value ? t("viewer.exitBrowserFullscreen") : t("viewer.browserFullscreen"));
 const pageFullscreenIcon = computed(() => pageFullscreen.value ? "viewer.page-fullscreen-off" : "viewer.page-fullscreen");
 const browserFullscreenIcon = computed(() => browserFullscreen.value ? "viewer.browser-fullscreen-off" : "viewer.browser-fullscreen");
 
@@ -99,8 +101,8 @@ const toggleBrowserFullscreen = async () => {
   } catch {
     emit("notice", {
       kind: "warning",
-      title: "无法全屏",
-      message: "当前浏览器未允许进入全屏，仍可在页面内查看 PDF。"
+      title: t("viewer.fullscreenFailedTitle"),
+      message: t("viewer.pdfFullscreenFailed")
     });
   }
 }
@@ -185,15 +187,15 @@ onBeforeUnmount(() => {
         @keydown.esc.prevent.stop="close">
       <viewer-toolbar kind="pdf" :name="currentEntry.name" :extension="currentEntry.extension" :subtitle="subtitle" icon-tone="pdf">
         <viewer-action-group>
-          <button title="上一份 PDF (←)" :disabled="!canShowPrevious" @click="showAdjacent(-1)">
+          <button :title="t('viewer.previousPdf')" :disabled="!canShowPrevious" @click="showAdjacent(-1)">
             <icon icon="action.previous" color="currentColor" size="1.1rem" />
           </button>
-          <button title="下一份 PDF (→)" :disabled="!canShowNext" @click="showAdjacent(1)">
+          <button :title="t('viewer.nextPdf')" :disabled="!canShowNext" @click="showAdjacent(1)">
             <icon icon="action.next" color="currentColor" size="1.1rem" />
           </button>
         </viewer-action-group>
         <viewer-action-group>
-          <button title="新窗口打开" @click="openInNewWindow">
+          <button :title="t('viewer.openNewWindow')" @click="openInNewWindow">
             <icon icon="action.open-new-tab" color="currentColor" />
           </button>
         </viewer-action-group>
@@ -206,10 +208,10 @@ onBeforeUnmount(() => {
           </button>
         </viewer-action-group>
         <viewer-action-group>
-          <button title="下载" @click="downloadCurrent">
+          <button :title="t('common.download')" @click="downloadCurrent">
             <icon icon="action.download" color="currentColor" />
           </button>
-          <button title="关闭" @click="close">
+          <button :title="t('common.close')" @click="close">
             <icon icon="action.close" color="currentColor" />
           </button>
         </viewer-action-group>
@@ -222,7 +224,7 @@ onBeforeUnmount(() => {
             :title="currentEntry.name"
             @load="handleLoad">
         </iframe>
-        <viewer-status v-if="loading">正在加载 PDF...</viewer-status>
+        <viewer-status v-if="loading">{{ t("viewer.pdfLoading") }}</viewer-status>
       </div>
     </section>
   </Teleport>

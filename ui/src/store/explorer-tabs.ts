@@ -6,6 +6,7 @@ import type {
     ExplorerTab,
     ExplorerViewMode
 } from "../class.ts";
+import {translate} from "../i18n";
 import {readJsonStorage, readStorageItem, writeJsonStorage, writeStorageItem} from "../utils/safe-storage.ts";
 
 export const closedTabStackLimit = 12;
@@ -36,7 +37,7 @@ export const normalizePath = (path: string): string => {
 
 export const pathTitle = (path: string): string => {
     const normalized = normalizePath(path);
-    if (normalized === "/") return "主页";
+    if (normalized === "/") return translate("nav.home");
     const parts = normalized.split("/").filter(Boolean);
     return parts[parts.length - 1] || normalized;
 }

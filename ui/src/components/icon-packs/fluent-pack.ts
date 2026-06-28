@@ -93,6 +93,7 @@ import textBulletListSvg from "@fluentui/svg-icons/icons/text_bullet_list_24_fil
 import textFontSvg from "@fluentui/svg-icons/icons/text_font_24_filled.svg?raw";
 import textSortAscendingSvg from "@fluentui/svg-icons/icons/text_sort_ascending_24_filled.svg?raw";
 import textSortDescendingSvg from "@fluentui/svg-icons/icons/text_sort_descending_24_filled.svg?raw";
+import translateSvg from "@fluentui/svg-icons/icons/translate_24_filled.svg?raw";
 import videoClipSvg from "@fluentui/svg-icons/icons/video_clip_24_filled.svg?raw";
 import warningSvg from "@fluentui/svg-icons/icons/warning_24_filled.svg?raw";
 import weatherMoonSvg from "@fluentui/svg-icons/icons/weather_moon_24_filled.svg?raw";
@@ -149,6 +150,7 @@ export const fluentIcons: Record<string, string> = {
   "action.clean": broomSvg,
   "action.settings": settingsSvg,
   "action.appearance": colorSvg,
+  "action.language": translateSvg,
   "action.main-menu": navigationSvg,
   "action.more": moreHorizontalSvg,
   "action.logout": signOutSvg,

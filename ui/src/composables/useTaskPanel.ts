@@ -1,5 +1,6 @@
 import {computed, ref} from "vue";
 import type {TaskStatus} from "../class.ts";
+import {useI18n} from "../i18n";
 import {canCancelTask, canCleanupTask, shortTaskId} from "../utils/task-status.ts";
 
 export type TaskCancelConfirmState = {
@@ -26,6 +27,7 @@ const emptyCancelConfirm = (): TaskCancelConfirmState => ({
 });
 
 export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showNotice, showError, onTaskSettled}: TaskPanelOptions) => {
+  const {locale, t} = useI18n();
   const visible = ref(false);
   const summaryVisible = ref(false);
   const loading = ref(false);
@@ -55,10 +57,10 @@ export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showNotice, s
         ?? null;
   });
   const summaryFailed = computed(() => summaryTask.value?.state === "failed" || Boolean(summaryTask.value?.errors.length));
-  const buttonText = computed(() => hasActiveTasks.value ? `任务 ${activeTaskCount.value}` : "任务");
+  const buttonText = computed(() => hasActiveTasks.value ? t("tasks.buttonActive", {count: activeTaskCount.value}) : t("common.tasks"));
 
   const updateRefreshTime = () => {
-    lastUpdatedAt.value = new Intl.DateTimeFormat("zh-CN", {
+    lastUpdatedAt.value = new Intl.DateTimeFormat(locale.value, {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit"
@@ -107,7 +109,7 @@ export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showNotice, s
       const failedCount = settledTasks.filter(task => task.state === "failed").length;
       const summarySettledTask = settledTasks.find(task => task.state === "failed") ?? settledTasks[0];
       if (summarySettledTask) recentSummaryTaskId.value = summarySettledTask.id;
-      if (failedCount) showNotice(`${failedCount} 个后台任务失败，请打开任务查看详情`, "error", "任务失败", 5000);
+      if (failedCount) showNotice(t("tasks.failedNotice", {count: failedCount}), "error", t("tasks.failedTitle"), 5000);
     }
     if (settledTasks.length || removedActiveTaskSettled) void onTaskSettled?.(settledTasks);
   }
@@ -123,7 +125,7 @@ export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showNotice, s
       scheduleSummaryHide();
     } catch (error) {
       stopPolling();
-      showError(error, "加载任务失败", "任务加载失败");
+      showError(error, t("tasks.loadFailed"), t("tasks.loadFailedTitle"));
     } finally {
       if (!silent) loading.value = false;
     }
@@ -194,11 +196,11 @@ export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showNotice, s
     cancelConfirm.value.error = "";
     try {
       await cancelTask(task.id);
-      message.value = `已发送取消请求：${shortTaskId(task.id)}`;
+      message.value = t("tasks.cancelRequested", {id: shortTaskId(task.id)});
       resetCancelConfirm();
       await load();
     } catch (error) {
-      cancelConfirm.value.error = error instanceof Error ? error.message : "取消任务失败";
+      cancelConfirm.value.error = error instanceof Error ? error.message : t("tasks.cancelFailed");
     } finally {
       if (cancelConfirm.value.visible) cancelConfirm.value.submitting = false;
     }
@@ -210,17 +212,17 @@ export const useTaskPanel = ({listTasks, cancelTask, cleanupTasks, showNotice, s
     try {
       resetCancelConfirm();
       const result = await cleanupTasks();
-      message.value = result.removed > 0 ? `已清理 ${result.removed} 条已结束任务` : "没有可清理的已结束任务";
+      message.value = result.removed > 0 ? t("tasks.cleanupFinished", {count: result.removed}) : t("tasks.noCleanup");
       await load(true);
     } catch (error) {
-      showError(error, "清理已结束任务失败", "任务清理失败");
+      showError(error, t("tasks.cleanupFailed"), t("tasks.cleanupFailedTitle"));
     } finally {
       cleanupLoading.value = false;
     }
   }
 
-  const markStarted = async (id: string, label = "后台任务") => {
-    message.value = `${label}已创建：${shortTaskId(id)}`;
+  const markStarted = async (id: string, label = t("tasks.defaultStartedLabel")) => {
+    message.value = t("tasks.started", {label, id: shortTaskId(id)});
     pendingTaskIds.add(id);
     recentSummaryTaskId.value = id;
     summaryDismissed.value = false;

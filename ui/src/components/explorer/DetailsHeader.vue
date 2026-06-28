@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type {DirSortKey, DirSortOrder} from "../../class.ts";
+import {useI18n} from "../../i18n";
 import Icon from "../Icon.vue";
 import type {DetailsColumnKey} from "./types.ts";
 
@@ -16,6 +17,8 @@ const emit = defineEmits<{
   (e: "fit-column", key: DetailsColumnKey): void;
 }>();
 
+const {t} = useI18n();
+
 const sortButtonClass = (key: DirSortKey) => ({
   active: props.sortKey === key
 });
@@ -25,29 +28,36 @@ const sortIndicatorIcon = (key: DirSortKey) => {
   return props.sortOrder === "asc" ? "sort.asc" : "sort.desc";
 }
 
-const resizeTitle = (label: string) => `拖拽调整${label}列宽，双击自动适配`;
+const columnLabel = (key: DetailsColumnKey) => {
+  if (key === "modified") return t("sort.modified");
+  if (key === "type") return t("sort.type");
+  if (key === "size") return t("sort.size");
+  return t("sort.name");
+}
+
+const resizeTitle = (key: DetailsColumnKey) => t("details.resizeTitle", {label: columnLabel(key)});
 </script>
 
 <template>
   <div class="details-header" :style="gridStyle">
     <button class="sort-button name-cell" :class="sortButtonClass('name')" :disabled="loading" @click.stop="emit('change-sort', 'name')">
-      <span>名称</span>
+      <span>{{ columnLabel("name") }}</span>
       <span class="sort-indicator"><icon v-if="sortIndicatorIcon('name')" :icon="sortIndicatorIcon('name')" size="small" /></span>
-      <span class="column-resizer" :title="resizeTitle('名称')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'name')" @pointerdown="emit('resize-column', $event, 'name')"></span>
+      <span class="column-resizer" :title="resizeTitle('name')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'name')" @pointerdown="emit('resize-column', $event, 'name')"></span>
     </button>
     <button class="sort-button" :class="sortButtonClass('modified')" :disabled="loading" @click.stop="emit('change-sort', 'modified')">
-      <span>修改日期</span>
+      <span>{{ columnLabel("modified") }}</span>
       <span class="sort-indicator"><icon v-if="sortIndicatorIcon('modified')" :icon="sortIndicatorIcon('modified')" size="small" /></span>
-      <span class="column-resizer" :title="resizeTitle('修改日期')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'modified')" @pointerdown="emit('resize-column', $event, 'modified')"></span>
+      <span class="column-resizer" :title="resizeTitle('modified')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'modified')" @pointerdown="emit('resize-column', $event, 'modified')"></span>
     </button>
     <span class="header-cell">
-      类型
-      <span class="column-resizer" :title="resizeTitle('类型')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'type')" @pointerdown="emit('resize-column', $event, 'type')"></span>
+      {{ columnLabel("type") }}
+      <span class="column-resizer" :title="resizeTitle('type')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'type')" @pointerdown="emit('resize-column', $event, 'type')"></span>
     </span>
     <button class="sort-button size-cell" :class="sortButtonClass('size')" :disabled="loading" @click.stop="emit('change-sort', 'size')">
-      <span>大小</span>
+      <span>{{ columnLabel("size") }}</span>
       <span class="sort-indicator"><icon v-if="sortIndicatorIcon('size')" :icon="sortIndicatorIcon('size')" size="small" /></span>
-      <span class="column-resizer" :title="resizeTitle('大小')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'size')" @pointerdown="emit('resize-column', $event, 'size')"></span>
+      <span class="column-resizer" :title="resizeTitle('size')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'size')" @pointerdown="emit('resize-column', $event, 'size')"></span>
     </button>
   </div>
 </template>

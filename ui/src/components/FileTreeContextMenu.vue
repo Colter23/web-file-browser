@@ -4,6 +4,7 @@ import type {FileTreeData} from "../class.ts";
 import {useMenuKeyboardNavigation} from "../composables/useMenuKeyboardNavigation.ts";
 import {useOutsidePointerDown} from "../composables/useOutsidePointerDown.ts";
 import {useViewportMenuPosition} from "../composables/useViewportMenuPosition.ts";
+import {useI18n} from "../i18n";
 import Icon from "./Icon.vue";
 
 const props = defineProps<{
@@ -28,10 +29,11 @@ const emit = defineEmits<{
   (e: "copy-path"): void;
 }>();
 
+const {t} = useI18n();
 const menuRef = ref<HTMLElement | null>(null);
 const {menuPosition, placeMenu} = useViewportMenuPosition({menuRef});
 const canToggle = computed(() => !props.loading && (props.expanded || props.hasChildren || props.node.children === undefined));
-const toggleText = computed(() => props.expanded ? "折叠" : "展开");
+const toggleText = computed(() => props.expanded ? t("context.collapse") : t("context.expand"));
 
 const {focusFirstMenuButton, handleMenuKeyDown} = useMenuKeyboardNavigation({
   menuRef,
@@ -68,21 +70,23 @@ watch(() => [props.x, props.y, props.node.path] as const, () => {
         ref="menuRef"
         class="tree-context-menu"
         :style="{left: `${menuPosition.x}px`, top: `${menuPosition.y}px`}"
+        role="menu"
+        :aria-label="t('context.menu')"
         @click.stop
         @contextmenu.prevent.stop
         @keydown="handleMenuKeyDown">
       <button class="context-row" :disabled="loading" @click="emit('open')">
         <span class="context-row-icon"><icon icon="action.open" /></span>
-        <span class="context-row-label">打开</span>
+        <span class="context-row-label">{{ t("context.open") }}</span>
       </button>
       <button class="context-row" :disabled="loading" @click="emit('open-new-tab')">
         <span class="context-row-icon"><icon icon="action.open-new-tab" /></span>
-        <span class="context-row-label">在新标签页中打开</span>
+        <span class="context-row-label">{{ t("context.openNewTab") }}</span>
       </button>
       <div class="context-separator"></div>
       <button class="context-row" :disabled="loading" @click="emit('refresh')">
         <span class="context-row-icon"><icon class="icon-motion-spin" icon="action.refresh" /></span>
-        <span class="context-row-label">刷新</span>
+        <span class="context-row-label">{{ t("context.refresh") }}</span>
       </button>
       <button class="context-row" :disabled="!canToggle" @click="emit('toggle')">
         <span class="context-row-icon"><icon icon="action.down" class="icon-motion-caret" :class="{'is-open': expanded}" /></span>
@@ -90,16 +94,16 @@ watch(() => [props.x, props.y, props.node.path] as const, () => {
       </button>
       <button v-if="favorite" class="context-row" :disabled="node.path === '/'" @click="emit('remove-favorite')">
         <span class="context-row-icon favorite"><icon icon="action.favorite-filled" /></span>
-        <span class="context-row-label">从收藏夹移除</span>
+        <span class="context-row-label">{{ t("context.removeFavorite") }}</span>
       </button>
       <button v-else class="context-row" :disabled="node.path === '/'" @click="emit('add-favorite')">
         <span class="context-row-icon favorite"><icon icon="action.favorite" /></span>
-        <span class="context-row-label">添加到收藏夹</span>
+        <span class="context-row-label">{{ t("context.addFavorite") }}</span>
       </button>
       <div class="context-separator"></div>
       <button class="context-row" @click="emit('copy-path')">
         <span class="context-row-icon"><icon icon="action.copy-path" /></span>
-        <span class="context-row-label">复制路径</span>
+        <span class="context-row-label">{{ t("context.copyPath") }}</span>
       </button>
     </div>
   </Teleport>

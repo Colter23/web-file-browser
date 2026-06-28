@@ -3,19 +3,22 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref} from "vue";
 import type {DirSortKey, DirSortOrder} from "../../class";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
+import type {MessageKey} from "../../i18n";
+import {useI18n} from "../../i18n";
 import Icon from "../Icon.vue";
 
 type SortOption = {
   key: DirSortKey;
-  label: string;
-  description: string;
+  labelKey: MessageKey;
+  descriptionKey: MessageKey;
   icon: string;
-  hint: string;
+  hintKey?: MessageKey;
+  hint?: string;
 }
 
 type OrderOption = {
   key: DirSortOrder;
-  label: string;
+  labelKey: MessageKey;
   icon: string;
 }
 
@@ -29,32 +32,33 @@ const emit = defineEmits<{
   (e: "set-sort-order", order: DirSortOrder): void;
 }>();
 
+const {t} = useI18n();
 const sortMenuRef = ref<HTMLElement | null>(null);
 const sortMenuPanelRef = ref<HTMLElement | null>(null);
 const sortButtonRef = ref<HTMLButtonElement | null>(null);
 const open = ref(false);
 
 const sortOptions: SortOption[] = [
-  {key: "name", label: "名称", description: "按文件名自然排序", icon: "sort.name", hint: "A-Z"},
-  {key: "modified", label: "修改日期", description: "按最后修改时间排序", icon: "sort.modified", hint: "时间"},
-  {key: "size", label: "大小", description: "按文件大小排序", icon: "sort.size", hint: "大小"}
+  {key: "name", labelKey: "sort.name", descriptionKey: "sort.byName", icon: "sort.name", hint: "A-Z"},
+  {key: "modified", labelKey: "sort.modified", descriptionKey: "sort.byModified", icon: "sort.modified", hintKey: "sort.time"},
+  {key: "size", labelKey: "sort.size", descriptionKey: "sort.bySize", icon: "sort.size", hintKey: "sort.size"}
 ];
 
 const orderOptions: OrderOption[] = [
-  {key: "asc", label: "升序", icon: "sort.asc"},
-  {key: "desc", label: "降序", icon: "sort.desc"}
+  {key: "asc", labelKey: "sort.asc", icon: "sort.asc"},
+  {key: "desc", labelKey: "sort.desc", icon: "sort.desc"}
 ];
 
 const activeSortOption = computed(() => sortOptions.find(option => option.key === props.sortKey) ?? sortOptions[0]);
-const activeSortLabel = computed(() => activeSortOption.value.label);
+const activeSortLabel = computed(() => t(activeSortOption.value.labelKey));
 const activeSortIcon = computed(() => activeSortOption.value.icon);
-const activeOrderLabel = computed(() => props.sortOrder === "asc" ? "升序" : "降序");
-const buttonTitle = computed(() => `排序：${activeSortLabel.value} ${activeOrderLabel.value}`);
+const activeOrderLabel = computed(() => props.sortOrder === "asc" ? t("sort.asc") : t("sort.desc"));
+const buttonTitle = computed(() => t("sort.buttonTitle", {field: activeSortLabel.value, order: activeOrderLabel.value}));
 
 const orderDescription = (order: DirSortOrder) => {
-  if (props.sortKey === "modified") return order === "asc" ? "旧到新" : "新到旧";
-  if (props.sortKey === "size") return order === "asc" ? "小到大" : "大到小";
-  return order === "asc" ? "A 到 Z" : "Z 到 A";
+  if (props.sortKey === "modified") return order === "asc" ? t("sort.oldToNew") : t("sort.newToOld");
+  if (props.sortKey === "size") return order === "asc" ? t("sort.smallToLarge") : t("sort.largeToSmall");
+  return order === "asc" ? t("sort.aToZ") : t("sort.zToA");
 }
 
 const close = () => {
@@ -147,9 +151,9 @@ onBeforeUnmount(() => {
       </span>
       <icon icon="action.down" class="sort-caret icon-motion-caret" :class="{'is-open': open}" />
     </button>
-    <div v-if="open" ref="sortMenuPanelRef" class="sort-menu-panel" role="menu" aria-label="排序方式" @keydown="handleMenuKeyDown">
+    <div v-if="open" ref="sortMenuPanelRef" class="sort-menu-panel" role="menu" :aria-label="t('sort.aria')" @keydown="handleMenuKeyDown">
       <section class="sort-menu-section">
-        <p class="menu-group-title">排序依据</p>
+        <p class="menu-group-title">{{ t("sort.field") }}</p>
         <div class="sort-field-list">
           <button
               v-for="option in sortOptions"
@@ -162,16 +166,16 @@ onBeforeUnmount(() => {
               @click="selectSortKey(option.key)">
             <span class="sort-option-icon"><icon :icon="option.icon" /></span>
             <span class="sort-menu-copy">
-              <strong>{{ option.label }}</strong>
-              <small>{{ option.description }}</small>
+              <strong>{{ t(option.labelKey) }}</strong>
+              <small>{{ t(option.descriptionKey) }}</small>
             </span>
-            <span class="sort-option-hint">{{ option.hint }}</span>
+            <span class="sort-option-hint">{{ option.hintKey ? t(option.hintKey) : option.hint }}</span>
             <span class="sort-check"><icon v-if="sortKey === option.key" icon="action.check" size="small" /></span>
           </button>
         </div>
       </section>
       <section class="sort-menu-section">
-        <p class="menu-group-title">顺序</p>
+        <p class="menu-group-title">{{ t("sort.order") }}</p>
         <div class="sort-order-toggle">
           <button
               v-for="option in orderOptions"
@@ -181,10 +185,10 @@ onBeforeUnmount(() => {
               role="menuitemradio"
               :aria-checked="sortOrder === option.key"
               tabindex="-1"
-              @click="selectSortOrder(option.key)">
+            @click="selectSortOrder(option.key)">
             <icon :icon="option.icon" />
             <span class="sort-menu-copy">
-              <strong>{{ option.label }}</strong>
+              <strong>{{ t(option.labelKey) }}</strong>
               <small>{{ orderDescription(option.key) }}</small>
             </span>
           </button>

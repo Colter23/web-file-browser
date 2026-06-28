@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed, ref} from "vue";
+import {useI18n} from "../../i18n";
 import FileTypeIcon from "../FileTypeIcon.vue";
 import OperationPanelShell from "./OperationPanelShell.vue";
 import type {DeleteConfirmState} from "./types.ts";
@@ -18,27 +19,30 @@ const emit = defineEmits<{
   (e: "update:permanent", value: boolean): void;
 }>();
 
+const {t} = useI18n();
 const panelRef = ref<OperationPanelShellExpose | null>(null);
 
 const title = computed(() => {
   const count = props.state.entries.length;
-  const action = props.state.permanent ? "永久删除" : "删除";
-  return count > 1 ? `${action} ${count} 项？` : `${action} ${props.state.entries[0]?.name ?? "所选项目"}？`;
+  const action = props.state.permanent ? t("delete.permanent") : t("common.delete");
+  return count > 1
+      ? t("delete.titleMany", {action, count})
+      : t("delete.title", {action, name: props.state.entries[0]?.name ?? t("delete.selectedItem")});
 });
 
 const message = computed(() => {
   const count = props.state.entries.length;
   if (props.state.permanent) return count > 1
-      ? "这些项目会被直接删除，无法从回收站恢复。"
-      : "该项目会被直接删除，无法从回收站恢复。";
-  return count > 1 ? "这些项目会被移动到回收站，之后可从回收站恢复。" : "该项目会被移动到回收站，之后可从回收站恢复。";
+      ? t("delete.permanentManyMessage")
+      : t("delete.permanentSingleMessage");
+  return count > 1 ? t("delete.trashManyMessage") : t("delete.trashSingleMessage");
 });
 
 const visibleItems = computed(() => props.state.entries.slice(0, 5));
 const extraCount = computed(() => Math.max(0, props.state.entries.length - visibleItems.value.length));
 const submitText = computed(() => {
-  if (props.state.submitting) return "创建任务中...";
-  return props.state.permanent ? "永久删除" : "移动到回收站";
+  if (props.state.submitting) return t("delete.creatingTask");
+  return props.state.permanent ? t("delete.permanent") : t("delete.moveToTrash");
 });
 
 defineExpose({
@@ -63,7 +67,7 @@ defineExpose({
         <span>{{ item.name }}</span>
       </div>
       <div v-if="extraCount" class="delete-confirm-more">
-        另有 {{ extraCount }} 项
+        {{ t("delete.extraItems", {count: extraCount}) }}
       </div>
     </div>
     <label class="delete-confirm-permanent" :class="{active: state.permanent}">
@@ -74,13 +78,13 @@ defineExpose({
           @change="event => emit('update:permanent', (event.target as HTMLInputElement).checked)">
       <span class="delete-confirm-switch" aria-hidden="true"><span></span></span>
       <span class="delete-confirm-copy">
-        <strong>永久删除</strong>
-        <small>跳过回收站，删除后无法从应用内恢复。</small>
+        <strong>{{ t("delete.permanent") }}</strong>
+        <small>{{ t("delete.permanentHint") }}</small>
       </span>
     </label>
     <p v-if="state.error" class="delete-confirm-error">{{ state.error }}</p>
     <template #actions>
-      <button type="button" class="operation-secondary" :disabled="state.submitting" @click="emit('close')">取消</button>
+      <button type="button" class="operation-secondary" :disabled="state.submitting" @click="emit('close')">{{ t("operation.cancel") }}</button>
       <button
           type="button"
           class="delete-confirm-primary"

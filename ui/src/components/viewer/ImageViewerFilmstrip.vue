@@ -2,6 +2,7 @@
 import {nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ComponentPublicInstance} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
+import {useI18n} from "../../i18n";
 import {downloadUrl} from "../../network/api.ts";
 import {scrollHorizontallyWithWheel} from "../../utils/wheel.ts";
 
@@ -15,6 +16,7 @@ const emit = defineEmits<{
   (e: "select", index: number): void;
 }>();
 
+const {t} = useI18n();
 const thumbRefs = new Map<string, HTMLElement>();
 const reduceMotion = ref(false);
 let reduceMotionMedia: MediaQueryList | null = null;
@@ -58,7 +60,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="image-viewer-filmstrip" aria-label="图片列表" @wheel="scrollHorizontallyWithWheel">
+  <div class="image-viewer-filmstrip" :aria-label="t('viewer.filmstrip')" @wheel="scrollHorizontallyWithWheel">
     <button
         v-for="item in items"
         :key="item.entry.path"

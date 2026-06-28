@@ -2,6 +2,7 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import {useImageZoomPan} from "../../composables/useImageZoomPan.ts";
+import {useI18n} from "../../i18n";
 import type {ShellNoticePayload} from "../shell/types.ts";
 import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
 import {readBooleanStorage, writeBooleanStorage} from "../../utils/safe-storage.ts";
@@ -22,6 +23,7 @@ const emit = defineEmits<{
   (e: "notice", payload: ShellNoticePayload): void;
 }>();
 
+const {t} = useI18n();
 const filmstripStorageKey = "explorer.imageViewer.showFilmstrip";
 const minZoom = 25;
 const maxZoom = 500;
@@ -101,7 +103,7 @@ const subtitle = computed(() => {
   return `${position}${formatEntrySize(entry.size, "0 B")} · ${formatEntryDate(entry.modified)}`;
 });
 
-const stageTitle = computed(() => fit.value ? "双击按原始大小查看" : "双击适应窗口，拖拽移动图片");
+const stageTitle = computed(() => fit.value ? t("viewer.doubleClickActual") : t("viewer.doubleClickFitPan"));
 
 const resetRuntimeState = () => {
   if (document.fullscreenElement === viewerRef.value) void document.exitFullscreen().catch(() => undefined);
@@ -166,8 +168,8 @@ const toggleBrowserFullscreen = async () => {
   } catch {
     emit("notice", {
       kind: "warning",
-      title: "无法全屏",
-      message: "当前浏览器未允许进入全屏，仍可在页面内查看大图。"
+      title: t("viewer.fullscreenFailedTitle"),
+      message: t("viewer.imageFullscreenFailed")
     });
   }
 }
@@ -189,7 +191,7 @@ const handleLoad = () => {
 
 const handleError = () => {
   loading.value = false;
-  error.value = "图片加载失败，请检查文件是否仍可读取。";
+  error.value = t("viewer.imageLoadFailed");
 }
 
 const handleFullscreenChange = () => {

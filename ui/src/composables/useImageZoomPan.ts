@@ -1,5 +1,6 @@
 import {computed, ref, toValue} from "vue";
 import type {MaybeRefOrGetter} from "vue";
+import {translate} from "../i18n";
 
 type ImageZoomPanOptions = {
   minZoom?: MaybeRefOrGetter<number>;
@@ -35,7 +36,7 @@ export const useImageZoomPan = (options: ImageZoomPanOptions = {}) => {
     transformOrigin: "center center"
   }));
 
-  const zoomText = computed(() => fit.value ? "适应" : `${Math.round(zoom.value)}%`);
+  const zoomText = computed(() => fit.value ? translate("preview.fit") : `${Math.round(zoom.value)}%`);
   const canPan = computed(() => !fit.value && (options.canPan?.() ?? true));
   const actualSizeActive = computed(() => !fit.value && Math.abs(zoom.value - 100) < 0.5);
   const canZoomOut = computed(() => zoom.value > minZoom.value || fit.value);

@@ -4,14 +4,16 @@ import type {ExplorerIconSize, ExplorerViewMode} from "../../class";
 import type {ExplorerViewModeSelection} from "../../composables/useExplorerViewMode.ts";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
+import type {MessageKey} from "../../i18n";
+import {useI18n} from "../../i18n";
 import Icon from "../Icon.vue";
 
 type ViewModeOption = {
   key: string;
   mode: ExplorerViewMode;
   iconSize?: ExplorerIconSize;
-  label: string;
-  description: string;
+  labelKey: MessageKey;
+  descriptionKey: MessageKey;
   icon: string;
   shortcut: string;
 }
@@ -28,6 +30,7 @@ const emit = defineEmits<{
   (e: "select", selection: ExplorerViewModeSelection): void;
 }>();
 
+const {t} = useI18n();
 const viewMenuRef = ref<HTMLElement | null>(null);
 const viewMenuPanelRef = ref<HTMLElement | null>(null);
 const viewModeButtonRef = ref<HTMLButtonElement | null>(null);
@@ -38,8 +41,8 @@ const viewModeOptions: ViewModeOption[] = [
     key: "details",
     mode: "details",
     iconSize: "small",
-    label: "详细信息",
-    description: "显示日期、类型和大小",
+    labelKey: "view.details",
+    descriptionKey: "view.detailsDescription",
     icon: "view.details",
     shortcut: "Ctrl+Shift+6"
   },
@@ -47,8 +50,8 @@ const viewModeOptions: ViewModeOption[] = [
     key: "list",
     mode: "list",
     iconSize: "small",
-    label: "列表",
-    description: "紧凑排列，快速扫描",
+    labelKey: "view.list",
+    descriptionKey: "view.listDescription",
     icon: "view.list",
     shortcut: "Ctrl+Shift+5"
   },
@@ -56,8 +59,8 @@ const viewModeOptions: ViewModeOption[] = [
     key: "tiles",
     mode: "tiles",
     iconSize: "medium",
-    label: "平铺",
-    description: "图标与文件信息并列",
+    labelKey: "view.tiles",
+    descriptionKey: "view.tilesDescription",
     icon: "view.tiles",
     shortcut: "Ctrl+Shift+7"
   },
@@ -65,8 +68,8 @@ const viewModeOptions: ViewModeOption[] = [
     key: "icons-small",
     mode: "icons",
     iconSize: "small",
-    label: "小图标",
-    description: "更多项目同屏展示",
+    labelKey: "view.smallIcons",
+    descriptionKey: "view.smallIconsDescription",
     icon: "view.icons",
     shortcut: "Ctrl+Shift+4"
   },
@@ -74,8 +77,8 @@ const viewModeOptions: ViewModeOption[] = [
     key: "icons-medium",
     mode: "icons",
     iconSize: "medium",
-    label: "中图标",
-    description: "兼顾预览和密度",
+    labelKey: "view.mediumIcons",
+    descriptionKey: "view.mediumIconsDescription",
     icon: "view.icons",
     shortcut: "Ctrl+Shift+3"
   },
@@ -83,8 +86,8 @@ const viewModeOptions: ViewModeOption[] = [
     key: "icons-large",
     mode: "icons",
     iconSize: "large",
-    label: "大图标",
-    description: "适合浏览图片和媒体",
+    labelKey: "view.largeIcons",
+    descriptionKey: "view.largeIconsDescription",
     icon: "view.icons",
     shortcut: "Ctrl+Shift+1/2"
   }
@@ -136,7 +139,7 @@ const select = (option: ViewModeOption) => {
   emit("select", {
     mode: option.mode,
     iconSize: option.iconSize,
-    label: option.label
+    label: t(option.labelKey)
   });
 }
 
@@ -181,7 +184,7 @@ onBeforeUnmount(() => {
       <span>{{ label }}</span>
       <icon icon="action.down" class="view-caret icon-motion-caret" :class="{'is-open': open}" />
     </button>
-    <div v-if="open" ref="viewMenuPanelRef" class="view-menu-panel" role="menu" aria-label="查看模式" @keydown="handleMenuKeyDown">
+    <div v-if="open" ref="viewMenuPanelRef" class="view-menu-panel" role="menu" :aria-label="t('view.aria')" @keydown="handleMenuKeyDown">
       <div class="view-menu-list">
         <button
             v-for="option in viewModeOptions"
@@ -194,8 +197,8 @@ onBeforeUnmount(() => {
             @click="select(option)">
           <span class="view-option-icon"><icon :icon="option.icon" /></span>
           <span class="view-menu-copy">
-            <strong>{{ option.label }}</strong>
-            <small>{{ option.description }}</small>
+            <strong>{{ t(option.labelKey) }}</strong>
+            <small>{{ t(option.descriptionKey) }}</small>
           </span>
           <kbd>{{ option.shortcut }}</kbd>
           <span class="view-check"><icon v-if="isActive(option)" icon="action.check" size="small" /></span>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {nextTick, ref, watch} from "vue";
+import {useI18n} from "../../i18n";
 import Icon from "../Icon.vue";
 
 const props = defineProps<{
@@ -18,6 +19,7 @@ const emit = defineEmits<{
   (e: "save"): void;
 }>();
 
+const {t} = useI18n();
 const confirmRef = ref<HTMLElement | null>(null);
 
 watch(() => props.visible, async visible => {
@@ -38,7 +40,7 @@ watch(() => props.visible, async visible => {
         <p>{{ description }}</p>
       </div>
       <div class="confirm-actions">
-        <button class="confirm-secondary" :disabled="busy" @click="emit('cancel')">取消</button>
+        <button class="confirm-secondary" :disabled="busy" @click="emit('cancel')">{{ t("editor.cancel") }}</button>
         <button class="confirm-danger" :disabled="busy" @click="emit('discard')">{{ discardText }}</button>
         <button class="confirm-primary" :disabled="!canSave || busy" @click="emit('save')">{{ saveText }}</button>
       </div>

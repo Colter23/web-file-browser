@@ -1,5 +1,7 @@
 import {computed, nextTick} from "vue";
 import type {ExplorerIconSize, ExplorerViewMode} from "../class.ts";
+import type {MessageKey} from "../i18n";
+import {useI18n} from "../i18n";
 import {useFileStore} from "../store";
 
 export type ExplorerViewModeSelection = {
@@ -13,37 +15,43 @@ type ExplorerViewModeOptions = {
   closeMenus: () => void;
 }
 
-const viewModeMeta: Record<ExplorerViewMode, {label: string; icon: string}> = {
-  details: {label: "详细信息", icon: "view.details"},
-  list: {label: "列表", icon: "view.list"},
-  icons: {label: "图标", icon: "view.icons"},
-  tiles: {label: "平铺", icon: "view.tiles"}
+const viewModeMeta: Record<ExplorerViewMode, {labelKey: MessageKey; icon: string}> = {
+  details: {labelKey: "view.details", icon: "view.details"},
+  list: {labelKey: "view.list", icon: "view.list"},
+  icons: {labelKey: "view.icons", icon: "view.icons"},
+  tiles: {labelKey: "view.tiles", icon: "view.tiles"}
 };
 
-const viewShortcutMap: Record<string, ExplorerViewModeSelection & {iconSize: ExplorerIconSize}> = {
-  Digit1: {mode: "icons", iconSize: "large", label: "大图标"},
-  Digit2: {mode: "icons", iconSize: "large", label: "大图标"},
-  Digit3: {mode: "icons", iconSize: "medium", label: "中图标"},
-  Digit4: {mode: "icons", iconSize: "small", label: "小图标"},
-  Digit5: {mode: "list", iconSize: "small", label: "列表"},
-  Digit6: {mode: "details", iconSize: "small", label: "详细信息"},
-  Digit7: {mode: "tiles", iconSize: "medium", label: "平铺"}
+const viewShortcutMap: Record<string, Omit<ExplorerViewModeSelection, "label"> & {iconSize: ExplorerIconSize; labelKey: MessageKey}> = {
+  Digit1: {mode: "icons", iconSize: "large", labelKey: "view.largeIcons"},
+  Digit2: {mode: "icons", iconSize: "large", labelKey: "view.largeIcons"},
+  Digit3: {mode: "icons", iconSize: "medium", labelKey: "view.mediumIcons"},
+  Digit4: {mode: "icons", iconSize: "small", labelKey: "view.smallIcons"},
+  Digit5: {mode: "list", iconSize: "small", labelKey: "view.list"},
+  Digit6: {mode: "details", iconSize: "small", labelKey: "view.details"},
+  Digit7: {mode: "tiles", iconSize: "medium", labelKey: "view.tiles"}
 };
 
-const iconSizeLabel: Record<ExplorerIconSize, string> = {
-  small: "小图标",
-  medium: "中图标",
-  large: "大图标"
+const iconSizeLabelKey: Record<ExplorerIconSize, MessageKey> = {
+  small: "view.smallIcons",
+  medium: "view.mediumIcons",
+  large: "view.largeIcons"
 };
 
 export const useExplorerViewMode = ({focusExplorer, closeMenus}: ExplorerViewModeOptions) => {
   const fileStore = useFileStore();
+  const {t} = useI18n();
 
   const currentViewModeMeta = computed(() => viewModeMeta[fileStore.viewMode]);
-  const currentViewModeLabel = computed(() => fileStore.viewMode === "icons" ? iconSizeLabel[fileStore.iconSize] : currentViewModeMeta.value.label);
-  const viewModeButtonTitle = computed(() => `当前：${currentViewModeLabel.value}，点击选择查看模式。Ctrl+Shift+1-7 可直接切换查看模式`);
+  const currentViewModeLabel = computed(() => {
+    return fileStore.viewMode === "icons" ? t(iconSizeLabelKey[fileStore.iconSize]) : t(currentViewModeMeta.value.labelKey);
+  });
+  const viewModeButtonTitle = computed(() => t("view.buttonTitle", {mode: currentViewModeLabel.value}));
 
-  const viewShortcut = (code: string) => viewShortcutMap[code] ?? viewShortcutMap[code.replace("Numpad", "Digit")];
+  const viewShortcut = (code: string) => {
+    const shortcut = viewShortcutMap[code] ?? viewShortcutMap[code.replace("Numpad", "Digit")];
+    return shortcut ? {...shortcut, label: t(shortcut.labelKey)} : undefined;
+  }
 
   const selectViewMode = (selection: ExplorerViewModeSelection) => {
     fileStore.setViewMode(selection.mode);

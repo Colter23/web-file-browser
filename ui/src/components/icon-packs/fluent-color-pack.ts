@@ -22,6 +22,7 @@ import documentFolderSvg from "@fluentui/svg-icons/icons/document_folder_24_colo
 import documentSvg from "@fluentui/svg-icons/icons/document_24_color.svg?raw";
 import documentTextSvg from "@fluentui/svg-icons/icons/document_text_24_color.svg?raw";
 import editSvg from "@fluentui/svg-icons/icons/edit_24_color.svg?raw";
+import globeSvg from "@fluentui/svg-icons/icons/globe_24_color.svg?raw";
 import headphonesSvg from "@fluentui/svg-icons/icons/headphones_24_color.svg?raw";
 import historySvg from "@fluentui/svg-icons/icons/history_24_color.svg?raw";
 import homeSvg from "@fluentui/svg-icons/icons/home_24_color.svg?raw";
@@ -73,6 +74,7 @@ const fluentColorIcons: Record<string, string> = {
   "action.clean": addStarburstSvg,
   "action.settings": settingsSvg,
   "action.appearance": paintBrushSvg,
+  "action.language": globeSvg,
   "action.main-menu": appsSvg,
   "action.more": optionsSvg,
   "action.search": searchSparkleSvg,

@@ -1,5 +1,6 @@
 import type {ArchiveFormat, FileInfo} from "../class.ts";
 import editorConfig from "../assets/editor-config.json";
+import {getLocale, translate as t} from "../i18n";
 import {parentPath} from "./file-path.ts";
 
 export type FileEntryKind = "folder" | "file";
@@ -173,12 +174,12 @@ export const entryPreviewKind = (entry: FileEntryLike | null | undefined, editab
 }
 
 export const entryPreviewTypeText = (kind: EntryPreviewKind) => ({
-  image: "图片",
-  text: "文本",
-  audio: "音频",
-  video: "视频",
-  pdf: "PDF",
-  unknown: "文件"
+  image: t("previewType.image"),
+  text: t("previewType.text"),
+  audio: t("previewType.audio"),
+  video: t("previewType.video"),
+  pdf: t("previewType.pdf"),
+  unknown: t("previewType.unknown")
 }[kind]);
 
 export const isEditableEntry = (entry: FileEntryLike | null | undefined, editableExtensions: readonly string[]) => {
@@ -259,7 +260,7 @@ export const formatEntryDate = (srcDate?: string) => {
   if (!srcDate) return "-";
   const date = parseEntryDate(srcDate);
   if (Number.isNaN(date.getTime())) return srcDate;
-  return new Intl.DateTimeFormat("zh-CN", {
+  return new Intl.DateTimeFormat(getLocale(), {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -282,19 +283,19 @@ export const formatEntrySize = (size?: number, missingText = "-") => {
 
 export const entryMetaRows = (entry: FileEntryLike, options: FileEntryMetaOptions = {}): FileEntryMetaRow[] => {
   const rows: FileEntryMetaRow[] = [
-    {label: "类型", value: options.typeText ?? entryTypeText(entry)}
+    {label: t("meta.type"), value: options.typeText ?? entryTypeText(entry)}
   ];
-  if (entry.path && options.includeLocation) rows.push({label: "位置", value: parentPath(entry.path)});
-  if (entry.path && options.includePath && options.pathBeforeStats) rows.push({label: "路径", value: entry.path});
+  if (entry.path && options.includeLocation) rows.push({label: t("meta.location"), value: parentPath(entry.path)});
+  if (entry.path && options.includePath && options.pathBeforeStats) rows.push({label: t("meta.path"), value: entry.path});
   rows.push(
-    {label: "大小", value: options.sizeText ?? (entry.type === "file" ? formatEntrySize(entry.size) : "-")},
-    {label: options.modifiedLabel ?? "修改", value: formatEntryDate(entry.modified)}
+    {label: t("meta.size"), value: options.sizeText ?? (entry.type === "file" ? formatEntrySize(entry.size) : "-")},
+    {label: options.modifiedLabel ?? t("meta.modified"), value: formatEntryDate(entry.modified)}
   );
-  if (entry.path && options.includePath && !options.pathBeforeStats) rows.push({label: "路径", value: entry.path});
+  if (entry.path && options.includePath && !options.pathBeforeStats) rows.push({label: t("meta.path"), value: entry.path});
   return rows;
 }
 
 export const entryTypeText = (entry: FileEntryLike) => {
-  if (entry.type === "folder") return "文件夹";
-  return entry.extension ? `${entry.extension.toUpperCase()} 文件` : "文件";
+  if (entry.type === "folder") return t("fileType.folder");
+  return entry.extension ? t("fileType.extensionFile", {extension: entry.extension.toUpperCase()}) : t("fileType.file");
 }

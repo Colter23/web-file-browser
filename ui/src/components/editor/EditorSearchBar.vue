@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {useI18n} from "../../i18n";
 import Icon from "../Icon.vue";
 import type {EditorInputRefSetter, EditorSearchOptionName} from "./types.ts";
 
@@ -31,6 +32,8 @@ const emit = defineEmits<{
   (e: "close"): void;
 }>();
 
+const {t} = useI18n();
+
 const updateSearchText = (event: Event) => {
   const input = event.target as HTMLInputElement | null;
   emit("update:searchText", input?.value ?? "");
@@ -51,7 +54,7 @@ const updateReplaceText = (event: Event) => {
           :value="searchText"
           class="search-input"
           type="text"
-          placeholder="查找"
+          :placeholder="t('editor.findPlaceholder')"
           @keydown.enter.prevent.stop="emit('search-input', $event)"
           @input="updateSearchText">
       <input
@@ -60,27 +63,27 @@ const updateReplaceText = (event: Event) => {
           :value="replaceText"
           class="search-input replace-input"
           type="text"
-          placeholder="替换为"
+          :placeholder="t('editor.replacePlaceholder')"
           @keydown.enter.prevent.stop="emit('replace-current')"
           @input="updateReplaceText">
     </div>
     <div class="search-actions">
       <span v-if="searchStatusText" class="search-status">{{ searchStatusText }}</span>
-      <button title="上一个 (Shift+Enter)" :disabled="!canFind" @click="emit('search', true)">
+      <button :title="t('editor.previousMatch')" :disabled="!canFind" @click="emit('search', true)">
         <icon icon="action.up" />
       </button>
-      <button title="下一个 (Enter)" :disabled="!canFind" @click="emit('search', false)">
+      <button :title="t('editor.nextMatch')" :disabled="!canFind" @click="emit('search', false)">
         <icon icon="action.down" />
       </button>
-      <button v-if="!replaceVisible && !readOnly" title="显示替换 (Ctrl+H)" @click="emit('show-replace')">
+      <button v-if="!replaceVisible && !readOnly" :title="t('editor.showReplace')" @click="emit('show-replace')">
         <icon icon="action.rename" />
       </button>
-      <button v-if="replaceVisible" class="text-tool" title="替换当前" :disabled="!canReplace" @click="emit('replace-current')">替换</button>
-      <button v-if="replaceVisible" class="text-tool" title="全部替换" :disabled="!canReplace" @click="emit('replace-all')">全部</button>
-      <button class="text-tool" :class="{active: caseSensitive}" title="区分大小写" @click="emit('toggle-option', 'case')">Aa</button>
-      <button class="text-tool" :class="{active: wholeWord}" title="全词匹配" @click="emit('toggle-option', 'word')">W</button>
-      <button class="text-tool" :class="{active: regex}" title="正则表达式" @click="emit('toggle-option', 'regex')">.*</button>
-      <button title="关闭查找" @click="emit('close')">
+      <button v-if="replaceVisible" class="text-tool" :title="t('editor.replaceCurrent')" :disabled="!canReplace" @click="emit('replace-current')">{{ t("editor.replace") }}</button>
+      <button v-if="replaceVisible" class="text-tool" :title="t('editor.replaceAll')" :disabled="!canReplace" @click="emit('replace-all')">{{ t("editor.replaceAllShort") }}</button>
+      <button class="text-tool" :class="{active: caseSensitive}" :title="t('editor.caseSensitive')" @click="emit('toggle-option', 'case')">Aa</button>
+      <button class="text-tool" :class="{active: wholeWord}" :title="t('editor.wholeWord')" @click="emit('toggle-option', 'word')">W</button>
+      <button class="text-tool" :class="{active: regex}" :title="t('editor.regex')" @click="emit('toggle-option', 'regex')">.*</button>
+      <button :title="t('editor.closeFind')" @click="emit('close')">
         <icon icon="action.close" />
       </button>
     </div>

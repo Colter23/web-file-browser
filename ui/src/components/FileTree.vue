@@ -4,6 +4,7 @@ import FileTreeNode from "./FileTreeNode.vue";
 import FileTreeContextMenu from "./FileTreeContextMenu.vue";
 import type {FileTreeData, LoadData} from "../class.ts";
 import type {ExplorerEntry} from "./explorer/types.ts";
+import {useI18n} from "../i18n";
 import {isSameOrDescendantPath, normalizePathText} from "../utils/file-path.ts";
 import {
   getActiveInternalEntryDragEntries,
@@ -17,6 +18,8 @@ const props = defineProps<{
   currentPath: string;
   favoritePaths: string[];
 }>();
+
+const {t} = useI18n();
 
 const emit = defineEmits<{
   (e: "drop-entries", payload: {entries: ExplorerEntry[]; target: FileTreeData; action: "copy" | "move"}): void;
@@ -278,9 +281,9 @@ const copyContextNodePath = async () => {
   closeContextMenu();
   try {
     await navigator.clipboard.writeText(normalizePathText(node.path));
-    emit("notice", {message: "已复制路径", kind: "success", title: "路径已复制"});
+    emit("notice", {message: t("context.pathCopied"), kind: "success", title: t("context.pathCopiedTitle")});
   } catch {
-    emit("notice", {message: "浏览器未允许写入剪贴板，请手动复制路径。", kind: "error", title: "复制路径失败"});
+    emit("notice", {message: t("favorite.clipboardDenied"), kind: "error", title: t("favorite.copyPathFailed")});
   }
 }
 
@@ -542,7 +545,7 @@ watch([() => props.currentPath, () => props.data], () => {
 </script>
 
 <template>
-  <div ref="treeRef" class="file-tree" role="tree" aria-label="文件树" tabindex="-1" @keydown="handleTreeKeyDown" @dragleave="handleTreeDragLeave" @dragend="clearTreeDragState" @drop="clearTreeDragState">
+  <div ref="treeRef" class="file-tree" role="tree" :aria-label="t('explorer.tree')" tabindex="-1" @keydown="handleTreeKeyDown" @dragleave="handleTreeDragLeave" @dragend="clearTreeDragState" @drop="clearTreeDragState">
     <template v-if="data.length">
       <file-tree-node
           v-for="file in data"
@@ -568,7 +571,7 @@ watch([() => props.currentPath, () => props.data], () => {
           @node-drag-leave="handleNodeDragLeave"
           @node-drop="handleNodeDrop" />
     </template>
-    <div v-else class="tree-empty">暂无目录</div>
+    <div v-else class="tree-empty">{{ t("explorer.emptyTree") }}</div>
 
     <file-tree-context-menu
         v-if="contextMenu.visible && contextNode"

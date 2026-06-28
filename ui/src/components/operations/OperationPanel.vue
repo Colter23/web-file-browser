@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed, nextTick, ref, watch} from "vue";
 import type {ArchiveFormat} from "../../class";
+import {useI18n} from "../../i18n";
 import OperationPanelShell from "./OperationPanelShell.vue";
 import type {OperationPanelState} from "./types.ts";
 
@@ -15,6 +16,7 @@ const emit = defineEmits<{
   (e: "submit"): void;
 }>();
 
+const {t} = useI18n();
 const nameInputRef = ref<HTMLInputElement | null>(null);
 
 const nameModel = computed({
@@ -29,15 +31,15 @@ const setFormat = (format: ArchiveFormat) => {
 const nameLabel = computed(() => {
   switch (props.state.kind) {
     case "createFile":
-      return "文件名";
+      return t("operation.fileName");
     case "createFolder":
-      return "文件夹名";
+      return t("operation.folderName");
     case "archive":
-      return "压缩包名称";
+      return t("operation.archiveName");
     case "extract":
-      return "解压到文件夹";
+      return t("operation.extractFolder");
     default:
-      return "名称";
+      return t("operation.name");
   }
 });
 
@@ -103,22 +105,22 @@ defineExpose({
           :disabled="state.submitting">
     </label>
     <div v-if="state.kind === 'archive'" class="operation-field">
-      <span>压缩格式</span>
+      <span>{{ t("operation.archiveFormat") }}</span>
       <div class="operation-segmented">
         <button type="button" :class="{active: state.format === 'zip'}" @click="setFormat('zip')">ZIP</button>
         <button type="button" :class="{active: state.format === 'tarGz'}" @click="setFormat('tarGz')">TAR.GZ</button>
       </div>
     </div>
     <div v-if="state.kind === 'archive'" class="operation-hint">
-      {{ state.entries.length }} 项将加入压缩包
+      {{ t("operation.addToArchive", {count: state.entries.length}) }}
     </div>
     <div v-else-if="state.kind === 'extract' && state.sourceEntry" class="operation-hint">
-      源文件：{{ state.sourceEntry.name }}
+      {{ t("operation.sourceFile", {name: state.sourceEntry.name}) }}
     </div>
     <template #actions>
-      <button type="button" class="operation-secondary" :disabled="state.submitting" @click="emit('close')">取消</button>
+      <button type="button" class="operation-secondary" :disabled="state.submitting" @click="emit('close')">{{ t("operation.cancel") }}</button>
       <button type="submit" class="operation-primary" :disabled="state.submitting || !state.name.trim()">
-        {{ state.submitting ? "处理中..." : state.primaryText }}
+        {{ state.submitting ? t("operation.processing") : state.primaryText }}
       </button>
     </template>
   </operation-panel-shell>

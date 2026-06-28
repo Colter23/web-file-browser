@@ -2,11 +2,13 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import Icon from "./Icon.vue";
 import {useFileStore} from "../store";
+import {useI18n} from "../i18n";
 import {scrollHorizontallyWithWheel} from "../utils/wheel.ts";
 import type {ExplorerEntryPathDropPayload} from "./explorer/types.ts";
 import {hasInternalEntryDragData, readInternalEntryDragData} from "../utils/internal-entry-drag.ts";
 
 const fileStore = useFileStore();
+const {t} = useI18n();
 type NavigateComplete = (navigated: boolean) => void;
 
 const emit = defineEmits<{
@@ -157,17 +159,17 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="path-card" title="地址栏 (Ctrl+L / Alt+D)">
+  <div class="path-card" :title="t('nav.addressBar')">
     <div class="flex items-center gap-1 pl-2">
       <button
           class="path-item px-1"
           :class="{dropTarget: dropTargetPath === '/'}"
           type="button"
-          title="主页"
+          :title="t('nav.home')"
           @click="changePath(-1)"
           @dragover="dragOverPath($event, '/')"
           @dragleave="dragLeavePath($event, '/')"
-          @drop="dropOnPath($event, '/', '主页')">
+          @drop="dropOnPath($event, '/', t('nav.home'))">
         <icon icon="file.home" size="large" />
       </button>
       <div v-if="pathList.length" class="separator">

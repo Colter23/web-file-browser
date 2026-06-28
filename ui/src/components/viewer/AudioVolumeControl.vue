@@ -7,7 +7,7 @@ defineProps<{
   volume: number;
   volumeStyle: StyleValue;
   volumeTitle: string;
-  muteTitle: string;
+  muteButtonTitle: string;
   audibleVolumePercent: string;
   variant?: "inline" | "floating";
 }>();
@@ -20,7 +20,7 @@ const emit = defineEmits<{
 
 <template>
   <div class="audio-volume" :class="`variant-${variant ?? 'inline'}`" :aria-label="volumeTitle">
-    <button :title="`${muteTitle}，当前${audibleVolumePercent}`" @click="emit('toggleMute')">
+    <button :title="muteButtonTitle" @click="emit('toggleMute')">
       <icon :icon="muted || volume === 0 ? 'action.volume-muted' : 'action.volume'" color="currentColor" />
     </button>
     <div class="audio-volume-slider" :style="volumeStyle">

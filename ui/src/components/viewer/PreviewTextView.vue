@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed, onBeforeUnmount, ref, watch} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
+import {useI18n} from "../../i18n";
 import {getFile} from "../../network/api.ts";
 import type {ShellNoticePayload} from "../shell/types.ts";
 import PreviewToolRow from "./PreviewToolRow.vue";
@@ -14,6 +15,7 @@ const emit = defineEmits<{
   (e: "notice", payload: ShellNoticePayload): void;
 }>();
 
+const {t} = useI18n();
 const previewLoading = ref(false);
 const previewText = ref("");
 const previewError = ref("");
@@ -24,7 +26,7 @@ let previewCopyTimer: number | undefined;
 
 const previewTextStats = computed(() => {
   const lines = previewText.value ? previewText.value.split(/\r\n|\r|\n/).length : 0;
-  return `${lines} 行，${previewText.value.length} 字符`;
+  return t("preview.textStats", {lines, chars: previewText.value.length});
 });
 
 const resetCopyState = () => {
@@ -55,7 +57,7 @@ const loadPreview = async () => {
     previewText.value = file.content;
   } catch (error) {
     if (version !== previewLoadVersion) return;
-    previewError.value = error instanceof Error ? error.message : "预览失败";
+    previewError.value = error instanceof Error ? error.message : t("preview.loadFailed");
   } finally {
     if (version === previewLoadVersion) previewLoading.value = false;
   }
@@ -71,7 +73,7 @@ const copyPreviewText = async () => {
       previewCopied.value = false;
     }, 1500);
   } catch {
-    emit("notice", {kind: "error", title: "复制失败", message: "复制失败，请手动选择文本复制"});
+    emit("notice", {kind: "error", title: t("preview.copyFailed"), message: t("preview.copyFailedMessage")});
   }
 }
 
@@ -86,13 +88,13 @@ onBeforeUnmount(resetPreviewRuntime);
 <template>
   <preview-tool-row>
     <button :class="{active: previewTextWrap}" @click="previewTextWrap = !previewTextWrap">
-      {{ previewTextWrap ? "自动换行" : "不换行" }}
+      {{ previewTextWrap ? t("preview.wrap") : t("preview.noWrap") }}
     </button>
-    <button :disabled="!previewText" @click="copyPreviewText">{{ previewCopied ? "已复制" : "复制" }}</button>
+    <button :disabled="!previewText" @click="copyPreviewText">{{ previewCopied ? t("preview.copied") : t("preview.copy") }}</button>
     <template #status>{{ previewTextStats }}</template>
   </preview-tool-row>
   <div class="preview-body text">
-    <div v-if="previewLoading" class="preview-placeholder">正在加载预览...</div>
+    <div v-if="previewLoading" class="preview-placeholder">{{ t("preview.loading") }}</div>
     <div v-else-if="previewError" class="preview-placeholder error">{{ previewError }}</div>
     <pre v-else :class="{nowrap: !previewTextWrap}">{{ previewText }}</pre>
   </div>

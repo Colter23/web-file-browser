@@ -69,6 +69,7 @@ import {useTrashPanel} from "../composables/useTrashPanel.ts";
 import {useUploadDrop} from "../composables/useUploadDrop.ts";
 import {useSearchIndexStatusHint} from "../composables/useSearchIndexStatusHint.ts";
 import {useFavorites} from "../composables/useFavorites.ts";
+import {useI18n} from "../i18n";
 import {entryFileInfo} from "../utils/file-entry.ts";
 import {parentPath} from "../utils/file-path.ts";
 
@@ -108,6 +109,7 @@ type FocusablePanelExpose = {
 
 const router = useRouter();
 const fileStore = useFileStore();
+const {t} = useI18n();
 const {
   width: sidebarWidth,
   resizing: sidebarResizing,
@@ -947,7 +949,7 @@ const signOut = async () => {
           :aria-valuemax="sidebarMaxWidth"
           :aria-valuenow="sidebarWidth"
           tabindex="0"
-          title="拖动调整文件树宽度，双击恢复默认"
+          :title="t('splitter.sidebar')"
           @pointerdown="startSidebarResize"
           @keydown="handleSidebarResizeKeyDown"
           @dblclick="resetSidebarWidth">
@@ -1119,7 +1121,7 @@ const signOut = async () => {
                 :aria-valuemax="previewPaneMaxWidth"
                 :aria-valuenow="previewPaneWidth"
                 tabindex="0"
-                title="拖动调整预览窗格宽度，双击恢复默认"
+                :title="t('splitter.preview')"
                 @pointerdown="startPreviewPaneResize"
                 @keydown="handlePreviewPaneResizeKeyDown"
                 @dblclick="resetPreviewPaneWidth">

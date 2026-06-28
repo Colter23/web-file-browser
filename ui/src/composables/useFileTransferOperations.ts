@@ -1,5 +1,6 @@
 import type {ExplorerEntry} from "../components/explorer/types.ts";
 import type {ShellNoticeKind} from "../components/shell/types.ts";
+import {useI18n} from "../i18n";
 import {downloadFile, uploadFiles} from "../network/api.ts";
 
 type FileTransferOperationsOptions = {
@@ -17,9 +18,11 @@ export const useFileTransferOperations = ({
   showError,
   setTaskMessage
 }: FileTransferOperationsOptions) => {
+  const {t} = useI18n();
+
   const downloadEntry = async (entry: ExplorerEntry | null | undefined) => {
     if (!entry || entry.type !== "file") {
-      showNotice("请选择一个文件", "warning");
+      showNotice(t("upload.selectFile"), "warning");
       return;
     }
     try {
@@ -31,7 +34,7 @@ export const useFileTransferOperations = ({
       anchor.click();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      showError(error, "下载失败", "下载失败");
+      showError(error, t("upload.downloadFailed"), t("upload.downloadFailed"));
     }
   }
 
@@ -40,10 +43,10 @@ export const useFileTransferOperations = ({
     if (!fileList.length) return;
     try {
       await uploadFiles(currentFolder(), fileList);
-      setTaskMessage(`已上传 ${fileList.length} 个文件`);
+      setTaskMessage(t("upload.uploaded", {count: fileList.length}));
       await refreshCurrent();
     } catch (error) {
-      showError(error, "操作失败");
+      showError(error, t("operation.operationFailed"));
     }
   }
 

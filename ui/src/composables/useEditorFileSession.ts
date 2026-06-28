@@ -1,6 +1,7 @@
 import {computed, nextTick, ref, watch} from "vue";
 import type {FileInfo} from "../class.ts";
 import type {EditorCursorStatus, PendingEditorAction} from "../components/editor/types.ts";
+import {useI18n} from "../i18n";
 import {isApiError} from "../network";
 import {getFile, saveFile} from "../network/file-api.ts";
 import {useFileStore} from "../store";
@@ -20,6 +21,7 @@ export const useEditorFileSession = ({
   focusEditor
 }: EditorFileSessionOptions) => {
   const fileStore = useFileStore();
+  const {t} = useI18n();
   const fileInfo = ref<FileInfo | null>(null);
   const currentMode = ref("text");
   const content = ref("");
@@ -55,12 +57,12 @@ export const useEditorFileSession = ({
       content.value = file.content;
       contentEtag.value = file.etag;
       isChange.value = false;
-      statusText.value = "已打开";
+      statusText.value = t("editor.opened");
       await nextTick();
       focusEditor();
     } catch (error) {
       if (version !== loadVersion) return;
-      errorText.value = error instanceof Error ? error.message : "打开文件失败";
+      errorText.value = error instanceof Error ? error.message : t("editor.openFailed");
       content.value = "";
       contentEtag.value = "";
       isChange.value = false;
@@ -122,20 +124,20 @@ export const useEditorFileSession = ({
     saveConflict.value = false;
     try {
       if (!contentEtag.value) {
-        throw new Error("文件版本信息缺失，请重新打开文件后再保存");
+        throw new Error(t("editor.missingVersion"));
       }
       const saved = await saveFile(fileInfo.value.path, content.value, contentEtag.value);
       contentEtag.value = saved.etag;
       isChange.value = false;
-      statusText.value = "已保存";
+      statusText.value = t("editor.saved");
     } catch (error) {
       if (isApiError(error) && (error.status === 412 || error.status === 428 || error.code === "PRECONDITION_FAILED" || error.code === "PRECONDITION_REQUIRED")) {
         saveConflict.value = true;
         errorText.value = error.status === 428
-            ? "缺少文件版本信息，请重新载入后再保存"
-            : "文件已被外部修改，请重新载入最新版本后再保存";
+            ? t("editor.missingVersionReload")
+            : t("editor.externalModified");
       } else {
-        errorText.value = error instanceof Error ? error.message : "保存失败";
+        errorText.value = error instanceof Error ? error.message : t("editor.saveFailed");
       }
     } finally {
       saving.value = false;

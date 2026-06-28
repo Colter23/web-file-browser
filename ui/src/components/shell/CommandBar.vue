@@ -5,6 +5,7 @@ import type {DirSortKey, DirSortOrder, ExplorerIconSize, ExplorerViewMode} from 
 import type {ExplorerViewModeSelection} from "../../composables/useExplorerViewMode.ts";
 import {useMenuKeyboardNavigation} from "../../composables/useMenuKeyboardNavigation.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
+import {useI18n} from "../../i18n";
 import {scrollHorizontallyWithWheel} from "../../utils/wheel.ts";
 import Icon from "../Icon.vue";
 import SortMenu from "./SortMenu.vue";
@@ -49,6 +50,7 @@ const emit = defineEmits<{
   (e: "toggle-preview"): void;
 }>();
 
+const {t} = useI18n();
 const commandBarRef = ref<HTMLElement | null>(null);
 const commandActionsRef = ref<HTMLElement | null>(null);
 const createButtonRef = ref<HTMLButtonElement | null>(null);
@@ -138,68 +140,68 @@ onBeforeUnmount(() => {
 
 <template>
   <div ref="commandBarRef" class="command-bar">
-    <div ref="commandActionsRef" class="command-actions" aria-label="文件操作">
-      <div class="command-group command-group-primary" role="group" aria-label="新建和上传">
-        <button class="command-button strong" title="上传" @click="emit('upload')">
+    <div ref="commandActionsRef" class="command-actions" :aria-label="t('command.fileOperations')">
+      <div class="command-group command-group-primary" role="group" :aria-label="t('command.createAndUpload')">
+        <button class="command-button strong" :title="t('command.uploadTitle')" @click="emit('upload')">
           <icon icon="action.upload" />
-          <span>上传</span>
+          <span>{{ t("common.upload") }}</span>
         </button>
         <button
             ref="createButtonRef"
             class="command-button"
             :class="{active: createMenuOpen}"
-            title="新建文件或文件夹"
+            :title="t('command.createTitle')"
             aria-haspopup="menu"
             :aria-expanded="createMenuOpen"
             @click="toggleCreateMenu"
             @keydown="handleCreateButtonKeyDown">
           <icon icon="action.new-file" />
-          <span>新建</span>
+          <span>{{ t("common.create") }}</span>
           <icon class="command-button-caret icon-motion-caret" :class="{'is-open': createMenuOpen}" icon="action.down" />
         </button>
       </div>
-      <div class="command-group" role="group" aria-label="剪贴板">
-        <button class="command-button" :disabled="!hasSelection" title="剪切 (Ctrl+X)" @click="emit('cut')">
+      <div class="command-group" role="group" :aria-label="t('command.clipboard')">
+        <button class="command-button" :disabled="!hasSelection" :title="t('command.cutTitle')" @click="emit('cut')">
           <icon icon="action.cut" />
-          <span>剪切</span>
+          <span>{{ t("common.cut") }}</span>
         </button>
-        <button class="command-button" :disabled="!hasSelection" title="复制 (Ctrl+C)" @click="emit('copy')">
+        <button class="command-button" :disabled="!hasSelection" :title="t('command.copyTitle')" @click="emit('copy')">
           <icon icon="action.copy" />
-          <span>复制</span>
+          <span>{{ t("common.copy") }}</span>
         </button>
-        <button class="command-button" :disabled="!canPasteSelection" title="粘贴 (Ctrl+V)" @click="emit('paste')">
+        <button class="command-button" :disabled="!canPasteSelection" :title="t('command.pasteTitle')" @click="emit('paste')">
           <icon icon="action.paste" />
-          <span>粘贴</span>
+          <span>{{ t("common.paste") }}</span>
         </button>
       </div>
-      <div class="command-group" role="group" aria-label="所选项目操作">
-        <button class="command-button" :disabled="!canDownloadSelection" title="下载" @click="emit('download')">
+      <div class="command-group" role="group" :aria-label="t('command.selectionActions')">
+        <button class="command-button" :disabled="!canDownloadSelection" :title="t('common.download')" @click="emit('download')">
           <icon icon="action.download" />
-          <span>下载</span>
+          <span>{{ t("common.download") }}</span>
         </button>
-        <button class="command-button" :disabled="!canPreviewSelection" title="预览 (Space / Ctrl+Enter)" @click="emit('preview')">
+        <button class="command-button" :disabled="!canPreviewSelection" :title="t('command.previewTitle')" @click="emit('preview')">
           <icon icon="action.preview" />
-          <span>预览</span>
+          <span>{{ t("common.preview") }}</span>
         </button>
-        <button class="command-button" :disabled="!canArchiveSelection" title="压缩" @click="emit('archive')">
+        <button class="command-button" :disabled="!canArchiveSelection" :title="t('common.archive')" @click="emit('archive')">
           <icon icon="action.archive" />
-          <span>压缩</span>
+          <span>{{ t("common.archive") }}</span>
         </button>
-        <button class="command-button" :disabled="!canExtractSelection" title="解压" @click="emit('extract')">
+        <button class="command-button" :disabled="!canExtractSelection" :title="t('common.extract')" @click="emit('extract')">
           <icon icon="action.extract" />
-          <span>解压</span>
+          <span>{{ t("common.extract") }}</span>
         </button>
-        <button class="command-button" :disabled="!canRenameSelection" title="重命名" @click="emit('rename')">
+        <button class="command-button" :disabled="!canRenameSelection" :title="t('common.rename')" @click="emit('rename')">
           <icon icon="action.rename" />
-          <span>重命名</span>
+          <span>{{ t("common.rename") }}</span>
         </button>
-        <button class="command-button danger" :disabled="!canDeleteSelection" title="删除" @click="emit('delete')">
+        <button class="command-button danger" :disabled="!canDeleteSelection" :title="t('common.delete')" @click="emit('delete')">
           <icon icon="action.delete" />
-          <span>删除</span>
+          <span>{{ t("common.delete") }}</span>
         </button>
       </div>
     </div>
-    <div class="command-view-tools" role="group" aria-label="查看和排序">
+    <div class="command-view-tools" role="group" :aria-label="t('command.viewAndSort')">
       <sort-menu
           :sort-key="sortKey"
           :sort-order="sortOrder"
@@ -216,10 +218,10 @@ onBeforeUnmount(() => {
           class="view-button"
           :class="{active: previewPanelVisible}"
           :disabled="!canTogglePreviewPane"
-          :title="previewPanelVisible ? '关闭预览窗格 (Alt+P)' : '打开预览窗格 (Alt+P)'"
+          :title="previewPanelVisible ? t('command.closePreviewPane') : t('command.openPreviewPane')"
           @click="emit('toggle-preview')">
         <icon icon="view.preview-pane" />
-        <span>预览窗格</span>
+        <span>{{ t("command.previewPane") }}</span>
       </button>
     </div>
     <div
@@ -228,20 +230,20 @@ onBeforeUnmount(() => {
         class="create-menu-panel"
         :style="createMenuStyle"
         role="menu"
-        aria-label="新建"
+        :aria-label="t('common.create')"
         @keydown="handleCreateMenuKeyDown">
       <button class="create-menu-item" type="button" role="menuitem" tabindex="-1" @click="emitCreateAction('file')">
         <span class="create-menu-icon"><icon icon="action.new-file" /></span>
         <span class="create-menu-copy">
-          <strong>新建文件</strong>
-          <small>在当前文件夹创建空文件</small>
+          <strong>{{ t("common.createFile") }}</strong>
+          <small>{{ t("command.createFileHint") }}</small>
         </span>
       </button>
       <button class="create-menu-item" type="button" role="menuitem" tabindex="-1" @click="emitCreateAction('folder')">
         <span class="create-menu-icon"><icon icon="action.new-folder" /></span>
         <span class="create-menu-copy">
-          <strong>新建文件夹</strong>
-          <small>快捷键 Ctrl+Shift+N</small>
+          <strong>{{ t("common.createFolder") }}</strong>
+          <small>{{ t("command.createFolderHint") }}</small>
         </span>
       </button>
     </div>

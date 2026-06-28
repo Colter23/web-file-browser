@@ -3,6 +3,7 @@ import type {ComputedRef, Ref} from "vue";
 import type {CreateFavoriteRequest, FavoriteItem, ReorderFavoriteItem, UpdateFavoriteRequest} from "../class.ts";
 import {isApiError} from "../network";
 import type {ShellNoticeKind} from "../components/shell/types.ts";
+import {useI18n} from "../i18n";
 import {normalizePathText} from "../utils/file-path.ts";
 
 type ListFavoritesOptions = {
@@ -50,6 +51,7 @@ export const useFavorites = ({
   showNotice,
   showError
 }: UseFavoritesOptions): UseFavoritesReturn => {
+  const {t} = useI18n();
   const favorites = ref<FavoriteItem[]>([]);
   const favoritesLoading = ref(false);
 
@@ -65,7 +67,7 @@ export const useFavorites = ({
     try {
       favorites.value = sortFavorites(await listFavorites(options));
     } catch (error) {
-      showError(error, "加载收藏夹失败");
+      showError(error, t("favorite.loadFailed"));
     } finally {
       favoritesLoading.value = false;
     }
@@ -87,13 +89,13 @@ export const useFavorites = ({
   const addFavorite = async (path: string, name?: string) => {
     const normalized = normalizePathText(path);
     if (normalized === "/") {
-      showNotice("主页不能添加到收藏夹", "warning", "收藏夹");
+      showNotice(t("favorite.homeUnsupported"), "warning", t("favorite.title"));
       return null;
     }
 
     const existing = favoriteByPath(normalized);
     if (existing) {
-      showNotice("该文件夹已经在收藏夹中", "info", "收藏夹");
+      showNotice(t("favorite.alreadyExists"), "info", t("favorite.title"));
       return existing;
     }
 
@@ -103,15 +105,15 @@ export const useFavorites = ({
         ...(name ? {name} : {})
       });
       replaceFavorite(item);
-      showNotice("已添加到收藏夹", "success", "收藏夹");
+      showNotice(t("favorite.added"), "success", t("favorite.title"));
       return item;
     } catch (error) {
       if (isApiError(error) && error.status === 409) {
         await loadFavorites();
-        showNotice("该文件夹已经在收藏夹中", "info", "收藏夹");
+        showNotice(t("favorite.alreadyExists"), "info", t("favorite.title"));
         return favoriteByPath(normalized);
       }
-      showError(error, "添加收藏失败");
+      showError(error, t("favorite.addFailed"));
       return null;
     }
   }
@@ -119,17 +121,17 @@ export const useFavorites = ({
   const removeFavorite = async (favoriteOrPath: FavoriteItem | string) => {
     const item = typeof favoriteOrPath === "string" ? favoriteByPath(favoriteOrPath) : favoriteOrPath;
     if (!item) {
-      showNotice("未找到对应的收藏项", "warning", "收藏夹");
+      showNotice(t("favorite.notFound"), "warning", t("favorite.title"));
       return false;
     }
 
     try {
       await deleteFavorite(item.id);
       favorites.value = favorites.value.filter(favorite => favorite.id !== item.id);
-      showNotice("已从收藏夹移除", "success", "收藏夹");
+      showNotice(t("favorite.removed"), "success", t("favorite.title"));
       return true;
     } catch (error) {
-      showError(error, "移除收藏失败");
+      showError(error, t("favorite.removeFailed"));
       return false;
     }
   }
@@ -137,7 +139,7 @@ export const useFavorites = ({
   const renameFavorite = async (favorite: FavoriteItem, name: string) => {
     const nextName = name.trim();
     if (!nextName) {
-      showNotice("收藏夹名称不能为空", "warning", "收藏夹");
+      showNotice(t("favorite.nameRequired"), "warning", t("favorite.title"));
       return false;
     }
     if (nextName === favorite.name) return true;
@@ -145,10 +147,10 @@ export const useFavorites = ({
     try {
       const item = await updateFavorite(favorite.id, {name: nextName});
       replaceFavorite(item);
-      showNotice("已重命名收藏项", "success", "收藏夹");
+      showNotice(t("favorite.renamed"), "success", t("favorite.title"));
       return true;
     } catch (error) {
-      showError(error, "重命名收藏项失败", "收藏夹");
+      showError(error, t("favorite.renameFailed"), t("favorite.title"));
       return false;
     }
   }
@@ -174,7 +176,7 @@ export const useFavorites = ({
       return true;
     } catch (error) {
       favorites.value = previous;
-      showError(error, "调整收藏夹顺序失败", "收藏夹");
+      showError(error, t("favorite.reorderFailed"), t("favorite.title"));
       return false;
     }
   }

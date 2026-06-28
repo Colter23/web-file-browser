@@ -7,6 +7,7 @@ import type {
   TrashRestoreResponse
 } from "../class.ts";
 import type {TrashConfirmState} from "../components/trash/types.ts";
+import {useI18n} from "../i18n";
 
 type ConflictPolicy = RuntimeSettings["conflictPolicy"];
 type TrashSelectOptions = {
@@ -47,6 +48,7 @@ export const useTrashPanel = ({
   showError,
   onRestored
 }: TrashPanelOptions) => {
+  const {t} = useI18n();
   const visible = ref(false);
   const loading = ref(false);
   const actionLoading = ref(false);
@@ -102,7 +104,7 @@ export const useTrashPanel = ({
       records.value = await listTrashRecords();
       ensureSelection();
     } catch (error) {
-      showError(error, "加载回收站失败", "回收站加载失败");
+      showError(error, t("trash.loadFailed"), t("trash.loadFailedTitle"));
     } finally {
       if (!silent) loading.value = false;
     }
@@ -217,7 +219,7 @@ export const useTrashPanel = ({
       if (lastResponse) await onRestored?.(lastResponse);
       await load(true);
     } catch (error) {
-      showError(error, "恢复回收站项目失败", "恢复失败");
+      showError(error, t("trash.restoreFailed"), t("trash.restoreFailedTitle"));
     } finally {
       actionLoading.value = false;
     }
@@ -262,10 +264,10 @@ export const useTrashPanel = ({
         message.value = trashBatchPurgeMessage(response);
       } else if (confirm.value.kind === "empty") {
         const response = await emptyTrash();
-        message.value = response.removed > 0 ? `已清空 ${response.removed} 项` : "回收站已经是空的";
+        message.value = response.removed > 0 ? t("trash.emptied", {count: response.removed}) : t("trash.alreadyEmpty");
       } else {
         const response = await cleanupTrash();
-        message.value = response.removed > 0 ? `已按策略清理 ${response.removed} 项` : "没有需要清理的项目";
+        message.value = response.removed > 0 ? t("trash.cleaned", {count: response.removed}) : t("trash.noCleanup");
       }
       resetConfirm();
       await load(true);
@@ -310,21 +312,21 @@ export const useTrashPanel = ({
 
   const trashBatchRestoreMessage = (response: TrashBatchRestoreResponse) => {
     if (response.success === 1 && response.failed === 0) {
-      return `已恢复到 ${response.restored[0]?.restoredVirtualPath ?? "-"}`;
+      return t("trash.restoredTo", {path: response.restored[0]?.restoredVirtualPath ?? "-"});
     }
-    if (response.failed > 0) return `已恢复 ${response.success} 项，${response.failed} 项失败`;
-    return `已恢复 ${response.success} 项`;
+    if (response.failed > 0) return t("trash.restoredPartial", {success: response.success, failed: response.failed});
+    return t("trash.restored", {count: response.success});
   }
 
   const trashBatchPurgeMessage = (response: TrashBatchPurgeResponse) => {
-    if (response.failed > 0) return `已永久删除 ${response.success} 项，${response.failed} 项失败`;
-    return `已永久删除 ${response.success} 项`;
+    if (response.failed > 0) return t("trash.purgedPartial", {success: response.success, failed: response.failed});
+    return t("trash.purged", {count: response.success});
   }
 
   const confirmErrorMessage = (kind: TrashConfirmState["kind"]) => {
-    if (kind === "delete") return "永久删除回收站项目失败";
-    if (kind === "cleanup") return "按策略清理回收站失败";
-    return "清空回收站失败";
+    if (kind === "delete") return t("trash.deleteFailed");
+    if (kind === "cleanup") return t("trash.cleanupFailed");
+    return t("trash.emptyFailed");
   }
 
   return {

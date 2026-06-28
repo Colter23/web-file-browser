@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
+import {useI18n} from "../../i18n";
 import {fileContentUrl} from "../../network/api.ts";
 import Icon from "../Icon.vue";
 import PreviewToolRow from "./PreviewToolRow.vue";
@@ -14,6 +15,7 @@ const emit = defineEmits<{
   (e: "open-pdf", entry: ExplorerEntry): void;
 }>();
 
+const {t} = useI18n();
 const previewUrl = computed(() => fileContentUrl(props.entry.path, {cacheKey: props.reloadKey}));
 
 const openPdfViewer = () => emit("open-pdf", props.entry);
@@ -24,22 +26,22 @@ const openPdfInNewWindow = () => {
 </script>
 
 <template>
-  <preview-tool-row status="浏览器原生预览">
-    <button title="打开 PDF 查看" @click="openPdfViewer">
+  <preview-tool-row :status="t('preview.nativePdf')">
+    <button :title="t('preview.openPdf')" @click="openPdfViewer">
       <icon icon="view.pdf" color="currentColor" />
-      <span>打开查看</span>
+      <span>{{ t("preview.openViewer") }}</span>
     </button>
-    <button title="在新窗口打开 PDF" @click="openPdfInNewWindow">
+    <button :title="t('preview.openPdfNewWindow')" @click="openPdfInNewWindow">
       <icon icon="action.open-new-tab" color="currentColor" />
-      <span>新窗口</span>
+      <span>{{ t("preview.newWindow") }}</span>
     </button>
   </preview-tool-row>
   <div class="preview-body pdf">
     <object class="pdf-frame" :data="previewUrl" type="application/pdf">
       <div class="preview-placeholder">
         <icon icon="file.pdf" size="3rem" />
-        <span>当前浏览器无法内嵌预览 PDF</span>
-        <button @click="openPdfInNewWindow">新窗口打开</button>
+        <span>{{ t("preview.pdfUnsupported") }}</span>
+        <button @click="openPdfInNewWindow">{{ t("preview.openNewWindow") }}</button>
       </div>
     </object>
   </div>

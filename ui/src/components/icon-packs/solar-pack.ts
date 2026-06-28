@@ -84,6 +84,7 @@ import starIcon from "@iconify-icons/solar/star-bold-duotone";
 import sunIcon from "@iconify-icons/solar/sun-bold-duotone";
 import textIcon from "@iconify-icons/solar/text-bold-duotone";
 import trashBinTrashIcon from "@iconify-icons/solar/trash-bin-trash-bold-duotone";
+import translationIcon from "@iconify-icons/solar/translation-2-bold-duotone";
 import uploadIcon from "@iconify-icons/solar/upload-bold-duotone";
 import undoLeftIcon from "@iconify-icons/solar/undo-left-bold-duotone";
 import undoRightIcon from "@iconify-icons/solar/undo-right-bold-duotone";
@@ -157,6 +158,7 @@ const solarIcons: Record<string, SolarIconData> = {
   "action.clean": broomIcon,
   "action.settings": settingsIcon,
   "action.appearance": paletteIcon,
+  "action.language": translationIcon,
   "action.main-menu": hamburgerMenuIcon,
   "action.more": menuDotsIcon,
   "action.logout": logout2Icon,

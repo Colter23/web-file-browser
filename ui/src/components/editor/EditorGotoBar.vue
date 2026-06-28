@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {useI18n} from "../../i18n";
 import Icon from "../Icon.vue";
 import type {EditorInputRefSetter} from "./types.ts";
 
@@ -19,6 +20,8 @@ const emit = defineEmits<{
   (e: "close"): void;
 }>();
 
+const {t} = useI18n();
+
 const updateLineText = (event: Event) => {
   const input = event.target as HTMLInputElement | null;
   emit("update:lineText", input?.value.trim() ?? "");
@@ -29,7 +32,7 @@ const updateLineText = (event: Event) => {
 <template>
   <div v-if="visible" class="goto-bar" @click.stop @keydown.esc.prevent.stop="emit('close')">
     <div class="goto-fields">
-      <span>行</span>
+      <span>{{ t("editor.line") }}</span>
       <input
           :ref="setGotoInputRef"
           :value="lineText"
@@ -44,8 +47,8 @@ const updateLineText = (event: Event) => {
     </div>
     <div class="goto-actions">
       <span v-if="status" class="goto-status">{{ status }}</span>
-      <button class="text-tool" title="跳转到行" :disabled="!canGotoLine" @click="emit('submit')">跳转</button>
-      <button title="关闭跳转" @click="emit('close')">
+      <button class="text-tool" :title="t('editor.gotoLine')" :disabled="!canGotoLine" @click="emit('submit')">{{ t("editor.goto") }}</button>
+      <button :title="t('editor.closeGoto')" @click="emit('close')">
         <icon icon="action.close" />
       </button>
     </div>
