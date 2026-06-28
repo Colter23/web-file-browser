@@ -272,7 +272,7 @@ onBeforeUnmount(() => {
 }
 
 .sort-field-item {
-  @apply grid w-full grid-cols-[2rem_minmax(0,1fr)_auto_1.25rem] items-center gap-2 rounded-md border px-2 py-2 text-left text-sm;
+  @apply grid w-full grid-cols-[2rem_minmax(0,1fr)_auto_1.25rem] items-center gap-2 rounded-md border px-2 py-1.5 text-left text-sm;
   border-color: transparent;
   color: var(--app-text-muted);
 }
@@ -284,14 +284,14 @@ onBeforeUnmount(() => {
 
 .sort-field-item.active {
   border-color: var(--app-accent-border, #bfdbfe);
-  background: var(--app-accent-soft, #eff6ff);
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 12%, var(--app-panel-solid));
   color: var(--app-accent, #2563eb);
 }
 
 .sort-field-item:focus-visible,
 .sort-order-button:focus-visible {
   @apply outline-none;
-  background: var(--app-accent-soft, #eff6ff);
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 12%, var(--app-panel-solid));
   color: var(--app-accent, #2563eb);
   box-shadow: inset 0 0 0 1px var(--app-accent-border, #bfdbfe);
 }
@@ -312,6 +312,12 @@ onBeforeUnmount(() => {
   border-color: var(--app-border-soft);
   background: var(--app-panel-muted);
   color: var(--app-text-subtle);
+}
+
+.sort-field-item.active .sort-option-hint {
+  border-color: color-mix(in srgb, var(--app-accent, #2563eb) 25%, var(--app-border-soft));
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 10%, transparent);
+  color: var(--app-accent, #2563eb);
 }
 
 .sort-check {
@@ -345,8 +351,16 @@ onBeforeUnmount(() => {
 }
 
 .sort-order-button {
-  @apply grid grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-2 rounded px-2.5 py-1.5 text-left text-sm;
+  @apply grid grid-cols-[1.1rem_minmax(0,1fr)] items-center gap-1.5 rounded px-2 py-1 text-left text-[0.8rem];
   color: var(--app-text-muted);
+}
+
+.sort-order-button .sort-menu-copy strong {
+  @apply text-[0.8rem];
+}
+
+.sort-order-button .sort-menu-copy small {
+  @apply text-[0.7rem];
 }
 
 .sort-order-button:hover {
@@ -354,7 +368,7 @@ onBeforeUnmount(() => {
 }
 
 .sort-order-button.active {
-  background: color-mix(in srgb, var(--app-accent, #2563eb) 16%, var(--app-panel-solid));
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 12%, var(--app-panel-solid));
   color: var(--app-accent, #2563eb);
   box-shadow:
       inset 0 0 0 1px var(--app-accent-border, #bfdbfe),
