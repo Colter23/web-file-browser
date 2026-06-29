@@ -3,7 +3,7 @@ import {nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ComponentPublicInstance} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import {useI18n} from "../../i18n";
-import {downloadUrl} from "../../network/api.ts";
+import {fileContentUrl} from "../../network/api.ts";
 import {scrollHorizontallyWithWheel} from "../../utils/wheel.ts";
 
 const props = defineProps<{
@@ -69,7 +69,7 @@ onBeforeUnmount(() => {
         :class="{active: item.entry.path === currentPath}"
         :title="`${item.index + 1} / ${imageCount} · ${item.entry.name}`"
         @click="emit('select', item.index)">
-      <img :src="downloadUrl(item.entry.path)" :alt="item.entry.name" loading="lazy">
+      <img :src="fileContentUrl(item.entry.path)" :alt="item.entry.name" loading="lazy">
       <span class="image-viewer-thumb-index">{{ item.index + 1 }}</span>
     </button>
   </div>

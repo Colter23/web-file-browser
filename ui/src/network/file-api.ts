@@ -257,11 +257,6 @@ export const downloadFile = async (path: string): Promise<Blob> => {
     return (await network.get(pathUrl("/api/download", path), {responseType: "blob"})).data
 }
 
-export const downloadUrl = (path: string): string => {
-    const base = config.BASE_URL.replace(/\/$/, "")
-    return `${base}${pathUrl("/api/download", path)}`
-}
-
 export const fileContentUrl = (path: string, options: {cacheKey?: string | number} = {}): string => {
     const base = config.BASE_URL.replace(/\/$/, "")
     const url = `${base}${pathUrl("/api/content", path)}`

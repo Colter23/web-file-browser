@@ -8,6 +8,7 @@ import type {
 } from "../class.ts";
 import type {TrashConfirmState} from "../components/trash/types.ts";
 import {useI18n} from "../i18n";
+import {apiErrorMessage} from "../utils/api-error-message.ts";
 
 type ConflictPolicy = RuntimeSettings["conflictPolicy"];
 type TrashSelectOptions = {
@@ -314,13 +315,26 @@ export const useTrashPanel = ({
     if (response.success === 1 && response.failed === 0) {
       return t("trash.restoredTo", {path: response.restored[0]?.restoredVirtualPath ?? "-"});
     }
-    if (response.failed > 0) return t("trash.restoredPartial", {success: response.success, failed: response.failed});
+    if (response.failed > 0) return trashBatchPartialMessage(response, "trash.restoredPartial");
     return t("trash.restored", {count: response.success});
   }
 
   const trashBatchPurgeMessage = (response: TrashBatchPurgeResponse) => {
-    if (response.failed > 0) return t("trash.purgedPartial", {success: response.success, failed: response.failed});
+    if (response.failed > 0) return trashBatchPartialMessage(response, "trash.purgedPartial");
     return t("trash.purged", {count: response.success});
+  }
+
+  const trashBatchPartialMessage = (
+      response: TrashBatchRestoreResponse | TrashBatchPurgeResponse,
+      summaryKey: "trash.restoredPartial" | "trash.purgedPartial"
+  ) => {
+    const summary = t(summaryKey, {success: response.success, failed: response.failed});
+    const firstError = response.errors[0];
+    if (!firstError) return summary;
+    return t("trash.partialWithReason", {
+      summary,
+      reason: apiErrorMessage(firstError, firstError.message)
+    });
   }
 
   const confirmErrorMessage = (kind: TrashConfirmState["kind"]) => {

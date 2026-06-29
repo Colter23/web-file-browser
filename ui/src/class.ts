@@ -334,7 +334,10 @@ export interface TrashRestoreResponse {
 
 export interface TrashBatchError {
     id: string;
+    code?: string;
+    reason?: string;
     message: string;
+    params?: Record<string, unknown>;
 }
 
 export interface TrashBatchRestoreResponse {
@@ -357,7 +360,10 @@ export interface TrashCleanupResponse {
 
 export interface TaskError {
     path: string;
+    code?: string;
+    reason?: string;
     message: string;
+    params?: Record<string, unknown>;
 }
 
 export interface TaskStatus {
@@ -380,7 +386,7 @@ export interface TaskStatus {
 
 export interface IndexStatus {
     enabled: boolean;
-    state: "disabled" | "idle" | "building" | "error" | string;
+    state: "disabled" | "idle" | "scanning" | "building" | "error" | string;
     indexedEntries: number;
     lastStartedAt?: string | null;
     lastFinishedAt?: string | null;

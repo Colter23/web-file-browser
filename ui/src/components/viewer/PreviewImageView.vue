@@ -3,7 +3,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import {useImageZoomPan} from "../../composables/useImageZoomPan.ts";
 import {useI18n} from "../../i18n";
-import {downloadUrl} from "../../network/api.ts";
+import {fileContentUrl} from "../../network/api.ts";
 import Icon from "../Icon.vue";
 import PreviewToolRow from "./PreviewToolRow.vue";
 
@@ -119,7 +119,7 @@ onBeforeUnmount(() => {
         @lostpointercapture="releasePreviewImagePointer"
         @wheel="handlePreviewImageWheel"
         @dblclick="openImagePreview">
-      <img :src="downloadUrl(entry.path)" :alt="entry.name" :style="previewImageStyle" @load="handlePreviewImageLoad">
+      <img :src="fileContentUrl(entry.path)" :alt="entry.name" :style="previewImageStyle" @load="handlePreviewImageLoad">
     </div>
   </div>
 </template>

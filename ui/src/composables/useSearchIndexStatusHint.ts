@@ -26,9 +26,9 @@ const indexStateNotice = (status: IndexStatus): {
       message: translate("search.indexDisabledMessage")
     };
   }
-  if (status.state === "building") {
+  if (status.state === "scanning" || status.state === "building") {
     return {
-      key: `building:${status.indexedEntries}`,
+      key: `scanning:${status.indexedEntries}`,
       kind: "info",
       title: translate("search.indexBuildingTitle"),
       message: translate("search.indexBuildingMessage", {count: status.indexedEntries ?? 0})

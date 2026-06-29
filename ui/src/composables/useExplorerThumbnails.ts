@@ -1,6 +1,6 @@
 import type {ComputedRef, Ref} from "vue";
 import {ref} from "vue";
-import {downloadUrl} from "../network/file-api.ts";
+import {fileContentUrl} from "../network/file-api.ts";
 
 type ThumbnailEntry = {
   type: "folder" | "file";
@@ -77,7 +77,7 @@ export const useExplorerThumbnails = <TEntry extends ThumbnailEntry>({
     return active.value && isImageFile(entry) && visiblePaths.value.has(entry.path) && !failedPaths.value.has(entry.path);
   }
 
-  const thumbnailUrl = (entry: TEntry) => downloadUrl(entry.path);
+  const thumbnailUrl = (entry: TEntry) => fileContentUrl(entry.path);
 
   const observe = (entry: TEntry, element: HTMLElement) => {
     if (!active.value || !isImageFile(entry) || visiblePaths.value.has(entry.path) || failedPaths.value.has(entry.path)) return;

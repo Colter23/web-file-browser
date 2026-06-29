@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type {ExplorerEntry} from "../explorer/types.ts";
 import {useI18n} from "../../i18n";
-import {downloadUrl} from "../../network/api.ts";
+import {fileContentUrl} from "../../network/api.ts";
 import Icon from "../Icon.vue";
 import PreviewToolRow from "./PreviewToolRow.vue";
 
@@ -26,7 +26,7 @@ const openVideoPreview = () => emit("open-video", props.entry);
   </preview-tool-row>
   <div class="preview-body video">
     <video
-        :src="downloadUrl(entry.path)"
+        :src="fileContentUrl(entry.path)"
         controls
         preload="metadata"
         playsinline

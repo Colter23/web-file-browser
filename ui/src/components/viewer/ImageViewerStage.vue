@@ -3,7 +3,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {StyleValue} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import {useI18n} from "../../i18n";
-import {downloadUrl} from "../../network/api.ts";
+import {fileContentUrl} from "../../network/api.ts";
 import ViewerStatus from "./ViewerStatus.vue";
 
 const props = defineProps<{
@@ -86,7 +86,7 @@ onBeforeUnmount(() => {
     <viewer-status v-if="error" tone="error">{{ error }}</viewer-status>
     <img
         :key="entry.path"
-        :src="downloadUrl(entry.path)"
+        :src="fileContentUrl(entry.path)"
         :alt="entry.name"
         :style="imageStyle"
         @load="emit('load')"

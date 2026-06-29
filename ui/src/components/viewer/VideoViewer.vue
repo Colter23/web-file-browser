@@ -3,7 +3,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import type {ExplorerEntry} from "../explorer/types.ts";
 import type {ShellNoticePayload} from "../shell/types.ts";
 import {useI18n} from "../../i18n";
-import {downloadUrl} from "../../network/api.ts";
+import {fileContentUrl} from "../../network/api.ts";
 import {formatEntryDate, formatEntrySize} from "../../utils/file-entry.ts";
 import {readBooleanStorage, readNumberStorage, writeBooleanStorage, writeNumberStorage} from "../../utils/safe-storage.ts";
 import Icon from "../Icon.vue";
@@ -64,7 +64,7 @@ function removeVolumeReleaseListeners() {
 }
 
 const currentEntry = computed(() => props.visible ? props.entry : null);
-const sourceUrl = computed(() => currentEntry.value ? downloadUrl(currentEntry.value.path) : "");
+const sourceUrl = computed(() => currentEntry.value ? fileContentUrl(currentEntry.value.path) : "");
 
 const currentIndex = computed(() => {
   const entry = props.entry;

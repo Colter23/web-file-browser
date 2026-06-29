@@ -199,7 +199,7 @@ const restartPendingSet = computed(() => new Set(settingsSnapshot.value?.restart
 const taskMetrics = computed(() => metrics.value?.tasks);
 const limitMetrics = computed(() => metrics.value?.limits);
 const indexBusy = computed(() => indexLoading.value || indexActionLoading.value);
-const indexBuilding = computed(() => indexStatus.value?.state === "building");
+const indexBuilding = computed(() => indexStatus.value?.state === "scanning" || indexStatus.value?.state === "building");
 const canRebuildIndex = computed(() => Boolean(indexStatus.value?.enabled) && !indexBusy.value && !indexBuilding.value);
 const canCancelIndex = computed(() => Boolean(indexStatus.value?.enabled) && !indexBusy.value && indexBuilding.value);
 const runtimeDirty = computed(() => {
@@ -862,6 +862,7 @@ const indexStateText = (status: IndexStatus | null) => {
   if (!status.enabled || status.state === "disabled") return "未启用";
   return {
     idle: "空闲",
+    scanning: "重建中",
     building: "重建中",
     error: "异常"
   }[status.state] ?? status.state;
@@ -871,6 +872,7 @@ const indexStateClass = (status: IndexStatus | null) => {
   if (!status || !status.enabled || status.state === "disabled") return "disabled";
   return {
     idle: "idle",
+    scanning: "building",
     building: "building",
     error: "error"
   }[status.state] ?? "idle";

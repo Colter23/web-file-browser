@@ -4,6 +4,7 @@ import type {TaskKind, TaskStatus} from "../../class.ts";
 import type {TaskCancelConfirmState} from "../../composables/useTaskPanel.ts";
 import {useDraggablePanel} from "../../composables/useDraggablePanel.ts";
 import {useI18n} from "../../i18n";
+import {apiErrorMessage} from "../../utils/api-error-message.ts";
 import {
   canCancelTask,
   formatTaskBytes,
@@ -136,7 +137,9 @@ const taskCancelMessage = computed(() => {
   if (!task) return t("tasks.cancelMessageFallback");
   return t("tasks.cancelMessage", {id: shortTaskId(task.id), state: taskStateText(task.state), progress: taskProgress(task)});
 });
-const taskErrorsTitle = (task: TaskStatus) => task.errors.map(error => `${error.path}：${error.message}`).join("\n");
+const taskErrorsTitle = (task: TaskStatus) => task.errors
+    .map(error => `${error.path}：${apiErrorMessage(error, error.message)}`)
+    .join("\n");
 
 watch(() => props.cancelConfirm.visible, async visible => {
   if (!visible) return;

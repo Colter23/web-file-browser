@@ -6,7 +6,7 @@ import type {ShellNoticePayload} from "../shell/types.ts";
 import {useOutsidePointerDown} from "../../composables/useOutsidePointerDown.ts";
 import {useI18n} from "../../i18n";
 import type {MessageKey} from "../../i18n";
-import {downloadUrl} from "../../network/api.ts";
+import {fileContentUrl} from "../../network/api.ts";
 import {formatEntrySize} from "../../utils/file-entry.ts";
 import {
   readBooleanStorage,
@@ -141,7 +141,7 @@ let positionFrame: number | undefined;
 let titleResizeObserver: ResizeObserver | undefined;
 
 const currentEntry = computed(() => props.visible ? props.entry : null);
-const sourceUrl = computed(() => currentEntry.value ? downloadUrl(currentEntry.value.path) : "");
+const sourceUrl = computed(() => currentEntry.value ? fileContentUrl(currentEntry.value.path) : "");
 const playlistEntries = computed(() => props.entries.length ? props.entries : (currentEntry.value ? [currentEntry.value] : []));
 
 const currentIndex = computed(() => {

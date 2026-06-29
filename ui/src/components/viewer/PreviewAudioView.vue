@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type {ExplorerEntry} from "../explorer/types.ts";
 import {useI18n} from "../../i18n";
-import {downloadUrl} from "../../network/api.ts";
+import {fileContentUrl} from "../../network/api.ts";
 import Icon from "../Icon.vue";
 import PreviewToolRow from "./PreviewToolRow.vue";
 
@@ -31,7 +31,7 @@ const openAudioPlayer = () => emit("open-audio", props.entry);
       </div>
       <strong :title="entry.name">{{ entry.name }}</strong>
       <audio
-          :src="downloadUrl(entry.path)"
+          :src="fileContentUrl(entry.path)"
           controls
           preload="metadata"
           @dblclick="openAudioPlayer">

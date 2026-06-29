@@ -3,7 +3,7 @@ import {readStorageItem, writeStorageItem} from "../utils/safe-storage.ts";
 import {messages} from "./messages.ts";
 import type {LocaleCode, MessageKey} from "./messages.ts";
 
-type TranslateParams = Record<string, string | number | boolean | null | undefined>;
+export type TranslateParams = Record<string, string | number | boolean | null | undefined>;
 
 const storageKey = "app.locale";
 const fallbackLocale: LocaleCode = "zh-CN";
@@ -33,12 +33,22 @@ export const setLocale = (locale: LocaleCode) => {
 
 export const getLocale = () => currentLocale.value;
 
-export const translate = (key: MessageKey, params: TranslateParams = {}) => {
-  const template = messages[currentLocale.value][key] ?? messages[fallbackLocale][key] ?? key;
+const interpolate = (template: string, params: TranslateParams) => {
   return template.replace(/\{(\w+)}/g, (_, name: string) => {
     const value = params[name];
     return value === null || value === undefined ? "" : String(value);
   });
+}
+
+export const translateOptional = (key: string, params: TranslateParams = {}) => {
+  const currentMessages = messages[currentLocale.value] as Record<string, string>;
+  const fallbackMessages = messages[fallbackLocale] as Record<string, string>;
+  const template = currentMessages[key] ?? fallbackMessages[key];
+  return template ? interpolate(template, params) : undefined;
+}
+
+export const translate = (key: MessageKey, params: TranslateParams = {}) => {
+  return translateOptional(key, params) ?? key;
 }
 
 export const useI18n = () => {
