@@ -87,14 +87,9 @@ async fn setup_password(
     Json(request): Json<SetupPasswordRequest>,
 ) -> Result<(HeaderMap, Json<SessionResponse>), AppError> {
     validate_setup_password(&request)?;
-    if state.auth_store.has_admin_password().await {
-        return Err(AppError::conflict("管理员密码已经初始化，请直接登录")
-            .with_reason("ADMIN_PASSWORD_ALREADY_CONFIGURED"));
-    }
-
     state
         .auth_store
-        .set_admin_password(request.password)
+        .initialize_admin_password(request.password)
         .await?;
     state.auth.clear_sessions().await;
     let token = state.auth.create_session().await;

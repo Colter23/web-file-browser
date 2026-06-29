@@ -165,3 +165,27 @@
 后续统一优化记录：
 
 - `config.json` 写入是同目录临时文件加 rename；Windows 下目标存在时会先删除再 rename，存在极短窗口。主要部署环境是 Linux Docker，当前可接受；如果以后 Windows 作为主要部署目标，可评估使用更强的替换语义。
+
+### 第七轮：认证与 API 错误
+
+已处理：
+
+- 修复公开认证接口缺少单 IP 并发保护的问题：`/api/auth/login`、`/api/auth/setup`、`/api/auth/session` 现在也会经过 IP 并发限制，避免登录校验和首次设置接口在局域网内被并发请求放大 CPU 压力。
+- 修复首次设置管理员密码的并发初始化窗口：`AuthStore::initialize_admin_password` 在写锁内再次检查是否已初始化，两个并发首次设置请求最多只有一个成功，不会让后到请求覆盖先到密码。
+- 收紧 `auth.json` 写入一致性：认证存储现在先写临时文件并 rename 成功，再替换内存密码快照；写盘失败不会造成“接口失败但当前进程密码已改变”。
+- 统一 API 默认错误响应：无效 JSON/请求提取失败、登录后的未知 API 路径、错误 HTTP 方法会返回结构化 JSON 错误，前端可继续依赖 `code/reason/message/params`。
+- 未知 `/api/*` 路径仍遵守认证边界：未登录先返回 `401 AUTH_REQUIRED`，登录后返回 `404 API_ROUTE_NOT_FOUND`。
+- 增加 API 回归测试覆盖公开认证接口 IP 限流、未知 API 认证优先、方法不支持 JSON 错误、无效 JSON 结构化错误。
+
+审查结论：
+
+- 公开接口范围保持为 `GET /api/`、`GET /api/health`、`GET /api/ready`、`POST /api/auth/setup`、`POST /api/auth/login`、`GET /api/auth/session`；其余 API 默认要求登录。
+- 会话仍为内存态单管理员会话，修改密码或首次设置后会清理旧会话；服务重启后需要重新登录，符合轻量局域网边界。
+- 错误响应主结构保持 `{ code, reason, message, params? }`；`reason` 继续作为前端国际化主 key，`message` 保持中文兜底。
+- 公共就绪检查仍不要求认证，便于 Docker 健康检查；详细运行指标 `/api/metrics` 仍要求认证。
+
+后续统一优化记录：
+
+- 当前会话 token 只存内存，服务重启会全部失效；这是轻量单管理员边界下的简单取舍。后续如果用户强烈需要“重启后保持登录”，再评估持久化会话，但需要同步考虑失效和重置机制。
+- Cookie 当前使用 `HttpOnly`、`SameSite=Lax`、`Path=/`，未默认加 `Secure`；局域网 HTTP 和 Docker 本地测试更方便。若以后支持反代 HTTPS，可增加“信任 HTTPS/启用 Secure Cookie”的启动配置。
+- 登录失败没有单独的密码错误退避或锁定策略；现阶段用单 IP 并发限制控制资源占用。若局域网内实际出现暴力尝试，再按轻量方式增加失败冷却，不引入复杂账号体系。

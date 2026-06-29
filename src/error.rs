@@ -13,6 +13,7 @@ pub enum AppError {
     Unauthorized(ErrorInfo),
     Forbidden(ErrorInfo),
     NotFound(ErrorInfo),
+    MethodNotAllowed(ErrorInfo),
     Conflict(ErrorInfo),
     TooManyRequests(ErrorInfo),
     PayloadTooLarge(ErrorInfo),
@@ -38,6 +39,10 @@ impl AppError {
 
     pub fn not_found(message: impl Into<String>) -> Self {
         Self::NotFound(ErrorInfo::new(message))
+    }
+
+    pub fn method_not_allowed(message: impl Into<String>) -> Self {
+        Self::MethodNotAllowed(ErrorInfo::new(message))
     }
 
     pub fn conflict(message: impl Into<String>) -> Self {
@@ -98,6 +103,7 @@ impl AppError {
             | Self::Unauthorized(info)
             | Self::Forbidden(info)
             | Self::NotFound(info)
+            | Self::MethodNotAllowed(info)
             | Self::Conflict(info)
             | Self::TooManyRequests(info)
             | Self::PayloadTooLarge(info)
@@ -115,6 +121,7 @@ impl AppError {
             Self::Unauthorized(info) => Self::Unauthorized(mapper(info)),
             Self::Forbidden(info) => Self::Forbidden(mapper(info)),
             Self::NotFound(info) => Self::NotFound(mapper(info)),
+            Self::MethodNotAllowed(info) => Self::MethodNotAllowed(mapper(info)),
             Self::Conflict(info) => Self::Conflict(mapper(info)),
             Self::TooManyRequests(info) => Self::TooManyRequests(mapper(info)),
             Self::PayloadTooLarge(info) => Self::PayloadTooLarge(mapper(info)),
@@ -132,6 +139,9 @@ impl AppError {
             Self::Unauthorized(info) => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED", info),
             Self::Forbidden(info) => (StatusCode::FORBIDDEN, "FORBIDDEN", info),
             Self::NotFound(info) => (StatusCode::NOT_FOUND, "NOT_FOUND", info),
+            Self::MethodNotAllowed(info) => {
+                (StatusCode::METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED", info)
+            }
             Self::Conflict(info) => (StatusCode::CONFLICT, "CONFLICT", info),
             Self::TooManyRequests(info) => {
                 (StatusCode::TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS", info)
@@ -187,6 +197,7 @@ impl fmt::Display for AppError {
             | Self::Unauthorized(message)
             | Self::Forbidden(message)
             | Self::NotFound(message)
+            | Self::MethodNotAllowed(message)
             | Self::Conflict(message)
             | Self::TooManyRequests(message)
             | Self::PayloadTooLarge(message)
@@ -313,6 +324,12 @@ mod tests {
                 StatusCode::NOT_FOUND,
                 "NOT_FOUND",
                 "NOT_FOUND",
+            ),
+            (
+                AppError::method_not_allowed("请求方法不支持"),
+                StatusCode::METHOD_NOT_ALLOWED,
+                "METHOD_NOT_ALLOWED",
+                "METHOD_NOT_ALLOWED",
             ),
             (
                 AppError::conflict("路径已存在"),

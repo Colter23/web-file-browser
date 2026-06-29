@@ -103,3 +103,56 @@ async fn setup_password_is_disabled_after_initialization() {
     assert_eq!(body["code"], "CONFLICT");
     assert!(body["message"].as_str().unwrap().contains("已经初始化"));
 }
+
+#[tokio::test]
+async fn public_auth_routes_are_limited_by_ip_concurrency() {
+    let (_root, app) = test_app_with_config("auth-ip-limit-api", |config| {
+        config.max_ip_concurrency = 1;
+        config.trust_proxy_headers = true;
+    })
+    .await;
+
+    let pending_body = Body::from_stream(stream::pending::<Result<Bytes, std::io::Error>>());
+    let first_request = Request::builder()
+        .method(Method::POST)
+        .uri("/api/auth/login")
+        .header("x-forwarded-for", "10.0.0.10")
+        .header(CONTENT_TYPE, "application/json")
+        .body(pending_body)
+        .unwrap();
+    let first_login = tokio::spawn({
+        let app = app.clone();
+        async move { app.oneshot(first_request).await }
+    });
+
+    let mut last_status = None;
+    let mut last_body = Value::Null;
+    for _ in 0..100 {
+        let second_request = Request::builder()
+            .method(Method::POST)
+            .uri("/api/auth/login")
+            .header("x-forwarded-for", "10.0.0.10")
+            .header(CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&json!({ "password": "test-password" })).unwrap(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(second_request).await.unwrap();
+        let status = response.status();
+        let body = json_body(response).await;
+        if status == StatusCode::TOO_MANY_REQUESTS {
+            assert_eq!(body["code"], "TOO_MANY_REQUESTS");
+            assert_eq!(body["reason"], "IP_CONCURRENCY_LIMITED");
+            first_login.abort();
+            assert!(first_login.await.unwrap_err().is_cancelled());
+            return;
+        }
+        last_status = Some(status);
+        last_body = body;
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+
+    first_login.abort();
+    assert!(first_login.await.unwrap_err().is_cancelled());
+    panic!("公共认证接口未触发 IP 并发限制，最后状态: {last_status:?}, body: {last_body}");
+}

@@ -45,6 +45,93 @@ async fn protected_api_requires_login_with_json_error() {
 }
 
 #[tokio::test]
+async fn unknown_api_requires_login_before_not_found() {
+    let (_root, app) = test_app("unknown-api-auth-first").await;
+
+    let response = app
+        .clone()
+        .oneshot(empty_request(Method::GET, "/api/not-found"))
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = json_body(response).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body["code"], "UNAUTHORIZED");
+    assert_eq!(body["reason"], "AUTH_REQUIRED");
+
+    let cookie = login_cookie(&app).await;
+    let response = app
+        .oneshot(empty_request_with_cookie(
+            Method::GET,
+            "/api/not-found",
+            &cookie,
+        ))
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = json_body(response).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "NOT_FOUND");
+    assert_eq!(body["reason"], "API_ROUTE_NOT_FOUND");
+    assert_eq!(body["message"], "API 路径不存在");
+}
+
+#[tokio::test]
+async fn api_method_not_allowed_returns_json_error_after_login() {
+    let (_root, app) = test_app("method-not-allowed-json").await;
+
+    let response = app
+        .clone()
+        .oneshot(empty_request(Method::POST, "/api/metrics"))
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = json_body(response).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body["reason"], "AUTH_REQUIRED");
+
+    let cookie = login_cookie(&app).await;
+    let response = app
+        .oneshot(empty_request_with_cookie(
+            Method::POST,
+            "/api/metrics",
+            &cookie,
+        ))
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = json_body(response).await;
+
+    assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+    assert_eq!(body["code"], "METHOD_NOT_ALLOWED");
+    assert_eq!(body["reason"], "METHOD_NOT_ALLOWED");
+    assert_eq!(body["message"], "请求方法不支持");
+}
+
+#[tokio::test]
+async fn malformed_json_returns_structured_api_error() {
+    let (_root, app) = test_app("malformed-json-error").await;
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/api/auth/login")
+        .header(CONTENT_TYPE, "application/json")
+        .body(Body::from("{"))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let body = json_body(response).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "BAD_REQUEST");
+    assert_eq!(body["reason"], "REQUEST_INVALID");
+    assert_eq!(body["message"], "请求格式无效");
+}
+
+#[tokio::test]
 async fn trusted_proxy_headers_enforce_forwarded_ip_concurrency_through_middleware() {
     let (root, app) = test_app_with_config("ip-limit-api", |config| {
         config.max_ip_concurrency = 1;

@@ -17,8 +17,8 @@
 
 ## 通用规则
 
-- 受保护的 `/api/*` 接口未登录时返回 `UNAUTHORIZED`。
-- `GET /api/health` 和登录接口不要求认证。
+- 受保护的 `/api/*` 接口未登录时返回 `UNAUTHORIZED`；未知 `/api/*` 路径也会先要求登录，登录后才返回 `API_ROUTE_NOT_FOUND`。
+- `GET /api/health`、`GET /api/ready` 和登录/首次设置/会话查询接口不要求认证。
 - `GET /api/ready` 是就绪检查，失败时返回非 2xx，但仍使用 JSON 描述检查项。
 - 后台任务创建接口通常先返回任务 `id`，单个路径失败会写入任务 `errors` 数组；任务错误项同样包含 `code`、`reason`、`message` 和可选 `params`。
 - 回收站批量恢复/永久删除的 `errors` 数组也包含 `code`、`reason`、`message` 和可选 `params`。
@@ -33,6 +33,7 @@
 | 401 | `UNAUTHORIZED` | 未登录、会话失效、管理员密码错误 | 跳转登录页或提示重新登录 |
 | 403 | `FORBIDDEN` | 只读挂载写入、无写入权限 | 展示只读提示，避免继续重试写操作 |
 | 404 | `NOT_FOUND` | 文件、映射、任务、回收站记录不存在 | 刷新当前视图或提示目标已不存在 |
+| 405 | `METHOD_NOT_ALLOWED` | API 路径存在但请求方法不支持 | 修正前端请求方法 |
 | 409 | `CONFLICT` | 名称冲突、任务已取消、任务已结束不能取消、索引正在重建、当前没有可取消的索引重建、禁止覆盖目录 | 根据场景提示用户选择自动重命名、拒绝或显式覆盖 |
 | 413 | `PAYLOAD_TOO_LARGE` | 上传、保存或解压超过配置上限 | 展示大小限制，必要时调整环境变量 |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | 在线编辑二进制文件或不允许的文件类型 | 提示文件不适合在线编辑 |
@@ -66,7 +67,11 @@
 | `AUTH_REQUIRED` | 未登录访问受保护接口 | 无 |
 | `ADMIN_PASSWORD_NOT_CONFIGURED` | 登录时管理员密码尚未初始化 | 无 |
 | `ADMIN_PASSWORD_INCORRECT` | 登录密码错误 | 无 |
+| `ADMIN_PASSWORD_ALREADY_CONFIGURED` | 首次设置接口重复调用 | 无 |
 | `PASSWORD_TOO_SHORT` | 首次设置或修改密码长度不足 | `field`, `minLength` |
+| `REQUEST_INVALID` | JSON、查询参数或请求格式无法解析 | 无 |
+| `API_ROUTE_NOT_FOUND` | 登录后访问不存在的 API 路径 | 无 |
+| `METHOD_NOT_ALLOWED` | API 路径存在但请求方法不支持 | 无 |
 | `MOUNT_READONLY` | 对只读挂载执行写操作 | 无 |
 | `PATH_NOT_FOUND` | 文件浏览、下载、编辑等操作中的虚拟路径不存在 | `path` |
 | `MAPPING_FOLDER_PATH_NOT_FOUND` | 创建或更新挂载时，本地 `folderPath` 不存在或不可访问 | `path` |
