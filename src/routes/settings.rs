@@ -25,12 +25,12 @@ async fn update_settings(
     State(state): State<Arc<AppState>>,
     Json(request): Json<UpdateSettingsRequest>,
 ) -> Result<Json<SettingsResponse>, AppError> {
-    if let Some(runtime) = request.runtime {
-        let runtime = state.settings.patch_runtime(runtime).await?;
+    if let Some(runtime) = state
+        .settings
+        .patch(request.runtime, request.startup)
+        .await?
+    {
         state.apply_runtime_settings(&runtime).await;
-    }
-    if let Some(startup) = request.startup {
-        state.settings.patch_startup(startup).await?;
     }
     Ok(Json(settings_response(&state).await))
 }

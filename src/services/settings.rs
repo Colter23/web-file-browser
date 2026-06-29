@@ -196,32 +196,59 @@ impl SettingsService {
         }
     }
 
-    pub async fn patch_runtime(
+    pub async fn patch(
         &self,
-        patch: RuntimeSettingsPatch,
-    ) -> Result<RuntimeSettings, AppError> {
+        runtime_patch: Option<RuntimeSettingsPatch>,
+        startup_patch: Option<StartupSettingsPatch>,
+    ) -> Result<Option<RuntimeSettings>, AppError> {
         let _guard = self.write_lock.lock().await;
-        self.ensure_runtime_not_env_locked(&patch)?;
-        let mut next = self.runtime().await;
-        apply_runtime_patch(&mut next, patch)?;
-        self.write_runtime_config(&next).await?;
-        *self.runtime.write().await = next.clone();
-        Ok(next)
-    }
+        let runtime_fields = runtime_patch
+            .as_ref()
+            .map(touched_runtime_fields)
+            .unwrap_or_default();
+        let startup_fields = startup_patch
+            .as_ref()
+            .map(touched_startup_fields)
+            .unwrap_or_default();
+        let update_runtime = !runtime_fields.is_empty();
+        let update_startup = !startup_fields.is_empty();
+        if !update_runtime && !update_startup {
+            return Ok(None);
+        }
+        if let Some(patch) = runtime_patch.as_ref() {
+            self.ensure_runtime_not_env_locked(patch)?;
+        }
+        if let Some(patch) = startup_patch.as_ref() {
+            self.ensure_startup_not_env_locked(patch)?;
+        }
 
-    pub async fn patch_startup(
-        &self,
-        patch: StartupSettingsPatch,
-    ) -> Result<StartupSettings, AppError> {
-        let _guard = self.write_lock.lock().await;
-        self.ensure_startup_not_env_locked(&patch)?;
-        let mut next = self.startup().await;
-        apply_startup_patch(&mut next, patch)?;
-        self.write_startup_config(&next).await?;
-        let config = AppConfig::load_from_file(self.config_file.as_ref().clone())?;
-        let next = config.startup_settings();
-        *self.startup.write().await = next.clone();
-        Ok(next)
+        let mut next_runtime = self.runtime().await;
+        if let Some(patch) = runtime_patch {
+            apply_runtime_patch(&mut next_runtime, patch)?;
+        }
+
+        let mut next_startup = self.startup().await;
+        if let Some(patch) = startup_patch {
+            apply_startup_patch(&mut next_startup, patch)?;
+        }
+
+        let mut config = RuntimeConfigFile::read(&self.config_file)?;
+        if update_runtime {
+            fill_runtime_config_fields(&mut config, &next_runtime, &runtime_fields);
+        }
+        if update_startup {
+            fill_startup_config_fields(&mut config, &next_startup, &startup_fields);
+        }
+        write_config_atomic(&self.config_file, &config).await?;
+
+        if update_runtime {
+            *self.runtime.write().await = next_runtime.clone();
+        }
+        if update_startup {
+            *self.startup.write().await = next_startup;
+        }
+
+        Ok(update_runtime.then_some(next_runtime))
     }
 
     pub async fn reload(&self) -> Result<RuntimeSettings, AppError> {
@@ -254,18 +281,6 @@ impl SettingsService {
             }
         }
         Ok(())
-    }
-
-    async fn write_runtime_config(&self, runtime: &RuntimeSettings) -> Result<(), AppError> {
-        let mut config = RuntimeConfigFile::read(&self.config_file)?;
-        fill_runtime_config(&mut config, runtime);
-        write_config_atomic(&self.config_file, &config).await
-    }
-
-    async fn write_startup_config(&self, startup: &StartupSettings) -> Result<(), AppError> {
-        let mut config = RuntimeConfigFile::read(&self.config_file)?;
-        fill_startup_config(&mut config, startup);
-        write_config_atomic(&self.config_file, &config).await
     }
 }
 
@@ -384,70 +399,170 @@ fn apply_startup_patch(
     Ok(())
 }
 
-fn fill_runtime_config(config: &mut RuntimeConfigFile, runtime: &RuntimeSettings) {
-    config.limits = Some(LimitsConfigFile {
-        max_upload_bytes: Some(runtime.max_upload_bytes),
-        max_dir_page_size: Some(runtime.max_dir_page_size),
-        max_dir_concurrency: Some(runtime.max_dir_concurrency),
-        max_transfer_concurrency: Some(runtime.max_transfer_concurrency),
-        max_ip_concurrency: Some(runtime.max_ip_concurrency),
-    });
-    config.editor = Some(EditorConfigFile {
-        max_edit_bytes: Some(runtime.max_edit_bytes),
-        editable_extensions: Some(runtime.editable_extensions.clone()),
-        editable_mime_types: Some(runtime.editable_mime_types.clone()),
-    });
-    config.tasks = Some(TaskConfigFile {
-        max_concurrency: Some(runtime.max_task_concurrency),
-        history_limit: Some(runtime.task_history_limit),
-        speed_limit_bytes_per_sec: Some(runtime.task_speed_limit_bytes_per_sec),
-    });
-    config.archive = Some(ArchiveConfigFile {
-        max_extract_bytes: Some(runtime.max_extract_bytes),
-        max_extract_files: Some(runtime.max_extract_files),
-        max_extract_depth: Some(runtime.max_extract_depth),
-    });
-    let rebuild_on_startup = config
-        .index
-        .as_ref()
-        .and_then(|index| index.rebuild_on_startup);
-    config.index = Some(IndexConfigFile {
-        enabled: Some(runtime.index_enabled),
-        rebuild_on_startup,
-        scan_delay_ms: Some(runtime.index_scan_delay_ms),
-    });
-    config.audit = Some(AuditConfigFile {
-        max_bytes: Some(runtime.audit_max_bytes),
-        retention_files: Some(runtime.audit_retention_files),
-    });
-    config.trash = Some(TrashConfigFile {
-        retention_days: Some(runtime.trash_retention_days),
-        max_bytes: Some(runtime.trash_max_bytes),
-    });
-    config.conflict_policy = Some(runtime.conflict_policy);
+fn fill_runtime_config_fields(
+    config: &mut RuntimeConfigFile,
+    runtime: &RuntimeSettings,
+    fields: &[&str],
+) {
+    for field in fields {
+        match *field {
+            "runtime.maxEditBytes" => {
+                editor_config(config).max_edit_bytes = Some(runtime.max_edit_bytes);
+            }
+            "runtime.editableExtensions" => {
+                editor_config(config).editable_extensions =
+                    Some(runtime.editable_extensions.clone());
+            }
+            "runtime.editableMimeTypes" => {
+                editor_config(config).editable_mime_types =
+                    Some(runtime.editable_mime_types.clone());
+            }
+            "runtime.maxUploadBytes" => {
+                limits_config(config).max_upload_bytes = Some(runtime.max_upload_bytes);
+            }
+            "runtime.maxDirPageSize" => {
+                limits_config(config).max_dir_page_size = Some(runtime.max_dir_page_size);
+            }
+            "runtime.maxDirConcurrency" => {
+                limits_config(config).max_dir_concurrency = Some(runtime.max_dir_concurrency);
+            }
+            "runtime.maxTransferConcurrency" => {
+                limits_config(config).max_transfer_concurrency =
+                    Some(runtime.max_transfer_concurrency);
+            }
+            "runtime.maxIpConcurrency" => {
+                limits_config(config).max_ip_concurrency = Some(runtime.max_ip_concurrency);
+            }
+            "runtime.maxTaskConcurrency" => {
+                task_config(config).max_concurrency = Some(runtime.max_task_concurrency);
+            }
+            "runtime.taskHistoryLimit" => {
+                task_config(config).history_limit = Some(runtime.task_history_limit);
+            }
+            "runtime.taskSpeedLimitBytesPerSec" => {
+                task_config(config).speed_limit_bytes_per_sec =
+                    Some(runtime.task_speed_limit_bytes_per_sec);
+            }
+            "runtime.maxExtractBytes" => {
+                archive_config(config).max_extract_bytes = Some(runtime.max_extract_bytes);
+            }
+            "runtime.maxExtractFiles" => {
+                archive_config(config).max_extract_files = Some(runtime.max_extract_files);
+            }
+            "runtime.maxExtractDepth" => {
+                archive_config(config).max_extract_depth = Some(runtime.max_extract_depth);
+            }
+            "runtime.indexEnabled" => {
+                index_config(config).enabled = Some(runtime.index_enabled);
+            }
+            "runtime.indexScanDelayMs" => {
+                index_config(config).scan_delay_ms = Some(runtime.index_scan_delay_ms);
+            }
+            "runtime.auditMaxBytes" => {
+                audit_config(config).max_bytes = Some(runtime.audit_max_bytes);
+            }
+            "runtime.auditRetentionFiles" => {
+                audit_config(config).retention_files = Some(runtime.audit_retention_files);
+            }
+            "runtime.trashRetentionDays" => {
+                trash_config(config).retention_days = Some(runtime.trash_retention_days);
+            }
+            "runtime.trashMaxBytes" => {
+                trash_config(config).max_bytes = Some(runtime.trash_max_bytes);
+            }
+            "runtime.conflictPolicy" => {
+                config.conflict_policy = Some(runtime.conflict_policy);
+            }
+            _ => {}
+        }
+    }
 }
 
-fn fill_startup_config(config: &mut RuntimeConfigFile, startup: &StartupSettings) {
-    config.server = Some(ServerConfigFile {
-        bind: Some(startup.bind_address.clone()),
-        port: Some(startup.port),
-        static_dir: Some(PathBuf::from(&startup.static_dir)),
-        cors_allowed_origins: Some(startup.cors_allowed_origins.clone()),
-        trust_proxy_headers: Some(startup.trust_proxy_headers),
-    });
-    config.storage = Some(StorageConfigFile {
-        mapping_file: Some(PathBuf::from(&startup.mapping_file)),
-        auth_file: Some(PathBuf::from(&startup.auth_file)),
-        favorites_file: Some(PathBuf::from(&startup.favorites_file)),
-        trash_dir: Some(PathBuf::from(&startup.trash_dir)),
-        audit_file: Some(PathBuf::from(&startup.audit_file)),
-    });
-    let index = config.index.take().unwrap_or_default();
-    config.index = Some(IndexConfigFile {
-        enabled: index.enabled,
-        rebuild_on_startup: Some(startup.index_rebuild_on_startup),
-        scan_delay_ms: index.scan_delay_ms,
-    });
+fn fill_startup_config_fields(
+    config: &mut RuntimeConfigFile,
+    startup: &StartupSettings,
+    fields: &[&str],
+) {
+    for field in fields {
+        match *field {
+            "startup.bindAddress" => {
+                server_config(config).bind = Some(startup.bind_address.clone());
+            }
+            "startup.port" => {
+                server_config(config).port = Some(startup.port);
+            }
+            "startup.mappingFile" => {
+                storage_config(config).mapping_file = Some(PathBuf::from(&startup.mapping_file));
+            }
+            "startup.authFile" => {
+                storage_config(config).auth_file = Some(PathBuf::from(&startup.auth_file));
+            }
+            "startup.favoritesFile" => {
+                storage_config(config).favorites_file =
+                    Some(PathBuf::from(&startup.favorites_file));
+            }
+            "startup.trashDir" => {
+                storage_config(config).trash_dir = Some(PathBuf::from(&startup.trash_dir));
+            }
+            "startup.staticDir" => {
+                server_config(config).static_dir = Some(PathBuf::from(&startup.static_dir));
+            }
+            "startup.corsAllowedOrigins" => {
+                server_config(config).cors_allowed_origins =
+                    Some(startup.cors_allowed_origins.clone());
+            }
+            "startup.trustProxyHeaders" => {
+                server_config(config).trust_proxy_headers = Some(startup.trust_proxy_headers);
+            }
+            "startup.auditFile" => {
+                storage_config(config).audit_file = Some(PathBuf::from(&startup.audit_file));
+            }
+            "startup.indexRebuildOnStartup" => {
+                index_config(config).rebuild_on_startup = Some(startup.index_rebuild_on_startup);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn limits_config(config: &mut RuntimeConfigFile) -> &mut LimitsConfigFile {
+    config.limits.get_or_insert_with(LimitsConfigFile::default)
+}
+
+fn editor_config(config: &mut RuntimeConfigFile) -> &mut EditorConfigFile {
+    config.editor.get_or_insert_with(EditorConfigFile::default)
+}
+
+fn task_config(config: &mut RuntimeConfigFile) -> &mut TaskConfigFile {
+    config.tasks.get_or_insert_with(TaskConfigFile::default)
+}
+
+fn archive_config(config: &mut RuntimeConfigFile) -> &mut ArchiveConfigFile {
+    config
+        .archive
+        .get_or_insert_with(ArchiveConfigFile::default)
+}
+
+fn index_config(config: &mut RuntimeConfigFile) -> &mut IndexConfigFile {
+    config.index.get_or_insert_with(IndexConfigFile::default)
+}
+
+fn audit_config(config: &mut RuntimeConfigFile) -> &mut AuditConfigFile {
+    config.audit.get_or_insert_with(AuditConfigFile::default)
+}
+
+fn trash_config(config: &mut RuntimeConfigFile) -> &mut TrashConfigFile {
+    config.trash.get_or_insert_with(TrashConfigFile::default)
+}
+
+fn server_config(config: &mut RuntimeConfigFile) -> &mut ServerConfigFile {
+    config.server.get_or_insert_with(ServerConfigFile::default)
+}
+
+fn storage_config(config: &mut RuntimeConfigFile) -> &mut StorageConfigFile {
+    config
+        .storage
+        .get_or_insert_with(StorageConfigFile::default)
 }
 
 async fn write_config_atomic(path: &Path, config: &RuntimeConfigFile) -> Result<(), AppError> {
@@ -805,7 +920,7 @@ mod tests {
         }))
         .unwrap();
 
-        let runtime = service.patch_runtime(patch).await.unwrap();
+        let runtime = service.patch(Some(patch), None).await.unwrap().unwrap();
 
         assert_eq!(runtime.max_upload_bytes, Some(8));
         assert_eq!(runtime.max_dir_page_size, 20);
@@ -818,6 +933,30 @@ mod tests {
         assert_eq!(value["limits"]["maxDirPageSize"], 20);
         assert_eq!(value["editor"]["editableExtensions"], json!(["txt", "md"]));
         assert_eq!(value["conflictPolicy"], "reject");
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn patch_runtime_writes_only_touched_fields() {
+        let root = temp_dir("settings-patch-touched-fields");
+        let config_path = root.join("data/config.json");
+        let mut config = AppConfig::load_from_file(config_path.clone()).unwrap();
+        config.config_file = config_path.clone();
+        config.max_dir_page_size = 99;
+        let service = SettingsService::new(&config);
+
+        let patch: RuntimeSettingsPatch = serde_json::from_value(json!({
+            "maxUploadBytes": 8
+        }))
+        .unwrap();
+
+        service.patch(Some(patch), None).await.unwrap();
+
+        let text = fs::read_to_string(config_path).await.unwrap();
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(value["limits"]["maxUploadBytes"], 8);
+        assert_eq!(value["limits"].get("maxDirPageSize"), None);
 
         let _ = std::fs::remove_dir_all(root);
     }
@@ -867,7 +1006,8 @@ mod tests {
         }))
         .unwrap();
 
-        let startup = service.patch_startup(patch).await.unwrap();
+        service.patch(None, Some(patch)).await.unwrap();
+        let startup = service.startup().await;
 
         assert_eq!(startup.bind_address, "127.0.0.1");
         assert_eq!(startup.port, 18080);
