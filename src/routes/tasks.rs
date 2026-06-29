@@ -23,7 +23,7 @@ use crate::{
         task_io::{
             ArchiveSource, BlockingProgress, ExtractLimits, archive_output_name,
             archive_sources_sync, cleanup_path, copy_path_streaming, extract_archive_sync,
-            extract_output_folder_name, finalize_temp_path, temp_sibling_path,
+            extract_output_folder_name, flush_and_finalize_temp_path, temp_sibling_path,
         },
     },
 };
@@ -520,8 +520,12 @@ async fn archive_task(
         let result = archive_sources_sync(&sources, &temp_path, format, &mut progress);
         match result {
             Ok(bytes) => {
-                progress.flush()?;
-                finalize_temp_path(&temp_path, &target_path, target.existed)?;
+                flush_and_finalize_temp_path(
+                    &mut progress,
+                    &temp_path,
+                    &target_path,
+                    target.existed,
+                )?;
                 Ok(bytes)
             }
             Err(error) => {
@@ -593,8 +597,7 @@ async fn extract_task(
         let result = extract_archive_sync(&source_path, &temp_path, limits, &mut progress);
         match result {
             Ok(bytes) => {
-                progress.flush()?;
-                finalize_temp_path(&temp_path, &target_path, false)?;
+                flush_and_finalize_temp_path(&mut progress, &temp_path, &target_path, false)?;
                 Ok(bytes)
             }
             Err(error) => {
@@ -661,13 +664,12 @@ async fn copy_one(
         let result = copy_path_streaming(&source_real_path, &temp_path, &mut progress);
         match result {
             Ok(bytes) => {
-                progress.flush()?;
-                if let Err(error) =
-                    finalize_temp_path(&temp_path, &target_real_path, replace_existing)
-                {
-                    cleanup_path(&temp_path);
-                    return Err(error);
-                }
+                flush_and_finalize_temp_path(
+                    &mut progress,
+                    &temp_path,
+                    &target_real_path,
+                    replace_existing,
+                )?;
                 Ok(bytes)
             }
             Err(error) => {

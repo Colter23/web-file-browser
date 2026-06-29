@@ -718,6 +718,22 @@ pub(crate) fn finalize_temp_path(
     }
 }
 
+pub(crate) fn flush_and_finalize_temp_path(
+    progress: &mut BlockingProgress,
+    temp_path: &FsPath,
+    target_path: &FsPath,
+    replace_file: bool,
+) -> Result<(), AppError> {
+    if let Err(error) = progress
+        .flush()
+        .and_then(|_| finalize_temp_path(temp_path, target_path, replace_file))
+    {
+        cleanup_path(temp_path);
+        return Err(error);
+    }
+    Ok(())
+}
+
 pub(crate) fn cleanup_path(path: &FsPath) {
     if path.is_dir() {
         let _ = fs::remove_dir_all(path);
@@ -970,6 +986,68 @@ mod tests {
         let result = worker.await.unwrap();
         assert!(result.is_err());
         assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    #[tokio::test]
+    async fn flush_and_finalize_cleans_temp_when_cancelled() {
+        let temp = temp_dir("web-file-browser-finalize-cancel-test");
+        fs::create_dir_all(&temp).unwrap();
+        let temp_path = temp.join(".output.tmp");
+        let target_path = temp.join("output.txt");
+        fs::write(&temp_path, "partial").unwrap();
+
+        let service = TaskService::new(1, None, 200);
+        let task = service.create(TaskKind::Copy, 1, 0).await.unwrap();
+        service.mark_running(&task.id).await.unwrap();
+        service.cancel(&task.id).await.unwrap();
+
+        let handle = Handle::current();
+        let result = tokio::task::spawn_blocking({
+            let temp_path = temp_path.clone();
+            let target_path = target_path.clone();
+            move || {
+                let mut progress = BlockingProgress::new(handle, service, task.id, None);
+                flush_and_finalize_temp_path(&mut progress, &temp_path, &target_path, false)
+            }
+        })
+        .await
+        .unwrap();
+
+        assert!(result.is_err());
+        assert!(!temp_path.exists());
+        assert!(!target_path.exists());
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
+    async fn flush_and_finalize_cleans_temp_when_replace_fails() {
+        let temp = temp_dir("web-file-browser-finalize-replace-fail-test");
+        fs::create_dir_all(&temp).unwrap();
+        let temp_path = temp.join(".output.tmp");
+        let target_path = temp.join("output.txt");
+        fs::write(&temp_path, "new").unwrap();
+        fs::create_dir(&target_path).unwrap();
+
+        let service = TaskService::new(1, None, 200);
+        let task = service.create(TaskKind::Copy, 1, 0).await.unwrap();
+        service.mark_running(&task.id).await.unwrap();
+
+        let handle = Handle::current();
+        let result = tokio::task::spawn_blocking({
+            let temp_path = temp_path.clone();
+            let target_path = target_path.clone();
+            move || {
+                let mut progress = BlockingProgress::new(handle, service, task.id, None);
+                flush_and_finalize_temp_path(&mut progress, &temp_path, &target_path, true)
+            }
+        })
+        .await
+        .unwrap();
+
+        assert!(result.is_err());
+        assert!(!temp_path.exists());
+        assert!(target_path.is_dir());
+        fs::remove_dir_all(temp).unwrap();
     }
 
     #[tokio::test]
