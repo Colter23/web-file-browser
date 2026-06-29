@@ -323,7 +323,7 @@ async fn upload_field(
             return Err(error);
         }
     } else {
-        if target.path.exists() {
+        if conflict::path_entry_exists(&target.path)? {
             let _ = fs::remove_file(&temp_path).await;
             let path = join_virtual_path(&parent.virtual_path, &target.name);
             return Err(AppError::conflict(format!("路径已存在: {path}"))
@@ -583,10 +583,18 @@ async fn create_temp_file(path: &Path) -> Result<File, AppError> {
 }
 
 async fn replace_file(temp_path: &Path, target: &Path) -> Result<(), AppError> {
+    if conflict::path_entry_exists(target)? {
+        conflict::ensure_file_target_replaceable(target)?;
+    }
     match fs::rename(temp_path, target).await {
         Ok(()) => Ok(()),
-        Err(error) if target.exists() => replace_existing_file(temp_path, target, error).await,
-        Err(error) => Err(error.into()),
+        Err(error) => {
+            if conflict::path_entry_exists(target)? {
+                replace_existing_file(temp_path, target, error).await
+            } else {
+                Err(error.into())
+            }
+        }
     }
 }
 
@@ -595,11 +603,7 @@ async fn replace_existing_file(
     target: &Path,
     first_error: std::io::Error,
 ) -> Result<(), AppError> {
-    if !target.is_file() {
-        return Err(
-            AppError::conflict("仅支持替换文件，不替换目录").with_reason("OVERWRITE_DIR_FORBIDDEN")
-        );
-    }
+    conflict::ensure_file_target_replaceable(target)?;
 
     let backup = replacement_backup_path(target);
     fs::rename(target, &backup).await.map_err(|backup_error| {

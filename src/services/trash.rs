@@ -744,7 +744,7 @@ fn move_payload_with_copy_fallback(
     target: &Path,
     kind: &TrashEntryKind,
 ) -> Result<(), AppError> {
-    if target.exists() {
+    if conflict::path_entry_exists(target)? {
         return Err(
             AppError::conflict(format!("恢复目标已存在: {}", target.display()))
                 .with_reason("TRASH_RESTORE_TARGET_EXISTS")

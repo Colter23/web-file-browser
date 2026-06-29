@@ -706,7 +706,7 @@ pub(crate) fn finalize_temp_path(
     if replace_file {
         conflict::replace_file_sync(temp_path, target_path)
     } else {
-        if target_path.exists() {
+        if conflict::path_entry_exists(target_path)? {
             cleanup_path(temp_path);
             return Err(AppError::conflict(format!(
                 "目标路径已存在: {}",

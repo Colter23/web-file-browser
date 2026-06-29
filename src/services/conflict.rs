@@ -22,7 +22,7 @@ pub fn resolve_child(
     let target = parent.join(desired_name);
     match policy {
         ConflictPolicy::Reject => {
-            if target.exists() {
+            if path_entry_exists(&target)? {
                 Err(AppError::conflict(format!("路径已存在: {display_path}"))
                     .with_reason("PATH_ALREADY_EXISTS")
                     .with_param("path", display_path))
@@ -35,7 +35,7 @@ pub fn resolve_child(
             }
         }
         ConflictPolicy::Overwrite => Ok(ConflictTarget {
-            existed: target.exists(),
+            existed: path_entry_exists(&target)?,
             path: target,
             name: desired_name.to_string(),
         }),
@@ -44,7 +44,28 @@ pub fn resolve_child(
 }
 
 pub fn ensure_file_overwrite_allowed(target: &ConflictTarget) -> Result<(), AppError> {
-    if target.existed && !target.path.is_file() {
+    if target.existed {
+        ensure_file_target_replaceable(&target.path)?;
+    }
+    Ok(())
+}
+
+pub fn path_entry_exists(path: &Path) -> Result<bool, AppError> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
+pub fn ensure_file_target_replaceable(path: &Path) -> Result<(), AppError> {
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.file_type().is_symlink() {
+        return Err(
+            AppError::bad_request("不支持覆盖符号链接").with_reason("SYMLINK_OPERATION_FORBIDDEN")
+        );
+    }
+    if !metadata.is_file() {
         return Err(AppError::conflict("仅支持显式覆盖文件，不覆盖目录")
             .with_reason("OVERWRITE_DIR_FORBIDDEN"));
     }
@@ -52,12 +73,20 @@ pub fn ensure_file_overwrite_allowed(target: &ConflictTarget) -> Result<(), AppE
 }
 
 pub fn replace_file_sync(source: &Path, target: &Path) -> Result<(), AppError> {
+    if path_entry_exists(target)? {
+        ensure_file_target_replaceable(target)?;
+    }
     match fs::rename(source, target) {
         Ok(()) => Ok(()),
-        Err(error) if target.exists() => replace_existing_file_sync(source, target, error),
-        Err(rename_error) => move_file_with_copy_fallback(source, target).map_err(|copy_error| {
-            AppError::internal(format!("移动文件失败: {rename_error}; {copy_error}"))
-        }),
+        Err(rename_error) => {
+            if path_entry_exists(target)? {
+                replace_existing_file_sync(source, target, rename_error)
+            } else {
+                move_file_with_copy_fallback(source, target).map_err(|copy_error| {
+                    AppError::internal(format!("移动文件失败: {rename_error}; {copy_error}"))
+                })
+            }
+        }
     }
 }
 
@@ -66,11 +95,7 @@ fn replace_existing_file_sync(
     target: &Path,
     first_error: std::io::Error,
 ) -> Result<(), AppError> {
-    if !target.is_file() {
-        return Err(
-            AppError::conflict("仅支持替换文件，不替换目录").with_reason("OVERWRITE_DIR_FORBIDDEN")
-        );
-    }
+    ensure_file_target_replaceable(target)?;
 
     let backup = backup_sibling_path(target);
     fs::rename(target, &backup).map_err(|backup_error| {
@@ -119,7 +144,7 @@ fn backup_sibling_path(target: &Path) -> PathBuf {
 
 fn auto_rename_child(parent: &Path, desired_name: &str) -> Result<ConflictTarget, AppError> {
     let target = parent.join(desired_name);
-    if !target.exists() {
+    if !path_entry_exists(&target)? {
         return Ok(ConflictTarget {
             path: target,
             name: desired_name.to_string(),
@@ -130,7 +155,7 @@ fn auto_rename_child(parent: &Path, desired_name: &str) -> Result<ConflictTarget
     for index in 1..10_000 {
         let candidate_name = numbered_name(desired_name, index);
         let candidate = parent.join(&candidate_name);
-        if !candidate.exists() {
+        if !path_entry_exists(&candidate)? {
             return Ok(ConflictTarget {
                 path: candidate,
                 name: candidate_name,
@@ -158,12 +183,16 @@ fn numbered_name(name: &str, index: usize) -> String {
 mod tests {
     use std::{
         fs,
+        path::Path,
         time::{SystemTime, UNIX_EPOCH},
     };
 
     use crate::models::ConflictPolicy;
 
-    use super::{backup_sibling_path, replace_file_sync, resolve_child};
+    use super::{
+        ConflictTarget, backup_sibling_path, ensure_file_overwrite_allowed, path_entry_exists,
+        replace_file_sync, resolve_child,
+    };
 
     #[test]
     fn auto_renames_existing_file_with_extension() {
@@ -186,6 +215,33 @@ mod tests {
         fs::write(temp.join("a.txt"), "old").unwrap();
 
         assert!(resolve_child(&temp, "a.txt", "/repo/a.txt", ConflictPolicy::Reject).is_err());
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[test]
+    fn conflict_checks_treat_symlink_as_existing_when_available() {
+        let temp = temp_dir("web-file-browser-conflict-symlink-test");
+        fs::create_dir_all(&temp).unwrap();
+        let outside_target = temp.join("outside-missing.txt");
+        let link = temp.join("a.txt");
+        if !try_create_file_symlink(&outside_target, &link) {
+            fs::remove_dir_all(temp).unwrap();
+            return;
+        }
+
+        assert!(path_entry_exists(&link).unwrap());
+        assert!(resolve_child(&temp, "a.txt", "/repo/a.txt", ConflictPolicy::Reject).is_err());
+        let renamed =
+            resolve_child(&temp, "a.txt", "/repo/a.txt", ConflictPolicy::AutoRename).unwrap();
+        assert_eq!(renamed.name, "a (1).txt");
+
+        let overwrite = ConflictTarget {
+            path: link,
+            name: "a.txt".to_string(),
+            existed: true,
+        };
+        let error = ensure_file_overwrite_allowed(&overwrite).unwrap_err();
+        assert_eq!(error.reason(), "SYMLINK_OPERATION_FORBIDDEN");
         fs::remove_dir_all(temp).unwrap();
     }
 
@@ -221,6 +277,28 @@ mod tests {
     }
 
     #[test]
+    fn replace_file_sync_rejects_symlink_target_when_available() {
+        let temp = temp_dir("web-file-browser-conflict-replace-symlink-test");
+        fs::create_dir_all(&temp).unwrap();
+        let source = temp.join("source.txt");
+        let outside_target = temp.join("outside.txt");
+        let link = temp.join("target.txt");
+        fs::write(&source, "new").unwrap();
+        fs::write(&outside_target, "old").unwrap();
+        if !try_create_file_symlink(&outside_target, &link) {
+            fs::remove_dir_all(temp).unwrap();
+            return;
+        }
+
+        let error = replace_file_sync(&source, &link).unwrap_err();
+
+        assert_eq!(error.reason(), "SYMLINK_OPERATION_FORBIDDEN");
+        assert_eq!(fs::read_to_string(&outside_target).unwrap(), "old");
+        assert!(source.exists());
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[test]
     fn backup_path_stays_next_to_target() {
         let temp = temp_dir("web-file-browser-conflict-backup-path-test");
         fs::create_dir_all(&temp).unwrap();
@@ -245,5 +323,21 @@ mod tests {
             .unwrap()
             .as_nanos();
         std::env::temp_dir().join(format!("{prefix}-{nonce}"))
+    }
+
+    fn try_create_file_symlink(source: &Path, link: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(source, link).is_ok()
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_file(source, link).is_ok()
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = (source, link);
+            false
+        }
     }
 }

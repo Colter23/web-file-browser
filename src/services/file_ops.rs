@@ -134,7 +134,10 @@ fn move_entry_sync(
 
     let desired_virtual_path = join_virtual_path(&target_parent.virtual_path, &target_name);
     let desired_target = target_parent.real_path.join(&target_name);
-    if desired_target.exists()
+    if conflict::path_entry_exists(&desired_target)?
+        && !fs::symlink_metadata(&desired_target)?
+            .file_type()
+            .is_symlink()
         && let Ok(canonical_target) = desired_target.canonicalize()
         && canonical_target == source.real_path
     {
@@ -216,6 +219,7 @@ fn delete_path_sync(path: &Path) -> Result<(), AppError> {
 mod tests {
     use std::{
         fs,
+        path::Path,
         time::{SystemTime, UNIX_EPOCH},
     };
 
@@ -404,5 +408,73 @@ mod tests {
         assert!(temp.join("a (1).txt").is_file());
         assert!(temp.join("target (1).txt").is_file());
         fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
+    async fn create_file_rejects_dangling_symlink_target_when_available() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp = std::env::temp_dir().join(format!("web-file-browser-create-link-test-{nonce}"));
+        let outside =
+            std::env::temp_dir().join(format!("web-file-browser-outside-link-test-{nonce}"));
+        fs::create_dir_all(&temp).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        let outside_target = outside.join("escaped.txt");
+        let link = temp.join("link.txt");
+        if !try_create_file_symlink(&outside_target, &link) {
+            fs::remove_dir_all(temp).unwrap();
+            fs::remove_dir_all(outside).unwrap();
+            return;
+        }
+        let snapshot = MappingSnapshot::build(vec![PathMapping {
+            id: Some(1),
+            mount_path: "/repo".to_string(),
+            folder_path: temp.to_string_lossy().to_string(),
+            remark: Some(String::new()),
+            order: Some(0),
+            writable: true,
+        }])
+        .await
+        .unwrap();
+
+        let result = create_entry_sync(
+            &snapshot,
+            "/repo",
+            CreateEntryRequest {
+                entry_type: CreateEntryType::File,
+                name: "link.txt".to_string(),
+                conflict_policy: None,
+            },
+            ConflictPolicy::Reject,
+        );
+
+        assert!(result.is_err());
+        assert!(!outside_target.exists());
+        assert!(
+            fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        fs::remove_dir_all(temp).unwrap();
+        fs::remove_dir_all(outside).unwrap();
+    }
+
+    fn try_create_file_symlink(source: &Path, link: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(source, link).is_ok()
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_file(source, link).is_ok()
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = (source, link);
+            false
+        }
     }
 }
