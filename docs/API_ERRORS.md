@@ -40,7 +40,7 @@
 | 416 | `RANGE_NOT_SATISFIABLE` | Range 头非法、越界或多段 Range | 重新发起完整读取或修正单段 Range |
 | 428 | `PRECONDITION_REQUIRED` | 保存内容时缺少 `If-Match` | 重新打开文件，带最新 ETag 保存 |
 | 412 | `PRECONDITION_FAILED` | 文件已被外部修改或 ETag 过期 | 提示刷新后再保存，避免覆盖外部修改 |
-| 429 | `TOO_MANY_REQUESTS` | 目录扫描、文件传输或单 IP 并发超过限制 | 稍后重试，前端避免并发风暴 |
+| 429 | `TOO_MANY_REQUESTS` | 目录扫描、文件传输、单 IP 并发超过限制，或登录失败进入短暂冷却 | 稍后重试，前端避免并发风暴 |
 | 500 | `INTERNAL_ERROR` | 文件系统异常、配置写入异常、任务内部异常 | 展示 `message`，查看服务日志和挂载权限 |
 
 ## 前端处理建议
@@ -67,6 +67,7 @@
 | `AUTH_REQUIRED` | 未登录访问受保护接口 | 无 |
 | `ADMIN_PASSWORD_NOT_CONFIGURED` | 登录时管理员密码尚未初始化 | 无 |
 | `ADMIN_PASSWORD_INCORRECT` | 登录密码错误 | 无 |
+| `LOGIN_FAILURE_COOLDOWN` | 同一来源连续登录失败后短暂冷却 | `retryAfterSeconds`, `attempts` |
 | `ADMIN_PASSWORD_ALREADY_CONFIGURED` | 首次设置接口重复调用 | 无 |
 | `PASSWORD_TOO_SHORT` | 首次设置或修改密码长度不足 | `field`, `minLength` |
 | `REQUEST_INVALID` | JSON、查询参数或请求格式无法解析 | 无 |

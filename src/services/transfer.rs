@@ -28,7 +28,7 @@ use uuid::Uuid;
 
 use crate::{
     error::AppError,
-    models::{ConflictPolicy, FileOperationResponse, UploadResponse},
+    models::{ConflictPolicy, FileOperationResponse, UploadItemError, UploadResponse},
     services::{
         conflict,
         path_resolver::{
@@ -219,14 +219,37 @@ pub async fn upload_multipart(
     ensure_folder(&parent.real_path, &parent.virtual_path)?;
 
     let mut files = Vec::new();
+    let mut errors = Vec::new();
     while let Some(field) = multipart.next_field().await? {
         let Some(file_name) = field.file_name().map(ToString::to_string) else {
             continue;
         };
-        files.push(upload_field(&parent, file_name, field, max_bytes, policy).await?);
+        match upload_field(&parent, file_name.clone(), field, max_bytes, policy).await {
+            Ok(file) => files.push(file),
+            Err(error) if files.is_empty() => return Err(error),
+            Err(error) => {
+                errors.push(upload_item_error(file_name, &error));
+                break;
+            }
+        }
     }
 
-    Ok((StatusCode::CREATED, Json(UploadResponse { files })))
+    let success = files.len();
+    let failed = errors.len();
+    let status = if failed == 0 {
+        StatusCode::CREATED
+    } else {
+        StatusCode::MULTI_STATUS
+    };
+    Ok((
+        status,
+        Json(UploadResponse {
+            files,
+            errors,
+            success,
+            failed,
+        }),
+    ))
 }
 
 pub fn parse_range_header(
@@ -339,6 +362,16 @@ async fn upload_field(
     Ok(FileOperationResponse {
         path: join_virtual_path(&parent.virtual_path, &target.name),
     })
+}
+
+fn upload_item_error(file_name: String, error: &AppError) -> UploadItemError {
+    UploadItemError {
+        file_name,
+        code: error.code().to_string(),
+        reason: error.reason().to_string(),
+        message: error.to_string(),
+        params: error.params().cloned(),
+    }
 }
 
 async fn write_body_to_file(

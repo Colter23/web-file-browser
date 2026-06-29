@@ -40,6 +40,9 @@ use crate::{
     },
 };
 
+#[derive(Debug, Clone)]
+pub(crate) struct RequestIp(pub String);
+
 pub fn api_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
     let public_auth_routes =
         public_auth_routes().layer(middleware::from_fn_with_state(state.clone(), limit_ip));
@@ -97,18 +100,19 @@ pub async fn normalize_api_error_response(request: Request, next: Next) -> Respo
 
 pub async fn limit_ip(
     State(state): State<Arc<AppState>>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Result<Response, AppError> {
     let ip = request_ip(
         &request,
         state.settings.active_startup().trust_proxy_headers,
     );
-    let _permit = state.limits.acquire_ip(ip).await?;
+    let _permit = state.limits.acquire_ip(ip.clone()).await?;
+    request.extensions_mut().insert(RequestIp(ip));
     Ok(next.run(request).await)
 }
 
-fn request_ip(request: &Request, trust_proxy_headers: bool) -> String {
+pub(crate) fn request_ip(request: &Request, trust_proxy_headers: bool) -> String {
     if trust_proxy_headers
         && let Some(ip) = request
             .headers()

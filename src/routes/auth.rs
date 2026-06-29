@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    extract::{Request, State},
+    extract::{Extension, Request, State},
     http::{HeaderMap, HeaderValue, header::SET_COOKIE},
     middleware::Next,
     response::Response,
@@ -12,7 +12,10 @@ use crate::{
     app::AppState,
     error::AppError,
     models::{ChangePasswordRequest, LoginRequest, SessionResponse, SetupPasswordRequest},
-    services::auth::{clear_session_cookie_value, extract_session_token, session_cookie_value},
+    routes::RequestIp,
+    services::auth::{
+        LoginThrottle, clear_session_cookie_value, extract_session_token, session_cookie_value,
+    },
 };
 
 pub fn public_auth_routes() -> Router<Arc<AppState>> {
@@ -47,11 +50,15 @@ pub async fn require_auth(
 
 async fn login(
     State(state): State<Arc<AppState>>,
+    Extension(request_ip): Extension<RequestIp>,
     Json(request): Json<LoginRequest>,
 ) -> Result<(HeaderMap, Json<SessionResponse>), AppError> {
     if !state.auth_store.has_admin_password().await {
         return Err(AppError::conflict("管理员密码尚未初始化，请先完成首次设置")
             .with_reason("ADMIN_PASSWORD_NOT_CONFIGURED"));
+    }
+    if let Some(throttle) = state.auth.login_cooldown(&request_ip.0).await {
+        return Err(login_cooldown_error(throttle));
     }
 
     if !state
@@ -59,11 +66,15 @@ async fn login(
         .verify_admin_password(request.password)
         .await?
     {
+        if let Some(throttle) = state.auth.record_login_failure(&request_ip.0).await {
+            return Err(login_cooldown_error(throttle));
+        }
         return Err(
             AppError::unauthorized("管理员密码不正确").with_reason("ADMIN_PASSWORD_INCORRECT")
         );
     }
 
+    state.auth.clear_login_failures(&request_ip.0).await;
     let token = state.auth.create_session().await;
     audit_ignore(&state, "login", None, None).await;
     let mut headers = HeaderMap::new();
@@ -80,6 +91,14 @@ async fn login(
             auth_configured: true,
         }),
     ))
+}
+
+fn login_cooldown_error(throttle: LoginThrottle) -> AppError {
+    let retry_after_seconds = throttle.retry_after.as_secs().max(1);
+    AppError::too_many_requests("管理员密码错误次数过多，请稍后重试")
+        .with_reason("LOGIN_FAILURE_COOLDOWN")
+        .with_param("retryAfterSeconds", retry_after_seconds)
+        .with_param("attempts", throttle.attempts)
 }
 
 async fn setup_password(

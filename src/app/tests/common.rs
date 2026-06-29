@@ -242,16 +242,27 @@ pub(super) fn multipart_upload_request_bytes(
     file_name: &str,
     content: &[u8],
 ) -> Request<Body> {
+    multipart_upload_request_many(uri, cookie, &[(file_name, content)])
+}
+
+pub(super) fn multipart_upload_request_many(
+    uri: &str,
+    cookie: &str,
+    files: &[(&str, &[u8])],
+) -> Request<Body> {
     let boundary = "web-file-browser-test-boundary";
-    let header = format!(
-        "--{boundary}\r\n\
-             Content-Disposition: form-data; name=\"file\"; filename=\"{file_name}\"\r\n\
-             Content-Type: application/octet-stream\r\n\r\n"
-    );
-    let footer = format!("\r\n--{boundary}--\r\n");
-    let mut body = Vec::with_capacity(header.len() + content.len() + footer.len());
-    body.extend_from_slice(header.as_bytes());
-    body.extend_from_slice(content);
+    let footer = format!("--{boundary}--\r\n");
+    let mut body = Vec::new();
+    for (file_name, content) in files {
+        let header = format!(
+            "--{boundary}\r\n\
+                 Content-Disposition: form-data; name=\"file\"; filename=\"{file_name}\"\r\n\
+                 Content-Type: application/octet-stream\r\n\r\n"
+        );
+        body.extend_from_slice(header.as_bytes());
+        body.extend_from_slice(content);
+        body.extend_from_slice(b"\r\n");
+    }
     body.extend_from_slice(footer.as_bytes());
     Request::builder()
         .method(Method::POST)

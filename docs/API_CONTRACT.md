@@ -406,7 +406,7 @@ multipart 流式上传到目标目录。字段名使用 `file`，可重复上传
 curl -F "file=@a.bin;filename=a.bin" /api/upload/files
 ```
 
-成功返回 `201`：
+全部成功返回 `201`：
 
 ```json
 {
@@ -414,7 +414,35 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
     {
       "path": "/files/a.bin"
     }
-  ]
+  ],
+  "success": 1,
+  "failed": 0
+}
+```
+
+多文件上传按顺序处理。如果前面的文件已成功落盘，后续文件失败时会停止继续处理并返回 `207 Multi-Status`，前端应根据 `files` 和 `errors` 展示部分成功结果。单文件失败或第一个文件失败时仍返回对应的 4xx 错误。
+
+```json
+{
+  "files": [
+    {
+      "path": "/files/a.bin"
+    }
+  ],
+  "errors": [
+    {
+      "fileName": "b.bin",
+      "code": "PAYLOAD_TOO_LARGE",
+      "reason": "UPLOAD_SIZE_LIMIT_EXCEEDED",
+      "message": "上传内容超过限制",
+      "params": {
+        "maxBytes": 1048576,
+        "writtenBytes": 1049600
+      }
+    }
+  ],
+  "success": 1,
+  "failed": 1
 }
 ```
 

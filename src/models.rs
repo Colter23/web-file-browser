@@ -378,6 +378,21 @@ pub struct FileOperationResponse {
 #[serde(rename_all = "camelCase")]
 pub struct UploadResponse {
     pub files: Vec<FileOperationResponse>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<UploadItemError>,
+    pub success: usize,
+    pub failed: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadItemError {
+    pub file_name: String,
+    pub code: String,
+    pub reason: String,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub params: Option<Map<String, Value>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

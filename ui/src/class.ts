@@ -289,6 +289,15 @@ export interface SaveFileResponse extends FileOperationResponse {
 
 export interface UploadResponse {
     files: FileOperationResponse[];
+    errors?: Array<{
+        fileName: string;
+        code: string;
+        reason: string;
+        message: string;
+        params?: Record<string, unknown>;
+    }>;
+    success: number;
+    failed: number;
 }
 
 export type ArchiveFormat = "tarGz" | "zip";

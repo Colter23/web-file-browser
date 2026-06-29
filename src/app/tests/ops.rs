@@ -28,6 +28,37 @@ async fn health_endpoint_is_public() {
 }
 
 #[tokio::test]
+async fn static_fallback_serves_frontend_routes_but_api_keeps_json_404() {
+    let (_root, app) = test_app("static-fallback-api").await;
+
+    let response = app
+        .clone()
+        .oneshot(empty_request(Method::GET, "/desktop/deep/link"))
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = text_body(response).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.contains("id=\"app\""));
+
+    let cookie = login_cookie(&app).await;
+    let response = app
+        .oneshot(empty_request_with_cookie(
+            Method::GET,
+            "/api/not-found",
+            &cookie,
+        ))
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = json_body(response).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["reason"], "API_ROUTE_NOT_FOUND");
+}
+
+#[tokio::test]
 async fn protected_api_requires_login_with_json_error() {
     let (_root, app) = test_app("protected-api").await;
 

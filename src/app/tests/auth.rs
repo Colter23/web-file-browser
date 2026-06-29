@@ -105,6 +105,62 @@ async fn setup_password_is_disabled_after_initialization() {
 }
 
 #[tokio::test]
+async fn login_failures_enter_short_ip_cooldown() {
+    let (_root, app) = test_app_with_config("auth-login-cooldown-api", |config| {
+        config.trust_proxy_headers = true;
+    })
+    .await;
+    let _cookie = login_cookie(&app).await;
+
+    let mut last_status = StatusCode::OK;
+    let mut last_body = Value::Null;
+    for _ in 0..5 {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/api/auth/login")
+                    .header("x-forwarded-for", "10.0.0.50")
+                    .header(CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({ "password": "wrong-password" })).unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        last_status = response.status();
+        last_body = json_body(response).await;
+    }
+
+    assert_eq!(last_status, StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(last_body["code"], "TOO_MANY_REQUESTS");
+    assert_eq!(last_body["reason"], "LOGIN_FAILURE_COOLDOWN");
+    assert!(last_body["params"]["retryAfterSeconds"].as_u64().unwrap() >= 1);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/auth/login")
+                .header("x-forwarded-for", "10.0.0.50")
+                .header(CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&json!({ "password": "test-password" })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = json_body(response).await;
+
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(body["reason"], "LOGIN_FAILURE_COOLDOWN");
+}
+
+#[tokio::test]
 async fn public_auth_routes_are_limited_by_ip_concurrency() {
     let (_root, app) = test_app_with_config("auth-ip-limit-api", |config| {
         config.max_ip_concurrency = 1;

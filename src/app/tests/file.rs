@@ -560,6 +560,51 @@ async fn multipart_upload_over_axum_default_limit_streams_through_api() {
 }
 
 #[tokio::test]
+async fn multipart_upload_reports_partial_success_when_later_file_fails() {
+    let (root, app) = test_app_with_config("multipart-partial-upload-api", |config| {
+        config.max_upload_bytes = Some(4);
+    })
+    .await;
+    let files_dir = root.path().join("files");
+    tokio::fs::create_dir_all(&files_dir).await.unwrap();
+
+    let cookie = login_cookie(&app).await;
+    create_mapping(&app, &cookie, "/docs", &files_dir, true).await;
+
+    let response = app
+        .clone()
+        .oneshot(multipart_upload_request_many(
+            "/api/upload/docs",
+            &cookie,
+            &[
+                ("ok.txt", b"1234".as_slice()),
+                ("too-large.txt", b"12345".as_slice()),
+                ("not-processed.txt", b"12".as_slice()),
+            ],
+        ))
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = json_body(response).await;
+
+    assert_eq!(status, StatusCode::MULTI_STATUS);
+    assert_eq!(body["success"], 1);
+    assert_eq!(body["failed"], 1);
+    assert_eq!(body["files"][0]["path"], "/docs/ok.txt");
+    assert_eq!(body["errors"][0]["fileName"], "too-large.txt");
+    assert_eq!(body["errors"][0]["code"], "PAYLOAD_TOO_LARGE");
+    assert_eq!(body["errors"][0]["reason"], "UPLOAD_SIZE_LIMIT_EXCEEDED");
+    assert_eq!(
+        tokio::fs::read_to_string(files_dir.join("ok.txt"))
+            .await
+            .unwrap(),
+        "1234"
+    );
+    assert!(!files_dir.join("too-large.txt").exists());
+    assert!(!files_dir.join("not-processed.txt").exists());
+}
+
+#[tokio::test]
 async fn directory_api_omits_totals_until_requested() {
     let (root, app) = test_app("directory-total-api").await;
     let files_dir = root.path().join("files");
