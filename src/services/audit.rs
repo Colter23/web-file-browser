@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc,
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
 };
 
@@ -21,6 +21,7 @@ use crate::error::AppError;
 pub struct AuditService {
     file_path: Arc<PathBuf>,
     state: Arc<Mutex<AuditState>>,
+    enabled: Arc<AtomicBool>,
     max_bytes: Arc<AtomicU64>,
     retention_files: Arc<AtomicUsize>,
 }
@@ -43,6 +44,7 @@ struct AuditRecord<'a> {
 impl AuditService {
     pub async fn load(
         file_path: PathBuf,
+        enabled: bool,
         max_bytes: Option<u64>,
         retention_files: usize,
     ) -> Result<Self, AppError> {
@@ -57,12 +59,14 @@ impl AuditService {
         Ok(Self {
             file_path: Arc::new(file_path),
             state: Arc::new(Mutex::new(AuditState { current_bytes })),
+            enabled: Arc::new(AtomicBool::new(enabled)),
             max_bytes: Arc::new(AtomicU64::new(option_to_atomic(max_bytes))),
             retention_files: Arc::new(AtomicUsize::new(retention_files)),
         })
     }
 
-    pub fn update_policy(&self, max_bytes: Option<u64>, retention_files: usize) {
+    pub fn update_policy(&self, enabled: bool, max_bytes: Option<u64>, retention_files: usize) {
+        self.enabled.store(enabled, Ordering::Relaxed);
         self.max_bytes
             .store(option_to_atomic(max_bytes), Ordering::Relaxed);
         self.retention_files
@@ -76,6 +80,10 @@ impl AuditService {
         path: Option<&str>,
         detail: Option<&str>,
     ) -> Result<(), AppError> {
+        if !self.enabled.load(Ordering::Relaxed) {
+            return Ok(());
+        }
+
         let mut state = self.state.lock().await;
         let time = OffsetDateTime::now_utc()
             .format(&Rfc3339)
@@ -251,7 +259,7 @@ mod tests {
     async fn rotates_audit_file_when_size_limit_is_reached() {
         let dir = temp_dir("web-file-browser-audit-rotate-test");
         let audit_path = dir.join("audit.jsonl");
-        let service = AuditService::load(audit_path.clone(), Some(180), 8)
+        let service = AuditService::load(audit_path.clone(), true, Some(180), 8)
             .await
             .unwrap();
 
@@ -285,7 +293,7 @@ mod tests {
     async fn zero_audit_limit_disables_rotation() {
         let dir = temp_dir("web-file-browser-audit-no-rotate-test");
         let audit_path = dir.join("audit.jsonl");
-        let service = AuditService::load(audit_path.clone(), None, 8)
+        let service = AuditService::load(audit_path.clone(), true, None, 8)
             .await
             .unwrap();
 
@@ -321,7 +329,7 @@ mod tests {
         let dir = temp_dir("web-file-browser-audit-existing-size-test");
         let audit_path = dir.join("audit.jsonl");
         fs::write(&audit_path, "existing audit line\n").unwrap();
-        let service = AuditService::load(audit_path.clone(), Some(20), 8)
+        let service = AuditService::load(audit_path.clone(), true, Some(20), 8)
             .await
             .unwrap();
 
@@ -375,7 +383,7 @@ mod tests {
     async fn zero_retention_removes_rotated_audit_files_after_rotation() {
         let dir = temp_dir("web-file-browser-audit-zero-retention-test");
         let audit_path = dir.join("audit.jsonl");
-        let service = AuditService::load(audit_path.clone(), Some(1), 0)
+        let service = AuditService::load(audit_path.clone(), true, Some(1), 0)
             .await
             .unwrap();
 
@@ -409,7 +417,9 @@ mod tests {
             )
             .unwrap();
         }
-        let service = AuditService::load(audit_path, Some(1024), 1).await.unwrap();
+        let service = AuditService::load(audit_path, true, Some(1024), 1)
+            .await
+            .unwrap();
 
         let removed = service.cleanup_rotated().await.unwrap();
 
@@ -417,6 +427,24 @@ mod tests {
         assert!(!dir.join("audit.10.jsonl").exists());
         assert!(!dir.join("audit.20.jsonl").exists());
         assert!(dir.join("audit.30.jsonl").exists());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test]
+    async fn disabled_audit_skips_file_writes() {
+        let dir = temp_dir("web-file-browser-audit-disabled-test");
+        let audit_path = dir.join("audit.jsonl");
+        let service = AuditService::load(audit_path.clone(), false, Some(1024), 1)
+            .await
+            .unwrap();
+
+        service
+            .record("admin", "disabled.action", Some("/file"), None)
+            .await
+            .unwrap();
+
+        assert!(!audit_path.exists());
 
         let _ = fs::remove_dir_all(dir);
     }

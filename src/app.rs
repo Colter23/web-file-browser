@@ -50,6 +50,7 @@ pub async fn build(config: AppConfig) -> Result<Router, AppError> {
     .await?;
     let audit = AuditService::load(
         config.audit_file.clone(),
+        config.audit_enabled,
         config.audit_max_bytes,
         config.audit_retention_files,
     )
@@ -121,8 +122,11 @@ impl AppState {
         self.search.set_enabled(settings.index_enabled).await;
         self.trash
             .update_policy(settings.trash_retention_days, settings.trash_max_bytes);
-        self.audit
-            .update_policy(settings.audit_max_bytes, settings.audit_retention_files);
+        self.audit.update_policy(
+            settings.audit_enabled,
+            settings.audit_max_bytes,
+            settings.audit_retention_files,
+        );
     }
 }
 

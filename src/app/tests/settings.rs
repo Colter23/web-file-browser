@@ -16,9 +16,14 @@ async fn settings_patch_updates_upload_limit_and_persists_config() {
             Some(&cookie),
             json!({
                 "runtime": {
+                    "authSessionTtlSeconds": 3600,
+                    "authSecureCookie": true,
                     "maxUploadBytes": 4,
                     "maxDirPageSize": 20,
                     "editableExtensions": [".TXT", " md "],
+                    "maxArchiveBytes": 1024,
+                    "maxArchiveFiles": 10,
+                    "auditEnabled": false,
                     "conflictPolicy": "reject"
                 }
             }),
@@ -30,8 +35,13 @@ async fn settings_patch_updates_upload_limit_and_persists_config() {
     let body: Value =
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(body["runtime"]["maxUploadBytes"], 4);
+    assert_eq!(body["runtime"]["authSessionTtlSeconds"], 3600);
+    assert_eq!(body["runtime"]["authSecureCookie"], true);
     assert_eq!(body["runtime"]["maxDirPageSize"], 20);
     assert_eq!(body["runtime"]["editableExtensions"], json!(["txt", "md"]));
+    assert_eq!(body["runtime"]["maxArchiveBytes"], 1024);
+    assert_eq!(body["runtime"]["maxArchiveFiles"], 10);
+    assert_eq!(body["runtime"]["auditEnabled"], false);
     assert_eq!(body["runtime"]["conflictPolicy"], "reject");
     assert_eq!(body["restartPending"], false);
     assert!(
@@ -58,12 +68,17 @@ async fn settings_patch_updates_upload_limit_and_persists_config() {
 
     let text = fs::read_to_string(root.path().join("data/config.json")).unwrap();
     let persisted: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(persisted["auth"]["sessionTtlSeconds"], 3600);
+    assert_eq!(persisted["auth"]["secureCookie"], true);
     assert_eq!(persisted["limits"]["maxUploadBytes"], 4);
     assert_eq!(persisted["limits"]["maxDirPageSize"], 20);
     assert_eq!(
         persisted["editor"]["editableExtensions"],
         json!(["txt", "md"])
     );
+    assert_eq!(persisted["archive"]["maxArchiveBytes"], 1024);
+    assert_eq!(persisted["archive"]["maxArchiveFiles"], 10);
+    assert_eq!(persisted["audit"]["enabled"], false);
     assert_eq!(persisted["conflictPolicy"], "reject");
 }
 

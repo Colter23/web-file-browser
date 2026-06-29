@@ -20,9 +20,12 @@ const DEFAULT_FAVORITES_FILE: &str = "data/favorites.json";
 const DEFAULT_TRASH_DIR: &str = "data/trash";
 const DEFAULT_STATIC_DIR: &str = "ui/dist";
 const DEFAULT_TRUST_PROXY_HEADERS: bool = false;
+const DEFAULT_AUTH_SESSION_TTL_SECONDS: u64 = 7 * 24 * 60 * 60;
+const DEFAULT_AUTH_SECURE_COOKIE: bool = false;
 const DEFAULT_MAX_EDIT_BYTES: u64 = 2 * 1024 * 1024;
 const DEFAULT_MAX_DIR_PAGE_SIZE: usize = 2_000;
 const DEFAULT_AUDIT_FILE: &str = "data/audit.jsonl";
+const DEFAULT_AUDIT_ENABLED: bool = true;
 const DEFAULT_AUDIT_MAX_BYTES: u64 = 10 * 1024 * 1024;
 const DEFAULT_AUDIT_RETENTION_FILES: usize = 8;
 const DEFAULT_MAX_DIR_CONCURRENCY: usize = 4;
@@ -48,12 +51,15 @@ pub struct AppConfig {
     pub static_dir: PathBuf,
     pub cors_allowed_origins: Vec<String>,
     pub trust_proxy_headers: bool,
+    pub auth_session_ttl_seconds: u64,
+    pub auth_secure_cookie: bool,
     pub max_edit_bytes: u64,
     pub editable_extensions: Vec<String>,
     pub editable_mime_types: Vec<String>,
     pub max_upload_bytes: Option<u64>,
     pub max_dir_page_size: usize,
     pub audit_file: PathBuf,
+    pub audit_enabled: bool,
     pub audit_max_bytes: Option<u64>,
     pub audit_retention_files: usize,
     pub max_dir_concurrency: usize,
@@ -62,6 +68,8 @@ pub struct AppConfig {
     pub max_task_concurrency: usize,
     pub task_history_limit: usize,
     pub task_speed_limit_bytes_per_sec: Option<u64>,
+    pub max_archive_bytes: Option<u64>,
+    pub max_archive_files: Option<usize>,
     pub max_extract_bytes: Option<u64>,
     pub max_extract_files: Option<usize>,
     pub max_extract_depth: usize,
@@ -96,6 +104,8 @@ impl AppConfig {
 
     pub(crate) fn runtime_settings(&self) -> RuntimeSettings {
         RuntimeSettings {
+            auth_session_ttl_seconds: self.auth_session_ttl_seconds,
+            auth_secure_cookie: self.auth_secure_cookie,
             max_edit_bytes: self.max_edit_bytes,
             editable_extensions: self.editable_extensions.clone(),
             editable_mime_types: self.editable_mime_types.clone(),
@@ -107,11 +117,14 @@ impl AppConfig {
             max_task_concurrency: self.max_task_concurrency,
             task_history_limit: self.task_history_limit,
             task_speed_limit_bytes_per_sec: self.task_speed_limit_bytes_per_sec,
+            max_archive_bytes: self.max_archive_bytes,
+            max_archive_files: self.max_archive_files,
             max_extract_bytes: self.max_extract_bytes,
             max_extract_files: self.max_extract_files,
             max_extract_depth: self.max_extract_depth,
             index_enabled: self.index_enabled,
             index_scan_delay_ms: self.index_scan_delay_ms,
+            audit_enabled: self.audit_enabled,
             audit_max_bytes: self.audit_max_bytes,
             audit_retention_files: self.audit_retention_files,
             trash_retention_days: self.trash_retention_days,
@@ -149,12 +162,15 @@ impl AppConfig {
             static_dir: PathBuf::from(DEFAULT_STATIC_DIR),
             cors_allowed_origins: Vec::new(),
             trust_proxy_headers: DEFAULT_TRUST_PROXY_HEADERS,
+            auth_session_ttl_seconds: DEFAULT_AUTH_SESSION_TTL_SECONDS,
+            auth_secure_cookie: DEFAULT_AUTH_SECURE_COOKIE,
             max_edit_bytes: DEFAULT_MAX_EDIT_BYTES,
             editable_extensions: Vec::new(),
             editable_mime_types: Vec::new(),
             max_upload_bytes: None,
             max_dir_page_size: DEFAULT_MAX_DIR_PAGE_SIZE,
             audit_file: PathBuf::from(DEFAULT_AUDIT_FILE),
+            audit_enabled: DEFAULT_AUDIT_ENABLED,
             audit_max_bytes: Some(DEFAULT_AUDIT_MAX_BYTES),
             audit_retention_files: DEFAULT_AUDIT_RETENTION_FILES,
             max_dir_concurrency: DEFAULT_MAX_DIR_CONCURRENCY,
@@ -163,6 +179,8 @@ impl AppConfig {
             max_task_concurrency: DEFAULT_MAX_TASK_CONCURRENCY,
             task_history_limit: DEFAULT_TASK_HISTORY_LIMIT,
             task_speed_limit_bytes_per_sec: None,
+            max_archive_bytes: None,
+            max_archive_files: None,
             max_extract_bytes: None,
             max_extract_files: None,
             max_extract_depth: DEFAULT_MAX_EXTRACT_DEPTH,
@@ -190,6 +208,11 @@ impl AppConfig {
             assign(&mut self.favorites_file, storage.favorites_file);
             assign(&mut self.trash_dir, storage.trash_dir);
             assign(&mut self.audit_file, storage.audit_file);
+        }
+
+        if let Some(auth) = file_config.auth {
+            assign_positive(&mut self.auth_session_ttl_seconds, auth.session_ttl_seconds);
+            assign(&mut self.auth_secure_cookie, auth.secure_cookie);
         }
 
         if let Some(limits) = file_config.limits {
@@ -225,6 +248,8 @@ impl AppConfig {
         }
 
         if let Some(archive) = file_config.archive {
+            assign_positive_option(&mut self.max_archive_bytes, archive.max_archive_bytes);
+            assign_positive_option(&mut self.max_archive_files, archive.max_archive_files);
             assign_positive_option(&mut self.max_extract_bytes, archive.max_extract_bytes);
             assign_positive_option(&mut self.max_extract_files, archive.max_extract_files);
             assign_positive(&mut self.max_extract_depth, archive.max_extract_depth);
@@ -242,6 +267,7 @@ impl AppConfig {
         }
 
         if let Some(audit) = file_config.audit {
+            assign(&mut self.audit_enabled, audit.enabled);
             assign_zero_disables(&mut self.audit_max_bytes, audit.max_bytes);
             assign(&mut self.audit_retention_files, audit.retention_files);
         }
@@ -266,6 +292,14 @@ impl AppConfig {
             &mut self.trust_proxy_headers,
             "WEB_FILE_BROWSER_TRUST_PROXY_HEADERS",
         );
+        assign_env_u64_positive(
+            &mut self.auth_session_ttl_seconds,
+            "WEB_FILE_BROWSER_AUTH_SESSION_TTL_SECONDS",
+        );
+        assign_env_bool(
+            &mut self.auth_secure_cookie,
+            "WEB_FILE_BROWSER_AUTH_SECURE_COOKIE",
+        );
         assign_env_u64_positive(&mut self.max_edit_bytes, "WEB_FILE_BROWSER_MAX_EDIT_BYTES");
         assign_env_list(
             &mut self.editable_extensions,
@@ -286,6 +320,7 @@ impl AppConfig {
             "WEB_FILE_BROWSER_MAX_DIR_PAGE_SIZE",
         );
         assign_env_path(&mut self.audit_file, "WEB_FILE_BROWSER_AUDIT_FILE");
+        assign_env_bool(&mut self.audit_enabled, "WEB_FILE_BROWSER_AUDIT_ENABLED");
         assign_env_zero_disables_u64(
             &mut self.audit_max_bytes,
             "WEB_FILE_BROWSER_AUDIT_MAX_BYTES",
@@ -317,6 +352,14 @@ impl AppConfig {
         assign_env_option_u64(
             &mut self.task_speed_limit_bytes_per_sec,
             "WEB_FILE_BROWSER_TASK_SPEED_LIMIT_BYTES_PER_SEC",
+        );
+        assign_env_option_u64(
+            &mut self.max_archive_bytes,
+            "WEB_FILE_BROWSER_MAX_ARCHIVE_BYTES",
+        );
+        assign_env_option_usize(
+            &mut self.max_archive_files,
+            "WEB_FILE_BROWSER_MAX_ARCHIVE_FILES",
         );
         assign_env_option_u64(
             &mut self.max_extract_bytes,
@@ -367,6 +410,9 @@ pub(crate) struct RuntimeConfigFile {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) storage: Option<StorageConfigFile>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) auth: Option<AuthConfigFile>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) limits: Option<LimitsConfigFile>,
@@ -455,6 +501,17 @@ pub(crate) struct StorageConfigFile {
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub(crate) struct AuthConfigFile {
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) session_ttl_seconds: Option<u64>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) secure_cookie: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct LimitsConfigFile {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -506,6 +563,12 @@ pub(crate) struct TaskConfigFile {
 pub(crate) struct ArchiveConfigFile {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_archive_bytes: Option<Option<u64>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_archive_files: Option<Option<usize>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) max_extract_bytes: Option<Option<u64>>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -543,6 +606,9 @@ pub(crate) struct TrashConfigFile {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AuditConfigFile {
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) enabled: Option<bool>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) max_bytes: Option<Option<u64>>,

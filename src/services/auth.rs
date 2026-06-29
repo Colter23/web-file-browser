@@ -9,8 +9,6 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 pub const SESSION_COOKIE: &str = "wfb_session";
-const SESSION_MAX_AGE_SECONDS: u64 = 604_800;
-const SESSION_TTL: Duration = Duration::from_secs(SESSION_MAX_AGE_SECONDS);
 const LOGIN_FAILURE_LIMIT: u32 = 5;
 const LOGIN_FAILURE_WINDOW: Duration = Duration::from_secs(10 * 60);
 const LOGIN_FAILURE_COOLDOWN: Duration = Duration::from_secs(30);
@@ -35,11 +33,14 @@ pub struct LoginThrottle {
 }
 
 impl AuthService {
-    pub async fn create_session(&self) -> String {
+    pub async fn create_session(&self, ttl_seconds: u64) -> String {
         let token = Uuid::new_v4().to_string();
         let mut sessions = self.sessions.write().await;
         prune_expired_sessions(&mut sessions);
-        sessions.insert(token.clone(), Instant::now() + SESSION_TTL);
+        sessions.insert(
+            token.clone(),
+            Instant::now() + Duration::from_secs(ttl_seconds.max(1)),
+        );
         token
     }
 
@@ -130,24 +131,29 @@ pub fn extract_session_token(headers: &HeaderMap) -> Option<String> {
         .find_map(|(name, value)| (name == SESSION_COOKIE).then(|| value.to_string()))
 }
 
-pub fn session_cookie_value(token: &str) -> String {
+pub fn session_cookie_value(token: &str, max_age_seconds: u64, secure_cookie: bool) -> String {
+    let secure = if secure_cookie { "; Secure" } else { "" };
     format!(
-        "{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_MAX_AGE_SECONDS}"
+        "{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}{secure}",
+        max_age_seconds.max(1)
     )
 }
 
-pub fn clear_session_cookie_value() -> String {
-    format!("{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")
+pub fn clear_session_cookie_value(secure_cookie: bool) -> String {
+    let secure = if secure_cookie { "; Secure" } else { "" };
+    format!("{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{secure}")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    const TEST_SESSION_MAX_AGE_SECONDS: u64 = 604_800;
+
     #[tokio::test]
     async fn validates_created_session() {
         let auth = AuthService::default();
-        let token = auth.create_session().await;
+        let token = auth.create_session(TEST_SESSION_MAX_AGE_SECONDS).await;
 
         assert!(auth.is_valid(&token).await);
         assert_eq!(auth.count().await, 1);
@@ -165,7 +171,10 @@ mod tests {
                 expired_token.clone(),
                 now.checked_sub(Duration::from_secs(1)).unwrap_or(now),
             );
-            sessions.insert(active_token.clone(), now + SESSION_TTL);
+            sessions.insert(
+                active_token.clone(),
+                now + Duration::from_secs(TEST_SESSION_MAX_AGE_SECONDS),
+            );
         }
 
         assert!(!auth.is_valid(&expired_token).await);
@@ -175,9 +184,18 @@ mod tests {
 
     #[test]
     fn session_cookie_uses_same_ttl_as_server_session() {
-        let cookie = session_cookie_value("token");
+        let cookie = session_cookie_value("token", TEST_SESSION_MAX_AGE_SECONDS, false);
 
         assert!(cookie.contains("Max-Age=604800"));
+        assert!(!cookie.contains("Secure"));
+    }
+
+    #[test]
+    fn session_cookie_can_enable_secure_flag() {
+        let cookie = session_cookie_value("token", 60, true);
+
+        assert!(cookie.contains("Max-Age=60"));
+        assert!(cookie.contains("Secure"));
     }
 
     #[tokio::test]

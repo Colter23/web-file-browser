@@ -58,6 +58,10 @@ docker compose up -d --build
   "storage": {
     "favoritesFile": "data/favorites.json"
   },
+  "auth": {
+    "sessionTtlSeconds": 604800,
+    "secureCookie": false
+  },
   "limits": {
     "maxUploadBytes": null,
     "maxDirPageSize": 2000,
@@ -76,6 +80,8 @@ docker compose up -d --build
     "speedLimitBytesPerSec": null
   },
   "archive": {
+    "maxArchiveBytes": null,
+    "maxArchiveFiles": null,
     "maxExtractBytes": null,
     "maxExtractFiles": null,
     "maxExtractDepth": 64
@@ -86,6 +92,7 @@ docker compose up -d --build
     "scanDelayMs": 2
   },
   "audit": {
+    "enabled": true,
     "maxBytes": 10485760,
     "retentionFiles": 8
   },
@@ -211,7 +218,7 @@ Compose 示例默认挂载：
 
 运行配置有两类：
 
-- 可在线编辑并热生效：上传/编辑大小上限、目录分页上限、目录/传输/IP 并发、任务并发/历史/限速、压缩解压限制、搜索索引开关、回收站保留策略、审计轮转策略、默认冲突策略。Web 设置页会通过 `/api/settings` 写入 `config.json` 并更新内存快照，后续请求立即使用新值。
+- 可在线编辑并热生效：会话有效期、新会话 Secure Cookie、上传/编辑大小上限、目录分页上限、目录/传输/IP 并发、任务并发/历史/限速、压缩输入和解压限制、搜索索引开关、回收站保留策略、审计开关和轮转策略、默认冲突策略。Web 设置页会通过 `/api/settings` 写入 `config.json` 并更新内存快照，后续请求立即使用新值。
 - 可在线保存但需要重启：监听地址、端口、静态目录、CORS、代理头信任、认证文件路径、挂载文件路径、收藏文件路径、回收站根目录、审计文件路径、启动时重建索引。保存后设置接口会返回 `restartPending=true`。
 - 只能展示：配置文件路径本身由默认值或 `WEB_FILE_BROWSER_CONFIG_FILE` / `WEB_FILE_BROWSER_CONFIG` 决定，不能写入当前配置文件来改变自己。
 
@@ -248,6 +255,8 @@ chown -R "$WEB_FILE_BROWSER_UID:$WEB_FILE_BROWSER_GID" data files
 
 - `WEB_FILE_BROWSER_CORS_ORIGINS`：允许跨域访问的可信来源，默认空表示同源，不支持 `*`。
 - `WEB_FILE_BROWSER_TRUST_PROXY_HEADERS`：是否信任 `X-Forwarded-For`，默认 `false`；仅在容器只通过可信反向代理访问时启用。
+- `WEB_FILE_BROWSER_AUTH_SESSION_TTL_SECONDS`：管理员会话有效期，默认 `604800` 秒，只影响后续新会话。
+- `WEB_FILE_BROWSER_AUTH_SECURE_COOKIE`：是否给会话 Cookie 增加 `Secure` 标记，默认 `false`；仅在通过 HTTPS 访问时启用。
 - `WEB_FILE_BROWSER_CONFLICT_POLICY`：冲突策略，默认 `autoRename`。
 - `WEB_FILE_BROWSER_MAX_UPLOAD_BYTES`：上传和保存上限，默认不限制。
 - `WEB_FILE_BROWSER_MAX_EDIT_BYTES`：在线编辑上限，默认 `2097152`。
@@ -255,8 +264,11 @@ chown -R "$WEB_FILE_BROWSER_UID:$WEB_FILE_BROWSER_GID" data files
 - `WEB_FILE_BROWSER_EDITABLE_MIME_TYPES`：在线编辑 MIME 白名单，默认空表示不限制 MIME，可写 `text/*`。
 - `WEB_FILE_BROWSER_MAX_DIR_PAGE_SIZE`：目录分页上限，默认 `2000`。
 - `WEB_FILE_BROWSER_TASK_HISTORY_LIMIT`：内存中保留的已结束后台任务数量，默认 `200`。
-- `WEB_FILE_BROWSER_AUDIT_MAX_BYTES`：审计 JSONL 单文件轮转上限，默认 `10485760`，设置为 `0` 可关闭。
+- `WEB_FILE_BROWSER_AUDIT_ENABLED`：是否写入审计 JSONL，默认 `true`。
+- `WEB_FILE_BROWSER_AUDIT_MAX_BYTES`：审计 JSONL 单文件轮转上限，默认 `10485760`，设置为 `0` 可关闭轮转。
 - `WEB_FILE_BROWSER_AUDIT_RETENTION_FILES`：保留的审计轮转文件数量，默认 `8`，设置为 `0` 表示只保留当前审计文件。
+- `WEB_FILE_BROWSER_MAX_ARCHIVE_BYTES`：单次压缩输入文件总字节上限，默认不限制。
+- `WEB_FILE_BROWSER_MAX_ARCHIVE_FILES`：单次压缩输入文件数量上限，默认不限制。
 - `WEB_FILE_BROWSER_MAX_EXTRACT_BYTES`：单次解压后的总字节上限，默认不限制。
 - `WEB_FILE_BROWSER_MAX_EXTRACT_FILES`：单次解压的条目数量上限，默认不限制。
 - `WEB_FILE_BROWSER_MAX_EXTRACT_DEPTH`：单个解压条目的路径深度上限，默认 `64`。

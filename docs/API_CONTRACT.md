@@ -772,6 +772,8 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
 ```json
 {
   "runtime": {
+    "authSessionTtlSeconds": 604800,
+    "authSecureCookie": false,
     "maxEditBytes": 2097152,
     "editableExtensions": [],
     "editableMimeTypes": [],
@@ -783,11 +785,14 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
     "maxTaskConcurrency": 2,
     "taskHistoryLimit": 200,
     "taskSpeedLimitBytesPerSec": null,
+    "maxArchiveBytes": null,
+    "maxArchiveFiles": null,
     "maxExtractBytes": null,
     "maxExtractFiles": null,
     "maxExtractDepth": 64,
     "indexEnabled": false,
     "indexScanDelayMs": 2,
+    "auditEnabled": true,
     "auditMaxBytes": 10485760,
     "auditRetentionFiles": 8,
     "trashRetentionDays": null,
@@ -840,8 +845,11 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
 ```json
 {
   "runtime": {
+    "authSessionTtlSeconds": 604800,
     "maxUploadBytes": 104857600,
     "maxDirPageSize": 1000,
+    "maxArchiveBytes": 10737418240,
+    "maxArchiveFiles": 100000,
     "conflictPolicy": "reject"
   },
   "startup": {
@@ -859,6 +867,9 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
 
 - 请求体只接受 `runtime` 和 `startup`，各自内部也只接受已定义字段；未知字段会返回 `400 BAD_REQUEST`。
 - 数值类限制通常必须大于 `0`；可为空的上限字段使用 `null` 表示不限制。
+- `authSessionTtlSeconds` 和 `authSecureCookie` 只影响后续新会话；已有 Cookie 不会被强制改写。
+- `maxArchiveBytes` 和 `maxArchiveFiles` 限制压缩任务的输入规模，在压缩遍历过程中累计检查，不会为了校验额外预扫目录。
+- `auditEnabled=false` 会跳过新的审计写入；`auditMaxBytes=null` 只表示不做大小轮转，不等于关闭审计。
 - 被环境变量控制的字段不能在线覆盖，返回 `409 CONFLICT`，前端可根据 `envLocked` 展示只读状态。
 - `startup.configFile` 决定配置文件自身位置，不支持在线修改，返回 `400 BAD_REQUEST`。需要调整时通过环境变量指定后重启。
 

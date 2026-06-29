@@ -21,7 +21,7 @@ use crate::{
             normalize_child_name,
         },
         task_io::{
-            ArchiveSource, BlockingProgress, ExtractLimits, archive_output_name,
+            ArchiveLimits, ArchiveSource, BlockingProgress, ExtractLimits, archive_output_name,
             archive_sources_sync, cleanup_path, copy_path_streaming, extract_archive_sync,
             extract_output_folder_name, flush_and_finalize_temp_path, temp_sibling_path,
         },
@@ -512,12 +512,17 @@ async fn archive_task(
     let temp_path = temp_sibling_path(&target.path, "archive");
     let target_path = target.path.clone();
     let format = request.format;
+    let runtime = state.settings.runtime().await;
+    let limits = ArchiveLimits {
+        max_bytes: runtime.max_archive_bytes,
+        max_files: runtime.max_archive_files,
+    };
     let tasks = state.tasks.clone();
     let speed_limit = state.tasks.speed_limit_bytes_per_sec();
     let handle = Handle::current();
     let bytes = tokio::task::spawn_blocking(move || {
         let mut progress = BlockingProgress::new(handle, tasks, task_id, speed_limit);
-        let result = archive_sources_sync(&sources, &temp_path, format, &mut progress);
+        let result = archive_sources_sync(&sources, &temp_path, format, limits, &mut progress);
         match result {
             Ok(bytes) => {
                 flush_and_finalize_temp_path(

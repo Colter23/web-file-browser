@@ -10,9 +10,9 @@ use uuid::Uuid;
 
 use crate::{
     config::{
-        AppConfig, ArchiveConfigFile, AuditConfigFile, EditorConfigFile, IndexConfigFile,
-        LimitsConfigFile, RuntimeConfigFile, ServerConfigFile, StorageConfigFile, TaskConfigFile,
-        TrashConfigFile, normalize_extension_values, normalize_mime_values,
+        AppConfig, ArchiveConfigFile, AuditConfigFile, AuthConfigFile, EditorConfigFile,
+        IndexConfigFile, LimitsConfigFile, RuntimeConfigFile, ServerConfigFile, StorageConfigFile,
+        TaskConfigFile, TrashConfigFile, normalize_extension_values, normalize_mime_values,
     },
     error::AppError,
     models::{
@@ -38,6 +38,14 @@ const RESTART_REQUIRED_FIELDS: &[&str] = &[
 ];
 
 const RUNTIME_ENV_FIELDS: &[(&str, &str)] = &[
+    (
+        "runtime.authSessionTtlSeconds",
+        "WEB_FILE_BROWSER_AUTH_SESSION_TTL_SECONDS",
+    ),
+    (
+        "runtime.authSecureCookie",
+        "WEB_FILE_BROWSER_AUTH_SECURE_COOKIE",
+    ),
     ("runtime.maxEditBytes", "WEB_FILE_BROWSER_MAX_EDIT_BYTES"),
     (
         "runtime.editableExtensions",
@@ -80,6 +88,14 @@ const RUNTIME_ENV_FIELDS: &[(&str, &str)] = &[
         "WEB_FILE_BROWSER_TASK_SPEED_LIMIT_BYTES_PER_SEC",
     ),
     (
+        "runtime.maxArchiveBytes",
+        "WEB_FILE_BROWSER_MAX_ARCHIVE_BYTES",
+    ),
+    (
+        "runtime.maxArchiveFiles",
+        "WEB_FILE_BROWSER_MAX_ARCHIVE_FILES",
+    ),
+    (
         "runtime.maxExtractBytes",
         "WEB_FILE_BROWSER_MAX_EXTRACT_BYTES",
     ),
@@ -96,6 +112,7 @@ const RUNTIME_ENV_FIELDS: &[(&str, &str)] = &[
         "runtime.indexScanDelayMs",
         "WEB_FILE_BROWSER_INDEX_SCAN_DELAY_MS",
     ),
+    ("runtime.auditEnabled", "WEB_FILE_BROWSER_AUDIT_ENABLED"),
     ("runtime.auditMaxBytes", "WEB_FILE_BROWSER_AUDIT_MAX_BYTES"),
     (
         "runtime.auditRetentionFiles",
@@ -288,6 +305,12 @@ fn apply_runtime_patch(
     settings: &mut RuntimeSettings,
     patch: RuntimeSettingsPatch,
 ) -> Result<(), AppError> {
+    if let Some(value) = patch.auth_session_ttl_seconds {
+        settings.auth_session_ttl_seconds = positive_u64(value, "会话有效期")?;
+    }
+    if let Some(value) = patch.auth_secure_cookie {
+        settings.auth_secure_cookie = value;
+    }
     if let Some(value) = patch.max_edit_bytes {
         settings.max_edit_bytes = positive_u64(value, "最大编辑大小")?;
     }
@@ -321,6 +344,12 @@ fn apply_runtime_patch(
     if let Some(value) = patch.task_speed_limit_bytes_per_sec {
         settings.task_speed_limit_bytes_per_sec = positive_optional_u64(value, "任务限速")?;
     }
+    if let Some(value) = patch.max_archive_bytes {
+        settings.max_archive_bytes = positive_optional_u64(value, "最大压缩输入字节数")?;
+    }
+    if let Some(value) = patch.max_archive_files {
+        settings.max_archive_files = positive_optional_usize(value, "最大压缩输入文件数")?;
+    }
     if let Some(value) = patch.max_extract_bytes {
         settings.max_extract_bytes = positive_optional_u64(value, "最大解压字节数")?;
     }
@@ -335,6 +364,9 @@ fn apply_runtime_patch(
     }
     if let Some(value) = patch.index_scan_delay_ms {
         settings.index_scan_delay_ms = value;
+    }
+    if let Some(value) = patch.audit_enabled {
+        settings.audit_enabled = value;
     }
     if let Some(value) = patch.audit_max_bytes {
         settings.audit_max_bytes = positive_optional_u64(value, "审计日志轮转大小")?;
@@ -406,6 +438,12 @@ fn fill_runtime_config_fields(
 ) {
     for field in fields {
         match *field {
+            "runtime.authSessionTtlSeconds" => {
+                auth_config(config).session_ttl_seconds = Some(runtime.auth_session_ttl_seconds);
+            }
+            "runtime.authSecureCookie" => {
+                auth_config(config).secure_cookie = Some(runtime.auth_secure_cookie);
+            }
             "runtime.maxEditBytes" => {
                 editor_config(config).max_edit_bytes = Some(runtime.max_edit_bytes);
             }
@@ -443,6 +481,12 @@ fn fill_runtime_config_fields(
                 task_config(config).speed_limit_bytes_per_sec =
                     Some(runtime.task_speed_limit_bytes_per_sec);
             }
+            "runtime.maxArchiveBytes" => {
+                archive_config(config).max_archive_bytes = Some(runtime.max_archive_bytes);
+            }
+            "runtime.maxArchiveFiles" => {
+                archive_config(config).max_archive_files = Some(runtime.max_archive_files);
+            }
             "runtime.maxExtractBytes" => {
                 archive_config(config).max_extract_bytes = Some(runtime.max_extract_bytes);
             }
@@ -457,6 +501,9 @@ fn fill_runtime_config_fields(
             }
             "runtime.indexScanDelayMs" => {
                 index_config(config).scan_delay_ms = Some(runtime.index_scan_delay_ms);
+            }
+            "runtime.auditEnabled" => {
+                audit_config(config).enabled = Some(runtime.audit_enabled);
             }
             "runtime.auditMaxBytes" => {
                 audit_config(config).max_bytes = Some(runtime.audit_max_bytes);
@@ -527,6 +574,10 @@ fn fill_startup_config_fields(
 
 fn limits_config(config: &mut RuntimeConfigFile) -> &mut LimitsConfigFile {
     config.limits.get_or_insert_with(LimitsConfigFile::default)
+}
+
+fn auth_config(config: &mut RuntimeConfigFile) -> &mut AuthConfigFile {
+    config.auth.get_or_insert_with(AuthConfigFile::default)
 }
 
 fn editor_config(config: &mut RuntimeConfigFile) -> &mut EditorConfigFile {
@@ -600,6 +651,16 @@ fn touched_runtime_fields(patch: &RuntimeSettingsPatch) -> Vec<&'static str> {
     let mut fields = Vec::new();
     push_if(
         &mut fields,
+        patch.auth_session_ttl_seconds.is_some(),
+        "runtime.authSessionTtlSeconds",
+    );
+    push_if(
+        &mut fields,
+        patch.auth_secure_cookie.is_some(),
+        "runtime.authSecureCookie",
+    );
+    push_if(
+        &mut fields,
         patch.max_edit_bytes.is_some(),
         "runtime.maxEditBytes",
     );
@@ -655,6 +716,16 @@ fn touched_runtime_fields(patch: &RuntimeSettingsPatch) -> Vec<&'static str> {
     );
     push_if(
         &mut fields,
+        patch.max_archive_bytes.is_some(),
+        "runtime.maxArchiveBytes",
+    );
+    push_if(
+        &mut fields,
+        patch.max_archive_files.is_some(),
+        "runtime.maxArchiveFiles",
+    );
+    push_if(
+        &mut fields,
         patch.max_extract_bytes.is_some(),
         "runtime.maxExtractBytes",
     );
@@ -677,6 +748,11 @@ fn touched_runtime_fields(patch: &RuntimeSettingsPatch) -> Vec<&'static str> {
         &mut fields,
         patch.index_scan_delay_ms.is_some(),
         "runtime.indexScanDelayMs",
+    );
+    push_if(
+        &mut fields,
+        patch.audit_enabled.is_some(),
+        "runtime.auditEnabled",
     );
     push_if(
         &mut fields,

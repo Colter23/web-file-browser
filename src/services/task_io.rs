@@ -1,4 +1,4 @@
-use flate2::{Compression, read::GzDecoder, write::GzEncoder};
+﻿use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use std::{
     collections::HashSet,
     fs,
@@ -27,6 +27,12 @@ const THROTTLE_CANCEL_CHECK_INTERVAL: Duration = Duration::from_millis(200);
 pub(crate) struct ArchiveSource {
     pub(crate) real_path: PathBuf,
     pub(crate) archive_name: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ArchiveLimits {
+    pub(crate) max_bytes: Option<u64>,
+    pub(crate) max_files: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -219,21 +225,24 @@ pub(crate) fn archive_sources_sync(
     sources: &[ArchiveSource],
     temp_path: &FsPath,
     format: ArchiveFormat,
+    limits: ArchiveLimits,
     progress: &mut BlockingProgress,
 ) -> Result<u64, AppError> {
     progress.ensure_not_cancelled()?;
     if let Some(parent) = temp_path.parent() {
         fs::create_dir_all(parent)?;
     }
+    let mut guard = ArchiveGuard::new(limits);
     match format {
-        ArchiveFormat::TarGz => archive_tar_gz_sync(sources, temp_path, progress),
-        ArchiveFormat::Zip => archive_zip_sync(sources, temp_path, progress),
+        ArchiveFormat::TarGz => archive_tar_gz_sync(sources, temp_path, &mut guard, progress),
+        ArchiveFormat::Zip => archive_zip_sync(sources, temp_path, &mut guard, progress),
     }
 }
 
 fn archive_tar_gz_sync(
     sources: &[ArchiveSource],
     temp_path: &FsPath,
+    guard: &mut ArchiveGuard,
     progress: &mut BlockingProgress,
 ) -> Result<u64, AppError> {
     progress.ensure_not_cancelled()?;
@@ -249,6 +258,7 @@ fn archive_tar_gz_sync(
             &source.real_path,
             FsPath::new(&source.archive_name),
             &mut used_paths,
+            guard,
             progress,
         )?;
         progress.item_done()?;
@@ -265,6 +275,7 @@ fn append_tar_path<W: Write>(
     source: &FsPath,
     archive_path: &FsPath,
     used_paths: &mut HashSet<PathBuf>,
+    guard: &mut ArchiveGuard,
     progress: &mut BlockingProgress,
 ) -> Result<u64, AppError> {
     progress.ensure_not_cancelled()?;
@@ -295,6 +306,7 @@ fn append_tar_path<W: Write>(
                 &entry.path(),
                 &archive_path.join(entry.file_name()),
                 used_paths,
+                guard,
                 progress,
             )?;
         }
@@ -307,6 +319,7 @@ fn append_tar_path<W: Write>(
         )));
     }
 
+    guard.file_seen(metadata.len())?;
     let mut header = Header::new_gnu();
     header.set_metadata(&metadata);
     header.set_size(metadata.len());
@@ -324,6 +337,7 @@ fn append_tar_path<W: Write>(
 fn archive_zip_sync(
     sources: &[ArchiveSource],
     temp_path: &FsPath,
+    guard: &mut ArchiveGuard,
     progress: &mut BlockingProgress,
 ) -> Result<u64, AppError> {
     progress.ensure_not_cancelled()?;
@@ -342,6 +356,7 @@ fn archive_zip_sync(
             FsPath::new(&source.archive_name),
             options,
             &mut used_paths,
+            guard,
             progress,
         )?;
         progress.item_done()?;
@@ -357,6 +372,7 @@ fn append_zip_path<W: Write + std::io::Seek>(
     archive_path: &FsPath,
     options: SimpleFileOptions,
     used_paths: &mut HashSet<PathBuf>,
+    guard: &mut ArchiveGuard,
     progress: &mut BlockingProgress,
 ) -> Result<u64, AppError> {
     progress.ensure_not_cancelled()?;
@@ -389,6 +405,7 @@ fn append_zip_path<W: Write + std::io::Seek>(
                 &archive_path.join(entry.file_name()),
                 options,
                 used_paths,
+                guard,
                 progress,
             )?;
         }
@@ -401,6 +418,7 @@ fn append_zip_path<W: Write + std::io::Seek>(
         )));
     }
     progress.ensure_not_cancelled()?;
+    guard.file_seen(metadata.len())?;
     writer.start_file(archive_name, options)?;
     copy_reader_to_writer(fs::File::open(source)?, writer, progress)?;
     progress.ensure_not_cancelled()?;
@@ -502,6 +520,44 @@ fn extract_zip_sync(
         bytes += file_size;
     }
     Ok(bytes)
+}
+
+struct ArchiveGuard {
+    limits: ArchiveLimits,
+    files: usize,
+    bytes: u64,
+}
+
+impl ArchiveGuard {
+    fn new(limits: ArchiveLimits) -> Self {
+        Self {
+            limits,
+            files: 0,
+            bytes: 0,
+        }
+    }
+
+    fn file_seen(&mut self, bytes: u64) -> Result<(), AppError> {
+        self.files = self.files.saturating_add(1);
+        self.bytes = self.bytes.saturating_add(bytes);
+        if let Some(max_files) = self.limits.max_files
+            && self.files > max_files
+        {
+            return Err(AppError::payload_too_large("压缩输入文件数量超过限制")
+                .with_reason("ARCHIVE_FILE_LIMIT_EXCEEDED")
+                .with_param("maxFiles", max_files)
+                .with_param("files", self.files));
+        }
+        if let Some(max_bytes) = self.limits.max_bytes
+            && self.bytes > max_bytes
+        {
+            return Err(AppError::payload_too_large("压缩输入总字节数超过限制")
+                .with_reason("ARCHIVE_SIZE_LIMIT_EXCEEDED")
+                .with_param("maxBytes", max_bytes)
+                .with_param("bytes", self.bytes));
+        }
+        Ok(())
+    }
 }
 
 struct ExtractGuard {
@@ -890,6 +946,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn archive_sources_respects_input_limits() {
+        let temp = temp_dir("web-file-browser-archive-limit-test");
+        let source_dir = temp.join("source");
+        fs::create_dir_all(&source_dir).unwrap();
+        fs::write(source_dir.join("a.txt"), "hello").unwrap();
+        fs::write(source_dir.join("b.txt"), "world").unwrap();
+        let target = temp.join("archive.zip");
+        let source = ArchiveSource {
+            real_path: source_dir,
+            archive_name: "source".to_string(),
+        };
+        let service = TaskService::new(1, None, 10);
+        let task = service.create(TaskKind::Archive, 1, 0).await.unwrap();
+        let task_id = task.id;
+        let handle = Handle::current();
+
+        let result = tokio::task::spawn_blocking({
+            let service = service.clone();
+            let target_for_task = target.clone();
+            move || {
+                let mut progress = BlockingProgress::new(handle, service, task_id, None);
+                archive_sources_sync(
+                    &[source],
+                    &target_for_task,
+                    ArchiveFormat::Zip,
+                    ArchiveLimits {
+                        max_bytes: None,
+                        max_files: Some(1),
+                    },
+                    &mut progress,
+                )
+            }
+        })
+        .await
+        .unwrap();
+
+        let error = result.expect_err("应该拒绝超过压缩输入文件数量限制");
+        assert_eq!(error.reason(), "ARCHIVE_FILE_LIMIT_EXCEEDED");
+        assert!(target.exists());
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
     async fn cancelled_archive_stops_before_creating_output() {
         let temp = temp_dir("web-file-browser-cancelled-archive-test");
         let source_dir = temp.join("source");
@@ -911,7 +1010,11 @@ mod tests {
             let target = target.clone();
             move || {
                 let mut progress = BlockingProgress::new(handle, service, task_id, None);
-                archive_zip_sync(&[source], &target, &mut progress)
+                let mut guard = ArchiveGuard::new(ArchiveLimits {
+                    max_bytes: None,
+                    max_files: None,
+                });
+                archive_zip_sync(&[source], &target, &mut guard, &mut progress)
             }
         })
         .await
@@ -1137,7 +1240,11 @@ mod tests {
         let handle = Handle::current();
         tokio::task::spawn_blocking(move || {
             let mut progress = BlockingProgress::new(handle, service, task.id, None);
-            archive_zip_sync(&sources, &target, &mut progress)
+            let mut guard = ArchiveGuard::new(ArchiveLimits {
+                max_bytes: None,
+                max_files: None,
+            });
+            archive_zip_sync(&sources, &target, &mut guard, &mut progress)
         })
         .await?
     }

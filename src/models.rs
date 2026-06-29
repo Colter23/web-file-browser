@@ -205,6 +205,8 @@ pub struct SessionResponse {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeSettings {
+    pub auth_session_ttl_seconds: u64,
+    pub auth_secure_cookie: bool,
     pub max_edit_bytes: u64,
     pub editable_extensions: Vec<String>,
     pub editable_mime_types: Vec<String>,
@@ -216,11 +218,14 @@ pub struct RuntimeSettings {
     pub max_task_concurrency: usize,
     pub task_history_limit: usize,
     pub task_speed_limit_bytes_per_sec: Option<u64>,
+    pub max_archive_bytes: Option<u64>,
+    pub max_archive_files: Option<usize>,
     pub max_extract_bytes: Option<u64>,
     pub max_extract_files: Option<usize>,
     pub max_extract_depth: usize,
     pub index_enabled: bool,
     pub index_scan_delay_ms: u64,
+    pub audit_enabled: bool,
     pub audit_max_bytes: Option<u64>,
     pub audit_retention_files: usize,
     pub trash_retention_days: Option<u64>,
@@ -271,6 +276,10 @@ pub struct UpdateSettingsRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RuntimeSettingsPatch {
     #[serde(default)]
+    pub auth_session_ttl_seconds: Option<u64>,
+    #[serde(default)]
+    pub auth_secure_cookie: Option<bool>,
+    #[serde(default)]
     pub max_edit_bytes: Option<u64>,
     #[serde(default)]
     pub editable_extensions: Option<Vec<String>>,
@@ -293,6 +302,10 @@ pub struct RuntimeSettingsPatch {
     #[serde(default)]
     pub task_speed_limit_bytes_per_sec: Option<Option<u64>>,
     #[serde(default)]
+    pub max_archive_bytes: Option<Option<u64>>,
+    #[serde(default)]
+    pub max_archive_files: Option<Option<usize>>,
+    #[serde(default)]
     pub max_extract_bytes: Option<Option<u64>>,
     #[serde(default)]
     pub max_extract_files: Option<Option<usize>>,
@@ -302,6 +315,8 @@ pub struct RuntimeSettingsPatch {
     pub index_enabled: Option<bool>,
     #[serde(default)]
     pub index_scan_delay_ms: Option<u64>,
+    #[serde(default)]
+    pub audit_enabled: Option<bool>,
     #[serde(default)]
     pub audit_max_bytes: Option<Option<u64>>,
     #[serde(default)]

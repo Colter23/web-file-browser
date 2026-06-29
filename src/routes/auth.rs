@@ -75,14 +75,10 @@ async fn login(
     }
 
     state.auth.clear_login_failures(&request_ip.0).await;
-    let token = state.auth.create_session().await;
+    let session_cookie = create_session_cookie(&state).await?;
     audit_ignore(&state, "login", None, None).await;
     let mut headers = HeaderMap::new();
-    headers.insert(
-        SET_COOKIE,
-        HeaderValue::from_str(&session_cookie_value(&token))
-            .map_err(|error| AppError::internal(format!("生成会话 Cookie 失败: {error}")))?,
-    );
+    headers.insert(SET_COOKIE, session_cookie);
 
     Ok((
         headers,
@@ -101,6 +97,20 @@ fn login_cooldown_error(throttle: LoginThrottle) -> AppError {
         .with_param("attempts", throttle.attempts)
 }
 
+async fn create_session_cookie(state: &AppState) -> Result<HeaderValue, AppError> {
+    let runtime = state.settings.runtime().await;
+    let token = state
+        .auth
+        .create_session(runtime.auth_session_ttl_seconds)
+        .await;
+    HeaderValue::from_str(&session_cookie_value(
+        &token,
+        runtime.auth_session_ttl_seconds,
+        runtime.auth_secure_cookie,
+    ))
+    .map_err(|error| AppError::internal(format!("生成会话 Cookie 失败: {error}")))
+}
+
 async fn setup_password(
     State(state): State<Arc<AppState>>,
     Json(request): Json<SetupPasswordRequest>,
@@ -111,15 +121,11 @@ async fn setup_password(
         .initialize_admin_password(request.password)
         .await?;
     state.auth.clear_sessions().await;
-    let token = state.auth.create_session().await;
+    let session_cookie = create_session_cookie(&state).await?;
     audit_ignore(&state, "setupPassword", None, None).await;
 
     let mut headers = HeaderMap::new();
-    headers.insert(
-        SET_COOKIE,
-        HeaderValue::from_str(&session_cookie_value(&token))
-            .map_err(|error| AppError::internal(format!("生成会话 Cookie 失败: {error}")))?,
-    );
+    headers.insert(SET_COOKIE, session_cookie);
 
     Ok((
         headers,
@@ -139,10 +145,11 @@ async fn logout(
     }
     audit_ignore(&state, "logout", None, None).await;
 
+    let runtime = state.settings.runtime().await;
     let mut response_headers = HeaderMap::new();
     response_headers.insert(
         SET_COOKIE,
-        HeaderValue::from_str(&clear_session_cookie_value())
+        HeaderValue::from_str(&clear_session_cookie_value(runtime.auth_secure_cookie))
             .unwrap_or_else(|_| HeaderValue::from_static("wfb_session=; Path=/; Max-Age=0")),
     );
 
@@ -175,15 +182,11 @@ async fn change_password(
         .set_admin_password(request.new_password)
         .await?;
     state.auth.clear_sessions().await;
-    let token = state.auth.create_session().await;
+    let session_cookie = create_session_cookie(&state).await?;
     audit_ignore(&state, "changePassword", None, None).await;
 
     let mut headers = HeaderMap::new();
-    headers.insert(
-        SET_COOKIE,
-        HeaderValue::from_str(&session_cookie_value(&token))
-            .map_err(|error| AppError::internal(format!("生成会话 Cookie 失败: {error}")))?,
-    );
+    headers.insert(SET_COOKIE, session_cookie);
 
     Ok((
         headers,
