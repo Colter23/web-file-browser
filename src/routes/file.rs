@@ -106,7 +106,7 @@ impl DirectoryQuery {
                 .with_reason("PAGE_SIZE_MUST_BE_POSITIVE")
                 .with_param("field", "limit"));
         }
-        Ok(DirectoryListOptions {
+        DirectoryListOptions {
             offset: self.offset.unwrap_or(0),
             limit: Some(limit),
             detail: parse_detail(self.detail.as_deref())?,
@@ -115,7 +115,8 @@ impl DirectoryQuery {
             filter: parse_filter(self.entry_type.as_deref())?,
             include_hidden: self.include_hidden.unwrap_or(false),
             include_total: self.include_total.unwrap_or(false),
-        })
+        }
+        .validate()
     }
 }
 

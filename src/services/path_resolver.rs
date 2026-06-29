@@ -56,7 +56,7 @@ pub struct DirectoryListOptions {
 }
 
 impl DirectoryListOptions {
-    fn validate(self) -> Result<Self, AppError> {
+    pub fn validate(self) -> Result<Self, AppError> {
         if self.detail == DirectoryDetail::Basic && self.sort != DirectorySort::Name {
             return Err(AppError::bad_request(
                 "detail=basic 仅支持 sort=name，按大小或修改时间排序请使用 detail=full",

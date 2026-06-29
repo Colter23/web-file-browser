@@ -662,6 +662,24 @@ async fn directory_api_requires_full_detail_for_expensive_sort() {
     let cookie = login_cookie(&app).await;
     create_mapping(&app, &cookie, "/docs", &files_dir, true).await;
 
+    let response = app
+        .clone()
+        .oneshot(empty_request_with_cookie(
+            Method::GET,
+            "/api/file/docs?detail=basic",
+            &cookie,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let last_modified = response
+        .headers()
+        .get(LAST_MODIFIED)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
     for sort in ["size", "modified"] {
         let response = app
             .clone()
@@ -682,6 +700,23 @@ async fn directory_api_requires_full_detail_for_expensive_sort() {
                 .contains("detail=basic 仅支持 sort=name")
         );
     }
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri("/api/file/docs?detail=basic&sort=size")
+                .header(COOKIE, &cookie)
+                .header(IF_MODIFIED_SINCE, last_modified)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = json_body(response).await;
+    assert_eq!(body["reason"], "DIRECTORY_BASIC_DETAIL_REQUIRES_NAME_SORT");
 
     let page = get_json(
         &app,
