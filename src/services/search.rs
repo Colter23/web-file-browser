@@ -95,9 +95,9 @@ impl SearchService {
 
     pub async fn set_enabled(&self, enabled: bool) {
         let old_enabled = self.enabled.swap(enabled, Ordering::SeqCst);
-        let mut status = self.status.write().await;
-        status.enabled = enabled;
         if enabled {
+            let mut status = self.status.write().await;
+            status.enabled = true;
             if !old_enabled && status.state == "disabled" {
                 status.state = "idle".to_string();
                 status.last_error = None;
@@ -105,8 +105,11 @@ impl SearchService {
             return;
         }
 
+        let mut entries = self.entries.write().await;
         self.rebuild_token.fetch_add(1, Ordering::SeqCst);
-        self.entries.write().await.clear();
+        entries.clear();
+        let mut status = self.status.write().await;
+        status.enabled = false;
         status.state = "disabled".to_string();
         status.indexed_entries = 0;
         status.last_finished_at = Some(now_epoch_string());
@@ -119,12 +122,15 @@ impl SearchService {
         scan_delay_ms: u64,
     ) -> Result<(), AppError> {
         if !self.is_enabled() {
-            return Err(AppError::bad_request("搜索索引未启用"));
+            return Err(search_index_disabled_error());
         }
         let token = {
             let mut status = self.status.write().await;
+            if !self.is_enabled() {
+                return Err(search_index_disabled_error());
+            }
             if status.state == "scanning" {
-                return Err(AppError::conflict("索引正在重建"));
+                return Err(search_index_scanning_error());
             }
             status.state = "scanning".to_string();
             status.last_started_at = Some(now_epoch_string());
@@ -141,24 +147,51 @@ impl SearchService {
         .await?;
         match result {
             Ok(entries) => {
+                if !self.is_enabled() {
+                    return Err(search_index_disabled_error());
+                }
                 if self.rebuild_token.load(Ordering::SeqCst) != token {
                     self.mark_rebuild_cancelled().await;
-                    return Err(AppError::conflict("索引重建已取消"));
+                    return Err(search_index_cancelled_error());
                 }
                 let indexed_entries = entries.len();
-                *self.entries.write().await = entries;
+                let mut current_entries = self.entries.write().await;
                 let mut status = self.status.write().await;
+                if !status.enabled {
+                    return Err(search_index_disabled_error());
+                }
+                if self.rebuild_token.load(Ordering::SeqCst) != token {
+                    return Err(search_index_cancelled_error());
+                }
+                *current_entries = entries;
                 status.state = "idle".to_string();
                 status.indexed_entries = indexed_entries;
                 status.last_finished_at = Some(now_epoch_string());
                 Ok(())
             }
             Err(ScanError::Cancelled) => {
-                self.mark_rebuild_cancelled().await;
-                Err(AppError::conflict("索引重建已取消"))
+                if self.is_enabled() {
+                    self.mark_rebuild_cancelled().await;
+                    Err(search_index_cancelled_error())
+                } else {
+                    Err(search_index_disabled_error())
+                }
             }
             Err(error) => {
+                if !self.is_enabled() {
+                    return Err(search_index_disabled_error());
+                }
+                if self.rebuild_token.load(Ordering::SeqCst) != token {
+                    self.mark_rebuild_cancelled().await;
+                    return Err(search_index_cancelled_error());
+                }
                 let mut status = self.status.write().await;
+                if !status.enabled {
+                    return Err(search_index_disabled_error());
+                }
+                if self.rebuild_token.load(Ordering::SeqCst) != token {
+                    return Err(search_index_cancelled_error());
+                }
                 status.state = "failed".to_string();
                 status.last_finished_at = Some(now_epoch_string());
                 status.last_error = Some(error.to_string());
@@ -169,14 +202,17 @@ impl SearchService {
 
     pub async fn cancel_rebuild(&self) -> Result<(), AppError> {
         if !self.is_enabled() {
-            return Err(AppError::bad_request("搜索索引未启用"));
+            return Err(search_index_disabled_error());
         }
-        let is_scanning = self.status.read().await.state == "scanning";
-        if !is_scanning {
-            return Err(AppError::conflict("当前没有正在重建的索引"));
+        let mut status = self.status.write().await;
+        if status.state != "scanning" {
+            return Err(AppError::conflict("当前没有正在重建的索引")
+                .with_reason("SEARCH_INDEX_NOT_SCANNING"));
         }
         self.rebuild_token.fetch_add(1, Ordering::SeqCst);
-        self.mark_rebuild_cancelled().await;
+        status.state = "cancelled".to_string();
+        status.last_finished_at = Some(now_epoch_string());
+        status.last_error = Some("索引重建已取消".to_string());
         Ok(())
     }
 
@@ -349,6 +385,9 @@ impl SearchService {
 
     async fn mark_rebuild_cancelled(&self) {
         let mut status = self.status.write().await;
+        if !status.enabled {
+            return;
+        }
         status.state = "cancelled".to_string();
         status.last_finished_at = Some(now_epoch_string());
         status.last_error = Some("索引重建已取消".to_string());
@@ -393,9 +432,21 @@ impl From<ScanError> for AppError {
     fn from(error: ScanError) -> Self {
         match error {
             ScanError::App(error) => error,
-            ScanError::Cancelled => AppError::conflict("索引重建已取消"),
+            ScanError::Cancelled => search_index_cancelled_error(),
         }
     }
+}
+
+fn search_index_disabled_error() -> AppError {
+    AppError::bad_request("搜索索引未启用").with_reason("SEARCH_INDEX_DISABLED")
+}
+
+fn search_index_scanning_error() -> AppError {
+    AppError::conflict("索引正在重建").with_reason("SEARCH_INDEX_SCANNING")
+}
+
+fn search_index_cancelled_error() -> AppError {
+    AppError::conflict("索引重建已取消").with_reason("SEARCH_INDEX_CANCELLED")
 }
 
 impl std::fmt::Display for ScanError {
@@ -453,6 +504,9 @@ fn scan_dir(
         }
         let path = entry.path();
         let file_type = entry.file_type()?;
+        if file_type.is_symlink() || (!file_type.is_dir() && !file_type.is_file()) {
+            continue;
+        }
         let kind = if file_type.is_dir() {
             EntryKind::Folder
         } else {
@@ -742,6 +796,56 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn rebuild_skips_symlink_entries_when_available() {
+        let (snapshot, temp) =
+            snapshot_with_files("search-skip-symlink", &[("real.txt", "real")]).await;
+        let link_path = temp.join("linked.txt");
+        if !try_create_file_symlink(&temp.join("real.txt"), &link_path) {
+            fs::remove_dir_all(temp).unwrap();
+            return;
+        }
+        let service = SearchService::new(true);
+
+        service.rebuild(snapshot, 0).await.unwrap();
+        let result = service.search(None, None, None, 0, 10).await;
+
+        assert_eq!(result.total, 1);
+        assert_eq!(result.items[0].path, "/repo/real.txt");
+
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
+    async fn disabling_index_while_rebuilding_keeps_disabled_status() {
+        let (snapshot, temp) =
+            snapshot_with_files("search-disable-during-rebuild", &[("dir/file.txt", "body")]).await;
+        let service = SearchService::new(true);
+        let rebuild = {
+            let service = service.clone();
+            tokio::spawn(async move { service.rebuild(snapshot, 50).await })
+        };
+        wait_search_state(&service, "scanning").await;
+
+        service.set_enabled(false).await;
+        let result = rebuild.await.unwrap();
+
+        assert!(matches!(result, Err(AppError::BadRequest(_))));
+        let status = service.status().await;
+        assert!(!status.enabled);
+        assert_eq!(status.state, "disabled");
+        assert_eq!(status.indexed_entries, 0);
+        assert!(
+            service
+                .search(None, None, None, 0, 10)
+                .await
+                .items
+                .is_empty()
+        );
+
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[tokio::test]
     async fn recent_respects_limit() {
         let (snapshot, temp) =
             snapshot_with_files("search-recent-limit", &[("a.txt", "a"), ("b.txt", "b")]).await;
@@ -835,6 +939,16 @@ mod tests {
         (snapshot, temp)
     }
 
+    async fn wait_search_state(service: &SearchService, expected: &str) {
+        for _ in 0..100 {
+            if service.status().await.state == expected {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("搜索索引未进入预期状态: {expected}");
+    }
+
     fn test_search_result(path: &str, modified: &str) -> SearchResult {
         SearchResult {
             name: path.rsplit('/').next().unwrap_or_default().to_string(),
@@ -847,6 +961,22 @@ mod tests {
             size: 0,
             entry_type: EntryKind::File.as_str().to_string(),
             mount_path: "/repo".to_string(),
+        }
+    }
+
+    fn try_create_file_symlink(source: &Path, link: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(source, link).is_ok()
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_file(source, link).is_ok()
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = (source, link);
+            false
         }
     }
 }

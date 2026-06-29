@@ -93,6 +93,8 @@
 | `FILE_MODIFIED` | 保存前 ETag 已变化 | `path` |
 | `SEARCH_INDEX_DISABLED` | 搜索索引关闭时请求重建 | 无 |
 | `SEARCH_INDEX_SCANNING` | 索引正在重建 | 无 |
+| `SEARCH_INDEX_CANCELLED` | 索引重建被取消 | 无 |
+| `SEARCH_INDEX_NOT_SCANNING` | 没有正在重建的索引却请求取消 | 无 |
 | `TASK_FIELD_REQUIRED` | 任务创建缺少必填字段 | `field` |
 | `TASK_LIST_EMPTY` | 任务创建列表为空 | `field` |
 | `TASK_SCHEDULER_UNAVAILABLE` | 后台任务调度器不可用 | 无 |

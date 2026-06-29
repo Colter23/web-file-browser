@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use serde::{Deserialize, Serialize};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -74,25 +77,26 @@ impl FavoriteService {
             Some(name) => normalize_favorite_name(name)?,
             None => default_favorite_name(&resolved),
         };
-        let relative_path = resolved.relative_parts.join("/");
         let mut items = self.items.write().await;
+        let mut next_items = items.clone();
         let candidate = FavoriteItem {
             id: Uuid::new_v4().to_string(),
             mount_id: resolved.mapping.id,
             mount_path: resolved.mapping.mount_path,
-            relative_path,
+            relative_path: resolved.relative_parts.join("/"),
             name,
-            order: request.order.unwrap_or_else(|| next_order(&items)),
+            order: request.order.unwrap_or_else(|| next_order(&next_items)),
             created_at: current_time_text()?,
         };
 
-        if items.iter().any(|item| same_target(item, &candidate)) {
+        if next_items.iter().any(|item| same_target(item, &candidate)) {
             return Err(AppError::conflict("该文件夹已经在收藏夹中"));
         }
 
-        items.push(candidate.clone());
-        sort_items(&mut items);
-        save_items(&self.file_path, &items).await?;
+        next_items.push(candidate.clone());
+        sort_items(&mut next_items);
+        save_items(&self.file_path, &next_items).await?;
+        *items = next_items;
         response_from_item(&snapshot, &candidate, false)
     }
 
@@ -103,7 +107,8 @@ impl FavoriteService {
         request: UpdateFavoriteRequest,
     ) -> Result<FavoriteResponse, AppError> {
         let mut items = self.items.write().await;
-        let Some(item) = items.iter_mut().find(|item| item.id == id) else {
+        let mut next_items = items.clone();
+        let Some(item) = next_items.iter_mut().find(|item| item.id == id) else {
             return Err(AppError::not_found("收藏夹条目不存在"));
         };
 
@@ -115,25 +120,30 @@ impl FavoriteService {
         }
 
         let updated = item.clone();
-        sort_items(&mut items);
-        save_items(&self.file_path, &items).await?;
+        sort_items(&mut next_items);
+        save_items(&self.file_path, &next_items).await?;
+        *items = next_items;
         response_from_item(&snapshot, &updated, false)
     }
 
     pub async fn delete(&self, id: String) -> Result<(), AppError> {
         let mut items = self.items.write().await;
-        let before_len = items.len();
-        items.retain(|item| item.id != id);
-        if items.len() == before_len {
+        let mut next_items = items.clone();
+        let before_len = next_items.len();
+        next_items.retain(|item| item.id != id);
+        if next_items.len() == before_len {
             return Err(AppError::not_found("收藏夹条目不存在"));
         }
-        save_items(&self.file_path, &items).await
+        save_items(&self.file_path, &next_items).await?;
+        *items = next_items;
+        Ok(())
     }
 
     pub async fn reorder(&self, request: ReorderFavoritesRequest) -> Result<(), AppError> {
         let mut items = self.items.write().await;
+        let mut next_items = items.clone();
         for requested in &request.items {
-            if !items.iter().any(|item| item.id == requested.id) {
+            if !next_items.iter().any(|item| item.id == requested.id) {
                 return Err(AppError::not_found(format!(
                     "收藏夹条目不存在: {}",
                     requested.id
@@ -142,24 +152,47 @@ impl FavoriteService {
         }
 
         for requested in request.items {
-            if let Some(item) = items.iter_mut().find(|item| item.id == requested.id) {
+            if let Some(item) = next_items.iter_mut().find(|item| item.id == requested.id) {
                 item.order = requested.order;
             }
         }
-        sort_items(&mut items);
-        save_items(&self.file_path, &items).await
+        sort_items(&mut next_items);
+        save_items(&self.file_path, &next_items).await?;
+        *items = next_items;
+        Ok(())
     }
 }
 
-async fn save_items(file_path: &PathBuf, items: &[FavoriteItem]) -> Result<(), AppError> {
+async fn save_items(file_path: &Path, items: &[FavoriteItem]) -> Result<(), AppError> {
     if let Some(parent) = file_path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
     let text = serde_json::to_vec_pretty(&FavoriteStoreFile {
         items: items.to_vec(),
     })?;
-    tokio::fs::write(file_path, text).await?;
-    Ok(())
+    let file_name = file_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("favorites.json");
+    let temp_path = file_path.with_file_name(format!(".{file_name}.{}.tmp", Uuid::new_v4()));
+    tokio::fs::write(&temp_path, text).await?;
+
+    match tokio::fs::rename(&temp_path, file_path).await {
+        Ok(()) => Ok(()),
+        Err(_error) if cfg!(windows) && file_path.exists() => {
+            tokio::fs::remove_file(file_path).await?;
+            if let Err(rename_error) = tokio::fs::rename(&temp_path, file_path).await {
+                let _ = tokio::fs::remove_file(&temp_path).await;
+                Err(rename_error.into())
+            } else {
+                Ok(())
+            }
+        }
+        Err(error) => {
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            Err(error.into())
+        }
+    }
 }
 
 fn response_from_item(
@@ -279,6 +312,7 @@ fn current_time_text() -> Result<String, AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::ReorderFavoriteItem;
 
     #[test]
     fn joins_mount_and_relative_path() {
@@ -290,5 +324,46 @@ mod tests {
     #[test]
     fn rejects_empty_favorite_name() {
         assert!(normalize_favorite_name("  ".to_string()).is_err());
+    }
+
+    #[tokio::test]
+    async fn reorder_failure_does_not_change_memory_snapshot() {
+        let temp = temp_dir("web-file-browser-favorites-write-failure-test");
+        let file_path = temp.join("favorites.json");
+        tokio::fs::create_dir_all(&file_path).await.unwrap();
+        let service = FavoriteService {
+            file_path: Arc::new(file_path),
+            items: Arc::new(RwLock::new(vec![FavoriteItem {
+                id: "favorite-1".to_string(),
+                mount_id: Some(1),
+                mount_path: "/repo".to_string(),
+                relative_path: "docs".to_string(),
+                name: "资料".to_string(),
+                order: 10,
+                created_at: "2026-01-01T00:00:00Z".to_string(),
+            }])),
+        };
+
+        let error = service
+            .reorder(ReorderFavoritesRequest {
+                items: vec![ReorderFavoriteItem {
+                    id: "favorite-1".to_string(),
+                    order: 99,
+                }],
+            })
+            .await
+            .unwrap_err();
+
+        assert!(matches!(error, AppError::Internal(_)));
+        let items = service.items.read().await;
+        assert_eq!(items[0].order, 10);
+
+        let _ = tokio::fs::remove_dir_all(temp).await;
+    }
+
+    fn temp_dir(prefix: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("{prefix}-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
     }
 }
