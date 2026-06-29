@@ -53,6 +53,28 @@ wait_task() {
   fail "后台任务未在预期时间内结束: ${task_id}"
 }
 
+wait_index_idle() {
+  local body
+  local state
+
+  for _ in $(seq 1 90); do
+    body=$(curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/index/status")
+    state=$(printf '%s' "${body}" | json_query '.state')
+    case "${state}" in
+      idle)
+        return 0
+        ;;
+      disabled|failed|cancelled)
+        printf '%s\n' "${body}" >&2
+        fail "搜索索引未成功进入 idle 状态"
+        ;;
+    esac
+    sleep 1
+  done
+
+  fail "搜索索引未在预期时间内完成重建"
+}
+
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd -P)
 
@@ -86,6 +108,8 @@ TAR_EXTRACTED_FILE="${SMOKE_ROOT}/tar-extracted.txt"
 UPLOAD_FILE="${SMOKE_ROOT}/upload.txt"
 HEADERS_FILE="${SMOKE_ROOT}/headers.txt"
 FRONTEND_FILE="${SMOKE_ROOT}/frontend.html"
+TOO_LARGE_UPLOAD_FILE="${SMOKE_ROOT}/too-large-upload.txt"
+HTTP_ERROR_FILE="${SMOKE_ROOT}/http-error.json"
 
 compose() {
   docker compose \
@@ -258,6 +282,218 @@ curl -fsS \
   "${BASE_URL}/api/download/files/hello.txt" \
   -o "${DOWNLOADED_FILE}"
 cmp "${EXPECTED_FILE}" "${DOWNLOADED_FILE}"
+
+log "验证运行配置热生效"
+SETTINGS_RESPONSE=$(curl -fsS \
+  -X PATCH \
+  -b "${COOKIE_JAR}" \
+  -H "Content-Type: application/json" \
+  -d '{"runtime":{"maxUploadBytes":4,"maxDirPageSize":2}}' \
+  "${BASE_URL}/api/settings")
+printf '%s' "${SETTINGS_RESPONSE}" | jq -e \
+  '.runtime.maxUploadBytes == 4 and .runtime.maxDirPageSize == 2 and .restartPending == false' >/dev/null \
+  || fail "运行配置 PATCH 后响应不符合预期"
+
+mkdir -p "${SMOKE_ROOT}/files/settings-page"
+: >"${SMOKE_ROOT}/files/settings-page/a.txt"
+: >"${SMOKE_ROOT}/files/settings-page/b.txt"
+: >"${SMOKE_ROOT}/files/settings-page/c.txt"
+PAGE_RESPONSE=$(curl -fsS \
+  -b "${COOKIE_JAR}" \
+  "${BASE_URL}/api/file/files/settings-page?detail=basic&limit=99")
+PAGE_COUNT=$(printf '%s' "${PAGE_RESPONSE}" | json_query '.file | length')
+PAGE_HAS_MORE=$(printf '%s' "${PAGE_RESPONSE}" | json_query '.hasMore')
+if [[ "${PAGE_COUNT}" -ne 2 || "${PAGE_HAS_MORE}" != "true" ]]; then
+  printf '%s\n' "${PAGE_RESPONSE}" >&2
+  fail "目录分页上限没有热生效"
+fi
+
+printf '12345' >"${TOO_LARGE_UPLOAD_FILE}"
+UPLOAD_STATUS=$(curl -sS \
+  -o "${HTTP_ERROR_FILE}" \
+  -w "%{http_code}" \
+  -b "${COOKIE_JAR}" \
+  -F "file=@${TOO_LARGE_UPLOAD_FILE};filename=too-large-after-settings.txt" \
+  "${BASE_URL}/api/upload/files?conflictPolicy=reject")
+if [[ "${UPLOAD_STATUS}" != "413" ]]; then
+  cat "${HTTP_ERROR_FILE}" >&2 || true
+  fail "上传上限没有热生效: ${UPLOAD_STATUS}"
+fi
+[[ ! -e "${SMOKE_ROOT}/files/too-large-after-settings.txt" ]] || fail "超限上传不应落盘"
+
+log "验证文件夹收藏"
+curl -fsS \
+  -b "${COOKIE_JAR}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"folder","name":"favorite-a","conflictPolicy":"reject"}' \
+  "${BASE_URL}/api/file/files" >/dev/null
+curl -fsS \
+  -b "${COOKIE_JAR}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"folder","name":"favorite-b","conflictPolicy":"reject"}' \
+  "${BASE_URL}/api/file/files" >/dev/null
+
+FAVORITE_A_RESPONSE=$(curl -fsS \
+  -b "${COOKIE_JAR}" \
+  -H "Content-Type: application/json" \
+  -d '{"path":"/files/favorite-a","name":"收藏 A","order":20}' \
+  "${BASE_URL}/api/favorites")
+FAVORITE_B_RESPONSE=$(curl -fsS \
+  -b "${COOKIE_JAR}" \
+  -H "Content-Type: application/json" \
+  -d '{"path":"/files/favorite-b","name":"收藏 B","order":10}' \
+  "${BASE_URL}/api/favorites")
+FAVORITE_A_ID=$(printf '%s' "${FAVORITE_A_RESPONSE}" | json_query '.id')
+FAVORITE_B_ID=$(printf '%s' "${FAVORITE_B_RESPONSE}" | json_query '.id')
+FAVORITE_LIST=$(curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/favorites?check=true")
+printf '%s' "${FAVORITE_LIST}" | jq -e \
+  'length == 2 and .[0].path == "/files/favorite-b" and .[0].missing == false' >/dev/null \
+  || fail "收藏夹列表不符合预期"
+
+curl -fsS \
+  -X PATCH \
+  -b "${COOKIE_JAR}" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"收藏 A 更新","order":5}' \
+  "${BASE_URL}/api/favorites/${FAVORITE_A_ID}" >/dev/null
+REORDER_PAYLOAD=$(jq -n \
+  --arg favorite_a "${FAVORITE_A_ID}" \
+  --arg favorite_b "${FAVORITE_B_ID}" \
+  '{items:[{id:$favorite_a,order:5},{id:$favorite_b,order:15}]}')
+curl -fsS \
+  -b "${COOKIE_JAR}" \
+  -H "Content-Type: application/json" \
+  -d "${REORDER_PAYLOAD}" \
+  "${BASE_URL}/api/favorites/reorder" >/dev/null
+FAVORITE_LIST=$(curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/favorites")
+printf '%s' "${FAVORITE_LIST}" | jq -e \
+  --arg favorite_a "${FAVORITE_A_ID}" \
+  '.[0].id == $favorite_a and .[0].name == "收藏 A 更新"' >/dev/null \
+  || fail "收藏夹更新或重排不符合预期"
+
+curl -fsS -X DELETE -b "${COOKIE_JAR}" "${BASE_URL}/api/favorites/${FAVORITE_A_ID}" >/dev/null
+curl -fsS -X DELETE -b "${COOKIE_JAR}" "${BASE_URL}/api/favorites/${FAVORITE_B_ID}" >/dev/null
+FAVORITE_LIST=$(curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/favorites")
+printf '%s' "${FAVORITE_LIST}" | jq -e 'length == 0' >/dev/null \
+  || fail "收藏夹删除后列表应为空"
+
+log "验证直接永久删除"
+curl -fsS \
+  -b "${COOKIE_JAR}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"file","name":"permanent-delete.txt","conflictPolicy":"reject"}' \
+  "${BASE_URL}/api/file/files" >/dev/null
+curl -fsS \
+  -X DELETE \
+  -b "${COOKIE_JAR}" \
+  "${BASE_URL}/api/file/files/permanent-delete.txt?permanent=true" >/dev/null
+DELETE_STATUS=$(curl -sS \
+  -o "${HTTP_ERROR_FILE}" \
+  -w "%{http_code}" \
+  -b "${COOKIE_JAR}" \
+  "${BASE_URL}/api/file/files/permanent-delete.txt")
+[[ "${DELETE_STATUS}" == "404" ]] || fail "永久删除后文件仍可访问: ${DELETE_STATUS}"
+TRASH_COUNT=$(curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/trash" | json_query 'length')
+[[ "${TRASH_COUNT}" -eq 0 ]] || fail "永久删除不应新增回收站记录"
+
+log "验证回收站批量恢复和批量清理"
+for name in batch-trash-a.txt batch-trash-b.txt; do
+  curl -fsS \
+    -b "${COOKIE_JAR}" \
+    -H "Content-Type: application/json" \
+    -d "{\"type\":\"file\",\"name\":\"${name}\",\"conflictPolicy\":\"reject\"}" \
+    "${BASE_URL}/api/file/files" >/dev/null
+  curl -fsS \
+    -X DELETE \
+    -b "${COOKIE_JAR}" \
+    "${BASE_URL}/api/file/files/${name}" >/dev/null
+done
+TRASH_RESPONSE=$(curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/trash")
+BATCH_TRASH_A_ID=$(printf '%s' "${TRASH_RESPONSE}" | jq -er '.[] | select(.originalVirtualPath == "/files/batch-trash-a.txt") | .id')
+BATCH_TRASH_B_ID=$(printf '%s' "${TRASH_RESPONSE}" | jq -er '.[] | select(.originalVirtualPath == "/files/batch-trash-b.txt") | .id')
+BATCH_PAYLOAD=$(jq -n \
+  --arg a "${BATCH_TRASH_A_ID}" \
+  --arg b "${BATCH_TRASH_B_ID}" \
+  '{ids:[$a,$b],conflictPolicy:"reject"}')
+BATCH_RESTORE_RESPONSE=$(curl -fsS \
+  -b "${COOKIE_JAR}" \
+  -H "Content-Type: application/json" \
+  -d "${BATCH_PAYLOAD}" \
+  "${BASE_URL}/api/trash/batch/restore")
+printf '%s' "${BATCH_RESTORE_RESPONSE}" | jq -e \
+  '.success == 2 and .failed == 0 and (.restored | length) == 2' >/dev/null \
+  || fail "回收站批量恢复结果不符合预期"
+curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/file/files/batch-trash-a.txt" >/dev/null
+curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/file/files/batch-trash-b.txt" >/dev/null
+
+for name in batch-trash-a.txt batch-trash-b.txt; do
+  curl -fsS \
+    -X DELETE \
+    -b "${COOKIE_JAR}" \
+    "${BASE_URL}/api/file/files/${name}" >/dev/null
+done
+TRASH_RESPONSE=$(curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/trash")
+BATCH_TRASH_A_ID=$(printf '%s' "${TRASH_RESPONSE}" | jq -er '.[] | select(.originalVirtualPath == "/files/batch-trash-a.txt") | .id')
+BATCH_TRASH_B_ID=$(printf '%s' "${TRASH_RESPONSE}" | jq -er '.[] | select(.originalVirtualPath == "/files/batch-trash-b.txt") | .id')
+BATCH_PAYLOAD=$(jq -n --arg a "${BATCH_TRASH_A_ID}" --arg b "${BATCH_TRASH_B_ID}" '{ids:[$a,$b]}')
+BATCH_PURGE_RESPONSE=$(curl -fsS \
+  -b "${COOKIE_JAR}" \
+  -H "Content-Type: application/json" \
+  -d "${BATCH_PAYLOAD}" \
+  "${BASE_URL}/api/trash/batch/purge")
+printf '%s' "${BATCH_PURGE_RESPONSE}" | jq -e \
+  '.success == 2 and .failed == 0 and (.purged | length) == 2' >/dev/null \
+  || fail "回收站批量清理结果不符合预期"
+TRASH_LEFT=$(curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/trash" | jq -er \
+  '[.[] | select(.originalVirtualPath == "/files/batch-trash-a.txt" or .originalVirtualPath == "/files/batch-trash-b.txt")] | length')
+[[ "${TRASH_LEFT}" -eq 0 ]] || fail "批量清理后不应残留对应回收站记录"
+
+log "验证轻量搜索索引"
+printf 'smoke search body\n' >"${SMOKE_ROOT}/files/smoke-needle.txt"
+SEARCH_SETTINGS_RESPONSE=$(curl -fsS \
+  -X PATCH \
+  -b "${COOKIE_JAR}" \
+  -H "Content-Type: application/json" \
+  -d '{"runtime":{"indexEnabled":true,"indexScanDelayMs":0}}' \
+  "${BASE_URL}/api/settings")
+printf '%s' "${SEARCH_SETTINGS_RESPONSE}" | jq -e '.runtime.indexEnabled == true' >/dev/null \
+  || fail "搜索索引开关没有热生效"
+curl -fsS \
+  -X POST \
+  -b "${COOKIE_JAR}" \
+  "${BASE_URL}/api/index/rebuild" >/dev/null
+wait_index_idle
+SEARCH_RESPONSE=$(curl -fsS \
+  -b "${COOKIE_JAR}" \
+  "${BASE_URL}/api/search?q=smoke-needle")
+printf '%s' "${SEARCH_RESPONSE}" | jq -e \
+  '.total >= 1 and ([.items[] | select(.path == "/files/smoke-needle.txt")] | length) >= 1' >/dev/null \
+  || fail "搜索索引没有返回预期文件"
+SEARCH_SETTINGS_RESPONSE=$(curl -fsS \
+  -X PATCH \
+  -b "${COOKIE_JAR}" \
+  -H "Content-Type: application/json" \
+  -d '{"runtime":{"indexEnabled":false}}' \
+  "${BASE_URL}/api/settings")
+printf '%s' "${SEARCH_SETTINGS_RESPONSE}" | jq -e '.runtime.indexEnabled == false' >/dev/null \
+  || fail "搜索索引关闭配置没有热生效"
+INDEX_STATUS=$(curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/index/status")
+printf '%s' "${INDEX_STATUS}" | jq -e '.enabled == false and .state == "disabled"' >/dev/null \
+  || fail "搜索索引关闭后状态不符合预期"
+
+log "验证启动配置保存提示"
+STARTUP_SETTINGS_RESPONSE=$(curl -fsS \
+  -X PATCH \
+  -b "${COOKIE_JAR}" \
+  -H "Content-Type: application/json" \
+  -d '{"startup":{"indexRebuildOnStartup":true}}' \
+  "${BASE_URL}/api/settings")
+printf '%s' "${STARTUP_SETTINGS_RESPONSE}" | jq -e \
+  '.startup.indexRebuildOnStartup == true
+   and .activeStartup.indexRebuildOnStartup == false
+   and .restartPending == true
+   and (.restartPendingFields | index("startup.indexRebuildOnStartup") != null)' >/dev/null \
+  || fail "启动配置保存提示不符合预期"
 
 log "验证指标接口"
 curl -fsS -b "${COOKIE_JAR}" "${BASE_URL}/api/metrics" >/dev/null
