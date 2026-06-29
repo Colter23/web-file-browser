@@ -75,7 +75,7 @@ pub struct TrashBatchPurgeOutcome {
     pub errors: Vec<TrashBatchItemError>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TrashEntryKind {
     File,
@@ -286,6 +286,10 @@ impl TrashService {
     pub async fn empty(&self) -> Result<usize, AppError> {
         let records = self.records.read().await.clone();
         let count = records.len();
+        let ids = records
+            .iter()
+            .map(|record| record.id.clone())
+            .collect::<HashSet<_>>();
         tokio::task::spawn_blocking(move || {
             for record in &records {
                 purge_record_sync(record)?;
@@ -293,9 +297,7 @@ impl TrashService {
             Ok::<_, AppError>(())
         })
         .await??;
-        let mut current = self.records.write().await;
-        current.clear();
-        self.save_all(&current).await?;
+        self.remove_records_once(&ids).await?;
         Ok(count)
     }
 
@@ -475,17 +477,31 @@ fn record_dir_from_payload<'a>(
     record: &TrashRecord,
     payload: &'a Path,
 ) -> Result<&'a Path, AppError> {
-    let record_dir = payload
+    let parent = payload
         .parent()
         .ok_or_else(|| trash_record_invalid("回收站记录路径无效"))?;
-    let dir_name = record_dir
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| trash_record_invalid("回收站记录目录无效"))?;
-    if dir_name != record.id {
-        return Err(trash_record_invalid("回收站记录目录与记录编号不匹配"));
+    if path_file_name_eq(parent, &record.id) {
+        return Ok(parent);
     }
-    Ok(record_dir)
+
+    let record_dir = parent
+        .parent()
+        .ok_or_else(|| trash_record_invalid("回收站记录路径无效"))?;
+    if path_file_name_eq(record_dir, &record.id) {
+        return Ok(record_dir);
+    }
+
+    Err(trash_record_invalid("回收站记录目录与记录编号不匹配"))
+}
+
+fn path_file_name_eq(path: &Path, expected: &str) -> bool {
+    path.file_name().and_then(|name| name.to_str()) == Some(expected)
+}
+
+fn record_payload_parent(record: &TrashRecord) -> Result<&Path, AppError> {
+    Path::new(&record.trash_path)
+        .parent()
+        .ok_or_else(|| trash_record_invalid("回收站记录路径无效"))
 }
 
 fn record_size(record: &TrashRecord) -> Result<u64, AppError> {
@@ -493,12 +509,7 @@ fn record_size(record: &TrashRecord) -> Result<u64, AppError> {
         return Ok(size_bytes);
     }
 
-    dir_size(
-        Path::new(&record.trash_path)
-            .parent()
-            .ok_or_else(|| trash_record_invalid("回收站记录路径无效"))?,
-    )
-    .map_err(AppError::from)
+    dir_size(record_payload_parent(record)?).map_err(AppError::from)
 }
 
 fn select_retention_purge_ids(
@@ -628,11 +639,6 @@ fn move_to_trash_sync(
     let (entry_dir, payload_path) =
         prepare_trash_entry_dir(&mount_trash_root, &mount_root, &root, &id, name)?;
 
-    if let Err(rename_error) = fs::rename(&source, &payload_path) {
-        copy_then_remove(&source, &payload_path, &kind)
-            .map_err(|copy_error| AppError::internal(format!("{rename_error}; {copy_error}")))?;
-    }
-
     let deleted_at = OffsetDateTime::now_utc()
         .format(&Rfc3339)
         .map_err(|error| AppError::internal(format!("生成删除时间失败: {error}")))?;
@@ -650,7 +656,24 @@ fn move_to_trash_sync(
     let metadata_text = serde_json::to_vec_pretty(&record)?;
     fs::write(entry_dir.join("metadata.json"), metadata_text)?;
 
+    if let Err(error) = move_source_to_trash_payload(&source, &payload_path, &kind) {
+        let _ = fs::remove_dir_all(&entry_dir);
+        return Err(error);
+    }
+
     Ok(record)
+}
+
+fn move_source_to_trash_payload(
+    source: &Path,
+    payload_path: &Path,
+    kind: &TrashEntryKind,
+) -> Result<(), AppError> {
+    if let Err(rename_error) = fs::rename(source, payload_path) {
+        copy_then_remove(source, payload_path, kind)
+            .map_err(|copy_error| AppError::internal(format!("{rename_error}; {copy_error}")))?;
+    }
+    Ok(())
 }
 
 fn prepare_trash_entry_dir(
@@ -681,7 +704,9 @@ fn prepare_trash_entry_dir_in_root(
     fs::create_dir_all(root)?;
     let entry_dir = root.join(id);
     fs::create_dir(&entry_dir)?;
-    let payload_path = entry_dir.join(name);
+    let payload_dir = entry_dir.join("payload");
+    fs::create_dir(&payload_dir)?;
+    let payload_path = payload_dir.join(name);
     Ok((entry_dir, payload_path))
 }
 
@@ -695,7 +720,9 @@ fn prepare_mount_trash_entry_dir_in_root(
     ensure_safe_mount_trash_root(root, mount_root)?;
     let entry_dir = root.join(id);
     fs::create_dir(&entry_dir)?;
-    let payload_path = entry_dir.join(name);
+    let payload_dir = entry_dir.join("payload");
+    fs::create_dir(&payload_dir)?;
+    let payload_path = payload_dir.join(name);
     Ok((entry_dir, payload_path))
 }
 
@@ -791,7 +818,8 @@ fn copy_dir_recursively(source: &Path, target: &Path) -> Result<(), std::io::Err
 mod tests {
     use super::{
         TrashEntryKind, TrashRecord, TrashService, copy_then_remove,
-        move_payload_with_copy_fallback, move_to_trash_sync, select_retention_purge_ids,
+        move_payload_with_copy_fallback, move_to_trash_sync, purge_record_sync,
+        select_retention_purge_ids,
     };
     use crate::{
         error::AppError,
@@ -829,11 +857,71 @@ mod tests {
 
         assert!(!source.exists());
         assert!(Path::new(&record.trash_path).exists());
-        let record_dir = Path::new(&record.trash_path).parent().unwrap();
+        assert!(Path::new(&record.trash_path).ends_with("payload/hello.txt"));
+        let record_dir = Path::new(&record.trash_path)
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
         assert!(record_dir.join("metadata.json").exists());
         assert_eq!(record.size_bytes, Some(5));
 
         fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[test]
+    fn trash_payload_does_not_collide_with_record_metadata_file() {
+        let temp = temp_dir("web-file-browser-trash-metadata-name-test");
+        let source_dir = temp.join("source");
+        let trash_dir = temp.join("trash");
+        fs::create_dir_all(&source_dir).unwrap();
+        let source = source_dir.join("metadata.json");
+        fs::write(&source, "用户文件").unwrap();
+
+        let record = move_to_trash_sync(
+            trash_dir,
+            source_dir.clone(),
+            source.clone(),
+            "/repo/metadata.json".to_string(),
+            source.to_string_lossy().to_string(),
+            "admin".to_string(),
+        )
+        .unwrap();
+
+        let payload = Path::new(&record.trash_path);
+        let record_dir = payload.parent().unwrap().parent().unwrap();
+
+        assert_eq!(
+            payload.file_name().and_then(|name| name.to_str()),
+            Some("metadata.json")
+        );
+        assert_eq!(fs::read_to_string(payload).unwrap(), "用户文件");
+        assert!(record_dir.join("metadata.json").is_file());
+        let metadata_text = fs::read_to_string(record_dir.join("metadata.json")).unwrap();
+        assert!(metadata_text.contains("\"originalVirtualPath\""));
+
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[test]
+    fn purge_supports_new_and_legacy_trash_record_layouts() {
+        let temp = temp_dir("web-file-browser-trash-layout-test");
+        let new_record_dir = temp.join("new-id");
+        let legacy_record_dir = temp.join("legacy-id");
+        fs::create_dir_all(new_record_dir.join("payload")).unwrap();
+        fs::create_dir_all(&legacy_record_dir).unwrap();
+        let new_payload = new_record_dir.join("payload/new.txt");
+        let legacy_payload = legacy_record_dir.join("legacy.txt");
+        fs::write(&new_payload, "new").unwrap();
+        fs::write(&legacy_payload, "legacy").unwrap();
+
+        purge_record_sync(&test_record_with_path("new-id", &new_payload)).unwrap();
+        purge_record_sync(&test_record_with_path("legacy-id", &legacy_payload)).unwrap();
+
+        assert!(!new_record_dir.exists());
+        assert!(!legacy_record_dir.exists());
+
+        fs::remove_dir_all(temp).unwrap_or(());
     }
 
     #[test]
@@ -1217,6 +1305,19 @@ mod tests {
             trash_path: format!("missing-trash/{id}/payload.txt"),
             size_bytes,
             deleted_at: deleted_at.to_string(),
+            actor: "admin".to_string(),
+            kind: TrashEntryKind::File,
+        }
+    }
+
+    fn test_record_with_path(id: &str, path: &Path) -> TrashRecord {
+        TrashRecord {
+            id: id.to_string(),
+            original_virtual_path: format!("/repo/{id}.txt"),
+            original_real_path: format!("missing/{id}.txt"),
+            trash_path: path.to_string_lossy().to_string(),
+            size_bytes: Some(1),
+            deleted_at: "2000-01-01T00:00:00Z".to_string(),
             actor: "admin".to_string(),
             kind: TrashEntryKind::File,
         }

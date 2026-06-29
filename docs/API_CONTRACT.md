@@ -555,7 +555,7 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
     "id": "uuid",
     "originalVirtualPath": "/files/a.txt",
     "originalRealPath": "/mnt/files/a.txt",
-    "trashPath": "/mnt/files/.web-file-browser-trash/uuid/a.txt",
+    "trashPath": "/mnt/files/.web-file-browser-trash/uuid/payload/a.txt",
     "sizeBytes": 12,
     "deletedAt": "2026-06-23T00:00:00Z",
     "actor": "admin",
