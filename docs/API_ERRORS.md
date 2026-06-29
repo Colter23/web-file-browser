@@ -29,13 +29,13 @@
 
 | HTTP 状态 | code | 常见场景 | 处理建议 |
 | --- | --- | --- | --- |
-| 400 | `BAD_REQUEST` | 参数格式错误、路径非法、任务路径或输出名为空、跨挂载移动、压缩包条目非法、搜索索引未启用 | 前端优先按 `reason` 翻译，调用方修正请求参数 |
+| 400 | `BAD_REQUEST` | 参数格式错误、路径非法、目录轻量模式使用了大小/时间排序、任务路径或输出名为空、跨挂载移动、压缩包条目非法、搜索索引未启用 | 前端优先按 `reason` 翻译，调用方修正请求参数 |
 | 401 | `UNAUTHORIZED` | 未登录、会话失效、管理员密码错误 | 跳转登录页或提示重新登录 |
 | 403 | `FORBIDDEN` | 只读挂载写入、无写入权限 | 展示只读提示，避免继续重试写操作 |
 | 404 | `NOT_FOUND` | 文件、映射、任务、回收站记录不存在 | 刷新当前视图或提示目标已不存在 |
 | 405 | `METHOD_NOT_ALLOWED` | API 路径存在但请求方法不支持 | 修正前端请求方法 |
 | 409 | `CONFLICT` | 名称冲突、任务已取消、任务已结束不能取消、索引正在重建、当前没有可取消的索引重建、禁止覆盖目录 | 根据场景提示用户选择自动重命名、拒绝或显式覆盖 |
-| 413 | `PAYLOAD_TOO_LARGE` | 上传、保存或解压超过配置上限 | 展示大小限制，必要时调整环境变量 |
+| 413 | `PAYLOAD_TOO_LARGE` | 上传、保存或解压超过配置上限 | 展示大小限制，必要时通过设置接口或配置文件调整上限 |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | 在线编辑二进制文件或不允许的文件类型 | 提示文件不适合在线编辑 |
 | 416 | `RANGE_NOT_SATISFIABLE` | Range 头非法、越界或多段 Range | 重新发起完整读取或修正单段 Range |
 | 428 | `PRECONDITION_REQUIRED` | 保存内容时缺少 `If-Match` | 重新打开文件，带最新 ETag 保存 |
@@ -79,6 +79,7 @@
 | `PATH_SEGMENT_INVALID` | 路径片段包含 `..`、反斜杠或分隔符 | `segment` |
 | `PATH_OUTSIDE_MOUNT` | 真实路径 canonical 后越过挂载根 | 无 |
 | `PAGE_SIZE_MUST_BE_POSITIVE` | `limit=0` | `field` |
+| `DIRECTORY_BASIC_DETAIL_REQUIRES_NAME_SORT` | `detail=basic` 下请求按大小或修改时间排序 | `detail`, `sort` |
 | `CROSS_MOUNT_MOVE_FORBIDDEN` | 跨挂载移动文件 | `sourcePath`, `targetPath` |
 | `PATH_ALREADY_EXISTS` | 冲突策略为拒绝或落盘前目标已存在 | `path` |
 | `OVERWRITE_DIR_FORBIDDEN` | 显式覆盖目录 | 无 |

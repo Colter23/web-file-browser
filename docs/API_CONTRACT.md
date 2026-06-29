@@ -58,7 +58,7 @@
 }
 ```
 
-常见错误：`401 UNAUTHORIZED` 密码错误，`409 CONFLICT` 管理员密码未初始化。未初始化时前端应转到首次设置页面并调用 `POST /api/auth/setup`。
+常见错误：`401 UNAUTHORIZED` 密码错误，`409 CONFLICT` 管理员密码未初始化。未初始化时前端应转到首次设置页面并调用 `POST /api/auth/setup`。同一来源连续登录失败会进入短暂冷却，返回 `429 TOO_MANY_REQUESTS` + `LOGIN_FAILURE_COOLDOWN`，`params` 包含 `retryAfterSeconds` 和 `attempts`；前端应按 `retryAfterSeconds` 禁用或延后重试。
 
 ### `POST /api/auth/logout`
 
@@ -267,7 +267,13 @@
 - `includeHidden=true`：返回隐藏文件。
 - `includeTotal=true`：返回 `folderTotal` 和 `fileTotal`；默认不统计总数。
 
-目录响应：
+性能约定：
+
+- `detail=basic` 是目录默认模式，只读取名称、类型和路径，避免逐项读取完整元数据；目录项的 `modified` 会为空字符串，文件项的 `size` 会是 `0`，前端不要把它当作真实大小展示。
+- 需要真实 `modified` 或 `size` 时使用 `detail=full`。`detail=full&sort=name` 只对当前页补充元数据；`sort=modified` 或 `sort=size` 需要先读取目录内候选项元数据，适合用户显式切换排序时使用。
+- `detail=basic` 只支持 `sort=name`。如果请求 `detail=basic&sort=size` 或 `detail=basic&sort=modified`，后端返回 `400 BAD_REQUEST` + `DIRECTORY_BASIC_DETAIL_REQUIRES_NAME_SORT`。
+
+目录响应结构如下；示例中的真实 `modified` 和 `size` 通常来自 `detail=full`：
 
 ```json
 {
@@ -374,9 +380,15 @@
 - `Accept-Ranges: bytes`
 - `Content-Range`，仅 `206` 时返回
 
+Range 语义：
+
+- 未带 `Range` 时返回 `200 OK` 和完整内容。
+- 合法单段 `Range` 返回 `206 Partial Content`，并返回 `Content-Range`。
+- 非法、越界或多段 Range 返回 `416 RANGE_NOT_SATISFIABLE`，不支持 `multipart/byteranges`。
+
 ### `HEAD /api/content/{path...}`
 
-只返回内容相关响应头。普通 HEAD 只读取元数据；`mode=edit` 会执行编辑安全检查。
+只返回内容相关响应头，不返回 body。普通 HEAD 只读取元数据；`mode=edit` 会执行编辑安全检查。HEAD 同样接受单段 `Range`，用于前端探测文件大小、类型、ETag 和分段能力。
 
 ### `PUT /api/content/{path...}`
 
@@ -450,11 +462,11 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
 
 ### `GET /api/download/{path...}`
 
-附件下载文件，支持单段 `Range`。用于下载按钮时优先使用此接口。
+附件下载文件，支持单段 `Range`。用于下载按钮时优先使用此接口。Range 状态码语义与 `/api/content/*` 一致：完整下载返回 `200`，单段命中返回 `206`，非法或多段 Range 返回 `416`。
 
 ### `HEAD /api/download/{path...}`
 
-只返回下载相关响应头。
+只返回下载相关响应头，不返回 body。可用于前端下载前探测文件大小、类型、ETag、文件名和 Range 能力。
 
 ## 后台任务
 
@@ -487,7 +499,7 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
 }
 ```
 
-`kind` 支持 `copy`、`move`、`delete`、`archive`、`extract`。`state` 支持 `queued`、`running`、`completed`、`failed`、`cancelled`。
+`kind` 支持 `copy`、`move`、`delete`、`archive`、`extract`。`state` 支持 `queued`、`running`、`completed`、`failed`、`cancelled`。任务创建接口成功时返回 `200 OK` 和任务 `id`；这只表示任务已进入队列，不表示任务已经完成。前端应继续轮询任务状态。
 
 ### `GET /api/tasks`
 
@@ -635,6 +647,8 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
 }
 ```
 
+批量恢复接口只要请求本身被接受就返回 `200 OK`。是否全部成功以 `success`、`failed` 和 `errors` 为准；即使 `failed > 0`，HTTP 状态也仍可能是 `200`。
+
 ### `DELETE /api/trash/{id}`
 
 永久删除单条回收站记录。成功返回 `204`。
@@ -648,6 +662,8 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
   "ids": ["uuid-1", "uuid-2"]
 }
 ```
+
+批量永久删除接口的部分失败语义同批量恢复：HTTP `200 OK` 表示批量请求处理完成，单项失败写入 `errors`。
 
 成功返回：
 
@@ -838,6 +854,13 @@ curl -F "file=@a.bin;filename=a.bin" /api/upload/files
 ```
 
 返回值与 `GET /api/settings` 相同。`runtime` 新配置只保证对后续请求和后续任务生效；已开始的上传、下载、后台任务继续使用开始时的配置。`startup` 修改后 `restartPending` 会变为 `true`，重启服务后才会进入 `activeStartup`。
+
+校验和冲突：
+
+- 请求体只接受 `runtime` 和 `startup`，各自内部也只接受已定义字段；未知字段会返回 `400 BAD_REQUEST`。
+- 数值类限制通常必须大于 `0`；可为空的上限字段使用 `null` 表示不限制。
+- 被环境变量控制的字段不能在线覆盖，返回 `409 CONFLICT`，前端可根据 `envLocked` 展示只读状态。
+- `startup.configFile` 决定配置文件自身位置，不支持在线修改，返回 `400 BAD_REQUEST`。需要调整时通过环境变量指定后重启。
 
 ### `POST /api/settings/reload`
 
