@@ -275,7 +275,7 @@
 - 必要时拆分 liveness 和 readiness。
   - `/api/health` 可以保持简单。
   - 如有需要，增加配置、回收站、审计目录可写性检查。
-  - 已新增 `/api/ready`：检查管理员密码初始化、配置/映射/回收站/审计目录可写和静态目录可读。
+  - 已新增 `/api/ready`：检查管理员密码初始化、配置/映射/回收站/审计目录可写和静态入口文件可读。
   - Dockerfile 已接入 `HEALTHCHECK`，使用 `/api/ready`。
 - 完善 `/api/metrics`。
   - 活动传输数。

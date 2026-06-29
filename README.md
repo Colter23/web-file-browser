@@ -178,7 +178,7 @@ docker compose up -d --build
 搜索查询分页只克隆当前页结果；最近文件查询也不会先克隆整个索引再排序。
 未初始化管理员密码时，`GET /api/auth/session` 会返回 `authConfigured=false`，前端应展示首次设置页面并调用 `POST /api/auth/setup`。登录后可通过 `POST /api/auth/password` 修改单管理员密码；修改成功后旧会话会失效，当前请求会获得新会话。服务端会话与 Cookie 一样默认 7 天有效，登录、鉴权和指标统计会懒清理过期会话。
 默认不开放跨域 CORS；只有 `WEB_FILE_BROWSER_CORS_ORIGINS` 显式配置的来源才能带凭据跨域访问 API。
-`GET /api/health` 是轻量存活检查，只确认进程可响应；`GET /api/ready` 是就绪检查，会验证配置、认证哈希、映射、回收站、审计和静态文件目录是否可用。管理员密码尚未初始化时仍返回就绪，便于首次进入 Web 页面完成设置。
+`GET /api/health` 是轻量存活检查，只确认进程可响应；`GET /api/ready` 是就绪检查，会验证配置、认证哈希、映射、回收站、审计和静态入口文件是否可用。管理员密码尚未初始化时仍返回就绪，便于首次进入 Web 页面完成设置。
 审计日志默认写入 append-only JSONL，达到 `WEB_FILE_BROWSER_AUDIT_MAX_BYTES` 后会在下一条审计写入前轮转为 `audit.<时间戳>.jsonl`。旧轮转文件只在发生新轮转后按 `WEB_FILE_BROWSER_AUDIT_RETENTION_FILES` 清理，不在启动时扫描审计目录。`POST /api/audit/cleanup` 可主动清理旧轮转文件，并会写入一条轻量审计记录。
 `GET /api/metrics` 返回轻量内存指标快照：映射数量、活跃会话、任务状态汇总、目录扫描/文件传输/IP 并发占用、回收站条目数量和搜索索引状态；默认不递归估算回收站大小，避免指标接口触发额外磁盘遍历。单 IP 并发保护会顺手清理空闲 IP 记录，`trackedIps` 只反映仍有活跃请求的限流记录。
 API 错误响应统一为 `{ "code": "...", "message": "..." }`，稳定错误码和前端处理建议见 [docs/API_ERRORS.md](docs/API_ERRORS.md)。

@@ -116,8 +116,12 @@ fn check_directory_writable(name: &str, dir: impl AsRef<Path>) -> ReadinessCheck
 
 fn check_directory_readable(name: &str, dir: impl AsRef<Path>) -> ReadinessCheck {
     let dir = PathBuf::from(dir.as_ref());
+    let index_file = dir.join("index.html");
     match std::fs::metadata(&dir) {
-        Ok(metadata) if metadata.is_dir() => readiness_ok(name, "目录可读"),
+        Ok(metadata) if metadata.is_dir() => match std::fs::File::open(&index_file) {
+            Ok(_) => readiness_ok(name, "静态入口文件可读"),
+            Err(error) => readiness_error(name, format!("静态入口文件不可读: {error}")),
+        },
         Ok(_) => readiness_error(name, "路径不是目录"),
         Err(error) => readiness_error(name, format!("目录不可读: {error}")),
     }
@@ -165,6 +169,21 @@ mod tests {
         let check = check_directory_readable("staticFiles", &file);
 
         assert_eq!(check.status, "error");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn readiness_readable_check_requires_static_entry() {
+        let dir = temp_dir("web-file-browser-ready-static-entry-test");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let missing = check_directory_readable("staticFiles", &dir);
+        assert_eq!(missing.status, "error");
+
+        std::fs::write(dir.join("index.html"), "<div id=\"app\"></div>").unwrap();
+        let ok = check_directory_readable("staticFiles", &dir);
+        assert_eq!(ok.status, "ok");
+
         std::fs::remove_dir_all(dir).unwrap();
     }
 

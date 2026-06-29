@@ -105,7 +105,7 @@ http://服务器IP:8080
 
 首次启动后打开 Web 页面，按提示设置单管理员密码。后端只会把 Argon2 哈希写入 `data/auth.json`，不会保存明文密码。需要重置密码时，停止容器，删除 `data/auth.json`，再启动容器并重新进入 Web 页面设置。
 
-镜像内置 Docker `HEALTHCHECK`，会通过 `web-file-browser --healthcheck` 访问容器内的 `http://127.0.0.1:8080/api/ready`。管理员密码尚未初始化时仍视为就绪，便于首次进入 Web 页面完成设置；如果 `/app/data`、认证哈希、映射、回收站、审计日志目录或静态文件目录不可用，容器会显示为 `unhealthy`。
+镜像内置 Docker `HEALTHCHECK`，会通过 `web-file-browser --healthcheck` 按当前监听配置访问容器内的 `/api/ready`。管理员密码尚未初始化时仍视为就绪，便于首次进入 Web 页面完成设置；如果 `/app/data`、认证哈希、映射、回收站、审计日志目录或静态入口文件不可用，容器会显示为 `unhealthy`。
 
 ## 自动冒烟验证
 

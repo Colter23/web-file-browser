@@ -1,6 +1,6 @@
 use std::{
     env, fs,
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     path::{Path, PathBuf},
 };
 
@@ -88,7 +88,10 @@ impl AppConfig {
     }
 
     pub fn socket_addr(&self) -> Result<SocketAddr, std::net::AddrParseError> {
-        format!("{}:{}", self.bind_address, self.port).parse()
+        match self.bind_address.parse::<IpAddr>() {
+            Ok(ip) => Ok(SocketAddr::new(ip, self.port)),
+            Err(_) => format!("{}:{}", self.bind_address, self.port).parse(),
+        }
     }
 
     pub(crate) fn runtime_settings(&self) -> RuntimeSettings {
@@ -724,7 +727,9 @@ pub(crate) fn normalize_mime_values(values: Vec<String>) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{RuntimeConfigFile, normalize_extension_list, normalize_mime_list, split_env_list};
+    use super::{
+        AppConfig, RuntimeConfigFile, normalize_extension_list, normalize_mime_list, split_env_list,
+    };
 
     #[test]
     fn splits_comma_separated_env_list() {
@@ -774,5 +779,16 @@ mod tests {
             config.conflict_policy,
             Some(crate::models::ConflictPolicy::Reject)
         );
+    }
+
+    #[test]
+    fn socket_addr_supports_ipv6_bind_address() {
+        let mut config = AppConfig::load_from_file("missing.json".into()).unwrap();
+        config.bind_address = "::".to_string();
+        config.port = 18080;
+
+        let address = config.socket_addr().unwrap();
+
+        assert_eq!(address.to_string(), "[::]:18080");
     }
 }

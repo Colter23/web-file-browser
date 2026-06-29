@@ -41,6 +41,12 @@ pub(super) async fn test_app_with_config(
     tokio::fs::create_dir_all(root.path().join("static"))
         .await
         .unwrap();
+    tokio::fs::write(
+        root.path().join("static/index.html"),
+        b"<div id=\"app\"></div>",
+    )
+    .await
+    .unwrap();
     let mut config = AppConfig {
         bind_address: "127.0.0.1".to_string(),
         port: 0,
