@@ -182,6 +182,8 @@ export interface SessionResponse {
 }
 
 export interface RuntimeSettings {
+    authSessionTtlSeconds: number;
+    authSecureCookie: boolean;
     maxEditBytes: number;
     editableExtensions: string[];
     editableMimeTypes: string[];
@@ -193,11 +195,14 @@ export interface RuntimeSettings {
     maxTaskConcurrency: number;
     taskHistoryLimit: number;
     taskSpeedLimitBytesPerSec?: number | null;
+    maxArchiveBytes?: number | null;
+    maxArchiveFiles?: number | null;
     maxExtractBytes?: number | null;
     maxExtractFiles?: number | null;
     maxExtractDepth: number;
     indexEnabled: boolean;
     indexScanDelayMs: number;
+    auditEnabled: boolean;
     auditMaxBytes?: number | null;
     auditRetentionFiles: number;
     trashRetentionDays?: number | null;
@@ -232,6 +237,8 @@ export interface SettingsResponse {
 }
 
 export type RuntimeSettingsPatch = Partial<{
+    authSessionTtlSeconds: number;
+    authSecureCookie: boolean;
     maxEditBytes: number;
     editableExtensions: string[];
     editableMimeTypes: string[];
@@ -243,11 +250,14 @@ export type RuntimeSettingsPatch = Partial<{
     maxTaskConcurrency: number;
     taskHistoryLimit: number;
     taskSpeedLimitBytesPerSec: number | null;
+    maxArchiveBytes: number | null;
+    maxArchiveFiles: number | null;
     maxExtractBytes: number | null;
     maxExtractFiles: number | null;
     maxExtractDepth: number;
     indexEnabled: boolean;
     indexScanDelayMs: number;
+    auditEnabled: boolean;
     auditMaxBytes: number | null;
     auditRetentionFiles: number;
     trashRetentionDays: number | null;
