@@ -19,6 +19,8 @@ const props = defineProps<{
   fontSize: number;
   tabSize: number;
   wrap: boolean;
+  showWhitespace: boolean;
+  autoSave: boolean;
   defaultEditMode: boolean;
 }>();
 
@@ -29,6 +31,8 @@ const emit = defineEmits<{
   (e: "update:fontSize", value: number): void;
   (e: "update:tabSize", value: number): void;
   (e: "update:wrap", value: boolean): void;
+  (e: "update:showWhitespace", value: boolean): void;
+  (e: "update:autoSave", value: boolean): void;
   (e: "update:defaultEditMode", value: boolean): void;
 }>();
 
@@ -114,7 +118,7 @@ const menuLayerStyle = computed(() => {
   const anchor = props.anchor;
   if (!anchor || !props.activeMenu) return {};
   const width = props.activeMenu === "language" ? 208 : props.activeMenu === "settings" ? 288 : 224;
-  const maxHeight = props.activeMenu === "settings" ? 360 : 320;
+  const maxHeight = props.activeMenu === "settings" ? 420 : 320;
   const padding = 8;
   const rawLeft = anchor.align === "start" ? anchor.left : anchor.right - width;
   const left = Math.min(Math.max(padding, rawLeft), Math.max(padding, window.innerWidth - width - padding));
@@ -209,6 +213,38 @@ const menuLayerStyle = computed(() => {
       </div>
       <div class="setting-row switch-row">
         <div class="setting-copy">
+          <span class="setting-label">{{ t("editor.showWhitespace") }}</span>
+          <span class="setting-hint">{{ t("editor.showWhitespaceHint") }}</span>
+        </div>
+        <button
+            type="button"
+            class="switch-control"
+            :class="{active: showWhitespace}"
+            role="switch"
+            :aria-label="t('editor.showWhitespace')"
+            :aria-checked="showWhitespace"
+            @click="emit('update:showWhitespace', !showWhitespace)">
+          <span></span>
+        </button>
+      </div>
+      <div class="setting-row switch-row">
+        <div class="setting-copy">
+          <span class="setting-label">{{ t("editor.autoSave") }}</span>
+          <span class="setting-hint">{{ t("editor.autoSaveHint") }}</span>
+        </div>
+        <button
+            type="button"
+            class="switch-control"
+            :class="{active: autoSave}"
+            role="switch"
+            :aria-label="t('editor.autoSave')"
+            :aria-checked="autoSave"
+            @click="emit('update:autoSave', !autoSave)">
+          <span></span>
+        </button>
+      </div>
+      <div class="setting-row switch-row">
+        <div class="setting-copy">
           <span class="setting-label">{{ t("editor.defaultEditMode") }}</span>
           <span class="setting-hint">{{ t("editor.defaultEditModeHint") }}</span>
         </div>
@@ -256,6 +292,7 @@ const menuLayerStyle = computed(() => {
 
 .settings-menu {
   @apply w-72 gap-1.5 p-2;
+  max-height: min(26.25rem, calc(100vh - 1rem));
 }
 
 .editor-menu p {

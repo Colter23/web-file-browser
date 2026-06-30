@@ -62,6 +62,17 @@ export const useMainViewShellActions = ({
     resetPdfViewer();
   }
 
+  const closePanelsForEditor = () => {
+    hideOperationPanel();
+    resetDeleteConfirm();
+    closePropertiesPanel();
+    resetTaskCancelConfirm();
+    closeTrashPanel();
+    resetImageViewer();
+    resetVideoViewer();
+    resetPdfViewer();
+  }
+
   const closeTransientPanels = () => {
     resetPreviewContext();
     hideOperationPanel();
@@ -115,6 +126,7 @@ export const useMainViewShellActions = ({
 
   return {
     closePanels,
+    closePanelsForEditor,
     closeTransientPanels,
     closeOperationShellPanels,
     closePreview,

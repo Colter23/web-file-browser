@@ -69,7 +69,7 @@ defineExpose({
           <icon icon="action.close" />
         </button>
       </div>
-      <div class="operation-shell-body">
+      <div v-if="$slots.default" class="operation-shell-body">
         <slot />
       </div>
       <div v-if="$slots.actions" class="operation-shell-actions">

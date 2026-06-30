@@ -108,7 +108,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@codemirror/commands@npm:^6.0.0":
+"@codemirror/commands@npm:^6.0.0, @codemirror/commands@npm:^6.10.4":
   version: 6.10.4
   resolution: "@codemirror/commands@npm:6.10.4"
   dependencies:
@@ -3108,6 +3108,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "web-file-browser-ui@workspace:."
   dependencies:
+    "@codemirror/commands": "npm:^6.10.4"
     "@codemirror/lang-css": "npm:^6.3.1"
     "@codemirror/lang-html": "npm:^6.4.11"
     "@codemirror/lang-javascript": "npm:^6.2.5"

@@ -4,14 +4,17 @@ import type {ExplorerEntry} from "../explorer/types.ts";
 import {useI18n} from "../../i18n";
 import {getFile} from "../../network/api.ts";
 import type {ShellNoticePayload} from "../shell/types.ts";
+import Icon from "../Icon.vue";
 import PreviewToolRow from "./PreviewToolRow.vue";
 
 const props = defineProps<{
   entry: ExplorerEntry;
   reloadKey: number;
+  canEdit: boolean;
 }>();
 
 const emit = defineEmits<{
+  (e: "edit", entry: ExplorerEntry): void;
   (e: "notice", payload: ShellNoticePayload): void;
 }>();
 
@@ -87,6 +90,10 @@ onBeforeUnmount(resetPreviewRuntime);
 
 <template>
   <preview-tool-row>
+    <button v-if="canEdit" :title="t('preview.edit')" @click="emit('edit', entry)">
+      <icon icon="action.edit" color="currentColor" />
+      <span>{{ t("preview.edit") }}</span>
+    </button>
     <button :class="{active: previewTextWrap}" @click="previewTextWrap = !previewTextWrap">
       {{ previewTextWrap ? t("preview.wrap") : t("preview.noWrap") }}
     </button>

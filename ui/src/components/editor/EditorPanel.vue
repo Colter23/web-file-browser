@@ -15,9 +15,13 @@ import EditorMenuLayer from "./EditorMenuLayer.vue";
 import EditorSearchBar from "./EditorSearchBar.vue";
 import EditorStatusBar from "./EditorStatusBar.vue";
 import EditorTitleBar from "./EditorTitleBar.vue";
+import type {ShellNoticeKind} from "../shell/types.ts";
 
 const fileStore = useFileStore();
 const {t} = useI18n();
+const emit = defineEmits<{
+  (e: "notice", payload: {message: string; kind?: ShellNoticeKind; title?: string}): void;
+}>();
 const editorRef = ref<CodeEditorExpose | null>(null);
 const activeMenu = ref<EditorMenuName>("");
 const menuAnchor = ref<EditorMenuAnchor | null>(null);
@@ -27,13 +31,20 @@ const {
   fontSize,
   tabSize,
   wrap,
+  showWhitespace,
+  autoSave,
   defaultEditMode
 } = useEditorPreferences();
 
 const editMode = ref(defaultEditMode.value);
+const autoSaveDelayMs = 1200;
 let resetSearchStateHandler = () => {};
+let autoSaveTimer: ReturnType<typeof window.setTimeout> | undefined;
 const resetSearchStateProxy = () => resetSearchStateHandler();
 const focusEditor = () => editorRef.value?.focus?.();
+const showEditorNotice = (message: string, kind?: ShellNoticeKind, title?: string) => {
+  emit("notice", {message, kind, title});
+}
 
 const {
   fileInfo,
@@ -42,6 +53,7 @@ const {
   isChange,
   loading,
   saving,
+  openFailed,
   errorText,
   saveConflict,
   pendingAction,
@@ -63,7 +75,8 @@ const {
 } = useEditorFileSession({
   closeMenus: () => closeMenus(),
   resetSearchState: resetSearchStateProxy,
-  focusEditor
+  focusEditor,
+  showNotice: showEditorNotice
 });
 
 const editorLocked = computed(() => editorReadOnly.value || !editMode.value);
@@ -177,12 +190,33 @@ const changeHighlight = (highlight: string) => {
 }
 
 const clampFontSize = (value: number) => {
-  if (!Number.isFinite(value)) return 16;
+  if (!Number.isFinite(value)) return 18;
   return Math.min(28, Math.max(12, Math.round(value)));
 }
 
 const adjustFontSize = (step: number) => {
   fontSize.value = clampFontSize(fontSize.value + step);
+}
+
+const saveManually = () => {
+  void save({notifySuccess: true});
+}
+
+const clearAutoSaveTimer = () => {
+  if (autoSaveTimer === undefined) return;
+  window.clearTimeout(autoSaveTimer);
+  autoSaveTimer = undefined;
+}
+
+const scheduleAutoSave = () => {
+  clearAutoSaveTimer();
+  if (!autoSave.value || !canSave.value || pendingAction.value) return;
+  autoSaveTimer = window.setTimeout(() => {
+    autoSaveTimer = undefined;
+    if (autoSave.value && canSave.value && !pendingAction.value) {
+      void save({notifySuccess: false});
+    }
+  }, autoSaveDelayMs);
 }
 
 const showReplace = () => {
@@ -223,7 +257,7 @@ const handleKeyDown = (event: KeyboardEvent) => {
   }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
     event.preventDefault();
-    void save();
+    saveManually();
     return;
   }
   if (event.key === "Escape") {
@@ -257,8 +291,11 @@ const handleGlobalPointerDown = (event: PointerEvent) => {
 
 watch(() => [fileStore.showEditor, fileStore.currentFile?.path] as const, ([visible, path]) => {
   if (!visible || !path) return;
+  clearAutoSaveTimer();
   editMode.value = defaultEditMode.value;
 }, {immediate: true});
+
+watch(() => [autoSave.value, content.value, canSave.value, pendingAction.value] as const, scheduleAutoSave);
 
 onMounted(() => {
   window.addEventListener("keydown", handleKeyDown);
@@ -268,6 +305,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  clearAutoSaveTimer();
   window.removeEventListener("keydown", handleKeyDown);
   window.removeEventListener("pointerdown", handleGlobalPointerDown, true);
   window.removeEventListener("beforeunload", handleBeforeUnload);
@@ -291,13 +329,15 @@ onBeforeUnmount(() => {
         :can-save="canSave"
         @toggle-menu="toggleMenu"
         @reload="reload"
-        @save="save"
+        @save="saveManually"
         @close="close" />
 
     <editor-menu-layer
         v-model:font-size="fontSize"
         v-model:tab-size="tabSize"
         v-model:wrap="wrap"
+        v-model:show-whitespace="showWhitespace"
+        v-model:auto-save="autoSave"
         v-model:default-edit-mode="defaultEditMode"
         :active-menu="activeMenu"
         :anchor="menuAnchor"
@@ -355,6 +395,7 @@ onBeforeUnmount(() => {
             :font-size="fontSize"
             :wrap="wrap"
             :tab-size="tabSize"
+            :show-whitespace="showWhitespace"
             :read-only="editorLocked"
             @change="onContentChange"
             @cursor-change="onCursorChange"
@@ -362,11 +403,11 @@ onBeforeUnmount(() => {
             @find="openSearch(false)"
             @goto-line="openGotoLine"
             @replace="openReplacePanel"
-            @save="save">
+            @save="saveManually">
         </code-editor>
       </div>
       <div v-if="loading" class="editor-overlay">{{ t("editor.loadingFile") }}</div>
-      <div v-else-if="errorText" class="editor-overlay error">
+      <div v-else-if="openFailed && errorText" class="editor-overlay error">
         <span>{{ errorText }}</span>
         <button @click="reload">{{ t("editor.retry") }}</button>
       </div>
@@ -387,6 +428,12 @@ onBeforeUnmount(() => {
         :message-text="editorMessageText"
         :file-path-text="filePathText"
         :conflict="saveConflict"
+        :dirty="isChange"
+        :saving="saving"
+        :edit-mode="editMode"
+        :auto-save="autoSave"
+        :font-size="fontSize"
+        :tab-size="tabSize"
         :cursor-text="cursorStatusText"
         :selection-text="selectionStatusText"
         :mode-text="selectedModeName"

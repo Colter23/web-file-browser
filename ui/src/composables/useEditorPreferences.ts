@@ -9,6 +9,8 @@ const storageKeys = {
   fontSize: "editor.fontSize",
   tabSize: "editor.tabSize",
   wrap: "editor.wrap",
+  showWhitespace: "editor.showWhitespace",
+  autoSave: "editor.autoSave",
   defaultEditMode: "editor.defaultEditMode"
 };
 
@@ -20,6 +22,9 @@ const legacyThemeMap: Record<string, string> = {
   soft_light: "paper_light",
   soft_dark: "midnight_dark"
 };
+
+const defaultFontSize = 18;
+const defaultTabSize = 2;
 
 const normalizeNumberPreference = (value: unknown, fallback: number, min: number, max: number) => {
   const numeric = typeof value === "number" ? value : Number(value);
@@ -49,9 +54,11 @@ const readBooleanPreference = (key: string, fallback: boolean) => {
 export const useEditorPreferences = () => {
   const currentTheme = ref(readThemePreference());
   const currentHighlight = ref(readHighlightPreference());
-  const fontSize = ref(readNumberPreference(storageKeys.fontSize, 16, 12, 28));
-  const tabSize = ref(readNumberPreference(storageKeys.tabSize, 4, 2, 8));
+  const fontSize = ref(readNumberPreference(storageKeys.fontSize, defaultFontSize, 12, 28));
+  const tabSize = ref(readNumberPreference(storageKeys.tabSize, defaultTabSize, 2, 8));
   const wrap = ref(readBooleanPreference(storageKeys.wrap, true));
+  const showWhitespace = ref(readBooleanPreference(storageKeys.showWhitespace, false));
+  const autoSave = ref(readBooleanPreference(storageKeys.autoSave, false));
   const defaultEditMode = ref(readBooleanPreference(storageKeys.defaultEditMode, false));
 
   watch(currentTheme, theme => {
@@ -63,7 +70,7 @@ export const useEditorPreferences = () => {
   });
 
   watch(fontSize, value => {
-    const normalized = normalizeNumberPreference(value, 16, 12, 28);
+    const normalized = normalizeNumberPreference(value, defaultFontSize, 12, 28);
     if (value !== normalized) {
       fontSize.value = normalized;
       return;
@@ -72,7 +79,7 @@ export const useEditorPreferences = () => {
   });
 
   watch(tabSize, value => {
-    const normalized = normalizeNumberPreference(value, 4, 2, 8);
+    const normalized = normalizeNumberPreference(value, defaultTabSize, 2, 8);
     if (value !== normalized) {
       tabSize.value = normalized;
       return;
@@ -82,6 +89,14 @@ export const useEditorPreferences = () => {
 
   watch(wrap, value => {
     writeBooleanStorage(storageKeys.wrap, Boolean(value));
+  });
+
+  watch(showWhitespace, value => {
+    writeBooleanStorage(storageKeys.showWhitespace, Boolean(value));
+  });
+
+  watch(autoSave, value => {
+    writeBooleanStorage(storageKeys.autoSave, Boolean(value));
   });
 
   watch(defaultEditMode, value => {
@@ -94,6 +109,8 @@ export const useEditorPreferences = () => {
     fontSize,
     tabSize,
     wrap,
+    showWhitespace,
+    autoSave,
     defaultEditMode
   };
 }

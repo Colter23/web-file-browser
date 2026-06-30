@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import {nextTick, ref, watch} from "vue";
 import {useI18n} from "../../i18n";
-import Icon from "../Icon.vue";
+import OperationPanelShell from "../operations/OperationPanelShell.vue";
+
+type OperationPanelShellExpose = {
+  focus: () => void;
+}
 
 const props = defineProps<{
   visible: boolean;
@@ -20,7 +24,7 @@ const emit = defineEmits<{
 }>();
 
 const {t} = useI18n();
-const confirmRef = ref<HTMLElement | null>(null);
+const confirmRef = ref<OperationPanelShellExpose | null>(null);
 
 watch(() => props.visible, async visible => {
   if (!visible) return;
@@ -30,74 +34,29 @@ watch(() => props.visible, async visible => {
 </script>
 
 <template>
-  <div v-if="visible" class="editor-confirm-mask" @click.stop>
-    <section ref="confirmRef" class="editor-confirm" tabindex="-1" @keydown.esc.prevent.stop="emit('cancel')">
-      <div class="confirm-icon">
-        <icon icon="action.edit" color="var(--app-accent, #2563eb)" />
-      </div>
-      <div class="confirm-content">
-        <h3>{{ title }}</h3>
-        <p>{{ description }}</p>
-      </div>
-      <div class="confirm-actions">
-        <button class="confirm-secondary" :disabled="busy" @click="emit('cancel')">{{ t("editor.cancel") }}</button>
-        <button class="confirm-danger" :disabled="busy" @click="emit('discard')">{{ discardText }}</button>
-        <button class="confirm-primary" :disabled="!canSave || busy" @click="emit('save')">{{ saveText }}</button>
-      </div>
-    </section>
-  </div>
+  <operation-panel-shell
+      v-if="visible"
+      ref="confirmRef"
+      width="operation"
+      variant="blue"
+      icon="action.save"
+      :title="title"
+      :subtitle="description"
+      :tabindex="-1"
+      @close="emit('cancel')">
+    <template #actions>
+      <button type="button" class="confirm-secondary" :disabled="busy" @click="emit('cancel')">{{ t("editor.cancel") }}</button>
+      <button type="button" class="confirm-danger" :disabled="busy" @click="emit('discard')">{{ discardText }}</button>
+      <button type="button" class="confirm-primary" :disabled="!canSave || busy" @click="emit('save')">{{ saveText }}</button>
+    </template>
+  </operation-panel-shell>
 </template>
 
 <style scoped lang="postcss">
 @reference "tailwindcss";
 
-.editor-confirm-mask {
-  @apply absolute inset-2 z-20 flex items-center justify-center rounded-md px-4 backdrop-blur-sm;
-  background: color-mix(in srgb, var(--app-bg) 26%, transparent);
-}
-
-.editor-confirm {
-  @apply grid w-full max-w-lg grid-cols-[2rem_1fr] gap-3 rounded-md border p-4 shadow-2xl outline-none;
-  border-color: var(--app-border-soft);
-  background: var(--app-panel-solid);
-  color: var(--app-text-muted);
-}
-
-.editor-confirm:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--app-accent-border, #bfdbfe);
-}
-
-.confirm-icon {
-  @apply flex h-8 w-8 items-center justify-center rounded-md;
-  background: var(--app-accent-soft, #eff6ff);
-}
-
-.confirm-content {
-  @apply min-w-0;
-}
-
-.confirm-content h3 {
-  @apply text-sm font-semibold;
-  color: var(--app-text);
-}
-
-.confirm-content p {
-  @apply mt-1 text-xs leading-5;
-  color: var(--app-text-subtle);
-}
-
-.confirm-actions {
-  @apply col-span-2 mt-1 flex justify-end gap-2;
-}
-
-.confirm-primary,
-.confirm-secondary,
-.confirm-danger {
-  @apply h-8 rounded-md border px-3 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50;
-}
-
 .confirm-primary {
-  border-color: var(--app-accent, #2563eb);
+  @apply h-9 rounded-md px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50;
   background: var(--app-accent, #2563eb);
   color: var(--app-accent-contrast);
 }
@@ -107,6 +66,7 @@ watch(() => props.visible, async visible => {
 }
 
 .confirm-secondary {
+  @apply h-9 rounded-md border px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50;
   border-color: var(--app-border-soft);
   background: var(--app-control-solid);
   color: var(--app-text-muted);
@@ -117,6 +77,7 @@ watch(() => props.visible, async visible => {
 }
 
 .confirm-danger {
+  @apply h-9 rounded-md border px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50;
   border-color: var(--app-danger-border);
   background: var(--app-control-solid);
   color: var(--app-danger);
@@ -124,5 +85,12 @@ watch(() => props.visible, async visible => {
 
 .confirm-danger:hover:not(:disabled) {
   background: var(--app-danger-soft);
+}
+
+.confirm-primary:focus-visible,
+.confirm-secondary:focus-visible,
+.confirm-danger:focus-visible {
+  @apply outline-none;
+  box-shadow: 0 0 0 3px var(--app-accent-ring, rgba(37, 99, 235, 0.22));
 }
 </style>

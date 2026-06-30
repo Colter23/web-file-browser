@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import {Compartment, EditorSelection, EditorState, Prec} from "@codemirror/state";
+import {Compartment, EditorSelection, EditorState, Prec, RangeSetBuilder} from "@codemirror/state";
 import type {Extension} from "@codemirror/state";
-import {EditorView, keymap} from "@codemirror/view";
-import type {ViewUpdate} from "@codemirror/view";
+import {Decoration, EditorView, keymap, ViewPlugin} from "@codemirror/view";
+import type {DecorationSet, ViewUpdate} from "@codemirror/view";
 import {basicSetup} from "codemirror";
+import {indentWithTab} from "@codemirror/commands";
 import {SearchQuery, highlightSelectionMatches, search, setSearchQuery} from "@codemirror/search";
 import {indentUnit} from "@codemirror/language";
 import {onBeforeUnmount, onMounted, ref, watch} from "vue";
@@ -20,6 +21,7 @@ interface CodeEditorProps {
   fontSize?: number;
   wrap?: boolean;
   tabSize?: number;
+  showWhitespace?: boolean;
   readOnly?: boolean;
 }
 
@@ -33,9 +35,10 @@ const props = withDefaults(defineProps<CodeEditorProps>(), {
   theme: "app",
   highlight: "default",
   content: "",
-  fontSize: 16,
+  fontSize: 18,
   wrap: true,
-  tabSize: 4,
+  tabSize: 2,
+  showWhitespace: false,
   readOnly: false
 })
 
@@ -55,6 +58,7 @@ const languageCompartment = new Compartment();
 const themeCompartment = new Compartment();
 const wrapCompartment = new Compartment();
 const tabCompartment = new Compartment();
+const whitespaceCompartment = new Compartment();
 const readOnlyCompartment = new Compartment();
 const fontSizeCompartment = new Compartment();
 let view: EditorView | null = null;
@@ -81,7 +85,68 @@ const fontSizeExtension = (fontSize: number) => EditorView.theme({
 
 const wrapExtension = (wrap: boolean) => wrap ? EditorView.lineWrapping : [];
 
+const visibleSpaceDecoration = Decoration.mark({class: "cm-visible-space"});
+const visibleTabDecoration = Decoration.mark({class: "cm-visible-tab"});
+
+const buildWhitespaceDecorations = (targetView: EditorView): DecorationSet => {
+  const builder = new RangeSetBuilder<Decoration>();
+  for (const {from, to} of targetView.visibleRanges) {
+    const text = targetView.state.doc.sliceString(from, to);
+    for (let index = 0; index < text.length; index++) {
+      const code = text.charCodeAt(index);
+      if (code === 32 || code === 9) {
+        const position = from + index;
+        builder.add(position, position + 1, code === 9 ? visibleTabDecoration : visibleSpaceDecoration);
+      }
+    }
+  }
+  return builder.finish();
+}
+
+const visibleWhitespacePlugin = ViewPlugin.fromClass(class {
+  decorations: DecorationSet;
+
+  constructor(targetView: EditorView) {
+    this.decorations = buildWhitespaceDecorations(targetView);
+  }
+
+  update(update: ViewUpdate) {
+    if (update.docChanged || update.viewportChanged) {
+      this.decorations = buildWhitespaceDecorations(update.view);
+    }
+  }
+}, {
+  decorations: value => value.decorations
+});
+
+const visibleWhitespaceTheme = EditorView.baseTheme({
+  "&": {
+    "--cm-visible-whitespace": "color-mix(in srgb, var(--app-text-subtle) 50%, transparent)"
+  },
+  ".cm-visible-space": {
+    backgroundImage: "radial-gradient(circle, var(--cm-visible-whitespace) 1px, transparent 1.3px)",
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat"
+  },
+  ".cm-visible-tab": {
+    backgroundImage: [
+      "linear-gradient(to right, var(--cm-visible-whitespace), var(--cm-visible-whitespace))",
+      "linear-gradient(45deg, transparent 45%, var(--cm-visible-whitespace) 46% 54%, transparent 55%)",
+      "linear-gradient(-45deg, transparent 45%, var(--cm-visible-whitespace) 46% 54%, transparent 55%)"
+    ].join(", "),
+    backgroundPosition: "0.15em 55%, calc(100% - 0.45em) 55%, calc(100% - 0.45em) 55%",
+    backgroundRepeat: "no-repeat",
+    backgroundSize: "calc(100% - 0.55em) 1px, 0.35em 0.35em, 0.35em 0.35em"
+  }
+});
+
+const whitespaceExtension = (showWhitespace: boolean): Extension => showWhitespace ? [
+  visibleWhitespaceTheme,
+  visibleWhitespacePlugin
+] : [];
+
 const customKeymap = () => Prec.highest(keymap.of([
+  indentWithTab,
   {
     key: "Mod-s",
     run: () => {
@@ -122,6 +187,7 @@ const createExtensions = (languageExtension: Extension): Extension[] => [
   themeCompartment.of(createCodeMirrorTheme(props.theme, appearanceStore.resolvedColorMode, props.highlight)),
   wrapCompartment.of(wrapExtension(props.wrap)),
   tabCompartment.of(tabExtensions(props.tabSize)),
+  whitespaceCompartment.of(whitespaceExtension(props.showWhitespace)),
   readOnlyCompartment.of(readOnlyExtensions(props.readOnly)),
   fontSizeCompartment.of(fontSizeExtension(props.fontSize))
 ];
@@ -325,6 +391,10 @@ watch(() => props.wrap, wrap => {
 
 watch(() => props.tabSize, tabSize => {
   view?.dispatch({effects: tabCompartment.reconfigure(tabExtensions(tabSize))});
+});
+
+watch(() => props.showWhitespace, showWhitespace => {
+  view?.dispatch({effects: whitespaceCompartment.reconfigure(whitespaceExtension(showWhitespace))});
 });
 
 watch(() => props.readOnly, readOnly => {

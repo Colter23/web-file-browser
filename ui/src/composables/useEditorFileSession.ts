@@ -6,11 +6,18 @@ import {isApiError} from "../network";
 import {getFile, saveFile} from "../network/file-api.ts";
 import {useFileStore} from "../store";
 import {checkFileLanguageMode} from "../utils/common.ts";
+import type {ShellNoticeKind} from "../components/shell/types.ts";
 
 type EditorFileSessionOptions = {
   closeMenus: () => void;
   resetSearchState: () => void;
   focusEditor: () => void;
+  showNotice?: (message: string, kind?: ShellNoticeKind, title?: string) => void;
+}
+
+type SaveOptions = {
+  notifySuccess?: boolean;
+  notifyError?: boolean;
 }
 
 const defaultCursorStatus = (): EditorCursorStatus => ({line: 1, column: 1, selectedRows: 0, selectedCharacters: 0});
@@ -18,7 +25,8 @@ const defaultCursorStatus = (): EditorCursorStatus => ({line: 1, column: 1, sele
 export const useEditorFileSession = ({
   closeMenus,
   resetSearchState,
-  focusEditor
+  focusEditor,
+  showNotice
 }: EditorFileSessionOptions) => {
   const fileStore = useFileStore();
   const {t} = useI18n();
@@ -29,7 +37,7 @@ export const useEditorFileSession = ({
   const isChange = ref(false);
   const loading = ref(false);
   const saving = ref(false);
-  const statusText = ref("");
+  const openFailed = ref(false);
   const errorText = ref("");
   const saveConflict = ref(false);
   const pendingAction = ref<PendingEditorAction>("");
@@ -40,13 +48,17 @@ export const useEditorFileSession = ({
   const canSave = computed(() => Boolean(fileInfo.value && isChange.value && contentEtag.value && !saveConflict.value && !loading.value && !saving.value));
   const editorReadOnly = computed(() => loading.value || saving.value || Boolean(pendingAction.value));
 
+  const notify = (message: string, kind: ShellNoticeKind, title = t("editor.noticeTitle")) => {
+    showNotice?.(message, kind, title);
+  }
+
   const loadCurrentFile = async () => {
     if (!fileStore.showEditor || fileStore.currentFile == null) return;
     const version = ++loadVersion;
     const target = fileStore.currentFile;
     fileInfo.value = target;
     currentMode.value = checkFileLanguageMode(target.extension);
-    statusText.value = "";
+    openFailed.value = false;
     errorText.value = "";
     saveConflict.value = false;
     cursorStatus.value = defaultCursorStatus();
@@ -57,15 +69,16 @@ export const useEditorFileSession = ({
       content.value = file.content;
       contentEtag.value = file.etag;
       isChange.value = false;
-      statusText.value = t("editor.opened");
       await nextTick();
       focusEditor();
     } catch (error) {
       if (version !== loadVersion) return;
       errorText.value = error instanceof Error ? error.message : t("editor.openFailed");
+      openFailed.value = true;
       content.value = "";
       contentEtag.value = "";
       isChange.value = false;
+      notify(errorText.value, "error", t("editor.openFailed"));
     } finally {
       if (version === loadVersion) loading.value = false;
     }
@@ -81,7 +94,7 @@ export const useEditorFileSession = ({
     isChange.value = false;
     content.value = "";
     contentEtag.value = "";
-    statusText.value = "";
+    openFailed.value = false;
     errorText.value = "";
     saveConflict.value = false;
     cursorStatus.value = defaultCursorStatus();
@@ -108,7 +121,7 @@ export const useEditorFileSession = ({
     pendingAction.value = "";
     content.value = value;
     isChange.value = true;
-    statusText.value = "";
+    openFailed.value = false;
     errorText.value = "";
     if (saveConflict.value) saveConflict.value = false;
   }
@@ -117,8 +130,8 @@ export const useEditorFileSession = ({
     cursorStatus.value = status;
   }
 
-  const save = async () => {
-    if (!fileInfo.value || saving.value || loading.value || saveConflict.value) return;
+  const save = async ({notifySuccess = false, notifyError = true}: SaveOptions = {}) => {
+    if (!fileInfo.value || saving.value || loading.value || saveConflict.value || !isChange.value) return false;
     saving.value = true;
     errorText.value = "";
     saveConflict.value = false;
@@ -129,16 +142,20 @@ export const useEditorFileSession = ({
       const saved = await saveFile(fileInfo.value.path, content.value, contentEtag.value);
       contentEtag.value = saved.etag;
       isChange.value = false;
-      statusText.value = t("editor.saved");
+      if (notifySuccess) notify(t("editor.savedNotice", {name: fileInfo.value.name}), "success");
+      return true;
     } catch (error) {
       if (isApiError(error) && (error.status === 412 || error.status === 428 || error.code === "PRECONDITION_FAILED" || error.code === "PRECONDITION_REQUIRED")) {
         saveConflict.value = true;
         errorText.value = error.status === 428
             ? t("editor.missingVersionReload")
             : t("editor.externalModified");
+        if (notifyError) notify(errorText.value, "warning", t("editor.versionConflictTitle"));
       } else {
         errorText.value = error instanceof Error ? error.message : t("editor.saveFailed");
+        if (notifyError) notify(errorText.value, "error", t("editor.saveFailed"));
       }
+      return false;
     } finally {
       saving.value = false;
     }
@@ -194,7 +211,7 @@ export const useEditorFileSession = ({
   const savePendingAction = async () => {
     if (pendingBusy.value || !canSave.value) return;
     pendingBusy.value = true;
-    await save();
+    await save({notifySuccess: true});
     pendingBusy.value = false;
     if (!isChange.value && !saveConflict.value && !errorText.value) {
       await finishPendingAction();
@@ -218,7 +235,7 @@ export const useEditorFileSession = ({
     isChange,
     loading,
     saving,
-    statusText,
+    openFailed,
     errorText,
     saveConflict,
     pendingAction,

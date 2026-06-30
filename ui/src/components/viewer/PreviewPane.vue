@@ -69,9 +69,7 @@ const downloadPreview = () => {
   <preview-header
       :title="previewTitleText"
       :subtitle="previewSubtitleText"
-      :can-edit="canEditPreview"
       :can-download="Boolean(entry)"
-      @edit="editPreview"
       @download="downloadPreview"
       @close="emit('close')">
     <template #icon>
@@ -86,7 +84,13 @@ const downloadPreview = () => {
   </preview-header>
   <preview-meta-list v-if="entry" :items="previewMeta" />
   <preview-image-view v-if="entry && previewKind === 'image'" :entry="entry" @open-image="emit('open-image', $event)" />
-  <preview-text-view v-else-if="entry && previewKind === 'text'" :entry="entry" :reload-key="reloadKey" @notice="emit('notice', $event)" />
+  <preview-text-view
+      v-else-if="entry && previewKind === 'text'"
+      :entry="entry"
+      :reload-key="reloadKey"
+      :can-edit="canEditPreview"
+      @edit="editPreview"
+      @notice="emit('notice', $event)" />
   <preview-audio-view v-else-if="entry && previewKind === 'audio'" :entry="entry" @open-audio="emit('open-audio', $event)" />
   <preview-video-view v-else-if="entry && previewKind === 'video'" :entry="entry" @open-video="emit('open-video', $event)" />
   <preview-pdf-view v-else-if="entry && previewKind === 'pdf'" :entry="entry" :reload-key="reloadKey" @open-pdf="emit('open-pdf', $event)" />

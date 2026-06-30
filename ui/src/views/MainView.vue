@@ -387,13 +387,11 @@ const {
   showNotice: showShellNotice
 });
 
-let closePanelsHandler = () => {};
 let closeTransientPanelsHandler = () => {};
 let closeOperationShellPanelsHandler = () => {};
 let closePreviewHandler = () => {};
 let tabHoverSwitchTimer: number | undefined;
 let tabHoverSwitchTargetId = "";
-const closePanels = () => closePanelsHandler();
 const closeTransientPanels = () => closeTransientPanelsHandler();
 const closeOperationShellPanels = () => closeOperationShellPanelsHandler();
 const closePreview = () => closePreviewHandler();
@@ -617,14 +615,13 @@ const shellActions = useMainViewShellActions({
   closeTrashPanel
 });
 
-closePanelsHandler = shellActions.closePanels;
 closeTransientPanelsHandler = shellActions.closeTransientPanels;
 closeOperationShellPanelsHandler = shellActions.closeOperationShellPanels;
 closePreviewHandler = shellActions.closePreview;
 refreshCurrentHandler = shellActions.refreshCurrent;
 
 watch(() => fileStore.showEditor, (showEditor) => {
-  if (showEditor) closePanels();
+  if (showEditor) shellActions.closePanelsForEditor();
 });
 
 watch(() => trashConfirm.value.visible, async (visible, wasVisible) => {
@@ -732,7 +729,7 @@ useMainViewLifecycle({
 const openPreviewInEditor = async (entry = previewEntry.value) => {
   if (!entry || entry.type !== "file") return;
   if (!await fileStore.requestEditorLeave()) return;
-  closePanels();
+  shellActions.closePanelsForEditor();
   fileStore.openEditor(entryFileInfo(entry));
 }
 
@@ -1205,7 +1202,7 @@ const signOut = async () => {
         </pdf-viewer>
 
         <div v-show="fileStore.showEditor" class="editor-overlay-panel">
-          <editor-panel></editor-panel>
+          <editor-panel @notice="payload => showShellNotice(payload.message, payload.kind, payload.title)"></editor-panel>
         </div>
       </section>
       </div>

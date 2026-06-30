@@ -5,12 +5,10 @@ import {useI18n} from "../../i18n";
 defineProps<{
   title: string;
   subtitle: string;
-  canEdit: boolean;
   canDownload: boolean;
 }>();
 
 const emit = defineEmits<{
-  (e: "edit"): void;
   (e: "download"): void;
   (e: "close"): void;
 }>();
@@ -32,9 +30,6 @@ const {t} = useI18n();
       </div>
     </div>
     <div class="preview-actions">
-      <button v-if="canEdit" :title="t('preview.edit')" :aria-label="t('preview.edit')" @click="emit('edit')">
-        <icon icon="action.edit" />
-      </button>
       <button v-if="canDownload" :title="t('preview.download')" :aria-label="t('preview.download')" @click="emit('download')">
         <icon icon="action.download" />
       </button>
