@@ -40,6 +40,7 @@ const open = ref(false);
 
 const sortOptions: SortOption[] = [
   {key: "name", labelKey: "sort.name", descriptionKey: "sort.byName", icon: "sort.name", hint: "A-Z"},
+  {key: "type", labelKey: "sort.type", descriptionKey: "sort.byType", icon: "sort.type", hintKey: "sort.type"},
   {key: "modified", labelKey: "sort.modified", descriptionKey: "sort.byModified", icon: "sort.modified", hintKey: "sort.time"},
   {key: "size", labelKey: "sort.size", descriptionKey: "sort.bySize", icon: "sort.size", hintKey: "sort.size"}
 ];

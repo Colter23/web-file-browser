@@ -22,7 +22,7 @@ const storageKeys = {
 
 const viewModes: ExplorerViewMode[] = ["details", "list", "icons", "tiles"];
 const iconSizes: ExplorerIconSize[] = ["small", "medium", "large"];
-const sortKeys: DirSortKey[] = ["name", "modified", "size"];
+const sortKeys: DirSortKey[] = ["name", "type", "modified", "size"];
 const sortOrders: DirSortOrder[] = ["asc", "desc"];
 
 export const normalizePath = (path: string): string => {

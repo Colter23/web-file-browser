@@ -157,7 +157,7 @@ docker compose up -d --build
 路径映射会保存到 `data/mappings.json`。
 运行配置默认读取 `data/config.json`；认证哈希保存到 `data/auth.json`。
 `GET /api/file/{path...}` 只返回目录或文件元数据；文件内容读取请使用 `GET /api/content/{path...}`。
-目录元数据默认分页，支持 `offset`、`limit`、`detail=basic|full`、`sort=name|modified|size`、`order=asc|desc`、`type=all|file|folder`、`includeHidden=true` 和 `includeTotal=true` 查询参数。默认不统计 `folderTotal/fileTotal`，以减少大目录额外开销；请求 `includeTotal=true` 时才返回总数。分页请求会返回 `hasMore`。按名称排序的轻量目录读取只保留当前页所需的排序窗口，不把整页之外的条目长期留在内存中。
+目录元数据默认分页，支持 `offset`、`limit`、`detail=basic|full`、`sort=name|type|modified|size`、`order=asc|desc`、`type=all|file|folder`、`includeHidden=true` 和 `includeTotal=true` 查询参数。默认不统计 `folderTotal/fileTotal`，以减少大目录额外开销；请求 `includeTotal=true` 时才返回总数。分页请求会返回 `hasMore`。按名称排序的轻量目录读取只保留当前页所需的排序窗口，不把整页之外的条目长期留在内存中。
 `GET /api/file/{path...}` 元数据响应会返回 `ETag` 和可用时的 `Last-Modified`；条件请求支持 `If-None-Match` 和 `If-Modified-Since`，缓存命中时返回 `304`。默认 `detail=basic` 的目录 `Last-Modified` 来自目录自身修改时间，不为了响应头额外 `stat` 子项；没有 `If-None-Match` 且 `If-Modified-Since` 命中时，会跳过目录 JSON 序列化。
 `GET /api/content/{path...}` 和 `GET /api/download/{path...}` 支持单段 `Range` 请求，并返回内容 `ETag`。
 编辑器读取文件时应使用 `GET /api/content/{path...}?mode=edit`，后端会拒绝超过编辑上限或看起来不是文本的文件；普通预览仍可使用默认 `mode=raw` 保持流式读取。

@@ -24,6 +24,7 @@ pub enum DirectoryDetail {
 pub enum DirectorySort {
     #[default]
     Name,
+    Type,
     Modified,
     Size,
 }
@@ -57,13 +58,15 @@ pub struct DirectoryListOptions {
 
 impl DirectoryListOptions {
     pub fn validate(self) -> Result<Self, AppError> {
-        if self.detail == DirectoryDetail::Basic && self.sort != DirectorySort::Name {
+        if self.detail == DirectoryDetail::Basic
+            && !matches!(self.sort, DirectorySort::Name | DirectorySort::Type)
+        {
             return Err(AppError::bad_request(
-                "detail=basic 仅支持 sort=name，按大小或修改时间排序请使用 detail=full",
+                "detail=basic 仅支持 sort=name/type，按大小或修改时间排序请使用 detail=full",
             )
             .with_reason("DIRECTORY_BASIC_DETAIL_REQUIRES_NAME_SORT")
             .with_param("detail", "basic")
-            .with_param("sort", "name"));
+            .with_param("sort", "name/type"));
         }
         Ok(self)
     }

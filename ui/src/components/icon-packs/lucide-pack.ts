@@ -170,6 +170,7 @@ const lucideIcons: Record<string, Component> = {
   "nav.recent": History,
 
   "sort.name": ArrowDownAZ,
+  "sort.type": FileType,
   "sort.modified": CalendarClock,
   "sort.size": FileDigit,
   "sort.asc": ArrowUpAZ,

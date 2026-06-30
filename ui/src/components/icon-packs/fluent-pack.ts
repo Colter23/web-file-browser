@@ -186,6 +186,7 @@ export const fluentIcons: Record<string, string> = {
   "nav.recent": historySvg,
 
   "sort.name": textSortAscendingSvg,
+  "sort.type": documentDataSvg,
   "sort.modified": calendarClockSvg,
   "sort.size": numberSymbolSquareSvg,
   "sort.asc": arrowSortUpLinesSvg,

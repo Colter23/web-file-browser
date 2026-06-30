@@ -194,6 +194,7 @@ const solarIcons: Record<string, SolarIconData> = {
   "nav.recent": historyIcon,
 
   "sort.name": sortByAlphabetIcon,
+  "sort.type": widget3Icon,
   "sort.modified": sortByTimeIcon,
   "sort.size": sortFromTopToBottomIcon,
   "sort.asc": sortFromBottomToTopIcon,

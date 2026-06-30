@@ -261,7 +261,7 @@
 - `offset`：分页起点，默认 `0`。
 - `limit`：分页大小，会被 `WEB_FILE_BROWSER_MAX_DIR_PAGE_SIZE` 截断；`0` 会返回错误。
 - `detail`：`basic` 或 `full`，默认 `basic`。
-- `sort`：`name`、`modified`、`size`，默认 `name`。`modified` 和 `size` 需要 `detail=full`。
+- `sort`：`name`、`type`、`modified`、`size`，默认 `name`。`modified` 和 `size` 需要 `detail=full`。
 - `order`：`asc` 或 `desc`，默认 `asc`。
 - `type`：`all`、`file`、`folder`，默认 `all`。
 - `includeHidden=true`：返回隐藏文件。
@@ -270,8 +270,8 @@
 性能约定：
 
 - `detail=basic` 是目录默认模式，只读取名称、类型和路径，避免逐项读取完整元数据；目录项的 `modified` 会为空字符串，文件项的 `size` 会是 `0`，前端不要把它当作真实大小展示。
-- 需要真实 `modified` 或 `size` 时使用 `detail=full`。`detail=full&sort=name` 只对当前页补充元数据；`sort=modified` 或 `sort=size` 需要先读取目录内候选项元数据，适合用户显式切换排序时使用。
-- `detail=basic` 只支持 `sort=name`。如果请求 `detail=basic&sort=size` 或 `detail=basic&sort=modified`，后端返回 `400 BAD_REQUEST` + `DIRECTORY_BASIC_DETAIL_REQUIRES_NAME_SORT`。
+- 需要真实 `modified` 或 `size` 时使用 `detail=full`。`detail=basic` 支持 `sort=name` 和 `sort=type`，类型排序会按文件扩展名和名称排序，不读取额外元数据；`detail=full&sort=name/type` 只对当前页补充元数据；`sort=modified` 或 `sort=size` 需要先读取目录内候选项元数据，适合用户显式切换排序时使用。
+- `detail=basic` 只支持 `sort=name/type`。如果请求 `detail=basic&sort=size` 或 `detail=basic&sort=modified`，后端返回 `400 BAD_REQUEST` + `DIRECTORY_BASIC_DETAIL_REQUIRES_NAME_SORT`。
 
 目录响应结构如下；示例中的真实 `modified` 和 `size` 通常来自 `detail=full`：
 

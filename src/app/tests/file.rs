@@ -703,6 +703,12 @@ async fn directory_api_requires_full_detail_for_expensive_sort() {
     tokio::fs::write(files_dir.join("large.txt"), b"xxx")
         .await
         .unwrap();
+    tokio::fs::write(files_dir.join("alpha.json"), b"xxxx")
+        .await
+        .unwrap();
+    tokio::fs::write(files_dir.join("beta.md"), b"xxxxx")
+        .await
+        .unwrap();
 
     let cookie = login_cookie(&app).await;
     create_mapping(&app, &cookie, "/docs", &files_dir, true).await;
@@ -766,6 +772,17 @@ async fn directory_api_requires_full_detail_for_expensive_sort() {
     let page = get_json(
         &app,
         &cookie,
+        "/api/file/docs?detail=basic&sort=type&type=file&limit=2",
+    )
+    .await;
+    let files = page["file"].as_array().unwrap();
+    assert_eq!(files.len(), 2);
+    assert_eq!(files[0]["name"], "alpha.json");
+    assert_eq!(files[1]["name"], "beta.md");
+
+    let page = get_json(
+        &app,
+        &cookie,
         "/api/file/docs?detail=full&sort=size&type=file&limit=2",
     )
     .await;
@@ -775,6 +792,17 @@ async fn directory_api_requires_full_detail_for_expensive_sort() {
     assert_eq!(files[0]["size"], 1);
     assert_eq!(files[1]["name"], "medium.txt");
     assert_eq!(files[1]["size"], 2);
+
+    let page = get_json(
+        &app,
+        &cookie,
+        "/api/file/docs?detail=full&sort=type&type=file&limit=2",
+    )
+    .await;
+    let files = page["file"].as_array().unwrap();
+    assert_eq!(files.len(), 2);
+    assert_eq!(files[0]["name"], "alpha.json");
+    assert_eq!(files[1]["name"], "beta.md");
 }
 
 #[tokio::test]

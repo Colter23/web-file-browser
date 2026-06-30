@@ -50,10 +50,11 @@ const resizeTitle = (key: DetailsColumnKey) => t("details.resizeTitle", {label: 
       <span class="sort-indicator"><icon v-if="sortIndicatorIcon('modified')" :icon="sortIndicatorIcon('modified')" size="small" /></span>
       <span class="column-resizer" :title="resizeTitle('modified')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'modified')" @pointerdown="emit('resize-column', $event, 'modified')"></span>
     </button>
-    <span class="header-cell">
-      {{ columnLabel("type") }}
+    <button class="sort-button" :class="sortButtonClass('type')" :disabled="loading" @click.stop="emit('change-sort', 'type')">
+      <span>{{ columnLabel("type") }}</span>
+      <span class="sort-indicator"><icon v-if="sortIndicatorIcon('type')" :icon="sortIndicatorIcon('type')" size="small" /></span>
       <span class="column-resizer" :title="resizeTitle('type')" @click.stop @dblclick.prevent.stop="emit('fit-column', 'type')" @pointerdown="emit('resize-column', $event, 'type')"></span>
-    </span>
+    </button>
     <button class="sort-button size-cell" :class="sortButtonClass('size')" :disabled="loading" @click.stop="emit('change-sort', 'size')">
       <span>{{ columnLabel("size") }}</span>
       <span class="sort-indicator"><icon v-if="sortIndicatorIcon('size')" :icon="sortIndicatorIcon('size')" size="small" /></span>

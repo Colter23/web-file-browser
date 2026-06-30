@@ -91,6 +91,7 @@ const fluentColorIcons: Record<string, string> = {
   "nav.refresh": arrowClockwiseDashesSvg,
   "nav.recent": historySvg,
 
+  "sort.type": documentTextSvg,
   "sort.modified": calendarClockSvg,
   "sort.size": numberSymbolSquareSvg,
 

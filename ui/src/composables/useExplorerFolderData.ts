@@ -108,8 +108,14 @@ const compareEntryDate = (left?: string, right?: string) => {
   return parseDate(left) - parseDate(right);
 }
 
+const entryTypeKey = (entry: ExplorerEntry) => {
+  if (entry.type === "folder") return "folder";
+  return (entry.extension ?? "").toLowerCase();
+}
+
 const compareResultEntries = (left: ExplorerEntry, right: ExplorerEntry, key: DirSortKey) => {
   if (left.type !== right.type) return left.type === "folder" ? -1 : 1;
+  if (key === "type") return compareEntryText(entryTypeKey(left), entryTypeKey(right)) || compareEntryText(left.name, right.name);
   if (key === "modified") return compareEntryDate(left.modified, right.modified) || compareEntryText(left.name, right.name);
   if (key === "size") return (left.size ?? 0) - (right.size ?? 0) || compareEntryText(left.name, right.name);
   return compareEntryText(left.name, right.name);
@@ -172,7 +178,8 @@ export const useExplorerFolderData = ({filterText, viewportRef}: ExplorerFolderD
   const filterKeyword = computed(() => sourceMode.value === "folder" ? filterText().trim() : "");
   const currentDetail = computed<DirDetail>(() => {
     const viewNeedsMetadata = fileStore.viewMode === "details" || fileStore.viewMode === "tiles";
-    return fileStore.sortKey !== "name" || viewNeedsMetadata ? "full" : "basic";
+    const sortNeedsMetadata = fileStore.sortKey === "modified" || fileStore.sortKey === "size";
+    return sortNeedsMetadata || viewNeedsMetadata ? "full" : "basic";
   });
 
   const entries = computed<ExplorerEntry[]>(() => {

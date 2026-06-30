@@ -133,6 +133,7 @@ fn parse_detail(value: Option<&str>) -> Result<DirectoryDetail, AppError> {
 fn parse_sort(value: Option<&str>) -> Result<DirectorySort, AppError> {
     match value.unwrap_or("name") {
         "name" => Ok(DirectorySort::Name),
+        "type" => Ok(DirectorySort::Type),
         "modified" => Ok(DirectorySort::Modified),
         "size" => Ok(DirectorySort::Size),
         other => Err(AppError::bad_request(format!("不支持的 sort: {other}"))

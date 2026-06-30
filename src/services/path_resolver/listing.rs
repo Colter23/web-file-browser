@@ -15,7 +15,9 @@ pub(super) fn list_real_folder(
     parent_path: &str,
     options: DirectoryListOptions,
 ) -> Result<FolderData, AppError> {
-    if options.detail == DirectoryDetail::Basic && options.sort == DirectorySort::Name {
+    if options.detail == DirectoryDetail::Basic
+        && matches!(options.sort, DirectorySort::Name | DirectorySort::Type)
+    {
         return list_real_folder_basic(path, parent_path, options);
     }
 
@@ -45,6 +47,7 @@ struct LightReadResult {
 #[derive(Debug, Clone)]
 struct LightEntryHeapItem {
     entry: LightEntry,
+    sort: DirectorySort,
     order: SortOrder,
 }
 
@@ -64,7 +67,7 @@ impl PartialOrd for LightEntryHeapItem {
 
 impl Ord for LightEntryHeapItem {
     fn cmp(&self, other: &Self) -> Ordering {
-        cmp_light_entries(&self.entry, &other.entry, self.order)
+        cmp_light_entries(&self.entry, &other.entry, self.sort, self.order)
     }
 }
 
@@ -124,17 +127,20 @@ fn read_light_entries_with_window(
             (Some(keep), Some(heap)) if heap.len() < keep => {
                 heap.push(LightEntryHeapItem {
                     entry: light_entry,
+                    sort: options.sort,
                     order: options.order,
                 });
             }
             (Some(_), Some(heap)) => {
                 let should_keep = heap.peek().is_some_and(|worst| {
-                    cmp_light_entries(&light_entry, &worst.entry, options.order) == Ordering::Less
+                    cmp_light_entries(&light_entry, &worst.entry, options.sort, options.order)
+                        == Ordering::Less
                 });
                 if should_keep {
                     heap.pop();
                     heap.push(LightEntryHeapItem {
                         entry: light_entry,
+                        sort: options.sort,
                         order: options.order,
                     });
                 }
@@ -154,7 +160,7 @@ fn list_real_folder_basic(
     options: DirectoryListOptions,
 ) -> Result<FolderData, AppError> {
     let mut result = read_light_entries_page(path, options)?;
-    sort_light_entries(&mut result.entries, options.order);
+    sort_light_entries(&mut result.entries, options.sort, options.order);
     let has_more = has_more(result.total_entries, options);
     let totals = count_totals_if_requested(&result, options);
     let entries = page_entries(result.entries, options);
@@ -182,9 +188,9 @@ fn list_real_folder_full(
     parent_path: &str,
     options: DirectoryListOptions,
 ) -> Result<FolderData, AppError> {
-    if options.sort == DirectorySort::Name {
+    if matches!(options.sort, DirectorySort::Name | DirectorySort::Type) {
         let mut result = read_light_entries_page(path, options)?;
-        sort_light_entries(&mut result.entries, options.order);
+        sort_light_entries(&mut result.entries, options.sort, options.order);
         let has_more = has_more(result.total_entries, options);
         let totals = count_totals_if_requested(&result, options);
         let entries = page_entries(result.entries, options)
@@ -421,14 +427,22 @@ pub(super) fn file_info_from_path(
     }
 }
 
-fn sort_light_entries(entries: &mut [LightEntry], order: SortOrder) {
-    entries.sort_by(|left, right| cmp_light_entries(left, right, order));
+fn sort_light_entries(entries: &mut [LightEntry], sort: DirectorySort, order: SortOrder) {
+    entries.sort_by(|left, right| cmp_light_entries(left, right, sort, order));
 }
 
-fn cmp_light_entries(left: &LightEntry, right: &LightEntry, order: SortOrder) -> Ordering {
+fn cmp_light_entries(
+    left: &LightEntry,
+    right: &LightEntry,
+    sort: DirectorySort,
+    order: SortOrder,
+) -> Ordering {
     let ordering = kind_order(left.kind)
         .cmp(&kind_order(right.kind))
-        .then_with(|| left.name.cmp(&right.name));
+        .then_with(|| match sort {
+            DirectorySort::Type => cmp_light_entry_type(left, right),
+            _ => left.name.cmp(&right.name),
+        });
     if order == SortOrder::Desc {
         ordering.reverse()
     } else {
@@ -442,6 +456,7 @@ fn sort_detailed_entries(entries: &mut [DetailedEntry], sort: DirectorySort, ord
             .cmp(&kind_order(right.light.kind))
             .then_with(|| match sort {
                 DirectorySort::Name => left.light.name.cmp(&right.light.name),
+                DirectorySort::Type => cmp_light_entry_type(&left.light, &right.light),
                 DirectorySort::Modified => left
                     .metadata
                     .modified()
@@ -455,6 +470,22 @@ fn sort_detailed_entries(entries: &mut [DetailedEntry], sort: DirectorySort, ord
             ordering
         }
     });
+}
+
+fn entry_extension_key(name: &str) -> String {
+    Path::new(name)
+        .extension()
+        .map(|extension| extension.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default()
+}
+
+fn cmp_light_entry_type(left: &LightEntry, right: &LightEntry) -> Ordering {
+    if left.kind == EntryKind::Folder {
+        return left.name.cmp(&right.name);
+    }
+    entry_extension_key(&left.name)
+        .cmp(&entry_extension_key(&right.name))
+        .then_with(|| left.name.cmp(&right.name))
 }
 
 fn kind_order(kind: EntryKind) -> u8 {
@@ -518,7 +549,7 @@ mod tests {
     };
 
     use super::{page_entries, read_light_entries_page, sort_light_entries};
-    use crate::services::path_resolver::DirectoryListOptions;
+    use crate::services::path_resolver::{DirectoryListOptions, DirectorySort};
 
     #[test]
     fn paged_light_read_keeps_only_requested_sort_window() {
@@ -544,7 +575,7 @@ mod tests {
         assert_eq!(result.file_total, 50);
         assert_eq!(result.entries.len(), 15);
 
-        sort_light_entries(&mut result.entries, options.order);
+        sort_light_entries(&mut result.entries, options.sort, options.order);
         let names = page_entries(result.entries, options)
             .into_iter()
             .map(|entry| entry.name)
@@ -559,6 +590,36 @@ mod tests {
                 "file-14.txt",
             ]
         );
+
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[test]
+    fn paged_light_read_can_sort_by_type_without_metadata() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp = std::env::temp_dir().join(format!("web-file-browser-type-window-test-{nonce}"));
+        fs::create_dir_all(&temp).unwrap();
+        fs::write(temp.join("z-last.txt"), "x").unwrap();
+        fs::write(temp.join("a-first.json"), "x").unwrap();
+        fs::write(temp.join("m-middle.md"), "x").unwrap();
+
+        let options = DirectoryListOptions {
+            offset: 0,
+            limit: Some(3),
+            sort: DirectorySort::Type,
+            ..DirectoryListOptions::default()
+        };
+        let mut result = read_light_entries_page(&temp, options).unwrap();
+        sort_light_entries(&mut result.entries, options.sort, options.order);
+        let names = page_entries(result.entries, options)
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["a-first.json", "m-middle.md", "z-last.txt"]);
 
         fs::remove_dir_all(temp).unwrap();
     }

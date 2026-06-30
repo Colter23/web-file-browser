@@ -13,7 +13,7 @@ export interface FolderData {
     hasMore?: boolean;
 }
 
-export type DirSortKey = "name" | "modified" | "size";
+export type DirSortKey = "name" | "type" | "modified" | "size";
 export type DirSortOrder = "asc" | "desc";
 export type DirEntryFilter = "all" | "folder" | "file";
 export type DirDetail = "basic" | "full";
