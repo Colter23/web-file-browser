@@ -35,6 +35,8 @@ import Icon from "../components/Icon.vue";
 import OperationPanelShell from "../components/operations/OperationPanelShell.vue";
 import ShellNotice from "../components/shell/ShellNotice.vue";
 import {useShellNotice} from "../composables/useShellNotice.ts";
+import {useI18n} from "../i18n";
+import type {MessageKey} from "../i18n";
 import {formatEntryDate} from "../utils/file-entry.ts";
 
 type MappingDialogMode = "create" | "edit";
@@ -84,6 +86,7 @@ interface StartupSettingsForm {
 }
 
 const router = useRouter();
+const {locale, t} = useI18n();
 const {
   notice: shellNotice,
   show: showShellNotice,
@@ -177,44 +180,44 @@ const startupForm = reactive<StartupSettingsForm>({
 });
 
 const navItems = [
-  {id: "overview", label: "概览", icon: "action.properties"},
-  {id: "mappings", label: "挂载目录", icon: "file.folder"},
-  {id: "index", label: "索引与安全", icon: "action.search"},
-  {id: "config", label: "系统配置", icon: "action.tools"}
+  {id: "overview", labelKey: "settings.nav.overview", icon: "action.properties"},
+  {id: "mappings", labelKey: "settings.nav.mappings", icon: "file.folder"},
+  {id: "index", labelKey: "settings.nav.indexSecurity", icon: "action.search"},
+  {id: "config", labelKey: "settings.nav.config", icon: "action.tools"}
 ] as const;
 
 type SettingsPageId = typeof navItems[number]["id"];
 
-const conflictPolicyOptions: {value: RuntimeSettings["conflictPolicy"]; label: string; description: string}[] = [
-  {value: "autoRename", label: "自动重命名", description: "发生冲突时自动追加序号"},
-  {value: "reject", label: "拒绝", description: "冲突时取消本次写入"},
-  {value: "overwrite", label: "覆盖", description: "冲突时覆盖已有内容"}
+const conflictPolicyOptions: {value: RuntimeSettings["conflictPolicy"]; labelKey: MessageKey; descriptionKey: MessageKey}[] = [
+  {value: "autoRename", labelKey: "settings.conflict.autoRename", descriptionKey: "settings.conflict.autoRenameDesc"},
+  {value: "reject", labelKey: "settings.conflict.reject", descriptionKey: "settings.conflict.rejectDesc"},
+  {value: "overwrite", labelKey: "settings.conflict.overwrite", descriptionKey: "settings.conflict.overwriteDesc"}
 ];
 
-const startupFieldLabels: Record<keyof StartupSettings, string> = {
-  bindAddress: "监听地址",
-  port: "端口",
-  mappingFile: "挂载配置文件",
-  configFile: "配置文件",
-  authFile: "认证文件",
-  favoritesFile: "收藏文件",
-  trashDir: "回收站目录",
-  staticDir: "静态文件目录",
-  corsAllowedOrigins: "CORS 来源",
-  trustProxyHeaders: "信任代理来源头",
-  auditFile: "审计日志文件",
-  indexRebuildOnStartup: "启动时重建索引"
+const startupFieldLabelKeys: Record<keyof StartupSettings, MessageKey> = {
+  bindAddress: "settings.startup.bindAddress",
+  port: "settings.startup.port",
+  mappingFile: "settings.startup.mappingFile",
+  configFile: "settings.startup.configFile",
+  authFile: "settings.startup.authFile",
+  favoritesFile: "settings.startup.favoritesFile",
+  trashDir: "settings.startup.trashDir",
+  staticDir: "settings.startup.staticDir",
+  corsAllowedOrigins: "settings.startup.corsAllowedOrigins",
+  trustProxyHeaders: "settings.startup.trustProxyHeaders",
+  auditFile: "settings.startup.auditFile",
+  indexRebuildOnStartup: "settings.startup.indexRebuildOnStartup"
 };
 
-const readinessCheckLabels: Record<string, string> = {
-  auth: "管理员认证",
-  configStore: "运行配置",
-  authStore: "认证文件",
-  favoritesStore: "收藏文件",
-  mappingStore: "挂载配置",
-  trash: "回收站目录",
-  audit: "审计日志",
-  staticFiles: "静态资源"
+const readinessCheckLabelKeys: Record<string, MessageKey> = {
+  auth: "settings.readiness.auth",
+  configStore: "settings.readiness.configStore",
+  authStore: "settings.readiness.authStore",
+  favoritesStore: "settings.readiness.favoritesStore",
+  mappingStore: "settings.readiness.mappingStore",
+  trash: "settings.readiness.trash",
+  audit: "settings.readiness.audit",
+  staticFiles: "settings.readiness.staticFiles"
 };
 
 const runtimeSettings = computed(() => settingsSnapshot.value?.runtime ?? null);
@@ -222,6 +225,7 @@ const startupSettings = computed(() => settingsSnapshot.value?.startup ?? null);
 const activeStartupSettings = computed(() => settingsSnapshot.value?.activeStartup ?? null);
 const activeSettingsPage = ref<SettingsPageId>("overview");
 const activeNavItem = computed(() => navItems.find(item => item.id === activeSettingsPage.value) ?? navItems[0]);
+const activeNavItemLabel = computed(() => t(activeNavItem.value.labelKey));
 const envLockedSet = computed(() => new Set(settingsSnapshot.value?.envLocked ?? []));
 const restartPendingSet = computed(() => new Set(settingsSnapshot.value?.restartPendingFields ?? []));
 const taskMetrics = computed(() => metrics.value?.tasks);
@@ -247,7 +251,7 @@ const canSaveSettings = computed(() => Boolean(settingsSnapshot.value) && settin
 const sortedMappings = computed(() => [...mappings.value].sort((left, right) => {
   const orderDelta = (left.order ?? 0) - (right.order ?? 0);
   if (orderDelta !== 0) return orderDelta;
-  return left.mountPath.localeCompare(right.mountPath, "zh-Hans-CN");
+  return left.mountPath.localeCompare(right.mountPath, locale.value === "zh-CN" ? "zh-Hans-CN" : "en-US");
 }));
 const writableMappingCount = computed(() => mappings.value.filter(mapping => mapping.writable).length);
 const readonlyMappingCount = computed(() => mappings.value.length - writableMappingCount.value);
@@ -256,11 +260,16 @@ const nextMappingOrder = computed(() => {
   return Math.max(...mappings.value.map(mapping => mapping.order ?? 0)) + 10;
 });
 const mappingBusy = computed(() => loading.value || mappingRefreshing.value || mappingReorderLoading.value || mappingSavingId.value != null);
-const mappingDialogTitle = computed(() => mappingDialogMode.value === "edit" ? "修改挂载" : "添加挂载");
+const mappingDialogTitle = computed(() => t(mappingDialogMode.value === "edit" ? "settings.mappings.editTitle" : "settings.mappings.addTitle"));
 const mappingDialogSubtitle = computed(() => mappingDialogMode.value === "edit"
-    ? "调整虚拟路径、目录和读写权限。"
-    : "把本地或容器目录显示为一个虚拟路径。");
-const mappingDialogSubmitText = computed(() => mappingDialogMode.value === "edit" ? "保存修改" : "添加挂载");
+    ? t("settings.mappings.editSubtitle")
+    : t("settings.mappings.addSubtitle"));
+const mappingDialogSubmitText = computed(() => t(mappingDialogMode.value === "edit" ? "settings.mappings.saveEdit" : "settings.mappings.addMount"));
+const cssContentText = (value: string) => JSON.stringify(value);
+const configTipStyle = computed<Record<string, string>>(() => ({
+  "--setting-lock-tip": cssContentText(t("settings.config.lockedByEnv")),
+  "--setting-readonly-tip": cssContentText(t("settings.config.configFileReadonly"))
+}));
 
 const selectSettingsPage = (id: SettingsPageId) => {
   activeSettingsPage.value = id;
@@ -278,7 +287,7 @@ const load = async () => {
     applySettingsSnapshot(settingData);
     await Promise.all([loadIndexStatus(false), loadMetrics(false)]);
   } catch (error) {
-    showError(error, "加载设置失败");
+    showError(error, t("settings.notice.loadFailed"));
   } finally {
     loading.value = false;
   }
@@ -428,8 +437,8 @@ const buildMappingPayload = (mapping: PathMapping): PathMapping => {
     writable: Boolean(mapping.writable)
   };
   if (mapping.id != null) payload.id = mapping.id;
-  if (!payload.mountPath) throw new Error("需要填写虚拟路径");
-  if (!payload.folderPath) throw new Error("需要填写本地或容器目录");
+  if (!payload.mountPath) throw new Error(t("settings.validation.mountPathRequired"));
+  if (!payload.folderPath) throw new Error(t("settings.validation.folderPathRequired"));
   return payload;
 }
 
@@ -437,7 +446,9 @@ const parseInteger = (value: unknown, label: string, min = 1, max = Number.MAX_S
   const text = trimFormText(value);
   const number = Number(text);
   if (!text || !Number.isInteger(number) || number < min || number > max) {
-    throw new Error(`${label}需要填写 ${min}${max === Number.MAX_SAFE_INTEGER ? " 以上" : `-${max}`} 的整数`);
+    throw new Error(max === Number.MAX_SAFE_INTEGER
+        ? t("settings.validation.integerMin", {label, min})
+        : t("settings.validation.integerRange", {label, min, max}));
   }
   return number;
 }
@@ -542,37 +553,37 @@ const startupSettingsSignature = (startup: StartupSettings) => JSON.stringify({
 });
 
 const buildRuntimeDraft = (): RuntimeSettings => ({
-  authSessionTtlSeconds: parseInteger(runtimeForm.authSessionTtlSeconds, "会话有效期"),
+  authSessionTtlSeconds: parseInteger(runtimeForm.authSessionTtlSeconds, t("settings.runtime.authSessionTtlSeconds")),
   authSecureCookie: runtimeForm.authSecureCookie,
-  maxEditBytes: parseInteger(runtimeForm.maxEditBytes, "编辑上限"),
+  maxEditBytes: parseInteger(runtimeForm.maxEditBytes, t("settings.runtime.maxEditBytes")),
   editableExtensions: parseListInput(runtimeForm.editableExtensions),
   editableMimeTypes: parseListInput(runtimeForm.editableMimeTypes),
-  maxUploadBytes: parseOptionalInteger(runtimeForm.maxUploadBytes, "上传上限"),
-  maxDirPageSize: parseInteger(runtimeForm.maxDirPageSize, "目录分页上限"),
-  maxDirConcurrency: parseInteger(runtimeForm.maxDirConcurrency, "目录并发"),
-  maxTransferConcurrency: parseInteger(runtimeForm.maxTransferConcurrency, "传输并发"),
-  maxIpConcurrency: parseInteger(runtimeForm.maxIpConcurrency, "单 IP 并发"),
-  maxTaskConcurrency: parseInteger(runtimeForm.maxTaskConcurrency, "任务并发"),
-  taskHistoryLimit: parseInteger(runtimeForm.taskHistoryLimit, "任务历史"),
-  taskSpeedLimitBytesPerSec: parseOptionalInteger(runtimeForm.taskSpeedLimitBytesPerSec, "任务限速"),
-  maxArchiveBytes: parseOptionalInteger(runtimeForm.maxArchiveBytes, "压缩输入字节上限"),
-  maxArchiveFiles: parseOptionalInteger(runtimeForm.maxArchiveFiles, "压缩条目上限"),
-  maxExtractBytes: parseOptionalInteger(runtimeForm.maxExtractBytes, "解压字节上限"),
-  maxExtractFiles: parseOptionalInteger(runtimeForm.maxExtractFiles, "解压条目上限"),
-  maxExtractDepth: parseInteger(runtimeForm.maxExtractDepth, "解压深度上限"),
+  maxUploadBytes: parseOptionalInteger(runtimeForm.maxUploadBytes, t("settings.runtime.maxUploadBytes")),
+  maxDirPageSize: parseInteger(runtimeForm.maxDirPageSize, t("settings.runtime.maxDirPageSize")),
+  maxDirConcurrency: parseInteger(runtimeForm.maxDirConcurrency, t("settings.runtime.maxDirConcurrency")),
+  maxTransferConcurrency: parseInteger(runtimeForm.maxTransferConcurrency, t("settings.runtime.maxTransferConcurrency")),
+  maxIpConcurrency: parseInteger(runtimeForm.maxIpConcurrency, t("settings.runtime.maxIpConcurrency")),
+  maxTaskConcurrency: parseInteger(runtimeForm.maxTaskConcurrency, t("settings.runtime.maxTaskConcurrency")),
+  taskHistoryLimit: parseInteger(runtimeForm.taskHistoryLimit, t("settings.runtime.taskHistoryLimit")),
+  taskSpeedLimitBytesPerSec: parseOptionalInteger(runtimeForm.taskSpeedLimitBytesPerSec, t("settings.runtime.taskSpeedLimitBytesPerSec")),
+  maxArchiveBytes: parseOptionalInteger(runtimeForm.maxArchiveBytes, t("settings.runtime.maxArchiveBytes")),
+  maxArchiveFiles: parseOptionalInteger(runtimeForm.maxArchiveFiles, t("settings.runtime.maxArchiveFiles")),
+  maxExtractBytes: parseOptionalInteger(runtimeForm.maxExtractBytes, t("settings.runtime.maxExtractBytes")),
+  maxExtractFiles: parseOptionalInteger(runtimeForm.maxExtractFiles, t("settings.runtime.maxExtractFiles")),
+  maxExtractDepth: parseInteger(runtimeForm.maxExtractDepth, t("settings.runtime.maxExtractDepth")),
   indexEnabled: runtimeForm.indexEnabled,
-  indexScanDelayMs: parseInteger(runtimeForm.indexScanDelayMs, "索引扫描延迟", 0),
+  indexScanDelayMs: parseInteger(runtimeForm.indexScanDelayMs, t("settings.runtime.indexScanDelayMs"), 0),
   auditEnabled: runtimeForm.auditEnabled,
-  auditMaxBytes: parseOptionalInteger(runtimeForm.auditMaxBytes, "审计轮转大小"),
-  auditRetentionFiles: parseInteger(runtimeForm.auditRetentionFiles, "审计保留数量", 0),
-  trashRetentionDays: parseOptionalInteger(runtimeForm.trashRetentionDays, "回收站保留天数"),
-  trashMaxBytes: parseOptionalInteger(runtimeForm.trashMaxBytes, "回收站容量上限"),
+  auditMaxBytes: parseOptionalInteger(runtimeForm.auditMaxBytes, t("settings.runtime.auditMaxBytes")),
+  auditRetentionFiles: parseInteger(runtimeForm.auditRetentionFiles, t("settings.runtime.auditRetentionFiles"), 0),
+  trashRetentionDays: parseOptionalInteger(runtimeForm.trashRetentionDays, t("settings.runtime.trashRetentionDays")),
+  trashMaxBytes: parseOptionalInteger(runtimeForm.trashMaxBytes, t("settings.runtime.trashMaxBytes")),
   conflictPolicy: runtimeForm.conflictPolicy
 });
 
 const buildStartupDraft = (): StartupSettings => ({
   bindAddress: trimFormText(startupForm.bindAddress),
-  port: parseInteger(startupForm.port, "端口", 1, 65535),
+  port: parseInteger(startupForm.port, t("settings.startup.port"), 1, 65535),
   mappingFile: trimFormText(startupForm.mappingFile),
   configFile: trimFormText(startupForm.configFile),
   authFile: trimFormText(startupForm.authFile),
@@ -654,15 +665,15 @@ const saveSettings = async () => {
       ...(Object.keys(startup).length ? {startup} : {})
     };
     if (!Object.keys(request).length) {
-      showWarning("没有需要保存的配置");
+      showWarning(t("settings.notice.noChanges"));
       return;
     }
     const next = await updateSettings(request);
     applySettingsSnapshot(next);
-    showSuccess(next.restartPending ? "配置已保存，部分启动配置需要重启后生效" : "配置已保存");
+    showSuccess(next.restartPending ? t("settings.notice.savedRestartPending") : t("settings.notice.saved"));
     await Promise.all([loadIndexStatus(false), loadMetrics(false)]);
   } catch (error) {
-    showError(error, "保存配置失败");
+    showError(error, t("settings.notice.saveFailed"));
   } finally {
     saving.value = false;
   }
@@ -675,10 +686,10 @@ const requestReloadSettings = async () => {
   try {
     const next = await reloadSettings();
     applySettingsSnapshot(next);
-    showSuccess(next.restartPending ? "已从配置文件重载，启动配置仍需重启后进入当前进程" : "已从配置文件重载");
+    showSuccess(next.restartPending ? t("settings.notice.reloadedRestartPending") : t("settings.notice.reloaded"));
     await Promise.all([loadIndexStatus(false), loadMetrics(false)]);
   } catch (error) {
-    showError(error, "重载配置失败");
+    showError(error, t("settings.notice.reloadFailed"));
   } finally {
     reloadingSettings.value = false;
   }
@@ -688,7 +699,7 @@ const resetSettingsForms = () => {
   if (!settingsSnapshot.value) return;
   syncRuntimeForm(settingsSnapshot.value.runtime);
   syncStartupForm(settingsSnapshot.value.startup);
-  showWarning("已撤销未保存的配置改动");
+  showWarning(t("settings.notice.reset"));
 }
 
 const loadIndexStatus = async (showFailure = true) => {
@@ -697,7 +708,7 @@ const loadIndexStatus = async (showFailure = true) => {
     indexStatus.value = await getIndexStatus();
   } catch (error) {
     indexStatus.value = null;
-    if (showFailure) showError(error, "加载索引状态失败");
+    if (showFailure) showError(error, t("settings.notice.indexLoadFailed"));
   } finally {
     indexLoading.value = false;
   }
@@ -719,7 +730,7 @@ const loadMetrics = async (showFailure = true) => {
     metrics.value = null;
     health.value = null;
     readiness.value = null;
-    if (showFailure) showError(error, "加载运行状态失败");
+    if (showFailure) showError(error, t("settings.notice.metricsLoadFailed"));
   } finally {
     metricsLoading.value = false;
   }
@@ -731,10 +742,10 @@ const requestIndexRebuild = async () => {
   indexActionLoading.value = true;
   try {
     await rebuildIndex();
-    showSuccess("已开始重建搜索索引");
+    showSuccess(t("settings.notice.indexRebuildStarted"));
     await loadIndexStatus(false);
   } catch (error) {
-    showError(error, "启动索引重建失败");
+    showError(error, t("settings.notice.indexRebuildFailed"));
   } finally {
     indexActionLoading.value = false;
   }
@@ -746,10 +757,10 @@ const requestIndexCancel = async () => {
   indexActionLoading.value = true;
   try {
     await cancelIndexRebuild();
-    showSuccess("已发送取消索引重建请求");
+    showSuccess(t("settings.notice.indexCancelSent"));
     await loadIndexStatus(false);
   } catch (error) {
-    showError(error, "取消索引重建失败");
+    showError(error, t("settings.notice.indexCancelFailed"));
   } finally {
     indexActionLoading.value = false;
   }
@@ -761,10 +772,12 @@ const requestAuditCleanup = async () => {
   auditCleanupLoading.value = true;
   try {
     const result = await cleanupAudit();
-    showSuccess(result.removed > 0 ? `已清理 ${result.removed} 个旧审计日志文件` : "没有需要清理的旧审计日志文件");
+    showSuccess(result.removed > 0
+        ? t("settings.notice.auditCleaned", {count: result.removed})
+        : t("settings.notice.auditNoCleanup"));
     await loadMetrics(false);
   } catch (error) {
-    showError(error, "清理旧审计日志失败");
+    showError(error, t("settings.notice.auditCleanupFailed"));
   } finally {
     auditCleanupLoading.value = false;
   }
@@ -777,9 +790,9 @@ const loadMappings = async (showResult = true) => {
     if (!mappingForm.mountPath && !mappingForm.folderPath && !mappingForm.remark) {
       mappingForm.order = nextMappingOrder.value;
     }
-    if (showResult) showSuccess("挂载目录已刷新");
+    if (showResult) showSuccess(t("settings.notice.mappingsRefreshed"));
   } catch (error) {
-    showError(error, "刷新挂载目录失败");
+    showError(error, t("settings.notice.mappingsRefreshFailed"));
   } finally {
     mappingRefreshing.value = false;
   }
@@ -800,9 +813,9 @@ const submitMappingDialog = async () => {
     resetMappingForm();
     mappingDialogOpen.value = false;
     await loadMappings(false);
-    showSuccess(editing ? "挂载目录已保存" : "挂载目录已添加");
+    showSuccess(t(editing ? "settings.notice.mappingSaved" : "settings.notice.mappingAdded"));
   } catch (error) {
-    showError(error, editing ? "保存挂载失败" : "添加挂载失败");
+    showError(error, t(editing ? "settings.notice.mappingSaveFailed" : "settings.notice.mappingAddFailed"));
   } finally {
     mappingSavingId.value = null;
   }
@@ -817,9 +830,9 @@ const confirmRemoveMapping = async () => {
     await deleteMapping(mapping.id);
     mappingDeleteTarget.value = null;
     await loadMappings(false);
-    showSuccess("挂载目录已删除");
+    showSuccess(t("settings.notice.mappingDeleted"));
   } catch (error) {
-    showError(error, "删除挂载失败");
+    showError(error, t("settings.notice.mappingDeleteFailed"));
   } finally {
     mappingSavingId.value = null;
   }
@@ -837,7 +850,7 @@ const commitMappingOrder = async (nextMappings: PathMapping[], activeId: number)
     await reorderMappings(items);
     await loadMappings(false);
   } catch (error) {
-    showError(error, "调整挂载顺序失败");
+    showError(error, t("settings.notice.mappingReorderFailed"));
   } finally {
     mappingSavingId.value = null;
     mappingReorderLoading.value = false;
@@ -893,27 +906,27 @@ const savePassword = async () => {
   if (passwordSaving.value) return;
   closeShellNotice();
   if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-    showError(null, "两次输入的新密码不一致");
+    showError(null, t("settings.notice.passwordMismatch"));
     return;
   }
   passwordSaving.value = true;
   try {
     await changePassword(passwordForm.currentPassword, passwordForm.newPassword);
     resetPasswordForm();
-    showSuccess("管理员密码已更新");
+    showSuccess(t("settings.notice.passwordUpdated"));
   } catch (error) {
-    showError(error, "修改密码失败");
+    showError(error, t("settings.notice.passwordUpdateFailed"));
   } finally {
     passwordSaving.value = false;
   }
 }
 
 const serviceStatusText = (status?: string | null) => {
-  if (!status) return "未知";
+  if (!status) return t("settings.status.unknown");
   return {
-    ok: "正常",
-    notReady: "未就绪",
-    error: "异常"
+    ok: t("settings.status.ok"),
+    notReady: t("settings.status.notReady"),
+    error: t("settings.status.error")
   }[status] ?? status;
 }
 
@@ -924,16 +937,19 @@ const serviceStatusClass = (status?: string | null) => {
   return "error";
 }
 
-const readinessCheckLabel = (name: string) => readinessCheckLabels[name] ?? name;
+const readinessCheckLabel = (name: string) => {
+  const key = readinessCheckLabelKeys[name];
+  return key ? t(key) : name;
+}
 
 const indexStateText = (status: IndexStatus | null) => {
-  if (!status) return "未知";
-  if (!status.enabled || status.state === "disabled") return "未启用";
+  if (!status) return t("settings.status.unknown");
+  if (!status.enabled || status.state === "disabled") return t("settings.index.disabled");
   return {
-    idle: "空闲",
-    scanning: "重建中",
-    building: "重建中",
-    error: "异常"
+    idle: t("settings.index.idle"),
+    scanning: t("settings.index.rebuilding"),
+    building: t("settings.index.rebuilding"),
+    error: t("settings.status.error")
   }[status.state] ?? status.state;
 }
 
@@ -962,15 +978,15 @@ const limitUsageRatio = (active?: number, limit?: number) => {
 
 const startupFieldName = (fieldPath: string) => {
   const key = fieldPath.replace(/^startup\./, "") as keyof StartupSettings;
-  return startupFieldLabels[key] ?? fieldPath;
+  return startupFieldLabelKeys[key] ? t(startupFieldLabelKeys[key]) : fieldPath;
 }
 
 const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) => {
   if (!source) return "-";
   const key = fieldPath.replace(/^startup\./, "") as keyof StartupSettings;
   const value = source[key];
-  if (Array.isArray(value)) return value.length ? value.join("，") : "同源";
-  if (typeof value === "boolean") return value ? "启用" : "关闭";
+  if (Array.isArray(value)) return value.length ? value.join(t("settings.common.listSeparator")) : t("settings.value.sameOrigin");
+  if (typeof value === "boolean") return value ? t("settings.value.enabled") : t("settings.value.disabled");
   return String(value ?? "-");
 }
 </script>
@@ -978,17 +994,17 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
 <template>
   <div class="settings-page">
     <header class="settings-topbar">
-      <button class="icon-button" title="返回文件浏览器" @click="router.push('/')">
+      <button class="icon-button" :title="t('settings.backToExplorer')" @click="router.push('/')">
         <Icon icon="action.previous" />
       </button>
       <div class="settings-title">
-        <h1>设置</h1>
-        <span>{{ settingsSnapshot?.restartPending ? "有启动配置等待重启生效" : `当前：${activeNavItem.label}` }}</span>
+        <h1>{{ t("common.settings") }}</h1>
+        <span>{{ settingsSnapshot?.restartPending ? t("settings.header.restartPending") : t("settings.header.current", {page: activeNavItemLabel}) }}</span>
       </div>
     </header>
 
     <main class="settings-shell">
-      <aside class="settings-sidebar" aria-label="设置分组">
+      <aside class="settings-sidebar" :aria-label="t('settings.sidebarAria')">
         <button
             v-for="item in navItems"
             :key="item.id"
@@ -997,31 +1013,31 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
             :class="{active: activeSettingsPage === item.id}"
             @click="selectSettingsPage(item.id)">
           <Icon :icon="item.icon" />
-          <span>{{ item.label }}</span>
+          <span>{{ t(item.labelKey) }}</span>
         </button>
       </aside>
 
       <section class="settings-content">
         <div v-if="activeSettingsPage === 'config'" class="settings-actionbar">
           <div class="settings-actionbar-copy">
-            <strong>{{ activeNavItem.label }}</strong>
-            <span>{{ settingsSnapshot?.restartPending ? "启动配置等待重启生效" : "保存会应用当前未提交的配置改动" }}</span>
+            <strong>{{ activeNavItemLabel }}</strong>
+            <span>{{ settingsSnapshot?.restartPending ? t("settings.actionbar.restartPending") : t("settings.actionbar.saveHint") }}</span>
           </div>
           <div class="topbar-actions">
             <button class="plain-button" :disabled="loading || saving" @click="load">
               <Icon class="icon-motion-spin" :class="{'is-spinning': loading}" icon="action.refresh" />
-              刷新
+              {{ t("common.refresh") }}
             </button>
             <button class="plain-button" :disabled="reloadingSettings || saving" @click="requestReloadSettings">
               <Icon class="icon-motion-spin" :class="{'is-spinning': reloadingSettings}" icon="action.refresh" />
-              重载配置
+              {{ t("settings.action.reloadConfig") }}
             </button>
             <button class="plain-button" :disabled="!settingsDirty || saving" @click="resetSettingsForms">
-              撤销
+              {{ t("settings.action.revert") }}
             </button>
             <button class="primary-button" :disabled="!canSaveSettings" @click="saveSettings">
               <Icon icon="action.save" />
-              保存更改
+              {{ t("settings.action.saveChanges") }}
             </button>
           </div>
         </div>
@@ -1029,21 +1045,21 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
         <section v-if="activeSettingsPage === 'overview'" id="overview" class="settings-panel hero-panel">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">Overview</p>
-              <h2>服务概览</h2>
+              <p class="eyebrow">{{ t("settings.eyebrow.overview") }}</p>
+              <h2>{{ t("settings.overview.title") }}</h2>
             </div>
             <div class="panel-actions">
               <button class="plain-button" :disabled="metricsLoading" @click="loadMetrics(true)">
                 <Icon class="icon-motion-spin" :class="{'is-spinning': metricsLoading}" icon="action.refresh" />
-                刷新状态
+                {{ t("settings.action.refreshStatus") }}
               </button>
               <button
                   class="plain-button"
                   :disabled="auditCleanupLoading"
-                  title="删除超过保留数量的旧审计日志文件，不会删除当前正在写入的日志"
+                  :title="t('settings.overview.cleanupAuditTitle')"
                   @click="requestAuditCleanup">
                 <Icon icon="action.clean" />
-                清理旧审计日志
+                {{ t("settings.overview.cleanupAudit") }}
               </button>
             </div>
           </div>
@@ -1051,31 +1067,31 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
           <div v-if="settingsSnapshot?.restartPending" class="restart-banner">
             <Icon icon="action.warning" />
             <div>
-              <strong>启动配置已保存，但当前进程还在使用旧配置。</strong>
-              <span>重启服务后，下次启动配置会进入当前生效配置。</span>
+              <strong>{{ t("settings.overview.restartTitle") }}</strong>
+              <span>{{ t("settings.overview.restartDesc") }}</span>
             </div>
           </div>
 
           <div class="status-grid">
             <article class="status-tile">
-              <span>服务存活</span>
+              <span>{{ t("settings.overview.health") }}</span>
               <strong class="status-pill" :class="serviceStatusClass(health?.status)">{{ serviceStatusText(health?.status) }}</strong>
-              <small>版本 {{ health?.version ?? "-" }}</small>
+              <small>{{ t("settings.overview.version", {version: health?.version ?? "-"}) }}</small>
             </article>
             <article class="status-tile">
-              <span>服务就绪</span>
+              <span>{{ t("settings.overview.readiness") }}</span>
               <strong class="status-pill" :class="serviceStatusClass(readiness?.status)">{{ serviceStatusText(readiness?.status) }}</strong>
-              <small>{{ readiness?.checks?.length ? `${readinessOkCount}/${readiness.checks.length} 项正常` : "暂无检查项" }}</small>
+              <small>{{ readiness?.checks?.length ? t("settings.overview.readinessCount", {ok: readinessOkCount, total: readiness.checks.length}) : t("settings.overview.noChecks") }}</small>
             </article>
             <article class="status-tile">
-              <span>挂载目录</span>
+              <span>{{ t("settings.nav.mappings") }}</span>
               <strong>{{ countText(metrics?.mappings) }}</strong>
-              <small>页面已加载 {{ mappings.length }} 项</small>
+              <small>{{ t("settings.overview.loadedMappings", {count: mappings.length}) }}</small>
             </article>
             <article class="status-tile">
-              <span>后台任务</span>
+              <span>{{ t("settings.overview.backgroundTasks") }}</span>
               <strong>{{ countText(taskMetrics?.total) }}</strong>
-              <small>运行 {{ countText(taskMetrics?.running) }}，排队 {{ countText(taskMetrics?.queued) }}</small>
+              <small>{{ t("settings.overview.taskSummary", {running: countText(taskMetrics?.running), queued: countText(taskMetrics?.queued)}) }}</small>
             </article>
           </div>
 
@@ -1083,11 +1099,11 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
             <section class="inline-section">
               <div class="inline-section-heading">
                 <div>
-                  <h3>服务依赖检查</h3>
-                  <p>检查登录、配置文件、挂载配置、回收站、审计日志和静态资源是否可用。</p>
+                  <h3>{{ t("settings.overview.dependencyChecks") }}</h3>
+                  <p>{{ t("settings.overview.dependencyChecksDesc") }}</p>
                 </div>
                 <span v-if="readiness?.checks?.length" class="section-badge" :class="{warning: readinessIssueCount > 0}">
-                  {{ readinessIssueCount > 0 ? `${readinessIssueCount} 项异常` : `${readinessOkCount} 项正常` }}
+                  {{ readinessIssueCount > 0 ? t("settings.overview.issueCount", {count: readinessIssueCount}) : t("settings.overview.okCount", {count: readinessOkCount}) }}
                 </span>
               </div>
               <div v-if="readiness?.checks?.length" class="check-list">
@@ -1100,27 +1116,27 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
                   <span>{{ check.message }}</span>
                 </div>
               </div>
-              <p v-else class="empty-inline">暂无就绪检查信息</p>
+              <p v-else class="empty-inline">{{ t("settings.overview.noReadinessInfo") }}</p>
             </section>
 
             <section class="inline-section">
               <div class="inline-section-heading">
                 <div>
-                  <h3>并发占用</h3>
-                  <p>用于判断目录扫描、文件传输和请求限流是否接近上限。</p>
+                  <h3>{{ t("settings.overview.concurrency") }}</h3>
+                  <p>{{ t("settings.overview.concurrencyDesc") }}</p>
                 </div>
               </div>
               <div class="limit-list">
                 <div class="limit-row">
-                  <div><span>目录扫描</span><strong>{{ limitUsageText(limitMetrics?.activeDirScans, limitMetrics?.dirScanLimit) }}</strong></div>
+                  <div><span>{{ t("settings.overview.dirScan") }}</span><strong>{{ limitUsageText(limitMetrics?.activeDirScans, limitMetrics?.dirScanLimit) }}</strong></div>
                   <span class="limit-bar"><span :style="{width: limitUsageRatio(limitMetrics?.activeDirScans, limitMetrics?.dirScanLimit)}"></span></span>
                 </div>
                 <div class="limit-row">
-                  <div><span>文件传输</span><strong>{{ limitUsageText(limitMetrics?.activeTransfers, limitMetrics?.transferLimit) }}</strong></div>
+                  <div><span>{{ t("settings.overview.fileTransfer") }}</span><strong>{{ limitUsageText(limitMetrics?.activeTransfers, limitMetrics?.transferLimit) }}</strong></div>
                   <span class="limit-bar"><span :style="{width: limitUsageRatio(limitMetrics?.activeTransfers, limitMetrics?.transferLimit)}"></span></span>
                 </div>
                 <div class="limit-row">
-                  <div><span>IP 请求</span><strong>{{ limitUsageText(limitMetrics?.activeIpRequests, limitMetrics?.ipLimit) }}</strong></div>
+                  <div><span>{{ t("settings.overview.ipRequests") }}</span><strong>{{ limitUsageText(limitMetrics?.activeIpRequests, limitMetrics?.ipLimit) }}</strong></div>
                   <span class="limit-bar"><span :style="{width: limitUsageRatio(limitMetrics?.activeIpRequests, limitMetrics?.ipLimit)}"></span></span>
                 </div>
               </div>
@@ -1128,66 +1144,66 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
           </div>
         </section>
 
-        <section v-if="activeSettingsPage === 'config'" id="config" class="config-split">
+        <section v-if="activeSettingsPage === 'config'" id="config" class="config-split" :style="configTipStyle">
           <section id="runtime" class="settings-panel config-pane runtime-pane">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">Runtime</p>
-              <h2>运行配置</h2>
+              <p class="eyebrow">{{ t("settings.eyebrow.runtime") }}</p>
+              <h2>{{ t("settings.config.runtimeTitle") }}</h2>
             </div>
-            <span class="section-badge config-badge immediate">保存后立即生效</span>
+            <span class="section-badge config-badge immediate">{{ t("settings.config.immediate") }}</span>
           </div>
 
           <div class="setting-group">
-            <h3>索引与审计</h3>
+            <h3>{{ t("settings.config.indexAudit") }}</h3>
             <div class="form-grid">
               <label class="switch-field" :class="{disabled: isRuntimeLocked('indexEnabled')}">
                 <input v-model="runtimeForm.indexEnabled" type="checkbox" :disabled="isRuntimeLocked('indexEnabled')">
                 <span class="switch-track"><span></span></span>
                 <span class="switch-copy">
-                  <strong>启用搜索索引</strong>
-                  <small>影响后续索引任务</small>
+                  <strong>{{ t("settings.runtime.indexEnabled") }}</strong>
+                  <small>{{ t("settings.runtime.indexEnabledHint") }}</small>
                 </span>
               </label>
               <label class="setting-field">
-                <span>索引扫描延迟 <small>毫秒</small></span>
+                <span>{{ t("settings.runtime.indexScanDelayMs") }} <small>{{ t("settings.unit.ms") }}</small></span>
                 <input v-model="runtimeForm.indexScanDelayMs" type="number" min="0" :disabled="isRuntimeLocked('indexScanDelayMs')">
               </label>
               <label class="switch-field" :class="{disabled: isRuntimeLocked('auditEnabled')}">
                 <input v-model="runtimeForm.auditEnabled" type="checkbox" :disabled="isRuntimeLocked('auditEnabled')">
                 <span class="switch-track"><span></span></span>
                 <span class="switch-copy">
-                  <strong>启用审计日志</strong>
-                  <small>关闭后不再记录新的审计事件</small>
+                  <strong>{{ t("settings.runtime.auditEnabled") }}</strong>
+                  <small>{{ t("settings.runtime.auditEnabledHint") }}</small>
                 </span>
               </label>
               <label class="setting-field">
-                <span>审计轮转大小 <small>字节，空为不限制</small></span>
+                <span>{{ t("settings.runtime.auditMaxBytes") }} <small>{{ t("settings.hint.bytesOptional") }}</small></span>
                 <input v-model="runtimeForm.auditMaxBytes" type="number" min="1" :disabled="isRuntimeLocked('auditMaxBytes')">
               </label>
               <label class="setting-field">
-                <span>审计保留数量</span>
+                <span>{{ t("settings.runtime.auditRetentionFiles") }}</span>
                 <input v-model="runtimeForm.auditRetentionFiles" type="number" min="0" :disabled="isRuntimeLocked('auditRetentionFiles')">
               </label>
             </div>
           </div>
 
           <div class="setting-group">
-            <h3>回收站与冲突</h3>
+            <h3>{{ t("settings.config.trashConflict") }}</h3>
             <div class="form-grid">
               <label class="setting-field">
-                <span>回收站保留天数 <small>空为不限制</small></span>
+                <span>{{ t("settings.runtime.trashRetentionDays") }} <small>{{ t("settings.hint.optionalUnlimited") }}</small></span>
                 <input v-model="runtimeForm.trashRetentionDays" type="number" min="1" :disabled="isRuntimeLocked('trashRetentionDays')">
               </label>
               <label class="setting-field">
-                <span>回收站容量 <small>字节，空为不限制</small></span>
+                <span>{{ t("settings.runtime.trashMaxBytes") }} <small>{{ t("settings.hint.bytesOptional") }}</small></span>
                 <input v-model="runtimeForm.trashMaxBytes" type="number" min="1" :disabled="isRuntimeLocked('trashMaxBytes')">
               </label>
               <label class="setting-field wide">
-                <span>默认冲突策略</span>
+                <span>{{ t("settings.runtime.conflictPolicy") }}</span>
                 <select v-model="runtimeForm.conflictPolicy" :disabled="isRuntimeLocked('conflictPolicy')">
                   <option v-for="option in conflictPolicyOptions" :key="option.value" :value="option.value">
-                    {{ option.label }} - {{ option.description }}
+                    {{ t(option.labelKey) }} - {{ t(option.descriptionKey) }}
                   </option>
                 </select>
               </label>
@@ -1195,10 +1211,10 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
           </div>
 
           <div class="setting-group">
-            <h3>会话与访问</h3>
+            <h3>{{ t("settings.config.sessionAccess") }}</h3>
             <div class="form-grid">
               <label class="setting-field">
-                <span>会话有效期 <small>秒</small></span>
+                <span>{{ t("settings.runtime.authSessionTtlSeconds") }} <small>{{ t("settings.unit.seconds") }}</small></span>
                 <input v-model="runtimeForm.authSessionTtlSeconds" type="number" min="1" :disabled="isRuntimeLocked('authSessionTtlSeconds')">
               </label>
               <label class="switch-field" :class="{disabled: isRuntimeLocked('authSecureCookie')}">
@@ -1206,89 +1222,89 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
                 <span class="switch-track"><span></span></span>
                 <span class="switch-copy">
                   <strong>Secure Cookie</strong>
-                  <small>仅在 HTTPS 下发送新会话 Cookie</small>
+                  <small>{{ t("settings.runtime.authSecureCookieHint") }}</small>
                 </span>
               </label>
             </div>
           </div>
 
           <div class="setting-group">
-            <h3>编辑与上传</h3>
+            <h3>{{ t("settings.config.editUpload") }}</h3>
             <div class="form-grid">
               <label class="setting-field">
-                <span>编辑上限 <small>字节</small></span>
+                <span>{{ t("settings.runtime.maxEditBytes") }} <small>{{ t("settings.unit.bytes") }}</small></span>
                 <input v-model="runtimeForm.maxEditBytes" type="number" min="1" :disabled="isRuntimeLocked('maxEditBytes')">
               </label>
               <label class="setting-field">
-                <span>上传上限 <small>空为不限制</small></span>
+                <span>{{ t("settings.runtime.maxUploadBytes") }} <small>{{ t("settings.hint.optionalUnlimited") }}</small></span>
                 <input v-model="runtimeForm.maxUploadBytes" type="number" min="1" :disabled="isRuntimeLocked('maxUploadBytes')">
               </label>
               <label class="setting-field wide">
-                <span>可编辑扩展名 <small>每行一个，空为不限制</small></span>
+                <span>{{ t("settings.runtime.editableExtensions") }} <small>{{ t("settings.hint.onePerLineOptional") }}</small></span>
                 <textarea v-model="runtimeForm.editableExtensions" :disabled="isRuntimeLocked('editableExtensions')" rows="4"></textarea>
               </label>
               <label class="setting-field wide">
-                <span>可编辑 MIME <small>每行一个，空为不限制</small></span>
+                <span>{{ t("settings.runtime.editableMimeTypes") }} <small>{{ t("settings.hint.onePerLineOptional") }}</small></span>
                 <textarea v-model="runtimeForm.editableMimeTypes" :disabled="isRuntimeLocked('editableMimeTypes')" rows="4"></textarea>
               </label>
             </div>
           </div>
 
           <div class="setting-group">
-            <h3>浏览与并发</h3>
+            <h3>{{ t("settings.config.browsingConcurrency") }}</h3>
             <div class="form-grid">
               <label class="setting-field">
-                <span>目录分页上限</span>
+                <span>{{ t("settings.runtime.maxDirPageSize") }}</span>
                 <input v-model="runtimeForm.maxDirPageSize" type="number" min="1" :disabled="isRuntimeLocked('maxDirPageSize')">
               </label>
               <label class="setting-field">
-                <span>目录扫描并发</span>
+                <span>{{ t("settings.runtime.maxDirConcurrency") }}</span>
                 <input v-model="runtimeForm.maxDirConcurrency" type="number" min="1" :disabled="isRuntimeLocked('maxDirConcurrency')">
               </label>
               <label class="setting-field">
-                <span>文件传输并发</span>
+                <span>{{ t("settings.runtime.maxTransferConcurrency") }}</span>
                 <input v-model="runtimeForm.maxTransferConcurrency" type="number" min="1" :disabled="isRuntimeLocked('maxTransferConcurrency')">
               </label>
               <label class="setting-field">
-                <span>单 IP 并发</span>
+                <span>{{ t("settings.runtime.maxIpConcurrency") }}</span>
                 <input v-model="runtimeForm.maxIpConcurrency" type="number" min="1" :disabled="isRuntimeLocked('maxIpConcurrency')">
               </label>
             </div>
           </div>
 
           <div class="setting-group">
-            <h3>任务与压缩</h3>
+            <h3>{{ t("settings.config.tasksArchives") }}</h3>
             <div class="form-grid">
               <label class="setting-field">
-                <span>任务并发</span>
+                <span>{{ t("settings.runtime.maxTaskConcurrency") }}</span>
                 <input v-model="runtimeForm.maxTaskConcurrency" type="number" min="1" :disabled="isRuntimeLocked('maxTaskConcurrency')">
               </label>
               <label class="setting-field">
-                <span>任务历史</span>
+                <span>{{ t("settings.runtime.taskHistoryLimit") }}</span>
                 <input v-model="runtimeForm.taskHistoryLimit" type="number" min="1" :disabled="isRuntimeLocked('taskHistoryLimit')">
               </label>
               <label class="setting-field">
-                <span>任务限速 <small>字节/秒，空为不限制</small></span>
+                <span>{{ t("settings.runtime.taskSpeedLimitBytesPerSec") }} <small>{{ t("settings.hint.bytesPerSecondOptional") }}</small></span>
                 <input v-model="runtimeForm.taskSpeedLimitBytesPerSec" type="number" min="1" :disabled="isRuntimeLocked('taskSpeedLimitBytesPerSec')">
               </label>
               <label class="setting-field">
-                <span>压缩输入上限 <small>字节，空为不限制</small></span>
+                <span>{{ t("settings.runtime.maxArchiveBytes") }} <small>{{ t("settings.hint.bytesOptional") }}</small></span>
                 <input v-model="runtimeForm.maxArchiveBytes" type="number" min="1" :disabled="isRuntimeLocked('maxArchiveBytes')">
               </label>
               <label class="setting-field">
-                <span>压缩条目上限 <small>空为不限制</small></span>
+                <span>{{ t("settings.runtime.maxArchiveFiles") }} <small>{{ t("settings.hint.optionalUnlimited") }}</small></span>
                 <input v-model="runtimeForm.maxArchiveFiles" type="number" min="1" :disabled="isRuntimeLocked('maxArchiveFiles')">
               </label>
               <label class="setting-field">
-                <span>解压字节上限 <small>空为不限制</small></span>
+                <span>{{ t("settings.runtime.maxExtractBytes") }} <small>{{ t("settings.hint.optionalUnlimited") }}</small></span>
                 <input v-model="runtimeForm.maxExtractBytes" type="number" min="1" :disabled="isRuntimeLocked('maxExtractBytes')">
               </label>
               <label class="setting-field">
-                <span>解压条目上限 <small>空为不限制</small></span>
+                <span>{{ t("settings.runtime.maxExtractFiles") }} <small>{{ t("settings.hint.optionalUnlimited") }}</small></span>
                 <input v-model="runtimeForm.maxExtractFiles" type="number" min="1" :disabled="isRuntimeLocked('maxExtractFiles')">
               </label>
               <label class="setting-field">
-                <span>解压深度上限</span>
+                <span>{{ t("settings.runtime.maxExtractDepth") }}</span>
                 <input v-model="runtimeForm.maxExtractDepth" type="number" min="1" :disabled="isRuntimeLocked('maxExtractDepth')">
               </label>
             </div>
@@ -1299,91 +1315,91 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
           <section id="startup" class="settings-panel config-pane startup-pane">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">Startup</p>
-              <h2>启动配置</h2>
+              <p class="eyebrow">{{ t("settings.eyebrow.startup") }}</p>
+              <h2>{{ t("settings.config.startupTitle") }}</h2>
             </div>
             <span class="section-badge config-badge restart" :class="{warning: settingsSnapshot?.restartPending}">
-              {{ settingsSnapshot?.restartPending ? "等待重启生效" : "保存后重启生效" }}
+              {{ settingsSnapshot?.restartPending ? t("settings.config.waitingRestart") : t("settings.config.restartAfterSave") }}
             </span>
           </div>
 
           <div v-if="settingsSnapshot?.restartPendingFields.length" class="pending-list">
             <div v-for="field in settingsSnapshot.restartPendingFields" :key="field" class="pending-row">
               <strong>{{ startupFieldName(field) }}</strong>
-              <span>当前：{{ startupFieldValue(field, activeStartupSettings) }}</span>
-              <span>下次：{{ startupFieldValue(field, startupSettings) }}</span>
+              <span>{{ t("settings.config.currentValue", {value: startupFieldValue(field, activeStartupSettings)}) }}</span>
+              <span>{{ t("settings.config.nextValue", {value: startupFieldValue(field, startupSettings)}) }}</span>
             </div>
           </div>
 
           <div class="setting-group">
-            <h3>服务与入口</h3>
+            <h3>{{ t("settings.config.serviceEntry") }}</h3>
             <div class="form-grid">
               <label class="setting-field" :class="{pending: isStartupPending('bindAddress')}">
-                <span>监听地址</span>
+                <span>{{ t("settings.startup.bindAddress") }}</span>
                 <input v-model="startupForm.bindAddress" :disabled="isStartupLocked('bindAddress')">
               </label>
               <label class="setting-field" :class="{pending: isStartupPending('port')}">
-                <span>端口</span>
+                <span>{{ t("settings.startup.port") }}</span>
                 <input v-model="startupForm.port" type="number" min="1" max="65535" :disabled="isStartupLocked('port')">
               </label>
               <label class="setting-field wide" :class="{pending: isStartupPending('staticDir')}">
-                <span>静态文件目录</span>
+                <span>{{ t("settings.startup.staticDir") }}</span>
                 <input v-model="startupForm.staticDir" :disabled="isStartupLocked('staticDir')">
               </label>
               <label class="setting-field wide readonly-field">
-                <span>配置文件 <small>不支持在线修改</small></span>
+                <span>{{ t("settings.startup.configFile") }} <small>{{ t("settings.config.notEditableOnline") }}</small></span>
                 <input v-model="startupForm.configFile" disabled>
               </label>
             </div>
           </div>
 
           <div class="setting-group">
-            <h3>数据文件</h3>
+            <h3>{{ t("settings.config.dataFiles") }}</h3>
             <div class="form-grid">
               <label class="setting-field wide" :class="{pending: isStartupPending('mappingFile')}">
-                <span>挂载配置文件</span>
+                <span>{{ t("settings.startup.mappingFile") }}</span>
                 <input v-model="startupForm.mappingFile" :disabled="isStartupLocked('mappingFile')">
               </label>
               <label class="setting-field wide" :class="{pending: isStartupPending('authFile')}">
-                <span>认证文件</span>
+                <span>{{ t("settings.startup.authFile") }}</span>
                 <input v-model="startupForm.authFile" :disabled="isStartupLocked('authFile')">
               </label>
               <label class="setting-field wide" :class="{pending: isStartupPending('favoritesFile')}">
-                <span>收藏文件</span>
+                <span>{{ t("settings.startup.favoritesFile") }}</span>
                 <input v-model="startupForm.favoritesFile" :disabled="isStartupLocked('favoritesFile')">
               </label>
               <label class="setting-field wide" :class="{pending: isStartupPending('trashDir')}">
-                <span>回收站目录</span>
+                <span>{{ t("settings.startup.trashDir") }}</span>
                 <input v-model="startupForm.trashDir" :disabled="isStartupLocked('trashDir')">
               </label>
               <label class="setting-field wide" :class="{pending: isStartupPending('auditFile')}">
-                <span>审计日志文件</span>
+                <span>{{ t("settings.startup.auditFile") }}</span>
                 <input v-model="startupForm.auditFile" :disabled="isStartupLocked('auditFile')">
               </label>
             </div>
           </div>
 
           <div class="setting-group">
-            <h3>网络与启动行为</h3>
+            <h3>{{ t("settings.config.networkStartup") }}</h3>
             <div class="form-grid">
               <label class="setting-field wide" :class="{pending: isStartupPending('corsAllowedOrigins')}">
-                <span>CORS 来源 <small>每行一个，空为同源</small></span>
+                <span>{{ t("settings.startup.corsAllowedOrigins") }} <small>{{ t("settings.hint.onePerLineSameOrigin") }}</small></span>
                 <textarea v-model="startupForm.corsAllowedOrigins" rows="4" :disabled="isStartupLocked('corsAllowedOrigins')"></textarea>
               </label>
               <label class="switch-field" :class="{pending: isStartupPending('trustProxyHeaders'), disabled: isStartupLocked('trustProxyHeaders')}">
                 <input v-model="startupForm.trustProxyHeaders" type="checkbox" :disabled="isStartupLocked('trustProxyHeaders')">
                 <span class="switch-track"><span></span></span>
                 <span class="switch-copy">
-                  <strong>信任代理来源头</strong>
-                  <small>位于反向代理后方时使用</small>
+                  <strong>{{ t("settings.startup.trustProxyHeaders") }}</strong>
+                  <small>{{ t("settings.startup.trustProxyHeadersHint") }}</small>
                 </span>
               </label>
               <label class="switch-field" :class="{pending: isStartupPending('indexRebuildOnStartup'), disabled: isStartupLocked('indexRebuildOnStartup')}">
                 <input v-model="startupForm.indexRebuildOnStartup" type="checkbox" :disabled="isStartupLocked('indexRebuildOnStartup')">
                 <span class="switch-track"><span></span></span>
                 <span class="switch-copy">
-                  <strong>启动时重建索引</strong>
-                  <small>下次启动时执行</small>
+                  <strong>{{ t("settings.startup.indexRebuildOnStartup") }}</strong>
+                  <small>{{ t("settings.startup.indexRebuildOnStartupHint") }}</small>
                 </span>
               </label>
             </div>
@@ -1394,56 +1410,56 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
         <section v-if="activeSettingsPage === 'mappings'" id="mappings" class="settings-panel">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">Mounts</p>
-              <h2>挂载目录</h2>
+              <p class="eyebrow">{{ t("settings.eyebrow.mounts") }}</p>
+              <h2>{{ t("settings.nav.mappings") }}</h2>
             </div>
             <div class="panel-actions">
               <button class="plain-button" :disabled="mappingBusy" @click="loadMappings(true)">
                 <Icon class="icon-motion-spin" :class="{'is-spinning': mappingRefreshing}" icon="action.refresh" />
-                刷新
+                {{ t("common.refresh") }}
               </button>
               <button class="primary-button" :disabled="mappingBusy" @click="openMappingDialog">
                 <Icon icon="action.add" />
-                添加挂载
+                {{ t("settings.mappings.addMount") }}
               </button>
             </div>
           </div>
 
           <div class="mapping-summary">
             <div>
-              <span>挂载数量</span>
+              <span>{{ t("settings.mappings.total") }}</span>
               <strong>{{ mappings.length }}</strong>
             </div>
             <div>
-              <span>可写目录</span>
+              <span>{{ t("settings.mappings.writableDirs") }}</span>
               <strong>{{ writableMappingCount }}</strong>
             </div>
             <div>
-              <span>只读目录</span>
+              <span>{{ t("settings.mappings.readonlyDirs") }}</span>
               <strong>{{ readonlyMappingCount }}</strong>
             </div>
             <div>
-              <span>配置文件</span>
-              <strong>{{ startupSettings?.mappingFile || "未读取" }}</strong>
+              <span>{{ t("settings.startup.mappingFile") }}</span>
+              <strong>{{ startupSettings?.mappingFile || t("settings.value.notLoaded") }}</strong>
             </div>
           </div>
 
           <div class="mapping-list-heading">
             <div>
-              <strong>当前挂载</strong>
-              <span>按显示顺序排列，拖动把手后会立即保存</span>
+              <strong>{{ t("settings.mappings.current") }}</strong>
+              <span>{{ t("settings.mappings.orderHint") }}</span>
             </div>
-            <span>{{ mappings.length }} 项</span>
+            <span>{{ t("common.items", {count: mappings.length}) }}</span>
           </div>
 
-          <div class="mapping-table" role="table" aria-label="当前挂载目录">
+          <div class="mapping-table" role="table" :aria-label="t('settings.mappings.current')">
             <div class="mapping-table-head" role="row">
-              <span>顺序</span>
-              <span>虚拟路径</span>
-              <span>本地/容器目录</span>
-              <span>备注</span>
-              <span>权限</span>
-              <span>操作</span>
+              <span>{{ t("settings.mappings.order") }}</span>
+              <span>{{ t("settings.mappings.mountPath") }}</span>
+              <span>{{ t("settings.mappings.folderPath") }}</span>
+              <span>{{ t("settings.mappings.remark") }}</span>
+              <span>{{ t("settings.mappings.permission") }}</span>
+              <span>{{ t("settings.mappings.actions") }}</span>
             </div>
             <div
                 v-for="mapping in sortedMappings"
@@ -1460,7 +1476,7 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
                 @drop="handleMappingDrop(mapping, $event)">
               <div
                   class="mapping-handle-cell"
-                  title="拖动调整顺序"
+                  :title="t('settings.mappings.dragToReorder')"
                   :draggable="!mappingBusy"
                   @dragstart="handleMappingDragStart(mapping, $event)"
                   @dragend="handleMappingDragEnd">
@@ -1472,29 +1488,29 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
               <div class="mapping-cell" :title="mapping.folderPath">
                 <span>{{ mapping.folderPath }}</span>
               </div>
-              <div class="mapping-cell" :class="{muted: !mapping.remark}" :title="mapping.remark || '无备注'">
-                <span>{{ mapping.remark || "无备注" }}</span>
+              <div class="mapping-cell" :class="{muted: !mapping.remark}" :title="mapping.remark || t('settings.mappings.noRemark')">
+                <span>{{ mapping.remark || t("settings.mappings.noRemark") }}</span>
               </div>
               <div class="mapping-access-cell">
                 <span class="access-badge" :class="{readonly: !mapping.writable}">
-                  {{ mapping.writable ? "可写" : "只读" }}
+                  {{ mapping.writable ? t("settings.mappings.writable") : t("settings.mappings.readonly") }}
                 </span>
               </div>
               <div class="mapping-row-actions">
                 <button class="plain-button" :disabled="mappingBusy" @click="openEditMappingDialog(mapping)">
                   <Icon icon="action.edit" />
-                  修改
+                  {{ t("settings.action.edit") }}
                 </button>
                 <button class="danger-button" :disabled="mappingBusy" @click="openMappingDeleteConfirm(mapping)">
                   <Icon icon="action.trash" />
-                  删除
+                  {{ t("common.delete") }}
                 </button>
               </div>
             </div>
             <div v-if="!mappings.length && !loading" class="mapping-empty">
               <Icon icon="file.folder" />
-              <strong>暂无挂载目录</strong>
-              <span>添加第一个挂载后会显示在文件树根目录。</span>
+              <strong>{{ t("settings.mappings.emptyTitle") }}</strong>
+              <span>{{ t("settings.mappings.emptyDesc") }}</span>
             </div>
           </div>
 
@@ -1509,28 +1525,28 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
               @submit="submitMappingDialog">
               <div class="mapping-dialog-body">
                 <label class="setting-field wide">
-                  <span>虚拟路径</span>
+                  <span>{{ t("settings.mappings.mountPath") }}</span>
                   <input ref="mappingMountInputRef" v-model="mappingForm.mountPath" placeholder="/files" required>
                 </label>
                 <label class="setting-field wide">
-                  <span>本地/容器目录</span>
-                  <input v-model="mappingForm.folderPath" placeholder="D:\\Files 或 /mnt/files" required>
+                  <span>{{ t("settings.mappings.folderPath") }}</span>
+                  <input v-model="mappingForm.folderPath" :placeholder="t('settings.mappings.folderPlaceholder')" required>
                 </label>
                 <label class="setting-field wide">
-                  <span>备注</span>
-                  <input v-model="mappingForm.remark" placeholder="可选">
+                  <span>{{ t("settings.mappings.remark") }}</span>
+                  <input v-model="mappingForm.remark" :placeholder="t('settings.value.optional')">
                 </label>
                 <label class="switch-field mapping-writable-toggle">
                   <input v-model="mappingForm.writable" type="checkbox">
                   <span class="switch-track"><span></span></span>
                   <span class="switch-copy">
-                    <strong>允许写入</strong>
-                    <small>关闭后上传、编辑、删除等写操作会被阻止</small>
+                    <strong>{{ t("settings.mappings.allowWrite") }}</strong>
+                    <small>{{ t("settings.mappings.allowWriteHint") }}</small>
                   </span>
                 </label>
               </div>
               <template #actions>
-                <button class="plain-button" type="button" :disabled="mappingBusy" @click="closeMappingDialog">取消</button>
+                <button class="plain-button" type="button" :disabled="mappingBusy" @click="closeMappingDialog">{{ t("common.cancel") }}</button>
                 <button class="primary-button" :disabled="mappingBusy" type="submit">
                   <Icon :icon="mappingDialogMode === 'edit' ? 'action.save' : 'action.add'" />
                   {{ mappingDialogSubmitText }}
@@ -1543,24 +1559,24 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
               icon="action.delete"
               variant="red"
               width="delete"
-              title="删除挂载？"
-              :subtitle="`将移除 ${mappingDeleteTarget.mountPath} 的挂载配置，不会删除真实目录。`"
+              :title="t('settings.mappings.deleteTitle')"
+              :subtitle="t('settings.mappings.deleteSubtitle', {path: mappingDeleteTarget.mountPath})"
               @close="closeMappingDeleteConfirm">
             <div class="mapping-delete-summary">
               <div>
-                <span>虚拟路径</span>
+                <span>{{ t("settings.mappings.mountPath") }}</span>
                 <strong>{{ mappingDeleteTarget.mountPath }}</strong>
               </div>
               <div>
-                <span>本地/容器目录</span>
+                <span>{{ t("settings.mappings.folderPath") }}</span>
                 <strong>{{ mappingDeleteTarget.folderPath }}</strong>
               </div>
             </div>
             <template #actions>
-              <button class="plain-button" type="button" :disabled="mappingBusy" @click="closeMappingDeleteConfirm">取消</button>
+              <button class="plain-button" type="button" :disabled="mappingBusy" @click="closeMappingDeleteConfirm">{{ t("common.cancel") }}</button>
               <button class="danger-button" type="button" :disabled="mappingBusy" @click="confirmRemoveMapping">
                 <Icon icon="action.trash" />
-                确认删除
+                {{ t("settings.mappings.confirmDelete") }}
               </button>
             </template>
           </operation-panel-shell>
@@ -1569,8 +1585,8 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
         <section v-if="activeSettingsPage === 'index'" id="index" class="settings-panel">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">Index & Security</p>
-              <h2>索引与安全</h2>
+              <p class="eyebrow">{{ t("settings.eyebrow.indexSecurity") }}</p>
+              <h2>{{ t("settings.nav.indexSecurity") }}</h2>
             </div>
           </div>
 
@@ -1578,25 +1594,25 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
             <section class="inline-section index-card">
               <div class="subsection-heading">
                 <div>
-                  <h3>搜索索引</h3>
-                  <span>查看索引状态，手动触发重建或取消正在进行的重建任务。</span>
+                  <h3>{{ t("settings.index.title") }}</h3>
+                  <span>{{ t("settings.index.desc") }}</span>
                 </div>
                 <div class="panel-actions">
                   <button class="plain-button" :disabled="indexBusy" @click="loadIndexStatus(true)">
                     <Icon class="icon-motion-spin" :class="{'is-spinning': indexLoading}" icon="action.refresh" />
-                    刷新状态
+                    {{ t("settings.action.refreshStatus") }}
                   </button>
-                  <button class="primary-button" :disabled="!canRebuildIndex" @click="requestIndexRebuild">重建索引</button>
-                  <button v-if="indexBuilding" class="danger-button" :disabled="!canCancelIndex" @click="requestIndexCancel">取消重建</button>
+                  <button class="primary-button" :disabled="!canRebuildIndex" @click="requestIndexRebuild">{{ t("settings.index.rebuild") }}</button>
+                  <button v-if="indexBuilding" class="danger-button" :disabled="!canCancelIndex" @click="requestIndexCancel">{{ t("settings.index.cancel") }}</button>
                 </div>
               </div>
               <div class="index-summary">
-                <span class="index-state" :class="indexStateClass(indexStatus)">{{ indexLoading ? "读取中" : indexStateText(indexStatus) }}</span>
-                <span>已索引 {{ countText(indexStatus?.indexedEntries) }} 项</span>
-                <span>上次开始 {{ optionalDateText(indexStatus?.lastStartedAt) }}</span>
-                <span>上次完成 {{ optionalDateText(indexStatus?.lastFinishedAt) }}</span>
+                <span class="index-state" :class="indexStateClass(indexStatus)">{{ indexLoading ? t("settings.status.loading") : indexStateText(indexStatus) }}</span>
+                <span>{{ t("settings.index.indexedEntries", {count: countText(indexStatus?.indexedEntries)}) }}</span>
+                <span>{{ t("settings.index.lastStarted", {time: optionalDateText(indexStatus?.lastStartedAt)}) }}</span>
+                <span>{{ t("settings.index.lastFinished", {time: optionalDateText(indexStatus?.lastFinishedAt)}) }}</span>
               </div>
-              <div v-if="indexBuilding" class="index-progress" aria-label="索引重建进行中">
+              <div v-if="indexBuilding" class="index-progress" :aria-label="t('settings.index.rebuildingAria')">
                 <span></span>
               </div>
               <p v-if="indexStatus?.lastError" class="error-text">{{ indexStatus.lastError }}</p>
@@ -1605,18 +1621,18 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
             <section class="inline-section security-card">
               <div class="subsection-heading">
                 <div>
-                  <h3>管理员密码</h3>
-                  <span>更新当前管理员账号的登录密码。</span>
+                  <h3>{{ t("settings.security.adminPassword") }}</h3>
+                  <span>{{ t("settings.security.adminPasswordDesc") }}</span>
                 </div>
-                <span class="section-badge">{{ settingsSnapshot?.authConfigured ? "已初始化" : "未初始化" }}</span>
+                <span class="section-badge">{{ settingsSnapshot?.authConfigured ? t("settings.security.initialized") : t("settings.security.notInitialized") }}</span>
               </div>
               <form class="password-form" @submit.prevent="savePassword">
-                <input v-model="passwordForm.currentPassword" :disabled="passwordSaving" autocomplete="current-password" placeholder="当前密码" type="password" required>
-                <input v-model="passwordForm.newPassword" :disabled="passwordSaving" autocomplete="new-password" minlength="8" placeholder="新密码" type="password" required>
-                <input v-model="passwordForm.confirmPassword" :disabled="passwordSaving" autocomplete="new-password" minlength="8" placeholder="确认新密码" type="password" required>
+                <input v-model="passwordForm.currentPassword" :disabled="passwordSaving" autocomplete="current-password" :placeholder="t('settings.security.currentPassword')" type="password" required>
+                <input v-model="passwordForm.newPassword" :disabled="passwordSaving" autocomplete="new-password" minlength="8" :placeholder="t('settings.security.newPassword')" type="password" required>
+                <input v-model="passwordForm.confirmPassword" :disabled="passwordSaving" autocomplete="new-password" minlength="8" :placeholder="t('settings.security.confirmPassword')" type="password" required>
                 <button class="primary-button" :disabled="passwordSaving" type="submit">
                   <Icon icon="action.save" />
-                  {{ passwordSaving ? "更新中" : "更新密码" }}
+                  {{ passwordSaving ? t("settings.security.updating") : t("settings.security.updatePassword") }}
                 </button>
               </form>
             </section>
@@ -2016,14 +2032,14 @@ const startupFieldValue = (fieldPath: string, source?: StartupSettings | null) =
 .config-pane .setting-field:has(select:disabled)::after,
 .config-pane .switch-field.disabled::after {
   @apply mt-1 block rounded-md border px-2 py-1 text-xs;
-  content: "由环境变量控制，不能在页面中覆盖";
+  content: var(--setting-lock-tip);
   border-color: var(--app-warning-border);
   background: color-mix(in srgb, var(--app-warning-soft) 72%, transparent);
   color: var(--app-warning-text);
 }
 
 .config-pane .readonly-field:has(input:disabled)::after {
-  content: "配置文件路径不支持在线修改，需要通过环境变量指定后重启";
+  content: var(--setting-readonly-tip);
 }
 
 .config-pane .switch-field.disabled {
