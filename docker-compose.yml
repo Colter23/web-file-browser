@@ -28,3 +28,6 @@ services:
       # - /srv/media:/mnt/media:ro
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      # 应用不需要额外 Linux capability，文件权限只由 UID/GID 和挂载目录权限决定。
+      - ALL

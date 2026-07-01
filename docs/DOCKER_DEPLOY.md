@@ -237,12 +237,16 @@ volumes:
 
 ## UID/GID 和权限
 
-容器默认使用 `1000:1000` 运行。镜像不会在构建阶段创建固定用户名，而是直接使用数字 UID/GID，因此 `0:0` 这类宿主机返回值不会导致构建失败。真实部署时仍建议把 `.env` 中的值改为宿主机拥有文件目录的用户：
+容器默认使用 `1000:1000` 运行。镜像不会在构建阶段创建固定用户名，而是直接使用数字 UID/GID，因此 `0:0` 这类宿主机返回值不会导致构建失败。真实部署时建议使用一个非 root 的宿主机用户运行，并让这个用户只拥有需要暴露给应用的目录：
 
 ```env
 WEB_FILE_BROWSER_UID=1000
 WEB_FILE_BROWSER_GID=1000
 ```
+
+不建议把 `WEB_FILE_BROWSER_UID` / `WEB_FILE_BROWSER_GID` 设置为 `0:0`。这是一个文件管理器，Web 登录后的操作会真实修改 bind mount 里的宿主机文件；如果以 root 运行，误操作、漏洞或被盗会话的影响范围都会变大，新建文件也容易变成 root 所有，后续迁移和维护更麻烦。遇到权限不足时，优先在宿主机上用 `chown`、`chgrp`、目录 ACL 或只读挂载来授权，而不是让容器长期以 root 运行。
+
+Compose 示例额外启用了 `no-new-privileges:true` 和 `cap_drop: [ALL]`。应用监听容器内 `8080` 端口，不需要特权端口，也不需要额外 Linux capability；文件读写能力只由容器进程的 UID/GID 和挂载目录权限决定。
 
 如果容器无法写入 `/app/data` 或业务文件目录，优先检查宿主机目录所有者和权限：
 
@@ -250,6 +254,16 @@ WEB_FILE_BROWSER_GID=1000
 ls -ld data files
 chown -R "$WEB_FILE_BROWSER_UID:$WEB_FILE_BROWSER_GID" data files
 ```
+
+如果 `./data` 或 `./files` 没有提前创建，Docker/Compose 可能会用 root 创建宿主机目录，非 root 容器随后就会写入失败。因此首次启动前建议手动创建并授权：
+
+```bash
+mkdir -p data files
+chown -R "$WEB_FILE_BROWSER_UID:$WEB_FILE_BROWSER_GID" data files
+chmod 700 data
+```
+
+`data/` 里包含认证哈希、挂载配置、回收站索引和审计日志，单机部署时建议用较严格的权限；业务文件目录 `files/` 则按实际共享需求设置权限。如果需要只读共享目录，优先使用 Docker `:ro` 挂载，并在应用挂载配置里同步关闭写入。
 
 ## 常用环境变量
 
