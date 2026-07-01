@@ -265,6 +265,25 @@ chmod 700 data
 
 `data/` 里包含认证哈希、挂载配置、回收站索引和审计日志，单机部署时建议用较严格的权限；业务文件目录 `files/` 则按实际共享需求设置权限。如果需要只读共享目录，优先使用 Docker `:ro` 挂载，并在应用挂载配置里同步关闭写入。
 
+## Unraid 模板
+
+项目提供了 Unraid Docker 模板：`deploy/unraid/web-file-browser.xml`。当前模板的 `Repository` 默认写为 `web-file-browser:local`，适合你先在 Unraid 主机上本地构建镜像后使用；如果以后推送到 GHCR、Docker Hub 或其他私有仓库，只需要把模板里的 `Repository` 改成真实镜像地址。
+
+Unraid 常见共享目录默认由 `nobody:users` 访问，对应 UID/GID 是 `99:100`。模板已经通过 `ExtraParams` 设置：
+
+```text
+--user 99:100 --security-opt=no-new-privileges:true --cap-drop=ALL
+```
+
+这表示容器不会以 root 运行，也不会拿额外 Linux capability。这个项目目前不读取 `PUID`/`PGID` 环境变量切换用户，所以在 Unraid 中要改运行用户时，需要修改模板里的 `--user UID:GID`，而不是只新增环境变量。
+
+模板默认挂载：
+
+- `/mnt/user/appdata/web-file-browser` 到 `/app/data`，保存运行配置、认证哈希、挂载配置、收藏、回收站索引和审计日志。
+- `/mnt/user/web-file-browser-files` 到 `/mnt/files`，作为首次试用目录；真实使用时建议改成具体共享目录，例如 `/mnt/user/media` 或 `/mnt/user/documents`，减少误操作范围。
+
+如果某个共享目录只需要浏览，不需要写入，建议在 Unraid 模板里把对应路径改为只读，并在应用挂载配置里同步关闭写入。
+
 ## 常用环境变量
 
 - `WEB_FILE_BROWSER_CORS_ORIGINS`：允许跨域访问的可信来源，默认空表示同源，不支持 `*`。
